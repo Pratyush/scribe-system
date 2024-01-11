@@ -4,10 +4,6 @@ use ark_ff::{Field, BigInt};
 use byteorder::{ByteOrder, LittleEndian};
 use num_bigint::BigUint;
 
-
-use ark_test_curves::
-    bls12_381::Fr;
-
 pub trait ReadStream: Send + Sync {
     type Item;
 
@@ -35,32 +31,37 @@ pub struct DenseMLPolyStream<F: Field> {
     f: PhantomData<F>,
 }
 
-impl ReadStream for DenseMLPolyStream<Fr> {
-    type Item = Fr;
+impl<F: Field> ReadStream for DenseMLPolyStream<F> {
+    type Item = F;
 
-    fn read_next(&mut self) -> Option<Fr> {
-        let mut buffer = [0u8; 32]; // Buffer for 32 bytes
-        match self.read_pointer.read_exact(&mut buffer) {
-            Ok(_) => {
-                println!("Read buffer: {:?}", buffer);
-                Some(Fr::from(BigUint::from_bytes_le(&buffer)))
+    fn read_next(&mut self) -> Option<F> {
+        match F::deserialize_uncompressed_unchecked(&mut self.read_pointer) {
+            Ok(field) => {
+                println!("Deserialized field: {:?}", field);
+                Some(field)
             },
-            Err(_) => None, // Return None on error or EOF
+            Err(_) => {
+                // Handle error or EOF
+                None
+            }
         }
     }
 }
 
-impl WriteStream for DenseMLPolyStream<Fr> {
-    type Item = Fr;
+impl<F: Field> WriteStream for DenseMLPolyStream<F> {
+    type Item = F;
 
     fn write_next(&mut self, field: Self::Item) -> Option<()> {
-        let data = field.0.0;
-        let mut buffer = [0u8; 32]; // 4 u64s * 8 bytes each
-        println!("Writing data: {:?}", data);
-
-        LittleEndian::write_u64_into(&data, &mut buffer);
-        self.write_pointer.write_all(&buffer).ok()?;
-        Some(())
+        match field.serialize_uncompressed(&mut self.write_pointer) {
+            Ok(_) => {
+                println!("Field serialized and written successfully.");
+                Some(())
+            },
+            Err(_) => {
+                // Handle serialization or write error
+                None
+            }
+        }
     }
 }
 
@@ -81,36 +82,46 @@ impl<F: Field> DenseMLPolyStream<F> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
-    use ark_ff::Fp;
-    use tempfile::NamedTempFile;
-    use byteorder::{LittleEndian, ByteOrder};
+    use ark_ff::One;
+    use ark_std::{test_rng, UniformRand};
+    use ark_test_curves::bls12_381::Fr;
+    use std::fs::File;
+    use std::io::{Seek, SeekFrom};
+    use std::marker::PhantomData;
+    use tempfile::tempfile;
+
+    use ark_std::rand::{Rng, SeedableRng}; // Import Rng trait and SeedableRng for deterministic rng in tests
+    use ark_std::rand::rngs::StdRng; // Using StdRng for the example
+    use ark_std::rand::distributions::{Distribution, Standard};
 
     #[test]
-    fn test_write_and_read() {
-        // Create a temporary file
-        let tempfile = NamedTempFile::new().unwrap();
-        let path = tempfile.path().to_path_buf();
+    fn test_one_field() {
+        let mut rng = StdRng::seed_from_u64(42); // Seed for reproducibility
 
-        // Create DenseMLPolyStream
-        let mut stream = DenseMLPolyStream::<Fr>::new(
-            0, 0, 
-            path.to_str().unwrap(), 
-            path.to_str().unwrap()
-        );
+        // Sample a random Fp<P, N> value
+        let random_value: Fr = Standard.sample(&mut rng);
 
-        // Create a Fr instance to write
-        let mock_field = Fr::from(12u128); // Example data
+        // Create a temporary file for the stream
+        let file = tempfile().expect("Failed to create a temporary file");
+        let file_clone = file.try_clone().expect("Failed to clone the file handle");
 
-        // Write the Fr instance
-        stream.write_next(mock_field).unwrap();
+        let mut stream = DenseMLPolyStream {
+            read_pointer: file,
+            write_pointer: file_clone,
+            num_vars: 0, // example value
+            num_evals: 0, // example value
+            f: PhantomData,
+        };
 
-        // Read the data back
-        if let Some(read_field) = stream.read_next() {
-            assert_eq!(read_field, Fr::from(12u128));
-        } else {
-            panic!("Failed to read data");
-        }
+        // Write to stream
+        stream.write_next(random_value).expect("Failed to write");
+
+        // Seek to the beginning of the file for reading
+        stream.read_pointer.seek(SeekFrom::Start(0)).expect("Failed to seek");
+
+        // Read from stream
+        let read_value = stream.read_next().expect("Failed to read");
+        assert_eq!(read_value, random_value, "The read value should match the written value");
     }
 }
 
@@ -118,13 +129,13 @@ pub trait MLPolyStream<F: Field>: Sized + Add<Self, Output = Self> + Sub<Self, O
 
 }
 
-pub struct DenseMLEStream<F: Field> {
-    read_pointer: File,
-    write_pointer: File,
-    num_vars: usize,
-    num_evals: usize,
-    f: PhantomData<F>,
-}
+// pub struct DenseMLEStream<F: Field> {
+//     read_pointer: File,
+//     write_pointer: File,
+//     num_vars: usize,
+//     num_evals: usize,
+//     f: PhantomData<F>,
+// }
 
 // pub struct SumcheckEvaluations<'a, F, I> {
 //     challenges: &'a [F],
