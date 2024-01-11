@@ -12,6 +12,7 @@ ark-test-curves = {version = "^0.4.0", features = ["bls12_381_curve", "ed_on_bls
 num-bigint = "0.4.4"
 tempfile = "3.3.0"
 ark-std ="0.4.0"
+plotters = "0.3"
 
 [dev-dependencies]
 

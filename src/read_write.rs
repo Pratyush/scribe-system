@@ -1,8 +1,12 @@
-use core::{iter::Peekable, marker::PhantomData};
-use std::{fs::File, io::{Read, Write}, ops::{Add, Sub, Mul}};
-use ark_ff::{Field, BigInt};
+use ark_ff::{BigInt, Field};
 use byteorder::{ByteOrder, LittleEndian};
+use core::{iter::Peekable, marker::PhantomData};
 use num_bigint::BigUint;
+use std::{
+    fs::File,
+    io::{Read, Write},
+    ops::{Add, Mul, Sub},
+};
 
 pub trait ReadStream: Send + Sync {
     type Item;
@@ -15,7 +19,6 @@ pub trait WriteStream: Send + Sync {
 
     fn write_next(&mut self, field: Self::Item) -> Option<()>;
 }
-
 
 pub struct Proof<F: Field> {
     prover_messages: ProverMsgs<F>,
@@ -37,9 +40,9 @@ impl<F: Field> ReadStream for DenseMLPolyStream<F> {
     fn read_next(&mut self) -> Option<F> {
         match F::deserialize_uncompressed_unchecked(&mut self.read_pointer) {
             Ok(field) => {
-                println!("Deserialized field: {:?}", field);
+                // println!("Deserialized field: {:?}", field);
                 Some(field)
-            },
+            }
             Err(_) => {
                 // Handle error or EOF
                 None
@@ -54,9 +57,9 @@ impl<F: Field> WriteStream for DenseMLPolyStream<F> {
     fn write_next(&mut self, field: Self::Item) -> Option<()> {
         match field.serialize_uncompressed(&mut self.write_pointer) {
             Ok(_) => {
-                println!("Field serialized and written successfully.");
+                // println!("Field serialized and written successfully.");
                 Some(())
-            },
+            }
             Err(_) => {
                 // Handle serialization or write error
                 None
@@ -89,10 +92,10 @@ mod tests {
     use std::io::{Seek, SeekFrom};
     use std::marker::PhantomData;
     use tempfile::tempfile;
-
-    use ark_std::rand::{Rng, SeedableRng}; // Import Rng trait and SeedableRng for deterministic rng in tests
-    use ark_std::rand::rngs::StdRng; // Using StdRng for the example
+    use std::time::Instant;
     use ark_std::rand::distributions::{Distribution, Standard};
+    use ark_std::rand::rngs::StdRng; // Using StdRng for the example
+    use ark_std::rand::{Rng, SeedableRng}; // Import Rng trait and SeedableRng for deterministic rng in tests
 
     #[test]
     fn test_one_field() {
@@ -108,7 +111,7 @@ mod tests {
         let mut stream = DenseMLPolyStream {
             read_pointer: file,
             write_pointer: file_clone,
-            num_vars: 0, // example value
+            num_vars: 0,  // example value
             num_evals: 0, // example value
             f: PhantomData,
         };
@@ -117,17 +120,137 @@ mod tests {
         stream.write_next(random_value).expect("Failed to write");
 
         // Seek to the beginning of the file for reading
-        stream.read_pointer.seek(SeekFrom::Start(0)).expect("Failed to seek");
+        stream
+            .read_pointer
+            .seek(SeekFrom::Start(0))
+            .expect("Failed to seek");
 
         // Read from stream
         let read_value = stream.read_next().expect("Failed to read");
-        assert_eq!(read_value, random_value, "The read value should match the written value");
+        assert_eq!(
+            read_value, random_value,
+            "The read value should match the written value"
+        );
+    }
+
+    #[test]
+    fn test_multiple_random_fields() {
+        let mut rng = StdRng::seed_from_u64(42); // Seed for reproducibility
+
+        // Generate 512 random Fr fields
+        let mut written_values = Vec::new();
+        for _ in 0..512 {
+            let random_value: Fr = Standard.sample(&mut rng);
+            written_values.push(random_value);
+        }
+
+        // Create a temporary file for the stream
+        let file = tempfile().expect("Failed to create a temporary file");
+        let file_clone = file.try_clone().expect("Failed to clone the file handle");
+
+        let mut stream = DenseMLPolyStream {
+            read_pointer: file,
+            write_pointer: file_clone,
+            num_vars: 0,  // example value
+            num_evals: 0, // example value
+            f: PhantomData,
+        };
+
+        // Write all fields to the stream
+        for value in &written_values {
+            stream.write_next(*value).expect("Failed to write");
+        }
+
+        // Seek to the beginning of the file for reading
+        stream
+            .read_pointer
+            .seek(SeekFrom::Start(0))
+            .expect("Failed to seek");
+
+        // Read fields from the stream
+        let mut read_values = Vec::new();
+        for _ in 0..512 {
+            if let Some(val) = stream.read_next() {
+                read_values.push(val);
+            }
+        }
+
+        // Compare written and read values
+        assert_eq!(
+            written_values, read_values,
+            "Written and read values should match"
+        );
+    }
+
+    #[test]
+    fn benchmark_streaming_time() {
+        let mut log_write_times = Vec::new();
+        let mut log_seek_times = Vec::new();
+        let mut log_read_times = Vec::new();
+
+        for n in 1..=20 {
+            let num_fields = 2usize.pow(n);
+            let mut rng = StdRng::seed_from_u64(42); // Seed for reproducibility
+
+            // Generate random fields
+            let written_values: Vec<Fr> = (0..num_fields)
+                .map(|_| Standard.sample(&mut rng))
+                .collect();
+
+            // Create a temporary file for the stream
+            let file = tempfile().expect("Failed to create a temporary file");
+            let file_clone = file.try_clone().expect("Failed to clone the file handle");
+
+            let mut stream = DenseMLPolyStream {
+                read_pointer: file,
+                write_pointer: file_clone,
+                num_vars: 0,  // example value
+                num_evals: 0, // example value
+                f: PhantomData,
+            };
+
+            // Measure write time
+            let start_write = Instant::now();
+            for value in &written_values {
+                stream.write_next(*value).expect("Failed to write");
+            }
+            let duration_write = start_write.elapsed().as_secs_f64();
+            log_write_times.push(duration_write.ln());
+
+            // Measure seek time
+            let start_seek = Instant::now();
+            stream.read_pointer.seek(SeekFrom::Start(0)).expect("Failed to seek");
+            let duration_seek = start_seek.elapsed().as_secs_f64();
+            log_seek_times.push(duration_seek.ln());
+
+            // Measure read time
+            let start_read = Instant::now();
+            let mut read_values = Vec::new();
+            for _ in 0..num_fields {
+                if let Some(val) = stream.read_next() {
+                    read_values.push(val);
+                }
+            }
+            let duration_read = start_read.elapsed().as_secs_f64();
+            log_read_times.push(duration_read.ln());
+
+            // Compare written and read values
+            assert_eq!(written_values, read_values, "Written and read values should match");
+
+            println!("n = {}: Write Time: {:?}, Seek Time: {:?}, Read Time: {:?}", n, duration_write, duration_seek, duration_read);
+        }
     }
 }
 
-pub trait MLPolyStream<F: Field>: Sized + Add<Self, Output = Self> + Sub<Self, Output = Self> + Mul<F, Output = Self>  + ReadStream<Item = F> + WriteStream<Item = F> {
-
-}
+// pub trait MLPolyStream<F: Field>:
+//     Sized
+//     + Add<Self, Output = Self>
+//     + Sub<Self, Output = Self>
+//     + Mul<F, Output = Self>
+//     + ReadStream<Item = F>
+//     + WriteStream<Item = F>
+// {
+// }
 
 // pub struct DenseMLEStream<F: Field> {
 //     read_pointer: File,
