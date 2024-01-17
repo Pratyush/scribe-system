@@ -1,12 +1,6 @@
-use ark_ff::{BigInt, Field};
-use byteorder::{ByteOrder, LittleEndian};
-use core::{iter::Peekable, marker::PhantomData};
-use num_bigint::BigUint;
-use std::{
-    fs::File,
-    io::{Read, Write},
-    ops::{Add, Mul, Sub},
-};
+use ark_ff::Field;
+use core::marker::PhantomData;
+use std::fs::File;
 use std::io::{Seek, SeekFrom};
 
 pub trait ReadStream: Send + Sync {
@@ -24,12 +18,6 @@ pub trait WriteStream: Send + Sync {
 
     fn write_restart(&mut self);
 }
-
-pub struct Proof<F: Field> {
-    prover_messages: ProverMsgs<F>,
-}
-
-pub struct ProverMsgs<F: Field>(pub F, pub F);
 
 pub struct DenseMLPolyStream<F: Field> {
     read_pointer: File,
@@ -56,7 +44,9 @@ impl<F: Field> ReadStream for DenseMLPolyStream<F> {
     }
 
     fn read_restart(&mut self) {
-        self.read_pointer.seek(SeekFrom::Start(0)).expect("Failed to seek");
+        self.read_pointer
+            .seek(SeekFrom::Start(0))
+            .expect("Failed to seek");
     }
 }
 
@@ -77,7 +67,9 @@ impl<F: Field> WriteStream for DenseMLPolyStream<F> {
     }
 
     fn write_restart(&mut self) {
-        self.write_pointer.seek(SeekFrom::Start(0)).expect("Failed to seek");
+        self.write_pointer
+            .seek(SeekFrom::Start(0))
+            .expect("Failed to seek");
     }
 }
 
@@ -98,17 +90,13 @@ impl<F: Field> DenseMLPolyStream<F> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ark_ff::One;
-    use ark_std::{test_rng, UniformRand};
-    use ark_test_curves::bls12_381::Fr;
-    use std::fs::File;
-    use std::io::{Seek, SeekFrom};
-    use std::marker::PhantomData;
-    use tempfile::tempfile;
-    use std::time::Instant;
     use ark_std::rand::distributions::{Distribution, Standard};
     use ark_std::rand::rngs::StdRng; // Using StdRng for the example
-    use ark_std::rand::{Rng, SeedableRng}; // Import Rng trait and SeedableRng for deterministic rng in tests
+    use ark_std::rand::SeedableRng;
+    use ark_test_curves::bls12_381::Fr;
+    use std::marker::PhantomData;
+    use std::time::Instant;
+    use tempfile::tempfile; // Import Rng trait and SeedableRng for deterministic rng in tests
 
     #[test]
     fn test_one_field() {
@@ -200,9 +188,8 @@ mod tests {
             let mut rng = StdRng::seed_from_u64(42); // Seed for reproducibility
 
             // Generate random fields
-            let written_values: Vec<Fr> = (0..num_fields)
-                .map(|_| Standard.sample(&mut rng))
-                .collect();
+            let written_values: Vec<Fr> =
+                (0..num_fields).map(|_| Standard.sample(&mut rng)).collect();
 
             // Create a temporary file for the stream
             let file = tempfile().expect("Failed to create a temporary file");
@@ -242,9 +229,15 @@ mod tests {
             log_read_times.push(duration_read.ln());
 
             // Compare written and read values
-            assert_eq!(written_values, read_values, "Written and read values should match");
+            assert_eq!(
+                written_values, read_values,
+                "Written and read values should match"
+            );
 
-            println!("n = {}: Write Time: {:?}, Seek Time: {:?}, Read Time: {:?}", n, duration_write, duration_seek, duration_read);
+            println!(
+                "n = {}: Write Time: {:?}, Seek Time: {:?}, Read Time: {:?}",
+                n, duration_write, duration_seek, duration_read
+            );
         }
     }
 }

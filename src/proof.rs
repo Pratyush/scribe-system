@@ -1,10 +1,8 @@
-use ark_ff::Field;
-use ark_std::borrow::Borrow;
-use ark_std::boxed::Box;
-use ark_std::vec::Vec;
-use crate::prover::RoundMsg;
 use crate::prover::Prover;
+use crate::prover::RoundMsg;
 use crate::transcript::GeminiTranscript;
+use ark_ff::Field;
+use ark_std::vec::Vec;
 
 use merlin::Transcript;
 
@@ -19,10 +17,6 @@ pub struct Sumcheck<F: Field> {
 }
 
 impl<F: Field> Sumcheck<F> {
-    /// Prove function for the scalar product.
-    /// The input contains a randomness generator and a prover struct.
-    /// The prover struct can be either time-efficient or space-efficient
-    /// depending on the configuration.
     pub fn prove<P: Prover<F>>(transcript: &mut Transcript, mut prover: P) -> Self {
         let rounds = prover.rounds();
         let mut messages = Vec::with_capacity(rounds);
@@ -53,3 +47,4 @@ impl<F: Field> Sumcheck<F> {
         }
     }
 }
+
