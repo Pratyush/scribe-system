@@ -89,7 +89,7 @@ impl<F: Field> DenseMLPolyStream<F> {
 
     pub fn new_from_tempfile(num_vars: usize, num_evals: usize) -> Self {
         let read_pointer = tempfile().expect("Failed to create a temporary file");
-        let write_pointer = read_pointer.try_clone().expect("Failed to clone the file handle");
+        let write_pointer = tempfile().expect("Failed to create a temporary file");
         Self {
             read_pointer,
             write_pointer,
@@ -97,6 +97,10 @@ impl<F: Field> DenseMLPolyStream<F> {
             num_evals,
             f: PhantomData,
         }
+    }
+
+    pub fn swap_read_write(&mut self) {
+        std::mem::swap(&mut self.read_pointer, &mut self.write_pointer);
     }
 }
 

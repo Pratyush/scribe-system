@@ -64,6 +64,8 @@ impl<F: Field> Prover<F> for SpaceProver<F> {
         self.stream.read_restart();
         self.stream.write_restart();
 
+        self.stream.swap_read_write();
+
         self.round += 1;
     }
 
