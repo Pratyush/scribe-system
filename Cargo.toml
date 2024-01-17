@@ -13,6 +13,8 @@ num-bigint = "0.4.4"
 tempfile = "3.3.0"
 ark-std ="0.4.0"
 plotters = "0.3"
+ark-serialize = {version = "0.4.0", features = ["derive"]}
+merlin = "3.0.0"
 
 [dev-dependencies]
 
@@ -20,3 +22,5 @@ plotters = "0.3"
 ark-ff = {git = "https://github.com/arkworks-rs/algebra"}
 ark-test-curves = {git = "https://github.com/arkworks-rs/algebra"}
 ark-std = {git = "https://github.com/arkworks-rs/utils"}
+ark-serialize = {git = "https://github.com/arkworks-rs/algebra"}
+ark-serialize-derive = {git = "https://github.com/arkworks-rs/algebra"}

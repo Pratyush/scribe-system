@@ -7,17 +7,22 @@ use std::{
     io::{Read, Write},
     ops::{Add, Mul, Sub},
 };
+use std::io::{Seek, SeekFrom};
 
 pub trait ReadStream: Send + Sync {
     type Item;
 
     fn read_next(&mut self) -> Option<Self::Item>;
+
+    fn read_restart(&mut self);
 }
 
 pub trait WriteStream: Send + Sync {
     type Item;
 
     fn write_next(&mut self, field: Self::Item) -> Option<()>;
+
+    fn write_restart(&mut self);
 }
 
 pub struct Proof<F: Field> {
@@ -29,7 +34,7 @@ pub struct ProverMsgs<F: Field>(pub F, pub F);
 pub struct DenseMLPolyStream<F: Field> {
     read_pointer: File,
     write_pointer: File,
-    num_vars: usize,
+    pub num_vars: usize,
     num_evals: usize,
     f: PhantomData<F>,
 }
@@ -49,6 +54,10 @@ impl<F: Field> ReadStream for DenseMLPolyStream<F> {
             }
         }
     }
+
+    fn read_restart(&mut self) {
+        self.read_pointer.seek(SeekFrom::Start(0)).expect("Failed to seek");
+    }
 }
 
 impl<F: Field> WriteStream for DenseMLPolyStream<F> {
@@ -65,6 +74,10 @@ impl<F: Field> WriteStream for DenseMLPolyStream<F> {
                 None
             }
         }
+    }
+
+    fn write_restart(&mut self) {
+        self.write_pointer.seek(SeekFrom::Start(0)).expect("Failed to seek");
     }
 }
 
@@ -120,10 +133,7 @@ mod tests {
         stream.write_next(random_value).expect("Failed to write");
 
         // Seek to the beginning of the file for reading
-        stream
-            .read_pointer
-            .seek(SeekFrom::Start(0))
-            .expect("Failed to seek");
+        stream.read_restart();
 
         // Read from stream
         let read_value = stream.read_next().expect("Failed to read");
@@ -162,10 +172,7 @@ mod tests {
         }
 
         // Seek to the beginning of the file for reading
-        stream
-            .read_pointer
-            .seek(SeekFrom::Start(0))
-            .expect("Failed to seek");
+        stream.read_restart();
 
         // Read fields from the stream
         let mut read_values = Vec::new();
@@ -219,7 +226,7 @@ mod tests {
 
             // Measure seek time
             let start_seek = Instant::now();
-            stream.read_pointer.seek(SeekFrom::Start(0)).expect("Failed to seek");
+            stream.read_restart();
             let duration_seek = start_seek.elapsed().as_secs_f64();
             log_seek_times.push(duration_seek.ln());
 
@@ -241,116 +248,3 @@ mod tests {
         }
     }
 }
-
-// pub trait MLPolyStream<F: Field>:
-//     Sized
-//     + Add<Self, Output = Self>
-//     + Sub<Self, Output = Self>
-//     + Mul<F, Output = Self>
-//     + ReadStream<Item = F>
-//     + WriteStream<Item = F>
-// {
-// }
-
-// pub struct DenseMLEStream<F: Field> {
-//     read_pointer: File,
-//     write_pointer: File,
-//     num_vars: usize,
-//     num_evals: usize,
-//     f: PhantomData<F>,
-// }
-
-// pub struct SumcheckEvaluations<'a, F, I> {
-//     challenges: &'a [F],
-//     evaluations: Peekable<I>,
-// }
-
-// impl<'a, F, I> SumcheckEvaluations<'a, F, I>
-// where
-//     F: Field,
-//     I: Iterator,
-//     I::Item: Borrow<F>,
-// {
-//     fn new(challenges: &'a [F], evaluations: I) -> Self {
-//         Self {
-//             challenges,
-//             evaluations,
-//         }
-//     }
-// }
-
-// impl<'a, F, I> ReadStream for SumcheckEvaluations<'a, F, I>
-// where
-//     F: Field,
-//     I: Iterator,
-//     I::Item: Borrow<F>,
-// {
-//     type Item = F;
-
-//     fn read_next(&mut self) -> Option<<Self as Iterator>::Item> {
-//         self.evaluations.next()?
-//     }
-
-//     // try not to use this method as it consumes the iterator and goes through each element and isn't efficient
-//     // fn len(&self) -> usize {
-//     //     self.evaluations.count()
-//     // }
-
-//     // fn is_empty(&self) -> bool {
-//     //     self.evaluations.peek().is_none()
-//     // }
-
-//     // fn restart(&mut self) {
-
-//     // }
-
-// }
-
-// /// Stream implementation of foleded polynomial.
-// #[derive(Clone, Copy)]
-// pub struct FoldedPolynomialStream<'a, F, S>(FoldedPolynomialTree<'a, F, S>, usize);
-// /// Iterator implementation of foleded polynomial.
-// pub struct FoldedPolynomialStreamIter<'a, F, I> {
-//     challenges: &'a [F],
-//     iterator: I,
-//     stack: Vec<(usize, F)>,
-// }
-
-// impl<'a, F, S> FoldedPolynomialStream<'a, F, S>
-// where
-//     S: Iterable,
-//     F: Field,
-//     S::Item: Borrow<F>,
-// {
-//     /// Initialize a new folded polynomial stream.
-//     pub fn new(coefficients: &'a S, challenges: &'a [F]) -> Self {
-//         let tree = FoldedPolynomialTree::new(coefficients, challenges);
-//         let len = challenges.len();
-//         Self(tree, len)
-//     }
-// }
-
-// impl<'a, F, S> Iterable for FoldedPolynomialStream<'a, F, S>
-// where
-//     S: Iterable,
-//     F: Field,
-//     S::Item: Borrow<F>,
-// {
-//     type Item = F;
-//     type Iter = FoldedPolynomialStreamIter<'a, F, S::Iter>;
-
-//     fn iter(&self) -> Self::Iter {
-//         let iterator = self.0.coefficients.iter();
-//         let challenges = self.0.challenges;
-//         let stack = init_stack(self.0.coefficients.len(), challenges.len());
-//         FoldedPolynomialStreamIter {
-//             iterator,
-//             challenges,
-//             stack,
-//         }
-//     }
-
-//     fn len(&self) -> usize {
-//         ceil_div(self.0.len(), 1 << self.0.challenges.len())
-//     }
-// }
