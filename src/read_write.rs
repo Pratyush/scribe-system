@@ -2,6 +2,7 @@ use ark_ff::Field;
 use core::marker::PhantomData;
 use std::fs::File;
 use std::io::{Seek, SeekFrom};
+use tempfile::tempfile;
 
 pub trait ReadStream: Send + Sync {
     type Item;
@@ -74,9 +75,21 @@ impl<F: Field> WriteStream for DenseMLPolyStream<F> {
 }
 
 impl<F: Field> DenseMLPolyStream<F> {
-    pub fn new(num_vars: usize, num_evals: usize, read_path: &str, write_path: &str) -> Self {
+    pub fn new_from_path(num_vars: usize, num_evals: usize, read_path: &str, write_path: &str) -> Self {
         let read_pointer = File::open(read_path).unwrap();
         let write_pointer = File::create(write_path).unwrap();
+        Self {
+            read_pointer,
+            write_pointer,
+            num_vars,
+            num_evals,
+            f: PhantomData,
+        }
+    }
+
+    pub fn new_from_tempfile(num_vars: usize, num_evals: usize) -> Self {
+        let read_pointer = tempfile().expect("Failed to create a temporary file");
+        let write_pointer = read_pointer.try_clone().expect("Failed to clone the file handle");
         Self {
             read_pointer,
             write_pointer,
