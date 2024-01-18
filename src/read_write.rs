@@ -1,7 +1,7 @@
 use ark_ff::Field;
 use core::marker::PhantomData;
 use std::{fs::File, io::{BufReader, BufWriter}};
-use std::io::{Seek, SeekFrom};
+use std::io::Seek;
 use tempfile::tempfile;
 
 pub trait ReadStream: Send + Sync {
@@ -32,21 +32,12 @@ impl<F: Field> ReadStream for DenseMLPolyStream<F> {
     type Item = F;
 
     fn read_next(&mut self) -> Option<F> {
-        match F::deserialize_uncompressed_unchecked(&mut self.read_pointer) {
-            Ok(field) => {
-                // println!("Deserialized field: {:?}", field);
-                Some(field)
-            }
-            Err(_) => {
-                // Handle error or EOF
-                None
-            }
-        }
+        F::deserialize_uncompressed_unchecked(&mut self.read_pointer).ok() 
     }
 
     fn read_restart(&mut self) {
         self.read_pointer
-            .seek(SeekFrom::Start(0))
+            .rewind()
             .expect("Failed to seek");
     }
 }
@@ -55,21 +46,12 @@ impl<F: Field> WriteStream for DenseMLPolyStream<F> {
     type Item = F;
 
     fn write_next(&mut self, field: Self::Item) -> Option<()> {
-        match field.serialize_uncompressed(&mut self.write_pointer) {
-            Ok(_) => {
-                // println!("Field serialized and written successfully.");
-                Some(())
-            }
-            Err(_) => {
-                // Handle serialization or write error
-                None
-            }
-        }
+        field.serialize_uncompressed(&mut self.write_pointer).ok()
     }
 
     fn write_restart(&mut self) {
         self.write_pointer
-            .seek(SeekFrom::Start(0))
+            .rewind()
             .expect("Failed to seek");
     }
 }
@@ -100,9 +82,9 @@ impl<F: Field> DenseMLPolyStream<F> {
     }
 
     pub fn swap_read_write(&mut self) {
-        std::mem::swap(self.read_pointer.get_mut(), self.write_pointer.get_mut());
         self.read_restart();
         self.write_restart();
+        std::mem::swap(self.read_pointer.get_mut(), self.write_pointer.get_mut());
     }
 }
 

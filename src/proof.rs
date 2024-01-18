@@ -80,7 +80,7 @@ mod tests {
             for elem in &field_elements {
                 stream.write_next(*elem).expect("Failed to write to stream");
             }
-            stream.write_restart();
+            stream.swap_read_write();
 
             // Create SpaceProver
             let prover = SpaceProver::new(stream);

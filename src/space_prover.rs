@@ -45,10 +45,13 @@ impl<F: Field> Prover<F> for SpaceProver<F> {
         let mut a_i0 = F::zero();
         let mut a_i1 = F::zero();
 
+        let mut i = 0u64;
         while let (Some(a_even), Some(a_odd)) = (self.stream.read_next(), self.stream.read_next()) {
             a_i0 += a_even;
             a_i1 += a_odd;
+            i += 2;
         }
+        dbg!(i.ilog2());
 
         self.stream.read_restart();
 
@@ -60,9 +63,6 @@ impl<F: Field> Prover<F> for SpaceProver<F> {
             self.stream
                 .write_next(a_even * (F::one() - challenge) + a_odd * challenge);
         }
-
-        self.stream.read_restart();
-        self.stream.write_restart();
 
         self.stream.swap_read_write();
 
