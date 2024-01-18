@@ -1,6 +1,6 @@
 use ark_ff::Field;
 use core::marker::PhantomData;
-use std::fs::File;
+use std::{fs::File, io::{BufReader, BufWriter}};
 use std::io::{Seek, SeekFrom};
 use tempfile::tempfile;
 
@@ -21,8 +21,8 @@ pub trait WriteStream: Send + Sync {
 }
 
 pub struct DenseMLPolyStream<F: Field> {
-    read_pointer: File,
-    write_pointer: File,
+    read_pointer: BufReader<File>,
+    write_pointer: BufWriter<File>,
     pub num_vars: usize,
     num_evals: usize,
     f: PhantomData<F>,
@@ -76,8 +76,8 @@ impl<F: Field> WriteStream for DenseMLPolyStream<F> {
 
 impl<F: Field> DenseMLPolyStream<F> {
     pub fn new_from_path(num_vars: usize, num_evals: usize, read_path: &str, write_path: &str) -> Self {
-        let read_pointer = File::open(read_path).unwrap();
-        let write_pointer = File::create(write_path).unwrap();
+        let read_pointer = BufReader::new(File::open(read_path).unwrap());
+        let write_pointer = BufWriter::new(File::create(write_path).unwrap());
         Self {
             read_pointer,
             write_pointer,
@@ -88,8 +88,8 @@ impl<F: Field> DenseMLPolyStream<F> {
     }
 
     pub fn new_from_tempfile(num_vars: usize, num_evals: usize) -> Self {
-        let read_pointer = tempfile().expect("Failed to create a temporary file");
-        let write_pointer = tempfile().expect("Failed to create a temporary file");
+        let read_pointer = BufReader::new(tempfile().expect("Failed to create a temporary file"));
+        let write_pointer = BufWriter::new(tempfile().expect("Failed to create a temporary file"));
         Self {
             read_pointer,
             write_pointer,
@@ -100,7 +100,9 @@ impl<F: Field> DenseMLPolyStream<F> {
     }
 
     pub fn swap_read_write(&mut self) {
-        std::mem::swap(&mut self.read_pointer, &mut self.write_pointer);
+        std::mem::swap(self.read_pointer.get_mut(), self.write_pointer.get_mut());
+        self.read_restart();
+        self.write_restart();
     }
 }
 
@@ -111,9 +113,7 @@ mod tests {
     use ark_std::rand::rngs::StdRng; // Using StdRng for the example
     use ark_std::rand::SeedableRng;
     use ark_test_curves::bls12_381::Fr;
-    use std::marker::PhantomData;
     use std::time::Instant;
-    use tempfile::tempfile; // Import Rng trait and SeedableRng for deterministic rng in tests
 
     #[test]
     fn test_one_field() {
@@ -123,19 +123,11 @@ mod tests {
         let random_value: Fr = Standard.sample(&mut rng);
 
         // Create a temporary file for the stream
-        let file = tempfile().expect("Failed to create a temporary file");
-        let file_clone = file.try_clone().expect("Failed to clone the file handle");
-
-        let mut stream = DenseMLPolyStream {
-            read_pointer: file,
-            write_pointer: file_clone,
-            num_vars: 0,  // example value
-            num_evals: 0, // example value
-            f: PhantomData,
-        };
+        let mut stream = DenseMLPolyStream::new_from_tempfile(0, 0);
 
         // Write to stream
         stream.write_next(random_value).expect("Failed to write");
+        stream.swap_read_write();
 
         // Seek to the beginning of the file for reading
         stream.read_restart();
@@ -159,22 +151,12 @@ mod tests {
             written_values.push(random_value);
         }
 
-        // Create a temporary file for the stream
-        let file = tempfile().expect("Failed to create a temporary file");
-        let file_clone = file.try_clone().expect("Failed to clone the file handle");
-
-        let mut stream = DenseMLPolyStream {
-            read_pointer: file,
-            write_pointer: file_clone,
-            num_vars: 0,  // example value
-            num_evals: 0, // example value
-            f: PhantomData,
-        };
-
+        let mut stream = DenseMLPolyStream::new_from_tempfile(0, 0);
         // Write all fields to the stream
         for value in &written_values {
             stream.write_next(*value).expect("Failed to write");
         }
+        stream.swap_read_write();
 
         // Seek to the beginning of the file for reading
         stream.read_restart();
@@ -207,18 +189,8 @@ mod tests {
             // Generate random fields
             let written_values: Vec<Fr> =
                 (0..num_fields).map(|_| Standard.sample(&mut rng)).collect();
-
-            // Create a temporary file for the stream
-            let file = tempfile().expect("Failed to create a temporary file");
-            let file_clone = file.try_clone().expect("Failed to clone the file handle");
-
-            let mut stream = DenseMLPolyStream {
-                read_pointer: file,
-                write_pointer: file_clone,
-                num_vars: 0,  // example value
-                num_evals: 0, // example value
-                f: PhantomData,
-            };
+            
+            let mut stream = DenseMLPolyStream::new_from_tempfile(0, 0);
 
             // Measure write time
             let start_write = Instant::now();
@@ -230,7 +202,7 @@ mod tests {
 
             // Measure seek time
             let start_seek = Instant::now();
-            stream.read_restart();
+            stream.swap_read_write();
             let duration_seek = start_seek.elapsed().as_secs_f64();
             log_seek_times.push(duration_seek.ln());
 
