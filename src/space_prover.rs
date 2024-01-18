@@ -40,12 +40,29 @@ impl<F: Field> Prover<F> for SpaceProver<F> {
             return None;
         }
 
+        let one = F::ONE;
         let mut a_i0 = F::zero();
         let mut a_i1 = F::zero();
-
-        while let (Some(a_even), Some(a_odd)) = (self.stream.read_next(), self.stream.read_next()) {
-            a_i0 += a_even;
-            a_i1 += a_odd;
+        // Previous round's update
+        while let (Some(a_even_0), Some(a_odd_0), Some(a_even_1), Some(a_odd_1)) = (
+            self.stream.read_next(),
+            self.stream.read_next(),
+            self.stream.read_next(),
+            self.stream.read_next(),
+        ) {
+            if let Some(challenge) = self.challenges.last() {
+                let temp_0 = a_even_0 * (one - challenge) + a_odd_0 * challenge;
+                let temp_1 = a_even_1 * (one - challenge) + a_odd_1 * challenge;
+                self.stream.write_next(temp_0);
+                self.stream.write_next(temp_1);
+                a_i0 += temp_0;
+                a_i1 += temp_1;
+                self.stream.swap_read_write();
+            } else {
+                // Handle first round
+                a_i0 += a_even_0 + a_even_1;
+                a_i1 += a_odd_0 + a_odd_1;
+            }
         }
 
         let message = RoundMsg(a_i0, a_i1);
@@ -55,17 +72,6 @@ impl<F: Field> Prover<F> for SpaceProver<F> {
         // compute the challenge for the next round
         let challenge = transcript.get_challenge(b"challenge");
         self.challenges.push(challenge);
-
-        self.stream.read_restart();
-
-        let one = F::ONE;
-        while let (Some(a_even), Some(a_odd)) = (self.stream.read_next(), self.stream.read_next()) {
-            self.stream
-                .write_next(a_even * (one - challenge) + a_odd * challenge);
-        }
-
-        self.stream.swap_read_write();
-
         self.round += 1;
 
         Some((message, challenge))

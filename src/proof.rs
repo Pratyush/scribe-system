@@ -53,7 +53,7 @@ mod tests {
     fn benchmark_proof_creation() {
         let mut log_proof_times = Vec::new();
 
-        for n in 1..=20 {
+        for n in 1..=24 {
             let num_vars = n;
             let num_evals = 2usize.pow(n as u32);
             let mut rng = StdRng::seed_from_u64(42); // Seed for reproducibility
