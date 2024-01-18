@@ -106,10 +106,7 @@ impl<F: Field> DenseMLPolyStream<F> {
 }
 
 // TODO: flesh this out.
-pub trait DenseMLPoly<F: Field>: 
-    ReadStream<Item = F> 
-    + WriteStream<Item = F> 
-{
+pub trait DenseMLPoly<F: Field>: ReadStream<Item = F> + WriteStream<Item = F> {
     fn add(self, other: impl DenseMLPoly<F>) -> impl DenseMLPoly<F>;
     fn prod(self, other: impl DenseMLPoly<F>) -> impl DenseMLPoly<F>;
     fn hadamard(self, other: impl DenseMLPoly<F>) -> impl DenseMLPoly<F>;

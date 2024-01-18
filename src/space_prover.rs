@@ -43,28 +43,40 @@ impl<F: Field> Prover<F> for SpaceProver<F> {
         let one = F::ONE;
         let mut a_i0 = F::zero();
         let mut a_i1 = F::zero();
-        while let (Some(a_even_0), Some(a_odd_0), Some(a_even_1), Some(a_odd_1)) = (
-            self.stream.read_next(),
-            self.stream.read_next(),
-            self.stream.read_next(),
-            self.stream.read_next(),
-        ) {
-            if let Some(challenge) = self.challenges.last() {
-                // Compute previous round update
-                let temp_0 = a_even_0 * (one - challenge) + a_odd_0 * challenge;
-                let temp_1 = a_even_1 * (one - challenge) + a_odd_1 * challenge;
-                self.stream.write_next(temp_0);
-                self.stream.write_next(temp_1);
-                // Compute current round message
-                a_i0 += temp_0;
-                a_i1 += temp_1;
-                self.stream.swap_read_write();
+        while let (Some(a_even_0), Some(a_odd_0)) =
+            (self.stream.read_next(), self.stream.read_next())
+        {
+            if let (Some(a_even_1), Some(a_odd_1)) =
+                (self.stream.read_next(), self.stream.read_next())
+            {
+                if let Some(challenge) = self.challenges.last() {
+                    // Compute previous round update
+                    let temp_0 = a_even_0 * (one - challenge) + a_odd_0 * challenge;
+                    let temp_1 = a_even_1 * (one - challenge) + a_odd_1 * challenge;
+                    self.stream.write_next(temp_0);
+                    self.stream.write_next(temp_1);
+                    // Compute current round message
+                    a_i0 += temp_0;
+                    a_i1 += temp_1;
+                    self.stream.swap_read_write();
+                } else {
+                    // Handle first round
+                    a_i0 += a_even_0 + a_even_1;
+                    a_i1 += a_odd_0 + a_odd_1;
+                }
             } else {
-                // Handle first round
-                a_i0 += a_even_0 + a_even_1;
-                a_i1 += a_odd_0 + a_odd_1;
+                if let Some(challenge) = self.challenges.last() {
+                    // Compute previous round update
+                    let temp_0 = a_even_0 * (one - challenge) + a_odd_0 * challenge;
+                    // Compute current round message
+                    a_i0 += temp_0;
+                } else {
+                    // Handle first round
+                    a_i0 += a_even_0 + a_odd_0;
+                }
             }
         }
+        // Handle the case where we read (Some, Some, None, None)
 
         let message = RoundMsg(a_i0, a_i1);
 
