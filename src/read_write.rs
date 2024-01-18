@@ -82,8 +82,19 @@ impl<F: Field> DenseMLPolyStream<F> {
     }
 
     pub fn swap_read_write(&mut self) {
+        // Truncate the read file to the current position
+        let cur_read_pos = self.read_pointer.stream_position().unwrap();
+        self.read_pointer.get_ref().set_len(cur_read_pos).unwrap();
+        // Seek to the beginning of the file for reading
         self.read_restart();
+
+        // Truncate the write file to the current position
+        let cur_write_pos = self.write_pointer.stream_position().unwrap();
+        self.write_pointer.get_ref().set_len(cur_write_pos).unwrap();
+        // Seek to the beginning of the file for writing
         self.write_restart();
+
+        // Swap the read and write pointers
         std::mem::swap(self.read_pointer.get_mut(), self.write_pointer.get_mut());
     }
 }

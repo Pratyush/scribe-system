@@ -51,7 +51,6 @@ impl<F: Field> Prover<F> for SpaceProver<F> {
             a_i1 += a_odd;
             i += 2;
         }
-        dbg!(i.ilog2());
 
         self.stream.read_restart();
 
@@ -59,9 +58,10 @@ impl<F: Field> Prover<F> for SpaceProver<F> {
     }
 
     fn update_stream(&mut self, challenge: F) {
+        let one = F::ONE;
         while let (Some(a_even), Some(a_odd)) = (self.stream.read_next(), self.stream.read_next()) {
             self.stream
-                .write_next(a_even * (F::one() - challenge) + a_odd * challenge);
+                .write_next(a_even * (one - challenge) + a_odd * challenge);
         }
 
         self.stream.swap_read_write();
