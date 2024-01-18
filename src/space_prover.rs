@@ -1,9 +1,11 @@
 use ark_ff::Field;
 use ark_std::vec::Vec;
+use merlin::Transcript;
 
 use crate::prover::Prover;
 use crate::prover::RoundMsg;
 use crate::read_write::{DenseMLPolyStream, ReadStream, WriteStream};
+use crate::transcript::GeminiTranscript;
 
 pub struct SpaceProver<F: Field> {
     // Randomness given by the verifier
@@ -31,12 +33,8 @@ impl<F: Field> SpaceProver<F> {
 }
 
 impl<F: Field> Prover<F> for SpaceProver<F> {
-    fn next_message(&mut self, verifier_message: Option<F>) -> Option<RoundMsg<F>> {
+    fn next_message(&mut self, transcript: &mut Transcript) -> Option<(RoundMsg<F>, F)> {
         assert!(self.round <= self.tot_rounds, "More rounds than needed.");
-
-        if let Some(challenge) = verifier_message {
-            self.challenges.push(challenge);
-        }
 
         if self.round == self.tot_rounds {
             return None;
@@ -50,12 +48,16 @@ impl<F: Field> Prover<F> for SpaceProver<F> {
             a_i1 += a_odd;
         }
 
+        let message = RoundMsg(a_i0, a_i1);
+
+        // add the message sent to the transcript
+        transcript.append_serializable(b"evaluations", &message);
+        // compute the challenge for the next round
+        let challenge = transcript.get_challenge(b"challenge");
+        self.challenges.push(challenge);
+
         self.stream.read_restart();
 
-        Some(RoundMsg(a_i0, a_i1))
-    }
-
-    fn update_stream(&mut self, challenge: F) {
         let one = F::ONE;
         while let (Some(a_even), Some(a_odd)) = (self.stream.read_next(), self.stream.read_next()) {
             self.stream
@@ -65,6 +67,8 @@ impl<F: Field> Prover<F> for SpaceProver<F> {
         self.stream.swap_read_write();
 
         self.round += 1;
+
+        Some((message, challenge))
     }
 
     fn round(&self) -> usize {

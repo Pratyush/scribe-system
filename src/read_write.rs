@@ -1,7 +1,10 @@
 use ark_ff::Field;
 use core::marker::PhantomData;
-use std::{fs::File, io::{BufReader, BufWriter}};
 use std::io::Seek;
+use std::{
+    fs::File,
+    io::{BufReader, BufWriter},
+};
 use tempfile::tempfile;
 
 pub trait ReadStream: Send + Sync {
@@ -32,13 +35,11 @@ impl<F: Field> ReadStream for DenseMLPolyStream<F> {
     type Item = F;
 
     fn read_next(&mut self) -> Option<F> {
-        F::deserialize_uncompressed_unchecked(&mut self.read_pointer).ok() 
+        F::deserialize_uncompressed_unchecked(&mut self.read_pointer).ok()
     }
 
     fn read_restart(&mut self) {
-        self.read_pointer
-            .rewind()
-            .expect("Failed to seek");
+        self.read_pointer.rewind().expect("Failed to seek");
     }
 }
 
@@ -50,14 +51,17 @@ impl<F: Field> WriteStream for DenseMLPolyStream<F> {
     }
 
     fn write_restart(&mut self) {
-        self.write_pointer
-            .rewind()
-            .expect("Failed to seek");
+        self.write_pointer.rewind().expect("Failed to seek");
     }
 }
 
 impl<F: Field> DenseMLPolyStream<F> {
-    pub fn new_from_path(num_vars: usize, num_evals: usize, read_path: &str, write_path: &str) -> Self {
+    pub fn new_from_path(
+        num_vars: usize,
+        num_evals: usize,
+        read_path: &str,
+        write_path: &str,
+    ) -> Self {
         let read_pointer = BufReader::new(File::open(read_path).unwrap());
         let write_pointer = BufWriter::new(File::create(write_path).unwrap());
         Self {
@@ -182,7 +186,7 @@ mod tests {
             // Generate random fields
             let written_values: Vec<Fr> =
                 (0..num_fields).map(|_| Standard.sample(&mut rng)).collect();
-            
+
             let mut stream = DenseMLPolyStream::new_from_tempfile(0, 0);
 
             // Measure write time
