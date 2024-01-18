@@ -7,6 +7,7 @@ use std::{
 };
 use tempfile::tempfile;
 
+// TODO: merge ReadStream and WriteStream into a single trait
 pub trait ReadStream: Send + Sync {
     type Item;
 
@@ -99,8 +100,19 @@ impl<F: Field> DenseMLPolyStream<F> {
         self.write_restart();
 
         // Swap the read and write pointers
+        // TODO: swap only if cur_write_pos != 0
         std::mem::swap(self.read_pointer.get_mut(), self.write_pointer.get_mut());
     }
+}
+
+// TODO: flesh this out.
+pub trait DenseMLPoly<F: Field>: 
+    ReadStream<Item = F> 
+    + WriteStream<Item = F> 
+{
+    fn add(self, other: impl DenseMLPoly<F>) -> impl DenseMLPoly<F>;
+    fn prod(self, other: impl DenseMLPoly<F>) -> impl DenseMLPoly<F>;
+    fn hadamard(self, other: impl DenseMLPoly<F>) -> impl DenseMLPoly<F>;
 }
 
 #[cfg(test)]
