@@ -1,3 +1,4 @@
+pub mod error;
 pub mod proof;
 pub mod prover;
 pub mod read_write;

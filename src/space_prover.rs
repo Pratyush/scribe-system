@@ -58,13 +58,13 @@ impl<F: Field> Prover<F> for SpaceProver<F> {
                     // Compute current round message
                     a_i0 += temp_0;
                     a_i1 += temp_1;
-                    self.stream.swap_read_write();
                 } else {
                     // Handle first round
                     a_i0 += a_even_0 + a_even_1;
                     a_i1 += a_odd_0 + a_odd_1;
                 }
             } else {
+                // Handle the case where we read (Some, Some, None, None)
                 if let Some(challenge) = self.challenges.last() {
                     // Compute previous round update
                     let temp_0 = a_even_0 * (one - challenge) + a_odd_0 * challenge;
@@ -76,7 +76,8 @@ impl<F: Field> Prover<F> for SpaceProver<F> {
                 }
             }
         }
-        // Handle the case where we read (Some, Some, None, None)
+
+        self.stream.swap_read_write();
 
         let message = RoundMsg(a_i0, a_i1);
 

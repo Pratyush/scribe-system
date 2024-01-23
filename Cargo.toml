@@ -23,3 +23,6 @@ ark-test-curves = {git = "https://github.com/arkworks-rs/algebra"}
 ark-std = {git = "https://github.com/arkworks-rs/utils"}
 ark-serialize = {git = "https://github.com/arkworks-rs/algebra"}
 ark-serialize-derive = {git = "https://github.com/arkworks-rs/algebra"}
+
+[profile.release]
+debug-assertions = false

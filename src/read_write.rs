@@ -36,6 +36,20 @@ impl<F: Field> ReadStream for DenseMLPolyStream<F> {
     type Item = F;
 
     fn read_next(&mut self) -> Option<F> {
+        #[cfg(debug_assertions)]
+        {
+            // Get current positions of read_pointer and write_pointer
+            let read_pos = self.read_pointer.stream_position().unwrap();
+            let write_pos = self.write_pointer.stream_position().unwrap();
+
+            // Check if read position is ahead of write position and print error if not
+            if read_pos <= write_pos {
+                eprintln!("Error: Read position is not ahead of write position.");
+                return None;
+            }
+        }
+
+        // Proceed with deserialization
         F::deserialize_uncompressed_unchecked(&mut self.read_pointer).ok()
     }
 
@@ -48,6 +62,20 @@ impl<F: Field> WriteStream for DenseMLPolyStream<F> {
     type Item = F;
 
     fn write_next(&mut self, field: Self::Item) -> Option<()> {
+        #[cfg(debug_assertions)]
+        {
+            // Get current positions of read_pointer and write_pointer
+            let read_pos = self.read_pointer.stream_position().unwrap();
+            let write_pos = self.write_pointer.stream_position().unwrap();
+
+            // Check if read position is ahead of write position and print error if not
+            if read_pos <= write_pos {
+                eprintln!("Error: Read position is not ahead of write position.");
+                return None;
+            }
+        }
+
+        // Proceed with serialization
         field.serialize_uncompressed(&mut self.write_pointer).ok()
     }
 
@@ -99,9 +127,10 @@ impl<F: Field> DenseMLPolyStream<F> {
         // Seek to the beginning of the file for writing
         self.write_restart();
 
-        // Swap the read and write pointers
-        // TODO: swap only if cur_write_pos != 0
-        std::mem::swap(self.read_pointer.get_mut(), self.write_pointer.get_mut());
+        // Swap the read and write pointers, only if current write pointer position isn't zero, while read should always be ahead of write
+        if cur_write_pos != 0 {
+            std::mem::swap(self.read_pointer.get_mut(), self.write_pointer.get_mut());
+        }
     }
 }
 
