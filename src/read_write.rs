@@ -12,7 +12,12 @@ use tempfile::tempfile;
 pub trait ReadWriteStream: Send + Sync {
     type Item;
 
-    fn new(num_vars: usize, num_evals: usize, read_path: Option<&str>, write_path: Option<&str>) -> Self;
+    fn new(
+        num_vars: usize,
+        num_evals: usize,
+        read_path: Option<&str>,
+        write_path: Option<&str>,
+    ) -> Self;
 
     fn read_next(&mut self) -> Option<Self::Item>;
 
@@ -40,7 +45,12 @@ pub struct DenseMLPolyStream<F: Field> {
 impl<F: Field> ReadWriteStream for DenseMLPolyStream<F> {
     type Item = F;
 
-    fn new(num_vars: usize, num_evals: usize, read_path: Option<&str>, write_path: Option<&str>) -> Self {
+    fn new(
+        num_vars: usize,
+        num_evals: usize,
+        read_path: Option<&str>,
+        write_path: Option<&str>,
+    ) -> Self {
         if let (Some(read_path), Some(write_path)) = (read_path, write_path) {
             Self::new_from_path(num_vars, num_evals, read_path, write_path)
         } else {
@@ -158,11 +168,13 @@ impl<F: Field> DenseMLPolyStream<F> {
             std::mem::swap(self.read_pointer.get_mut(), self.write_pointer.get_mut());
         }
     }
-
 }
 
 pub trait DenseMLPoly<F: Field>: ReadWriteStream<Item = F> {
-    fn add(mut self, mut other: Self, read_path: Option<&str>, write_path: Option<&str>) -> Self where Self: Sized {
+    fn add(mut self, mut other: Self, read_path: Option<&str>, write_path: Option<&str>) -> Self
+    where
+        Self: Sized,
+    {
         // Create a new stream for the result.
         let mut result_stream = Self::new(self.num_vars(), self.num_evals(), read_path, write_path);
 
@@ -178,7 +190,10 @@ pub trait DenseMLPoly<F: Field>: ReadWriteStream<Item = F> {
         result_stream
     }
 
-    fn prod(mut self, mut other: Self, read_path: Option<&str>, write_path: Option<&str>) -> Self where Self: Sized {
+    fn prod(mut self, mut other: Self, read_path: Option<&str>, write_path: Option<&str>) -> Self
+    where
+        Self: Sized,
+    {
         // Create a new stream for the result.
         let mut result_stream = Self::new(self.num_vars(), self.num_evals(), read_path, write_path);
 
@@ -196,7 +211,6 @@ pub trait DenseMLPoly<F: Field>: ReadWriteStream<Item = F> {
 
     fn hadamard(self, other: impl DenseMLPoly<F>) -> impl DenseMLPoly<F>;
 }
-
 
 #[cfg(test)]
 mod tests {
