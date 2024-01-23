@@ -78,7 +78,7 @@ impl<F: Field> Sumcheck<F> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::read_write::{DenseMLPolyStream, WriteStream};
+    use crate::read_write::{DenseMLPolyStream, ReadWriteStream};
     use crate::space_prover::SpaceProver;
     use ark_std::rand::distributions::{Distribution, Standard};
     use ark_std::rand::rngs::StdRng; // Using StdRng for reproducibility
@@ -92,7 +92,7 @@ mod tests {
         let mut log_proof_times = Vec::new();
         let mut log_verification_times = Vec::new();
 
-        for n in 4..=24 {
+        for n in 1..=24 {
             let num_vars = n;
             let num_evals = 2usize.pow(n as u32);
             let mut rng = StdRng::seed_from_u64(42); // Seed for reproducibility
@@ -109,7 +109,9 @@ mod tests {
 
             // Write the random field elements to the stream and update asserted_sum
             for elem in &field_elements {
-                stream.write_next(*elem).expect("Failed to write to stream");
+                stream
+                    .write_next_unchecked(*elem)
+                    .expect("Failed to write to stream");
                 asserted_sum += *elem; // Update the asserted_sum
             }
 

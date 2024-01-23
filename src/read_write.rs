@@ -1,4 +1,5 @@
 use ark_ff::Field;
+use ark_serialize::Read;
 use core::marker::PhantomData;
 use std::io::Seek;
 use std::{
@@ -7,17 +8,12 @@ use std::{
 };
 use tempfile::tempfile;
 
-// TODO: merge ReadStream and WriteStream into a single trait
-pub trait ReadStream: Send + Sync {
+pub trait ReadWriteStream: Send + Sync {
     type Item;
 
     fn read_next(&mut self) -> Option<Self::Item>;
 
     fn read_restart(&mut self);
-}
-
-pub trait WriteStream: Send + Sync {
-    type Item;
 
     fn write_next(&mut self, field: Self::Item) -> Option<()>;
 
@@ -32,7 +28,7 @@ pub struct DenseMLPolyStream<F: Field> {
     f: PhantomData<F>,
 }
 
-impl<F: Field> ReadStream for DenseMLPolyStream<F> {
+impl<F: Field> ReadWriteStream for DenseMLPolyStream<F> {
     type Item = F;
 
     fn read_next(&mut self) -> Option<F> {
@@ -43,8 +39,10 @@ impl<F: Field> ReadStream for DenseMLPolyStream<F> {
             let write_pos = self.write_pointer.stream_position().unwrap();
 
             // Check if read position is ahead of write position and print error if not
-            if read_pos <= write_pos {
-                eprintln!("Error: Read position is not ahead of write position.");
+            if read_pos < write_pos {
+                println!("Read position: {}", read_pos);
+                println!("Write position: {}", write_pos);
+                eprintln!("`read_next` Error: Read position is not ahead of write position.");
                 return None;
             }
         }
@@ -56,10 +54,6 @@ impl<F: Field> ReadStream for DenseMLPolyStream<F> {
     fn read_restart(&mut self) {
         self.read_pointer.rewind().expect("Failed to seek");
     }
-}
-
-impl<F: Field> WriteStream for DenseMLPolyStream<F> {
-    type Item = F;
 
     fn write_next(&mut self, field: Self::Item) -> Option<()> {
         #[cfg(debug_assertions)]
@@ -69,8 +63,10 @@ impl<F: Field> WriteStream for DenseMLPolyStream<F> {
             let write_pos = self.write_pointer.stream_position().unwrap();
 
             // Check if read position is ahead of write position and print error if not
-            if read_pos <= write_pos {
-                eprintln!("Error: Read position is not ahead of write position.");
+            if read_pos < write_pos {
+                println!("Read position: {}", read_pos);
+                println!("Write position: {}", write_pos);
+                eprintln!("`write_next` Error: Read position is not ahead of write position.");
                 return None;
             }
         }
@@ -132,10 +128,15 @@ impl<F: Field> DenseMLPolyStream<F> {
             std::mem::swap(self.read_pointer.get_mut(), self.write_pointer.get_mut());
         }
     }
+
+    // Used for testing purpose when writing to a random stream without checking read and write pointer positions
+    pub fn write_next_unchecked(&mut self, field: F) -> Option<()> {
+        field.serialize_uncompressed(&mut self.write_pointer).ok()
+    }
 }
 
 // TODO: flesh this out.
-pub trait DenseMLPoly<F: Field>: ReadStream<Item = F> + WriteStream<Item = F> {
+pub trait DenseMLPoly<F: Field>: ReadWriteStream<Item = F> {
     fn add(self, other: impl DenseMLPoly<F>) -> impl DenseMLPoly<F>;
     fn prod(self, other: impl DenseMLPoly<F>) -> impl DenseMLPoly<F>;
     fn hadamard(self, other: impl DenseMLPoly<F>) -> impl DenseMLPoly<F>;
