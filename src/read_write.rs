@@ -1,6 +1,7 @@
 use ark_ff::Field;
 use ark_serialize::Read;
 use core::marker::PhantomData;
+use std::fs::read;
 use std::io::Seek;
 use std::{
     fs::File,
@@ -11,25 +12,41 @@ use tempfile::tempfile;
 pub trait ReadWriteStream: Send + Sync {
     type Item;
 
+    fn new(num_vars: usize, num_evals: usize, read_path: Option<&str>, write_path: Option<&str>) -> Self;
+
     fn read_next(&mut self) -> Option<Self::Item>;
 
     fn read_restart(&mut self);
 
     fn write_next(&mut self, field: Self::Item) -> Option<()>;
 
+    fn write_next_unchecked(&mut self, field: Self::Item) -> Option<()>;
+
     fn write_restart(&mut self);
+
+    fn num_vars(&self) -> usize;
+
+    fn num_evals(&self) -> usize;
 }
 
 pub struct DenseMLPolyStream<F: Field> {
     read_pointer: BufReader<File>,
     write_pointer: BufWriter<File>,
     pub num_vars: usize,
-    num_evals: usize,
+    pub num_evals: usize,
     f: PhantomData<F>,
 }
 
 impl<F: Field> ReadWriteStream for DenseMLPolyStream<F> {
     type Item = F;
+
+    fn new(num_vars: usize, num_evals: usize, read_path: Option<&str>, write_path: Option<&str>) -> Self {
+        if let (Some(read_path), Some(write_path)) = (read_path, write_path) {
+            Self::new_from_path(num_vars, num_evals, read_path, write_path)
+        } else {
+            Self::new_from_tempfile(num_vars, num_evals)
+        }
+    }
 
     fn read_next(&mut self) -> Option<F> {
         #[cfg(debug_assertions)]
@@ -75,8 +92,21 @@ impl<F: Field> ReadWriteStream for DenseMLPolyStream<F> {
         field.serialize_uncompressed(&mut self.write_pointer).ok()
     }
 
+    // Used for testing purpose when writing to a random stream without checking read and write pointer positions
+    fn write_next_unchecked(&mut self, field: F) -> Option<()> {
+        field.serialize_uncompressed(&mut self.write_pointer).ok()
+    }
+
     fn write_restart(&mut self) {
         self.write_pointer.rewind().expect("Failed to seek");
+    }
+
+    fn num_vars(&self) -> usize {
+        self.num_vars
+    }
+
+    fn num_evals(&self) -> usize {
+        self.num_evals
     }
 }
 
@@ -129,18 +159,44 @@ impl<F: Field> DenseMLPolyStream<F> {
         }
     }
 
-    // Used for testing purpose when writing to a random stream without checking read and write pointer positions
-    pub fn write_next_unchecked(&mut self, field: F) -> Option<()> {
-        field.serialize_uncompressed(&mut self.write_pointer).ok()
-    }
 }
 
-// TODO: flesh this out.
 pub trait DenseMLPoly<F: Field>: ReadWriteStream<Item = F> {
-    fn add(self, other: impl DenseMLPoly<F>) -> impl DenseMLPoly<F>;
-    fn prod(self, other: impl DenseMLPoly<F>) -> impl DenseMLPoly<F>;
+    fn add(mut self, mut other: Self, read_path: Option<&str>, write_path: Option<&str>) -> Self where Self: Sized {
+        // Create a new stream for the result.
+        let mut result_stream = Self::new(self.num_vars(), self.num_evals(), read_path, write_path);
+
+        // Restart both input streams to ensure they are read from the beginning
+        self.read_restart();
+        other.read_restart();
+
+        while let (Some(a), Some(b)) = (self.read_next(), other.read_next()) {
+            // Perform addition and write the result to the new stream
+            result_stream.write_next_unchecked(a + b);
+        }
+
+        result_stream
+    }
+
+    fn prod(mut self, mut other: Self, read_path: Option<&str>, write_path: Option<&str>) -> Self where Self: Sized {
+        // Create a new stream for the result.
+        let mut result_stream = Self::new(self.num_vars(), self.num_evals(), read_path, write_path);
+
+        // Restart both input streams to ensure they are read from the beginning
+        self.read_restart();
+        other.read_restart();
+
+        while let (Some(a), Some(b)) = (self.read_next(), other.read_next()) {
+            // Perform multiplication and write the result to the new stream
+            result_stream.write_next_unchecked(a * b);
+        }
+
+        result_stream
+    }
+
     fn hadamard(self, other: impl DenseMLPoly<F>) -> impl DenseMLPoly<F>;
 }
+
 
 #[cfg(test)]
 mod tests {
