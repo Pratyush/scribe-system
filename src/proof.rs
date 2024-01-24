@@ -1,6 +1,7 @@
 use crate::error::{VerificationError, VerificationResult};
 use crate::prover::Prover;
 use crate::prover::RoundMsg;
+use crate::transcript::GeminiTranscript;
 use ark_ff::Field;
 use ark_std::vec::Vec;
 
@@ -14,6 +15,15 @@ pub struct Sumcheck<F: Field> {
     pub challenges: Vec<F>,
     /// The number of rounds in the protocol.
     rounds: usize,
+}
+
+/// Subclaim when verifier is convinced
+/// Needs to be checked against a query to the polynomial oracle
+pub struct SubClaim<F: Field> {
+    /// the multi-dimensional point that this multilinear extension is evaluated to
+    pub point: Vec<F>,
+    /// the expected evaluation
+    pub expected_evaluation: F,
 }
 
 impl<F: Field> Sumcheck<F> {
@@ -37,11 +47,21 @@ impl<F: Field> Sumcheck<F> {
         }
     }
 
-    pub fn verify(&self, asserted_sum: F) -> VerificationResult {
+    pub fn verify(&self, asserted_sum: F, transcript: &mut Transcript) -> VerificationResult<F> {
         // Check if there are no messages or challenges
         if self.messages.is_empty() || self.challenges.is_empty() {
             eprint!("No messages or challenges to verify");
             return Err(VerificationError);
+        }
+
+        // Calculate challenges independently
+        let mut challenges = Vec::with_capacity(self.rounds);
+        for round in 0..self.rounds {
+            // add the message sent to the transcript
+            transcript.append_serializable(b"evaluations", &self.messages[round]);
+            // compute the challenge for the next round
+            let challenge: F = transcript.get_challenge(b"challenge");
+            challenges.push(challenge);
         }
 
         // Check the first round
@@ -52,26 +72,27 @@ impl<F: Field> Sumcheck<F> {
         }
 
         let one = F::one();
+        let mut current_msg = RoundMsg(F::zero(), F::zero());
 
         // Check subsequent rounds
         for round in 1..self.rounds {
-            let current_msg = &self.messages[round];
+            current_msg = self.messages[round];
             let previous_msg = &self.messages[round - 1];
             let challenge = self.challenges[round - 1];
 
+            // Calculate polynomial of last round evaluated at challenge of last round
             let expected_sum = (one - challenge) * previous_msg.0 + challenge * previous_msg.1;
             if current_msg.0 + current_msg.1 != expected_sum {
-                // println!("Expected sum: {}", expected_sum);
-                // println!("Current sum: {}", current_msg.0 + current_msg.1);
-                // println!("    Current message 0: {:?}", current_msg.0);
-                // println!("    Current message 1: {:?}", current_msg.1);
-                // eprintln!("Verification failed in round {}", round);
                 return Err(VerificationError);
             }
         }
 
         // If all checks pass
-        Ok(())
+        let challenge = challenges[self.rounds - 1];
+        Ok(SubClaim {
+            point: challenges,
+            expected_evaluation: (one - challenge) * current_msg.0 + challenge * current_msg.1,
+        })
     }
 }
 
@@ -122,11 +143,11 @@ mod tests {
 
             // Initialize a Transcript
             let label = b"benchmark";
-            let mut transcript = Transcript::new(label);
+            let mut transcript_prover = Transcript::new(label);
 
             // Measure proof creation time
             let start = Instant::now();
-            let proof = Sumcheck::prove(&mut transcript, prover);
+            let proof = Sumcheck::prove(&mut transcript_prover, prover);
             let duration = start.elapsed().as_secs_f64();
             log_proof_times.push(duration.ln());
 
@@ -134,8 +155,10 @@ mod tests {
             // println!("challenge: {:?}", proof.challenges);
 
             // Measure verification time
+            let mut transcript_verifier = Transcript::new(label);
+
             let start = Instant::now();
-            let verification_result = proof.verify(asserted_sum);
+            let verification_result = proof.verify(asserted_sum, &mut transcript_verifier);
             let verification_duration = start.elapsed().as_secs_f64();
             log_verification_times.push(verification_duration.ln());
 

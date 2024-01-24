@@ -1,5 +1,6 @@
 //! Collection of errors and falurest in the proof system.
 
+use crate::proof::SubClaim;
 use ark_std::fmt;
 
 /// Error identifying a failure in the proof verification.
@@ -13,4 +14,4 @@ impl fmt::Display for VerificationError {
 }
 
 /// Verification result.
-pub type VerificationResult = ark_std::result::Result<(), VerificationError>;
+pub type VerificationResult<F> = ark_std::result::Result<SubClaim<F>, VerificationError>;
