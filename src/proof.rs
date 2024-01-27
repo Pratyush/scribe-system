@@ -126,7 +126,7 @@ mod tests {
             let mut asserted_sum = Fr::from(0);
 
             // Initialize DenseMLPolyStream
-            let mut stream = DenseMLPolyStream::new_from_tempfile(num_vars, num_evals);
+            let mut stream = DenseMLPolyStream::new_from_tempfile(num_vars);
 
             // Write the random field elements to the stream and update asserted_sum
             for elem in &field_elements {

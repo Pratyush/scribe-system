@@ -1,8 +1,14 @@
 use ark_ff::Field;
+use ark_ff::PrimeField;
 use ark_serialize::Read;
+use ark_std::end_timer;
+use ark_std::rand::RngCore;
+use ark_std::start_timer;
 use core::marker::PhantomData;
 use std::fs::read;
 use std::io::Seek;
+use std::sync::Arc;
+use std::sync::Mutex;
 use std::{
     fs::File,
     io::{BufReader, BufWriter},
@@ -12,12 +18,7 @@ use tempfile::tempfile;
 pub trait ReadWriteStream: Send + Sync {
     type Item;
 
-    fn new(
-        num_vars: usize,
-        num_evals: usize,
-        read_path: Option<&str>,
-        write_path: Option<&str>,
-    ) -> Self;
+    fn new(num_vars: usize, read_path: Option<&str>, write_path: Option<&str>) -> Self;
 
     fn read_next(&mut self) -> Option<Self::Item>;
 
@@ -30,31 +31,24 @@ pub trait ReadWriteStream: Send + Sync {
     fn write_restart(&mut self);
 
     fn num_vars(&self) -> usize;
-
-    fn num_evals(&self) -> usize;
 }
 
+#[derive(Debug)]
 pub struct DenseMLPolyStream<F: Field> {
     read_pointer: BufReader<File>,
     write_pointer: BufWriter<File>,
     pub num_vars: usize,
-    pub num_evals: usize,
     f: PhantomData<F>,
 }
 
 impl<F: Field> ReadWriteStream for DenseMLPolyStream<F> {
     type Item = F;
 
-    fn new(
-        num_vars: usize,
-        num_evals: usize,
-        read_path: Option<&str>,
-        write_path: Option<&str>,
-    ) -> Self {
+    fn new(num_vars: usize, read_path: Option<&str>, write_path: Option<&str>) -> Self {
         if let (Some(read_path), Some(write_path)) = (read_path, write_path) {
-            Self::new_from_path(num_vars, num_evals, read_path, write_path)
+            Self::new_from_path(num_vars, read_path, write_path)
         } else {
-            Self::new_from_tempfile(num_vars, num_evals)
+            Self::new_from_tempfile(num_vars)
         }
     }
 
@@ -114,40 +108,43 @@ impl<F: Field> ReadWriteStream for DenseMLPolyStream<F> {
     fn num_vars(&self) -> usize {
         self.num_vars
     }
-
-    fn num_evals(&self) -> usize {
-        self.num_evals
-    }
 }
 
 impl<F: Field> DenseMLPolyStream<F> {
-    pub fn new_from_path(
-        num_vars: usize,
-        num_evals: usize,
-        read_path: &str,
-        write_path: &str,
-    ) -> Self {
+    pub fn new_from_path(num_vars: usize, read_path: &str, write_path: &str) -> Self {
         let read_pointer = BufReader::new(File::open(read_path).unwrap());
         let write_pointer = BufWriter::new(File::create(write_path).unwrap());
         Self {
             read_pointer,
             write_pointer,
             num_vars,
-            num_evals,
             f: PhantomData,
         }
     }
 
-    pub fn new_from_tempfile(num_vars: usize, num_evals: usize) -> Self {
+    pub fn new_from_tempfile(num_vars: usize) -> Self {
         let read_pointer = BufReader::new(tempfile().expect("Failed to create a temporary file"));
         let write_pointer = BufWriter::new(tempfile().expect("Failed to create a temporary file"));
         Self {
             read_pointer,
             write_pointer,
             num_vars,
-            num_evals,
             f: PhantomData,
         }
+    }
+
+    pub fn from_evaluations_vec(
+        num_vars: usize,
+        evaluations: Vec<F>,
+        read_path: Option<&str>,
+        write_path: Option<&str>,
+    ) -> Self {
+        let mut stream = Self::new(num_vars, read_path, write_path);
+        for e in evaluations {
+            stream.write_next_unchecked(e).expect("Failed to write");
+        }
+        stream.swap_read_write();
+        stream
     }
 
     pub fn swap_read_write(&mut self) {
@@ -168,6 +165,109 @@ impl<F: Field> DenseMLPolyStream<F> {
             std::mem::swap(self.read_pointer.get_mut(), self.write_pointer.get_mut());
         }
     }
+
+    // store the result in a tempfile; might provide an option for writing to a new file path instead
+    // original version spits out a new poly, while we modify the original poly (stream)
+    pub fn fix_variables(&mut self, partial_point: &[F]) {
+        assert!(
+            partial_point.len() <= self.num_vars,
+            "invalid size of partial point"
+        );
+        // let mut poly = self.evaluations.to_vec();
+        let nv = self.num_vars;
+        let dim = partial_point.len();
+        let one = F::one();
+
+        // let mut return_stream = Self::new_from_tempfile(self.num_vars - partial_point.len());
+
+        // evaluate single variable of partial point from left to right
+        // for i in 1..dim + 1 {
+        //     let r = partial_point[i - 1];
+        //     let one = F::one();
+
+        //     if i == dim {
+        //         while let (Some(even), Some(odd)) = (self.read_next(), self.read_next()) {
+        //             return_stream.write_next(even * (one - r) + odd * r);
+        //         }
+        //     } else {
+        //         while let (Some(even), Some(odd)) = (self.read_next(), self.read_next()) {
+        //             self.write_next(even * (one - r) + odd * r);
+        //         }
+        //         self.swap_read_write();
+        //     }
+        // }
+
+        // return_stream
+
+        // evaluate single variable of partial point from left to right
+        for i in 1..=dim {
+            let r = partial_point[i - 1];
+            while let (Some(even), Some(odd)) = (self.read_next(), self.read_next()) {
+                self.write_next(even * (one - r) + odd * r);
+            }
+            self.swap_read_write();
+        }
+    }
+
+    // Evaluate at a specific point to one field element
+    pub fn evaluate(&mut self, point: &[F]) -> Option<F> {
+        if point.len() == self.num_vars {
+            self.fix_variables(point);
+            Some(self.read_next().expect("Failed to read"))
+        } else {
+            None
+        }
+    }
+
+    pub fn rand<R: RngCore>(num_vars: usize, rng: &mut R) -> Self {
+        Self::from_evaluations_vec(
+            num_vars,
+            (0..(1 << num_vars)).map(|_| F::rand(rng)).collect(),
+            None,
+            None,
+        )
+    }
+
+    // create a vector of random field elements for each stream
+    // then load the vector into the stream
+    // vectosr are loaded in memory so this might not be scalable
+    pub fn random_mle_list<R: RngCore>(
+        nv: usize,
+        degree: usize,
+        rng: &mut R,
+        read_path: Option<&str>,
+        write_path: Option<&str>,
+    ) -> (Vec<Arc<Mutex<DenseMLPolyStream<F>>>>, F) {
+        let start = start_timer!(|| "sample random mle list");
+        let mut multiplicands = Vec::with_capacity(degree);
+        for _ in 0..degree {
+            multiplicands.push(Vec::with_capacity(1 << nv))
+        }
+        let mut sum = F::zero();
+
+        for _ in 0..(1 << nv) {
+            let mut product = F::one();
+
+            for e in multiplicands.iter_mut() {
+                let val = F::rand(rng);
+                e.push(val);
+                product *= val;
+            }
+            sum += product;
+        }
+
+        let list = multiplicands
+            .into_iter()
+            .map(|x| {
+                Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(
+                    nv, x, read_path, write_path,
+                )))
+            })
+            .collect();
+
+        end_timer!(start);
+        (list, sum)
+    }
 }
 
 pub trait DenseMLPoly<F: Field>: ReadWriteStream<Item = F> {
@@ -176,7 +276,7 @@ pub trait DenseMLPoly<F: Field>: ReadWriteStream<Item = F> {
         Self: Sized,
     {
         // Create a new stream for the result.
-        let mut result_stream = Self::new(self.num_vars(), self.num_evals(), read_path, write_path);
+        let mut result_stream = Self::new(self.num_vars(), read_path, write_path);
 
         // Restart both input streams to ensure they are read from the beginning
         self.read_restart();
@@ -195,7 +295,7 @@ pub trait DenseMLPoly<F: Field>: ReadWriteStream<Item = F> {
         Self: Sized,
     {
         // Create a new stream for the result.
-        let mut result_stream = Self::new(self.num_vars(), self.num_evals(), read_path, write_path);
+        let mut result_stream = Self::new(self.num_vars(), read_path, write_path);
 
         // Restart both input streams to ensure they are read from the beginning
         self.read_restart();
@@ -229,7 +329,7 @@ mod tests {
         let random_value: Fr = Standard.sample(&mut rng);
 
         // Create a temporary file for the stream
-        let mut stream = DenseMLPolyStream::new_from_tempfile(0, 0);
+        let mut stream = DenseMLPolyStream::new_from_tempfile(0);
 
         // Write to stream
         stream.write_next(random_value).expect("Failed to write");
@@ -257,7 +357,7 @@ mod tests {
             written_values.push(random_value);
         }
 
-        let mut stream = DenseMLPolyStream::new_from_tempfile(0, 0);
+        let mut stream = DenseMLPolyStream::new_from_tempfile(0);
         // Write all fields to the stream
         for value in &written_values {
             stream.write_next(*value).expect("Failed to write");
@@ -296,7 +396,7 @@ mod tests {
             let written_values: Vec<Fr> =
                 (0..num_fields).map(|_| Standard.sample(&mut rng)).collect();
 
-            let mut stream = DenseMLPolyStream::new_from_tempfile(0, 0);
+            let mut stream = DenseMLPolyStream::new_from_tempfile(0);
 
             // Measure write time
             let start_write = Instant::now();
