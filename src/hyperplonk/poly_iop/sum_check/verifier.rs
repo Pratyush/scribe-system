@@ -167,8 +167,10 @@ impl<F: PrimeField> SumCheckVerifier<F> for IOPVerifierState<F> {
             // 1. check if the received 'P(0) + P(1) = expected`.
             if evaluations[0] + evaluations[1] != expected {
                 return Err(PolyIOPErrors::InvalidProof(
-                    "Prover message is not consistent with the claim.".to_string(),
+                    format!("Prover message is NOT consistent with the claim. expected: {}, evaluation: {}, evaluation 0: {}, evaluation 1: {}.", expected, evaluations[0] + evaluations[1], evaluations[0], evaluations[1]),
                 ));
+            } else {
+                println!("Prover message is consistent with the claim. expected: {}, evaluation: {}, evaluation 0: {}, evaluation 1: {}.", expected, evaluations[0] + evaluations[1], evaluations[0], evaluations[1]);
             }
         }
         end_timer!(start);
@@ -324,8 +326,9 @@ fn u64_factorial(a: usize) -> u64 {
 #[cfg(test)]
 mod test {
     use super::interpolate_uni_poly;
-    use crate::poly_iop::errors::PolyIOPErrors;
-    use ark_bls12_381::Fr;
+    use crate::hyperplonk::poly_iop::errors::PolyIOPErrors;
+    // use ark_bls12_381::Fr;
+    use ark_test_curves::bls12_381::Fr;
     use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial, Polynomial};
     use ark_std::{vec::Vec, UniformRand};
 

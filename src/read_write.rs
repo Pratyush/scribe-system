@@ -166,6 +166,13 @@ impl<F: Field> DenseMLPolyStream<F> {
         }
     }
 
+    pub fn decrement_num_vars(&mut self) {
+        if self.num_vars <= 0 {
+            panic!("Cannot decrement num_vars below 0");
+        }
+        self.num_vars -= 1;
+    }
+
     // store the result in a tempfile; might provide an option for writing to a new file path instead
     // original version spits out a new poly, while we modify the original poly (stream)
     pub fn fix_variables(&mut self, partial_point: &[F]) {
@@ -173,10 +180,12 @@ impl<F: Field> DenseMLPolyStream<F> {
             partial_point.len() <= self.num_vars,
             "invalid size of partial point"
         );
+
+        println!("fix_variables challenge: {:?}", partial_point);
         // let mut poly = self.evaluations.to_vec();
         let nv = self.num_vars;
         let dim = partial_point.len();
-        let one = F::one();
+        // let one = F::one();
 
         // let mut return_stream = Self::new_from_tempfile(self.num_vars - partial_point.len());
 
@@ -201,10 +210,14 @@ impl<F: Field> DenseMLPolyStream<F> {
 
         // evaluate single variable of partial point from left to right
         for i in 1..=dim {
+            println!("fix_variables round: {:?}", i);
             let r = partial_point[i - 1];
             while let (Some(even), Some(odd)) = (self.read_next(), self.read_next()) {
-                self.write_next(even * (one - r) + odd * r);
+                println!("fix_variables even: {:?}", even);
+                println!("fix_variables odd: {:?}", odd);
+                self.write_next(even + (even - odd) * r);
             }
+            self.decrement_num_vars();
             self.swap_read_write();
         }
     }

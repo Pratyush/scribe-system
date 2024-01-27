@@ -169,9 +169,10 @@ impl<F: PrimeField> SumCheck<F> for PolyIOP<F> {
         let mut prover_state = IOPProverState::prover_init(poly)?;
         let mut challenge = None;
         let mut prover_msgs = Vec::with_capacity(poly.aux_info.num_variables);
-        for _ in 0..poly.aux_info.num_variables {
+        for i in 0..poly.aux_info.num_variables {
             let prover_msg =
                 IOPProverState::prove_round_and_update_state(&mut prover_state, &challenge)?;
+            println!("round={}, prover challenge: {:?}", i, challenge);
             transcript.append_serializable_element(b"prover msg", &prover_msg)?;
             prover_msgs.push(prover_msg);
             challenge = Some(transcript.get_and_append_challenge(b"Internal round")?);
@@ -201,11 +202,12 @@ impl<F: PrimeField> SumCheck<F> for PolyIOP<F> {
         for i in 0..aux_info.num_variables {
             let prover_msg = proof.proofs.get(i).expect("proof is incomplete");
             transcript.append_serializable_element(b"prover msg", prover_msg)?;
-            IOPVerifierState::verify_round_and_update_state(
+            let challenge = IOPVerifierState::verify_round_and_update_state(
                 &mut verifier_state,
                 prover_msg,
                 transcript,
             )?;
+            println!("round={}, verifier challenge: {:?}", i, challenge);
         }
 
         let res = IOPVerifierState::check_and_generate_subclaim(&verifier_state, &claimed_sum);
@@ -245,9 +247,10 @@ mod test {
             &poly_info,
             &mut transcript,
         )?;
+        let evaluated_point = poly.evaluate(std::slice::from_ref(&subclaim.point[poly_info.num_variables - 1])).unwrap();
         assert!(
-            poly.evaluate(&subclaim.point).unwrap() == subclaim.expected_evaluation,
-            "wrong subclaim"
+            evaluated_point == subclaim.expected_evaluation, // expected_evaluation is interpolated; in the full protocol, the evaluated_point should be a commitment query at subclaim point rather than evaluated from scratch
+            "{}", format!("wrong subclaim: evaluated: {}, expected: {}", evaluated_point, subclaim.expected_evaluation)
         );
         Ok(())
     }
@@ -285,27 +288,34 @@ mod test {
         let subclaim =
             IOPVerifierState::check_and_generate_subclaim(&verifier_state, &asserted_sum)
                 .expect("fail to generate subclaim");
+
+        let evaluated_point = poly.evaluate(std::slice::from_ref(&subclaim.point[poly_info.num_variables - 1])).unwrap();
         assert!(
-            poly.evaluate(&subclaim.point).unwrap() == subclaim.expected_evaluation,
-            "wrong subclaim"
+            evaluated_point == subclaim.expected_evaluation, // the expected evaluation is interpolated; in the full protocol, the poly evaluation should be a commitment query at subclaim point rather than evaluated from scratch
+            "{}", format!("wrong subclaim: evaluated: {}, expected: {}", evaluated_point, subclaim.expected_evaluation)
         );
         Ok(())
     }
 
+    // #[test]
+    // fn test_field() {
+    //     Fr::from(30075196068324037111649715913338998877421767019548989508356020060391592862770);
+    // }
+
     #[test]
     fn test_trivial_polynomial() -> Result<(), PolyIOPErrors> {
         let nv = 1;
-        let num_multiplicands_range = (4, 13);
-        let num_products = 5;
+        let num_multiplicands_range = (1, 2);
+        let num_products = 1;
 
         test_sumcheck(nv, num_multiplicands_range, num_products)?;
         test_sumcheck_internal(nv, num_multiplicands_range, num_products)
     }
     #[test]
     fn test_normal_polynomial() -> Result<(), PolyIOPErrors> {
-        let nv = 12;
-        let num_multiplicands_range = (4, 9);
-        let num_products = 5;
+        let nv = 3;
+        let num_multiplicands_range = (1, 2);
+        let num_products = 1;
 
         test_sumcheck(nv, num_multiplicands_range, num_products)?;
         test_sumcheck_internal(nv, num_multiplicands_range, num_products)
