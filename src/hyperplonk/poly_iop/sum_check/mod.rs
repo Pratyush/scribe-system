@@ -172,7 +172,7 @@ impl<F: PrimeField> SumCheck<F> for PolyIOP<F> {
         for i in 0..poly.aux_info.num_variables {
             let prover_msg =
                 IOPProverState::prove_round_and_update_state(&mut prover_state, &challenge)?;
-            println!("round={}, prover challenge: {:?}", i, challenge);
+            // println!("round={}, prover challenge: {:?}", i, challenge);
             transcript.append_serializable_element(b"prover msg", &prover_msg)?;
             prover_msgs.push(prover_msg);
             challenge = Some(transcript.get_and_append_challenge(b"Internal round")?);
@@ -207,7 +207,7 @@ impl<F: PrimeField> SumCheck<F> for PolyIOP<F> {
                 prover_msg,
                 transcript,
             )?;
-            println!("round={}, verifier challenge: {:?}", i, challenge);
+            println!("round={}, verifier challenge: {}", i, challenge);
         }
 
         let res = IOPVerifierState::check_and_generate_subclaim(&verifier_state, &claimed_sum);
