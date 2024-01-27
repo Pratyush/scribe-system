@@ -4,3 +4,5 @@ pub mod prover;
 pub mod read_write;
 pub mod space_prover;
 pub mod transcript;
+
+pub mod hyperplonk;

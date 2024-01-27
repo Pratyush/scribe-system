@@ -6,14 +6,21 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-ark-std ="0.4.0"
 ark-ff = "0.4.0"
+ark-std = { version = "^0.4.0", default-features = false }
+ark-poly = { version = "^0.4.0", default-features = false }
+# ark-bls12-381 = { version = "0.4.0", default-features = false, features = [ "curve" ] }
 ark-test-curves = {version = "^0.4.0", features = ["bls12_381_curve", "ed_on_bls12_381"]}
 ark-serialize = {version = "0.4.0", features = ["derive"]}
 byteorder = "1.4"
 tempfile = "3.3.0"
 plotters = "0.3"
 merlin = "3.0.0"
+rayon = { version = "1.5.2", default-features = false, optional = true }
+
+
+# following required by hyperplonk and might remove later
+displaydoc = { version = "0.2.3", default-features = false }
 
 [dev-dependencies]
 
@@ -26,3 +33,16 @@ ark-serialize-derive = {git = "https://github.com/arkworks-rs/algebra"}
 
 [profile.release]
 debug-assertions = false
+
+[features]
+# default = [ "parallel", "print-trace" ]
+default = ["parallel"]
+parallel = [ 
+    "rayon",
+    "ark-std/parallel", 
+    "ark-ff/parallel",  
+    "ark-poly/parallel" 
+    ]
+print-trace = [ 
+    "ark-std/print-trace" 
+    ] 
