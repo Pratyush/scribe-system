@@ -93,6 +93,7 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
         //     .collect();
 
         if let Some(chal) = challenge {
+            // println!("ROUND CHALLENGE: {:?}", chal);
             // challenge is None for the first round
             if self.round == 0 {
                 return Err(PolyIOPErrors::InvalidProver(
@@ -102,6 +103,7 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
             self.challenges.push(*chal);
 
             let r = self.challenges[self.round - 1];
+            println!("prover challenge: {}", r);
             #[cfg(feature = "parallel")]
             self.poly
                 .flattened_ml_extensions
@@ -148,12 +150,14 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
                         .expect("Failed to lock mutex")
                         .read_next()
                         .unwrap();
+                    println!("eval: {}", eval);
                     *step = self.poly.flattened_ml_extensions[*f]
                         .lock()
                         .expect("Failed to lock mutex")
                         .read_next()
                         .unwrap()
                         - *eval;
+                    println!("step: {}", step);
                 }
 
                 // Updating sum
@@ -188,11 +192,22 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
             }
         }
 
+        // restart all streams
+        self.poly.flattened_ml_extensions.iter_mut().for_each(|stream| {
+            stream
+                .lock()
+                .expect("Failed to lock mutex")
+                .read_restart();
+        });
+
         // update prover's state to the partial evaluated polynomial
         // self.poly.flattened_ml_extensions = flattened_ml_extensions
         //     .par_iter()
         //     .map(|x| Arc::new(x.clone()))
         //     .collect();
+
+        println!("prover message 0: {}", products_sum[0]);
+        println!("prover message 1: {}", products_sum[1]);
 
         Ok(IOPProverMessage {
             evaluations: products_sum,

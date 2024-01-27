@@ -181,7 +181,7 @@ impl<F: Field> DenseMLPolyStream<F> {
             "invalid size of partial point"
         );
 
-        println!("fix_variables challenge: {:?}", partial_point);
+        // println!("fix_variables challenge: {:?}", partial_point);
         // let mut poly = self.evaluations.to_vec();
         let nv = self.num_vars;
         let dim = partial_point.len();
@@ -209,12 +209,15 @@ impl<F: Field> DenseMLPolyStream<F> {
         // return_stream
 
         // evaluate single variable of partial point from left to right
-        for i in 1..=dim {
-            println!("fix_variables round: {:?}", i);
+        for i in 1..dim + 1 {
+            println!("fix_variables round: {}", i);
             let r = partial_point[i - 1];
+            // if self.read_next().is_none() {
+            //     println!("Failed to read");
+            // }
             while let (Some(even), Some(odd)) = (self.read_next(), self.read_next()) {
-                println!("fix_variables even: {:?}", even);
-                println!("fix_variables odd: {:?}", odd);
+                println!("fix_variables even: {}", even);
+                println!("fix_variables odd: {}", odd);
                 self.write_next(even + (even - odd) * r);
             }
             self.decrement_num_vars();
@@ -264,10 +267,15 @@ impl<F: Field> DenseMLPolyStream<F> {
             for e in multiplicands.iter_mut() {
                 let val = F::rand(rng);
                 e.push(val);
+                println!("val: {:?}", val);
                 product *= val;
             }
             sum += product;
         }
+
+        println!("length of multiplicands: {:?}", multiplicands.len());
+
+        println!("length of stream: {:?}", multiplicands[0].len());
 
         let list = multiplicands
             .into_iter()
