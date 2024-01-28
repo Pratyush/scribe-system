@@ -157,6 +157,11 @@ impl<F: PrimeField> SumCheckVerifier<F> for IOPVerifierState<F> {
         // insert the asserted_sum to the first position of the expected vector
         expected_vec.insert(0, *asserted_sum);
 
+        expected_vec.iter().for_each(|x| println!("expected_vec: {}", x));
+        self.polynomials_received
+            .iter()
+            .for_each(|x| x.iter().for_each(|y| println!("polynomials_received: {}", y)));
+
         for (evaluations, &expected) in self
             .polynomials_received
             .iter()
