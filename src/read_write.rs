@@ -267,7 +267,7 @@ impl<F: Field> DenseMLPolyStream<F> {
             for e in multiplicands.iter_mut() {
                 let val = F::rand(rng);
                 e.push(val);
-                println!("val: {:?}", val);
+                println!("val: {}", val);
                 product *= val;
             }
             sum += product;
