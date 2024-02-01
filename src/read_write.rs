@@ -183,8 +183,8 @@ impl<F: Field> DenseMLPolyStream<F> {
 
         // println!("fix_variables challenge: {:?}", partial_point);
         // let mut poly = self.evaluations.to_vec();
-        let nv = self.num_vars;
-        let dim = partial_point.len();
+        let nv = dbg!(self.num_vars);
+        let dim = dbg!(partial_point.len());
         // let one = F::one();
 
         // let mut return_stream = Self::new_from_tempfile(self.num_vars - partial_point.len());
@@ -209,9 +209,8 @@ impl<F: Field> DenseMLPolyStream<F> {
         // return_stream
 
         // evaluate single variable of partial point from left to right
-        for i in 1..dim + 1 {
-            println!("fix_variables round: {}", i);
-            let r = partial_point[i - 1];
+        self.read_restart();
+        for &r in partial_point {
             // if self.read_next().is_none() {
             //     println!("Failed to read");
             // }
@@ -249,8 +248,7 @@ impl<F: Field> DenseMLPolyStream<F> {
         } else {
             None
         }
- 
-
+        
     }
 
     pub fn rand<R: RngCore>(num_vars: usize, rng: &mut R) -> Self {
