@@ -149,14 +149,14 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
                         .lock()
                         .expect("Failed to lock mutex")
                         .read_next()
-                        .unwrap();
+                        .unwrap(); // aL
                     println!("eval: {}", eval);
                     *step = self.poly.flattened_ml_extensions[*f]
                         .lock()
                         .expect("Failed to lock mutex")
                         .read_next()
                         .unwrap()
-                        - *eval;
+                        - *eval; // aR - aL
                     println!("step: {}", step);
                 }
 
@@ -166,7 +166,7 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
                 sum[0] += buf.iter().map(|(eval, _)| *eval).product::<F>();
                 for acc in sum.iter_mut().skip(1) {
                     for (eval, step) in buf.iter_mut() {
-                        *eval += *step;
+                        *eval += *step; // aL; aR; 2aR - aL; 3aR - 2aL; ...
                     }
                     println!("subsequent eval: {}", buf[0].0);
                     *acc += buf.iter().map(|(eval, _)| *eval).product::<F>();
@@ -176,7 +176,7 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
             // Multiplying sum by coefficient
             for s in &mut sum {
                 *s *= *coefficient;
-                println!("evaluation from sum: {}", s)
+                println!(" sum: {}", s)
             }
 
             // Extrapolation

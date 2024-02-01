@@ -225,15 +225,20 @@ mod test {
     use ark_test_curves::bls12_381::Fr;
     use ark_ff::UniformRand;
     use ark_poly::{DenseMultilinearExtension, MultilinearExtension};
-    use ark_std::test_rng;
+    use ark_std::{rand::{rngs::StdRng, SeedableRng}, test_rng};
     use std::sync::{Arc, Mutex};
+    use crate::read_write::ReadWriteStream;
 
     fn test_sumcheck(
         nv: usize,
         num_multiplicands_range: (usize, usize),
         num_products: usize,
     ) -> Result<(), PolyIOPErrors> {
-        let mut rng = test_rng();
+        let seed = [
+        1, 0, 0, 0, 23, 0, 0, 0, 200, 1, 0, 0, 210, 30, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0,
+        ];
+        let mut rng = StdRng::from_seed(seed);
         let mut transcript = <PolyIOP<Fr> as SumCheck<Fr>>::init_transcript();
 
         let (poly, asserted_sum) =
@@ -247,6 +252,23 @@ mod test {
             &poly_info,
             &mut transcript,
         )?;
+
+        // loop over and print all elements of all ml extensions of poly
+        for mle in poly.flattened_ml_extensions.iter() {
+            // read next on mle and print each element 
+            let mut mle_stream = mle.lock().unwrap();
+            while let (Some(elem)) =
+            (mle_stream.read_next())
+            {
+                println!("evaluate elem: {}", elem);
+            }
+        }
+
+        // print subclaim point
+        for point in subclaim.point.iter() {
+            println!("evaluate point: {}", point);
+        }
+
         let evaluated_point = poly.evaluate(std::slice::from_ref(&subclaim.point[poly_info.num_variables - 1])).unwrap();
         assert!(
             evaluated_point == subclaim.expected_evaluation, // expected_evaluation is interpolated; in the full protocol, the evaluated_point should be a commitment query at subclaim point rather than evaluated from scratch
@@ -260,7 +282,11 @@ mod test {
         num_multiplicands_range: (usize, usize),
         num_products: usize,
     ) -> Result<(), PolyIOPErrors> {
-        let mut rng = test_rng();
+        let seed = [
+        1, 0, 0, 0, 23, 0, 0, 0, 200, 1, 0, 0, 210, 30, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0,
+        ];
+        let mut rng = StdRng::from_seed(seed);
         let (poly, asserted_sum) =
             VirtualPolynomial::<Fr>::rand(nv, num_multiplicands_range, num_products, &mut rng)?;
         let poly_info = poly.aux_info.clone();
