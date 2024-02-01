@@ -125,6 +125,8 @@ impl<F: PrimeField> SumCheckVerifier<F> for IOPVerifierState<F> {
             .into_par_iter()
             .zip(self.challenges.clone().into_par_iter())
             .map(|(evaluations, challenge)| {
+                println!("expected_vec challenge: {}", challenge);
+                evaluations.iter().for_each(|x| println!("expecte_vec evaluations: {}", x));
                 if evaluations.len() != self.max_degree + 1 {
                     return Err(PolyIOPErrors::InvalidVerifier(format!(
                         "incorrect number of evaluations: {} vs {}",

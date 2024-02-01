@@ -218,7 +218,7 @@ impl<F: Field> DenseMLPolyStream<F> {
             while let (Some(even), Some(odd)) = (self.read_next(), self.read_next()) {
                 println!("fix_variables even: {}", even);
                 println!("fix_variables odd: {}", odd);
-                self.write_next(even + (even - odd) * r);
+                self.write_next(even + r * (even - odd));
             }
             self.decrement_num_vars();
             self.swap_read_write();
@@ -229,10 +229,28 @@ impl<F: Field> DenseMLPolyStream<F> {
     pub fn evaluate(&mut self, point: &[F]) -> Option<F> {
         if point.len() == self.num_vars {
             self.fix_variables(point);
+
+            println!("===post evaluation===");
+            // print all elements of read stream and write stream
+            self.read_restart();
+            self.write_restart();
+            while let Some(read) = self.read_next() {
+                println!("read: {}", read);
+            }
+            self.swap_read_write();
+            while let Some(write) = self.read_next() {
+                println!("write: {}", write);
+            }
+            println!("===post evaluation===");
+            self.swap_read_write();
+
+
             Some(self.read_next().expect("Failed to read"))
         } else {
             None
         }
+ 
+
     }
 
     pub fn rand<R: RngCore>(num_vars: usize, rng: &mut R) -> Self {
