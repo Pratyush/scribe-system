@@ -134,6 +134,10 @@ impl<F: PrimeField> SumCheckVerifier<F> for IOPVerifierState<F> {
                         self.max_degree + 1
                     )));
                 }
+                // debug print challenge
+                println!("verifier challenge before interpolation: {}", challenge);
+                // debug print evaluations
+                evaluations.iter().for_each(|x| println!("verifier evaluations before interpolation: {}", x));
                 interpolate_uni_poly::<F>(&evaluations, challenge)
             })
             .collect::<Result<Vec<_>, PolyIOPErrors>>()?;

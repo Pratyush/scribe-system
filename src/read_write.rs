@@ -35,7 +35,7 @@ pub trait ReadWriteStream: Send + Sync {
 
 #[derive(Debug)]
 pub struct DenseMLPolyStream<F: Field> {
-    read_pointer: BufReader<File>,
+    pub read_pointer: BufReader<File>,
     write_pointer: BufWriter<File>,
     pub num_vars: usize,
     f: PhantomData<F>,
@@ -209,7 +209,7 @@ impl<F: Field> DenseMLPolyStream<F> {
         // return_stream
 
         // evaluate single variable of partial point from left to right
-        self.read_restart();
+        // self.read_restart();
         for &r in partial_point {
             // if self.read_next().is_none() {
             //     println!("Failed to read");
@@ -217,7 +217,7 @@ impl<F: Field> DenseMLPolyStream<F> {
             while let (Some(even), Some(odd)) = (self.read_next(), self.read_next()) {
                 println!("fix_variables even: {}", even);
                 println!("fix_variables odd: {}", odd);
-                self.write_next(even + r * (even - odd));
+                self.write_next(even + r * (odd - even));
             }
             self.decrement_num_vars();
             self.swap_read_write();
@@ -227,6 +227,7 @@ impl<F: Field> DenseMLPolyStream<F> {
     // Evaluate at a specific point to one field element
     pub fn evaluate(&mut self, point: &[F]) -> Option<F> {
         if point.len() == self.num_vars {
+            dbg!(self.read_pointer.stream_position().unwrap());
             self.fix_variables(point);
 
             println!("===post evaluation===");

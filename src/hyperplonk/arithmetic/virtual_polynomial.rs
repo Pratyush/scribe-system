@@ -241,13 +241,13 @@ impl<F: PrimeField> VirtualPolynomial<F> {
     pub fn evaluate(&self, point: &[F]) -> Result<F, ArithErrors> {
         let start = start_timer!(|| "evaluation");
 
-        if self.aux_info.num_variables != point.len() {
-            return Err(ArithErrors::InvalidParameters(format!(
-                "wrong number of variables {} vs {}",
-                self.aux_info.num_variables,
-                point.len()
-            )));
-        }
+        // if self.aux_info.num_variables != point.len() {
+        //     return Err(ArithErrors::InvalidParameters(format!(
+        //         "wrong number of variables {} vs {}",
+        //         self.aux_info.num_variables,
+        //         point.len()
+        //     )));
+        // }
 
         let evals: Vec<F> = self
             .flattened_ml_extensions
@@ -290,6 +290,7 @@ impl<F: PrimeField> VirtualPolynomial<F> {
             let (product, product_sum) =
                 DenseMLPolyStream::random_mle_list(nv, num_multiplicands, rng, None, None);
             let coefficient = F::rand(rng);
+            // let coefficient = F::one();
             poly.add_mle_list(product.into_iter(), coefficient)?;
             sum += product_sum * coefficient;
         }

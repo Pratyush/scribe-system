@@ -22,7 +22,7 @@ use crate::{
 use ark_ff::PrimeField;
 // use ark_poly::DenseMultilinearExtension;
 use ark_std::{end_timer, start_timer};
-use std::{fmt::Debug, sync::Arc};
+use std::{fmt::Debug, io::Seek, sync::Arc};
 // use transcript::IOPTranscript;
 
 mod prover;
@@ -172,6 +172,17 @@ impl<F: PrimeField> SumCheck<F> for PolyIOP<F> {
         for i in 0..poly.aux_info.num_variables {
             let prover_msg =
                 IOPProverState::prove_round_and_update_state(&mut prover_state, &challenge)?;
+            // print the position of read pointer of each mle in poly
+            for mle in poly.flattened_ml_extensions.iter() {
+                // read next on mle and print each element 
+                let mut mle_stream = mle.lock().unwrap();
+                println!("starting read pointer position of `prove` argument poly: {}", mle_stream.read_pointer.stream_position().unwrap());
+            }
+            for mle in prover_state.poly.flattened_ml_extensions.iter() {
+                // read next on mle and print each element 
+                let mut mle_stream = mle.lock().unwrap();
+                println!("starting read pointer position of prover_state poly: {}", mle_stream.read_pointer.stream_position().unwrap());
+            }
             // println!("round={}, prover challenge: {:?}", i, challenge);
             transcript.append_serializable_element(b"prover msg", &prover_msg)?;
             prover_msgs.push(prover_msg);
@@ -228,6 +239,8 @@ mod test {
     use ark_std::{rand::{rngs::StdRng, SeedableRng}, test_rng};
     use std::sync::{Arc, Mutex};
     use crate::read_write::ReadWriteStream;
+    use std::io::Seek;
+    use std::str::FromStr;
 
     fn test_sumcheck(
         nv: usize,
@@ -243,6 +256,14 @@ mod test {
 
         let (poly, asserted_sum) =
             VirtualPolynomial::rand(nv, num_multiplicands_range, num_products, &mut rng)?;
+        
+          // print the position of read pointer of each mle in poly
+        for mle in poly.flattened_ml_extensions.iter() {
+            // read next on mle and print each element 
+            let mut mle_stream = mle.lock().unwrap();
+            println!("starting read pointer position: {}", mle_stream.read_pointer.stream_position().unwrap());
+        }
+        
         let proof = <PolyIOP<Fr> as SumCheck<Fr>>::prove(&poly, &mut transcript)?;
         let poly_info = poly.aux_info.clone();
         let mut transcript = <PolyIOP<Fr> as SumCheck<Fr>>::init_transcript();
@@ -253,20 +274,34 @@ mod test {
             &mut transcript,
         )?;
 
-        // loop over and print all elements of all ml extensions of poly
+        // print read pointer position of each mle in poly
         for mle in poly.flattened_ml_extensions.iter() {
             // read next on mle and print each element 
             let mut mle_stream = mle.lock().unwrap();
-            while let (Some(elem)) =
-            (mle_stream.read_next())
-            {
-                println!("evaluate elem: {}", elem);
-            }
+            println!("ending read pointer position: {}", mle_stream.read_pointer.stream_position().unwrap());
         }
+
+        // // loop over and print all elements of all ml extensions of poly
+        // for mle in poly.flattened_ml_extensions.iter() {
+        //     // read next on mle and print each element 
+        //     let mut mle_stream = mle.lock().unwrap();
+        //     while let (Some(elem)) =
+        //     (mle_stream.read_next())
+        //     {
+        //         println!("evaluate elem: {}", elem);
+        //     }
+        // }
 
         // print subclaim point
         for point in subclaim.point.iter() {
             println!("evaluate point: {}", point);
+        }
+
+        // print read pointer position of each mle in poly
+        for mle in poly.flattened_ml_extensions.iter() {
+            // read next on mle and print each element 
+            let mut mle_stream = mle.lock().unwrap();
+            println!("ending read pointer position: {}", mle_stream.read_pointer.stream_position().unwrap());
         }
 
         let evaluated_point = poly.evaluate(std::slice::from_ref(&subclaim.point[poly_info.num_variables - 1])).unwrap();
@@ -289,6 +324,12 @@ mod test {
         let mut rng = StdRng::from_seed(seed);
         let (poly, asserted_sum) =
             VirtualPolynomial::<Fr>::rand(nv, num_multiplicands_range, num_products, &mut rng)?;
+        // print the position of read pointer of each mle in poly
+        for mle in poly.flattened_ml_extensions.iter() {
+            // read next on mle and print each element 
+            let mut mle_stream = mle.lock().unwrap();
+            println!("starting read pointer position: {}", mle_stream.read_pointer.stream_position().unwrap());
+        }
         let poly_info = poly.aux_info.clone();
         let mut prover_state = IOPProverState::prover_init(&poly)?;
         let mut verifier_state = IOPVerifierState::verifier_init(&poly_info);
@@ -323,25 +364,29 @@ mod test {
         Ok(())
     }
 
-    // #[test]
-    // fn test_field() {
-    //     Fr::from(30075196068324037111649715913338998877421767019548989508356020060391592862770);
-    // }
+    #[test]
+    fn test_field() {
+        let even = Fr::from_str("46726240763639862128214388288720131204625575015731614850157206947646262134152").unwrap();
+        let odd = Fr::from_str("43289727388036023252294560744145593863815462211184144675663927741862919848062").unwrap();
+        let r = Fr::from_str("48518066819672969227993919640561737464634267551386147702542572494009347136503").unwrap();
+        let evaluated = even + r * (odd - even);
+        println!("evaluated: {}", evaluated);
+    }
 
     #[test]
     fn test_trivial_polynomial() -> Result<(), PolyIOPErrors> {
         let nv = 1;
-        let num_multiplicands_range = (1, 2);
-        let num_products = 1;
+        let num_multiplicands_range = (4, 13);
+        let num_products = 5;
 
         test_sumcheck(nv, num_multiplicands_range, num_products)?;
         test_sumcheck_internal(nv, num_multiplicands_range, num_products)
     }
     #[test]
     fn test_normal_polynomial() -> Result<(), PolyIOPErrors> {
-        let nv = 3;
-        let num_multiplicands_range = (1, 2);
-        let num_products = 1;
+        let nv = 12;
+        let num_multiplicands_range = (4, 9);
+        let num_products = 5;
 
         test_sumcheck(nv, num_multiplicands_range, num_products)?;
         test_sumcheck_internal(nv, num_multiplicands_range, num_products)
