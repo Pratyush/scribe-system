@@ -20,6 +20,7 @@ use ark_ff::{batch_inversion, PrimeField};
 // use ark_poly::DenseMultilinearExtension;
 use ark_std::{cfg_into_iter, end_timer, start_timer, vec::Vec};
 use rayon::prelude::{IntoParallelIterator, IntoParallelRefIterator};
+use std::io::Seek;
 use std::sync::Arc;
 
 #[cfg(feature = "parallel")]
@@ -109,8 +110,9 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
                 .flattened_ml_extensions
                 .par_iter_mut()
                 .for_each(|mle| {
-                    mle.lock()
-                        .expect("Failed to lock mutex")
+                    let mut mle = mle.lock().expect("Failed to lock mutex");
+                    dbg!(mle.read_pointer.stream_position().unwrap());
+                    mle
                         .fix_variables(&[r])
                 });
             #[cfg(not(feature = "parallel"))]
