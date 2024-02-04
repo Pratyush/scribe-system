@@ -285,8 +285,7 @@ impl<F: PrimeField> VirtualPolynomial<F> {
         let mut poly = VirtualPolynomial::new(nv);
         for _ in 0..num_products {
             let num_multiplicands =
-            1;
-                // rng.gen_range(num_multiplicands_range.0..num_multiplicands_range.1);
+                rng.gen_range(num_multiplicands_range.0..num_multiplicands_range.1);
             let (product, product_sum) =
                 DenseMLPolyStream::random_mle_list(nv, num_multiplicands, rng, None, None);
             let coefficient = F::rand(rng);

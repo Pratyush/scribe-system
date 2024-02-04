@@ -104,14 +104,14 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
             self.challenges.push(*chal);
 
             let r = self.challenges[self.round - 1];
-            println!("prover challenge: {}", r);
+            // println!("prover challenge: {}", r);
             #[cfg(feature = "parallel")]
             self.poly
                 .flattened_ml_extensions
                 .par_iter_mut()
                 .for_each(|mle| {
                     let mut mle = mle.lock().expect("Failed to lock mutex");
-                    dbg!(mle.read_pointer.stream_position().unwrap());
+                    // dbg!(mle.read_pointer.stream_position().unwrap());
                     mle
                         .fix_variables(&[r])
                 });
@@ -152,25 +152,25 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
                         .expect("Failed to lock mutex")
                         .read_next()
                         .unwrap(); // aL
-                    println!("eval: {}", eval);
+                    // println!("eval: {}", eval);
                     *step = self.poly.flattened_ml_extensions[*f]
                         .lock()
                         .expect("Failed to lock mutex")
                         .read_next()
                         .unwrap()
                         - *eval; // aR - aL
-                    println!("step: {}", step);
+                    // println!("step: {}", step);
                 }
 
                 // Updating sum
-                println!("buf length: {}", buf.len());
-                println!("first eval: {}", buf[0].0);
+                // println!("buf length: {}", buf.len());
+                // println!("first eval: {}", buf[0].0);
                 sum[0] += buf.iter().map(|(eval, _)| *eval).product::<F>();
                 for acc in sum.iter_mut().skip(1) {
                     for (eval, step) in buf.iter_mut() {
                         *eval += *step; // aL; aR; 2aR - aL; 3aR - 2aL; ...
                     }
-                    println!("subsequent eval: {}", buf[0].0);
+                    // println!("subsequent eval: {}", buf[0].0);
                     *acc += buf.iter().map(|(eval, _)| *eval).product::<F>();
                 }
             }
@@ -178,7 +178,7 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
             // Multiplying sum by coefficient
             for s in &mut sum {
                 *s *= *coefficient;
-                println!(" sum: {}", s)
+                // println!(" sum: {}", s)
             }
 
             // Extrapolation
@@ -212,8 +212,8 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
         //     .map(|x| Arc::new(x.clone()))
         //     .collect();
 
-        println!("prover message 0: {}", products_sum[0]);
-        println!("prover message 1: {}", products_sum[1]);
+        // println!("prover message 0: {}", products_sum[0]);
+        // println!("prover message 1: {}", products_sum[1]);
 
         Ok(IOPProverMessage {
             evaluations: products_sum,

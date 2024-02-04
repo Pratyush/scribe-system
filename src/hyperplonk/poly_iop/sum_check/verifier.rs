@@ -125,8 +125,8 @@ impl<F: PrimeField> SumCheckVerifier<F> for IOPVerifierState<F> {
             .into_par_iter()
             .zip(self.challenges.clone().into_par_iter())
             .map(|(evaluations, challenge)| {
-                println!("expected_vec challenge: {}", challenge);
-                evaluations.iter().for_each(|x| println!("expecte_vec evaluations: {}", x));
+                // println!("expected_vec challenge: {}", challenge);
+                // evaluations.iter().for_each(|x| println!("expecte_vec evaluations: {}", x));
                 if evaluations.len() != self.max_degree + 1 {
                     return Err(PolyIOPErrors::InvalidVerifier(format!(
                         "incorrect number of evaluations: {} vs {}",
@@ -135,9 +135,9 @@ impl<F: PrimeField> SumCheckVerifier<F> for IOPVerifierState<F> {
                     )));
                 }
                 // debug print challenge
-                println!("verifier challenge before interpolation: {}", challenge);
+                // println!("verifier challenge before interpolation: {}", challenge);
                 // debug print evaluations
-                evaluations.iter().for_each(|x| println!("verifier evaluations before interpolation: {}", x));
+                // evaluations.iter().for_each(|x| println!("verifier evaluations before interpolation: {}", x));
                 interpolate_uni_poly::<F>(&evaluations, challenge)
             })
             .collect::<Result<Vec<_>, PolyIOPErrors>>()?;
@@ -163,10 +163,10 @@ impl<F: PrimeField> SumCheckVerifier<F> for IOPVerifierState<F> {
         // insert the asserted_sum to the first position of the expected vector
         expected_vec.insert(0, *asserted_sum);
 
-        expected_vec.iter().for_each(|x| println!("expected_vec: {}", x));
-        self.polynomials_received
-            .iter()
-            .for_each(|x| x.iter().for_each(|y| println!("polynomials_received: {}", y)));
+        // expected_vec.iter().for_each(|x| println!("expected_vec: {}", x));
+        // self.polynomials_received
+        //     .iter()
+        //     .for_each(|x| x.iter().for_each(|y| println!("polynomials_received: {}", y)));
 
         for (evaluations, &expected) in self
             .polynomials_received
@@ -177,19 +177,20 @@ impl<F: PrimeField> SumCheckVerifier<F> for IOPVerifierState<F> {
             // the deferred check during the interactive phase:
             // 1. check if the received 'P(0) + P(1) = expected`.
             if evaluations[0] + evaluations[1] != expected {
-                println!("Prover message is NOT consistent with the claim.");
-                println!("expected: {}", expected);
-                println!("evaluation: {}", evaluations[0] + evaluations[1]);
-                println!("evaluation 0: {}", evaluations[0]);
-                println!("evaluation 1: {}", evaluations[1]);
+                // println!("Prover message is NOT consistent with the claim.");
+                // println!("expected: {}", expected);
+                // println!("evaluation: {}", evaluations[0] + evaluations[1]);
+                // println!("evaluation 0: {}", evaluations[0]);
+                // println!("evaluation 1: {}", evaluations[1]);
                 return Err(PolyIOPErrors::InvalidProof(format!("Prover message is NOT consistent with the claim.")));
-            } else {
-                println!("Prover message is consistent with the claim.");
-                println!("expected: {}", expected);
-                println!("evaluation: {}", evaluations[0] + evaluations[1]);
-                println!("evaluation 0: {}", evaluations[0]);
-                println!("evaluation 1: {}", evaluations[1]);
-            }
+            } 
+            // else {
+                // println!("Prover message is consistent with the claim.");
+                // println!("expected: {}", expected);
+                // println!("evaluation: {}", evaluations[0] + evaluations[1]);
+                // println!("evaluation 0: {}", evaluations[0]);
+                // println!("evaluation 1: {}", evaluations[1]);
+            // }
         }
         end_timer!(start);
         Ok(SumCheckSubClaim {
