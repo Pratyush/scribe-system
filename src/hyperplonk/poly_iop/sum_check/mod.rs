@@ -258,11 +258,11 @@ mod test {
             VirtualPolynomial::rand(nv, num_multiplicands_range, num_products, &mut rng)?;
         
           // print the position of read pointer of each mle in poly
-        for mle in poly.flattened_ml_extensions.iter() {
+        // for mle in poly.flattened_ml_extensions.iter() {
             // read next on mle and print each element 
-            let mut mle_stream = mle.lock().unwrap();
+            // let mut mle_stream = mle.lock().unwrap();
             // println!("starting read pointer position: {}", mle_stream.read_pointer.stream_position().unwrap());
-        }
+        // }
         
         let proof = <PolyIOP<Fr> as SumCheck<Fr>>::prove(&poly, &mut transcript)?;
         let poly_info = poly.aux_info.clone();
@@ -275,11 +275,11 @@ mod test {
         )?;
 
         // print read pointer position of each mle in poly
-        for mle in poly.flattened_ml_extensions.iter() {
+        // for mle in poly.flattened_ml_extensions.iter() {
             // read next on mle and print each element 
-            let mut mle_stream = mle.lock().unwrap();
+            // let mut mle_stream = mle.lock().unwrap();
             // println!("ending read pointer position: {}", mle_stream.read_pointer.stream_position().unwrap());
-        }
+        // }
 
         // // loop over and print all elements of all ml extensions of poly
         // for mle in poly.flattened_ml_extensions.iter() {
@@ -293,16 +293,16 @@ mod test {
         // }
 
         // print subclaim point
-        for point in subclaim.point.iter() {
+        // for point in subclaim.point.iter() {
             // println!("evaluate point: {}", point);
-        }
+        // }
 
         // print read pointer position of each mle in poly
-        for mle in poly.flattened_ml_extensions.iter() {
+        // for mle in poly.flattened_ml_extensions.iter() {
             // read next on mle and print each element 
-            let mut mle_stream = mle.lock().unwrap();
+            // let mut mle_stream = mle.lock().unwrap();
             // println!("ending read pointer position: {}", mle_stream.read_pointer.stream_position().unwrap());
-        }
+        // }
 
         let evaluated_point = poly.evaluate(std::slice::from_ref(&subclaim.point[poly_info.num_variables - 1])).unwrap();
         assert!(
@@ -325,11 +325,11 @@ mod test {
         let (poly, asserted_sum) =
             VirtualPolynomial::<Fr>::rand(nv, num_multiplicands_range, num_products, &mut rng)?;
         // print the position of read pointer of each mle in poly
-        for mle in poly.flattened_ml_extensions.iter() {
+        // for mle in poly.flattened_ml_extensions.iter() {
             // read next on mle and print each element 
-            let mut mle_stream = mle.lock().unwrap();
+            // let mut mle_stream = mle.lock().unwrap();
             // println!("starting read pointer position: {}", mle_stream.read_pointer.stream_position().unwrap());
-        }
+        // }
         let poly_info = poly.aux_info.clone();
         let mut prover_state = IOPProverState::prover_init(&poly)?;
         let mut verifier_state = IOPVerifierState::verifier_init(&poly_info);
@@ -455,6 +455,11 @@ mod test {
         poly.add_mle_list(vec![ml_extensions[4].clone()], Fr::rand(&mut rng))?;
 
         assert_eq!(poly.flattened_ml_extensions.len(), 5);
+
+        // print each product indices of virtualpolynomial
+        for (coeff, product) in poly.products.iter() {
+            println!("coeff: {}, product: {:?}", coeff, product);
+        }
 
         // test memory usage for prover
         let prover = IOPProverState::<Fr>::prover_init(&poly).unwrap();
