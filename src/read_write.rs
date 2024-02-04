@@ -306,6 +306,36 @@ impl<F: Field> DenseMLPolyStream<F> {
         end_timer!(start);
         (list, sum)
     }
+
+    // Build a randomize list of mle-s whose sum is zero.
+    // loaded to streams from vectors and therefore is for testing purpose only.
+    // for multiple multiplicands (streams), the first stream is zero everywhere while the rest of the streams are arbitrary.
+    pub fn random_zero_mle_list<R: RngCore>(
+        nv: usize,
+        degree: usize,
+        rng: &mut R,
+    ) -> Vec<Arc<Mutex<DenseMLPolyStream<F>>>> {
+        let start = start_timer!(|| "sample random zero mle list");
+
+        let mut multiplicands = Vec::with_capacity(degree);
+        for _ in 0..degree {
+            multiplicands.push(Vec::with_capacity(1 << nv))
+        }
+        for _ in 0..(1 << nv) {
+            multiplicands[0].push(F::zero());
+            for e in multiplicands.iter_mut().skip(1) {
+                e.push(F::rand(rng));
+            }
+        }
+
+        let list = multiplicands
+            .into_iter()
+            .map(|x| Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(nv, x, None, None))))
+            .collect();
+
+        end_timer!(start);
+        list
+    }
 }
 
 pub trait DenseMLPoly<F: Field>: ReadWriteStream<Item = F> {
