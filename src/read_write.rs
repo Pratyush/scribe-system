@@ -56,16 +56,16 @@ impl<F: Field> ReadWriteStream for DenseMLPolyStream<F> {
         #[cfg(debug_assertions)]
         {
             // Get current positions of read_pointer and write_pointer
-            // let read_pos = self.read_pointer.stream_position().unwrap();
-            // let write_pos = self.write_pointer.stream_position().unwrap();
+            let read_pos = self.read_pointer.stream_position().unwrap();
+            let write_pos = self.write_pointer.stream_position().unwrap();
 
             // Check if read position is ahead of write position and print error if not
-            // if read_pos < write_pos {
-            //     println!("Read position: {}", read_pos);
-            //     println!("Write position: {}", write_pos);
-            //     eprintln!("`read_next` Error: Read position is not ahead of write position.");
-            //     return None;
-            // }
+            if read_pos < write_pos {
+                println!("Read position: {}", read_pos);
+                println!("Write position: {}", write_pos);
+                eprintln!("`read_next` Error: Read position is not ahead of write position.");
+                return None;
+            }
         }
 
         // Proceed with deserialization
@@ -338,6 +338,11 @@ impl<F: Field> DenseMLPolyStream<F> {
     }
 }
 
+// currently not very efficient as it reads and writes one field element at a time
+// in the future we could optimize by:
+// 1. read multiple streams in parallel
+// 2. read off multiple field elements to a memory buffer
+// to implement these, we also need a memory usage threshold to upper bound the # of streams in parallel times the memory buffer size for each stream
 pub trait DenseMLPoly<F: Field>: ReadWriteStream<Item = F> {
     fn add(mut self, mut other: Self, read_path: Option<&str>, write_path: Option<&str>) -> Self
     where
@@ -377,8 +382,88 @@ pub trait DenseMLPoly<F: Field>: ReadWriteStream<Item = F> {
         result_stream
     }
 
-    fn hadamard(self, other: impl DenseMLPoly<F>) -> impl DenseMLPoly<F>;
+    // not super efficient as streams are sequentially accessed and read one field element only
+    fn add_multi(streams: Vec<Self>, read_path: Option<&str>, write_path: Option<&str>) -> Self
+    where
+        Self: Sized,
+    {
+        // Assume all streams have the same number of variables for simplicity
+        let num_vars = streams.first().expect("Streams cannot be empty").num_vars();
+        let mut result_stream = Self::new(num_vars, read_path, write_path);
+
+        // Restart all input streams
+        let mut streams = streams.into_iter().map(|mut stream| {
+            stream.read_restart();
+            stream
+        }).collect::<Vec<_>>();
+
+        // Assume all streams are of the same length
+        loop {
+            let mut sum = F::zero();
+            let mut end_of_streams = false;
+
+            for stream in &mut streams {
+                match stream.read_next() {
+                    Some(value) => sum = sum + value,
+                    None => {
+                        end_of_streams = true;
+                        break;
+                    }
+                }
+            }
+
+            if end_of_streams {
+                break;
+            }
+
+            result_stream.write_next_unchecked(sum);
+        }
+
+        result_stream
+    }
+
+    // not super efficient as streams are sequentially accessed and read one field element only
+    fn prod_multi(streams: Vec<Self>, read_path: Option<&str>, write_path: Option<&str>) -> Self
+    where
+        Self: Sized,
+    {
+        let num_vars = streams.first().expect("Streams cannot be empty").num_vars();
+        let mut result_stream = Self::new(num_vars, read_path, write_path);
+
+        // Restart all input streams
+        let mut streams = streams.into_iter().map(|mut stream| {
+            stream.read_restart();
+            stream
+        }).collect::<Vec<_>>();
+
+        loop {
+            let mut prod = F::one(); // Assuming F::one() exists and represents the multiplicative identity
+            let mut end_of_streams = false;
+
+            for stream in &mut streams {
+                match stream.read_next() {
+                    Some(value) => prod = prod * value,
+                    None => {
+                        end_of_streams = true;
+                        break;
+                    }
+                }
+            }
+
+            if end_of_streams {
+                break;
+            }
+
+            result_stream.write_next_unchecked(prod);
+        }
+
+        result_stream
+    }
+
+    // fn hadamard(self, other: impl DenseMLPoly<F>) -> impl DenseMLPoly<F>;
 }
+
+impl<F: Field> DenseMLPoly<F> for DenseMLPolyStream<F> {}
 
 #[cfg(test)]
 mod tests {
