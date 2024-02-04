@@ -176,12 +176,12 @@ impl<F: PrimeField> SumCheck<F> for PolyIOP<F> {
             for mle in poly.flattened_ml_extensions.iter() {
                 // read next on mle and print each element 
                 let mut mle_stream = mle.lock().unwrap();
-                println!("starting read pointer position of `prove` argument poly: {}", mle_stream.read_pointer.stream_position().unwrap());
+                // println!("starting read pointer position of `prove` argument poly: {}", mle_stream.read_pointer.stream_position().unwrap());
             }
             for mle in prover_state.poly.flattened_ml_extensions.iter() {
                 // read next on mle and print each element 
                 let mut mle_stream = mle.lock().unwrap();
-                println!("starting read pointer position of prover_state poly: {}", mle_stream.read_pointer.stream_position().unwrap());
+                // println!("starting read pointer position of prover_state poly: {}", mle_stream.read_pointer.stream_position().unwrap());
             }
             // println!("round={}, prover challenge: {:?}", i, challenge);
             transcript.append_serializable_element(b"prover msg", &prover_msg)?;
@@ -218,7 +218,7 @@ impl<F: PrimeField> SumCheck<F> for PolyIOP<F> {
                 prover_msg,
                 transcript,
             )?;
-            println!("round={}, verifier challenge: {}", i, challenge);
+            // println!("round={}, verifier challenge: {}", i, challenge);
         }
 
         let res = IOPVerifierState::check_and_generate_subclaim(&verifier_state, &claimed_sum);
@@ -261,7 +261,7 @@ mod test {
         for mle in poly.flattened_ml_extensions.iter() {
             // read next on mle and print each element 
             let mut mle_stream = mle.lock().unwrap();
-            println!("starting read pointer position: {}", mle_stream.read_pointer.stream_position().unwrap());
+            // println!("starting read pointer position: {}", mle_stream.read_pointer.stream_position().unwrap());
         }
         
         let proof = <PolyIOP<Fr> as SumCheck<Fr>>::prove(&poly, &mut transcript)?;
@@ -278,7 +278,7 @@ mod test {
         for mle in poly.flattened_ml_extensions.iter() {
             // read next on mle and print each element 
             let mut mle_stream = mle.lock().unwrap();
-            println!("ending read pointer position: {}", mle_stream.read_pointer.stream_position().unwrap());
+            // println!("ending read pointer position: {}", mle_stream.read_pointer.stream_position().unwrap());
         }
 
         // // loop over and print all elements of all ml extensions of poly
@@ -294,14 +294,14 @@ mod test {
 
         // print subclaim point
         for point in subclaim.point.iter() {
-            println!("evaluate point: {}", point);
+            // println!("evaluate point: {}", point);
         }
 
         // print read pointer position of each mle in poly
         for mle in poly.flattened_ml_extensions.iter() {
             // read next on mle and print each element 
             let mut mle_stream = mle.lock().unwrap();
-            println!("ending read pointer position: {}", mle_stream.read_pointer.stream_position().unwrap());
+            // println!("ending read pointer position: {}", mle_stream.read_pointer.stream_position().unwrap());
         }
 
         let evaluated_point = poly.evaluate(std::slice::from_ref(&subclaim.point[poly_info.num_variables - 1])).unwrap();
@@ -328,7 +328,7 @@ mod test {
         for mle in poly.flattened_ml_extensions.iter() {
             // read next on mle and print each element 
             let mut mle_stream = mle.lock().unwrap();
-            println!("starting read pointer position: {}", mle_stream.read_pointer.stream_position().unwrap());
+            // println!("starting read pointer position: {}", mle_stream.read_pointer.stream_position().unwrap());
         }
         let poly_info = poly.aux_info.clone();
         let mut prover_state = IOPProverState::prover_init(&poly)?;
@@ -370,7 +370,7 @@ mod test {
         let odd = Fr::from_str("43289727388036023252294560744145593863815462211184144675663927741862919848062").unwrap();
         let r = Fr::from_str("48518066819672969227993919640561737464634267551386147702542572494009347136503").unwrap();
         let evaluated = even + r * (odd - even);
-        println!("evaluated: {}", evaluated);
+        // println!("evaluated: {}", evaluated);
     }
 
     #[test]
