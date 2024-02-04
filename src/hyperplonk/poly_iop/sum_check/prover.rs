@@ -136,9 +136,16 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
         // f(r_1, ... r_m,, x_{m+1}... x_n)
 
         for (coefficient, products) in &products_list {
+            println!("coefficient: {}", coefficient);
+            println!("products: {:?}", products);
+            println!("round: {}", self.round);
+
             let mut sum = vec![F::zero(); products.len() + 1];
 
             for b in 0..1 << (self.poly.aux_info.num_variables - self.round) {
+                println!("b: {}", b);
+                println!("round: {}", self.round);
+                println!("num_variables: {}", self.poly.aux_info.num_variables);
                 let mut buf = vec![(F::zero(), F::zero()); products.len()];
 
                 // Updating buf

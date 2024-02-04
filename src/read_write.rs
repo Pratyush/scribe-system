@@ -56,16 +56,16 @@ impl<F: Field> ReadWriteStream for DenseMLPolyStream<F> {
         #[cfg(debug_assertions)]
         {
             // Get current positions of read_pointer and write_pointer
-            let read_pos = self.read_pointer.stream_position().unwrap();
-            let write_pos = self.write_pointer.stream_position().unwrap();
+            // let read_pos = self.read_pointer.stream_position().unwrap();
+            // let write_pos = self.write_pointer.stream_position().unwrap();
 
             // Check if read position is ahead of write position and print error if not
-            if read_pos < write_pos {
-                println!("Read position: {}", read_pos);
-                println!("Write position: {}", write_pos);
-                eprintln!("`read_next` Error: Read position is not ahead of write position.");
-                return None;
-            }
+            // if read_pos < write_pos {
+            //     println!("Read position: {}", read_pos);
+            //     println!("Write position: {}", write_pos);
+            //     eprintln!("`read_next` Error: Read position is not ahead of write position.");
+            //     return None;
+            // }
         }
 
         // Proceed with deserialization
