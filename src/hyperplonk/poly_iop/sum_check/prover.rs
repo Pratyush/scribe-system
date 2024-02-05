@@ -112,8 +112,7 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
                 .for_each(|mle| {
                     let mut mle = mle.lock().expect("Failed to lock mutex");
                     // dbg!(mle.read_pointer.stream_position().unwrap());
-                    mle
-                        .fix_variables(&[r])
+                    mle.fix_variables(&[r])
                 });
             #[cfg(not(feature = "parallel"))]
             self.poly
@@ -151,7 +150,8 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
                 // println!("num_variables: {}", self.poly.aux_info.num_variables);
 
                 // Use a HashMap to store stream values once per unique stream
-                let mut stream_values: std::collections::HashMap<usize, (F, F)> = std::collections::HashMap::new();
+                let mut stream_values: std::collections::HashMap<usize, (F, F)> =
+                    std::collections::HashMap::new();
 
                 // Read and store values only for unique streams
                 for &f in products.iter() {
@@ -160,10 +160,10 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
                         // println!(": {}", f);
                         let stream = &self.poly.flattened_ml_extensions[f];
                         let mut locked_stream = stream.lock().expect("Failed to lock mutex");
-                        
+
                         // print read position
                         // println!("read position: {}", locked_stream.read_pointer.stream_position().unwrap());
-                        
+
                         let eval = locked_stream.read_next().unwrap(); // Read once for eval
                         let step = locked_stream.read_next().unwrap() - eval; // Read once for step
                         stream_values.insert(f, (eval, step));
@@ -192,12 +192,12 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
             }
 
             // restart all streams
-            self.poly.flattened_ml_extensions.iter_mut().for_each(|stream| {
-                stream
-                    .lock()
-                    .expect("Failed to lock mutex")
-                    .read_restart();
-            });
+            self.poly
+                .flattened_ml_extensions
+                .iter_mut()
+                .for_each(|stream| {
+                    stream.lock().expect("Failed to lock mutex").read_restart();
+                });
 
             // Multiplying sum by coefficient
             for s in &mut sum {
@@ -220,12 +220,8 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
             {
                 *products_sum += *s;
             }
-
         }
 
-        
-
-        
         // update prover's state to the partial evaluated polynomial
         // self.poly.flattened_ml_extensions = flattened_ml_extensions
         //     .par_iter()

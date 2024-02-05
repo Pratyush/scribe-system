@@ -8,11 +8,11 @@
 
 use std::fmt::Debug;
 
-use crate::hyperplonk::poly_iop::{errors::PolyIOPErrors, sum_check::SumCheck, PolyIOP};
 use crate::hyperplonk::arithmetic::virtual_polynomial::eq_eval;
+use crate::hyperplonk::poly_iop::{errors::PolyIOPErrors, sum_check::SumCheck, PolyIOP};
+use crate::hyperplonk::transcript::IOPTranscript;
 use ark_ff::PrimeField;
 use ark_std::{end_timer, start_timer};
-use crate::hyperplonk::transcript::IOPTranscript;
 
 /// A zero check IOP subclaim for `f(x)` consists of the following:
 ///   - the initial challenge vector r which is used to build eq(x, r) in
@@ -124,11 +124,11 @@ impl<F: PrimeField> ZeroCheck<F> for PolyIOP<F> {
 mod test {
 
     use super::ZeroCheck;
-    use crate::hyperplonk::poly_iop::{errors::PolyIOPErrors, PolyIOP};
     use crate::hyperplonk::arithmetic::virtual_polynomial::VirtualPolynomial;
+    use crate::hyperplonk::poly_iop::{errors::PolyIOPErrors, PolyIOP};
     // use ark_bls12_381::Fr;
-    use ark_test_curves::bls12_381::Fr;
     use ark_std::test_rng;
+    use ark_test_curves::bls12_381::Fr;
 
     fn test_zerocheck(
         nv: usize,
@@ -155,8 +155,12 @@ mod test {
             transcript.append_message(b"testing", b"initializing transcript for testing")?;
             let zero_subclaim =
                 <PolyIOP<Fr> as ZeroCheck<Fr>>::verify(&proof, &poly_info, &mut transcript)?;
-            
-            let evaluated_point = poly.evaluate(std::slice::from_ref(&zero_subclaim.point[poly_info.num_variables - 1])).unwrap();
+
+            let evaluated_point = poly
+                .evaluate(std::slice::from_ref(
+                    &zero_subclaim.point[poly_info.num_variables - 1],
+                ))
+                .unwrap();
             assert!(
                 evaluated_point == zero_subclaim.expected_evaluation,
                 "wrong subclaim"

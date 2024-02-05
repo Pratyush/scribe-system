@@ -8,9 +8,7 @@
 //! various functions associated with it.
 
 use crate::{
-    hyperplonk::arithmetic::{
-        errors::ArithErrors,
-    },
+    hyperplonk::arithmetic::errors::ArithErrors,
     read_write::{DenseMLPolyStream, ReadWriteStream},
 };
 use ark_ff::PrimeField;
@@ -24,7 +22,12 @@ use ark_std::{
 use rayon::iter::IntoParallelRefMutIterator;
 use rayon::prelude::*;
 use std::{
-    cmp::max, collections::HashMap, io::Seek, marker::PhantomData, ops::Add, sync::{Arc, Mutex}
+    cmp::max,
+    collections::HashMap,
+    io::Seek,
+    marker::PhantomData,
+    ops::Add,
+    sync::{Arc, Mutex},
 };
 
 #[rustfmt::skip]
@@ -251,12 +254,10 @@ impl<F: PrimeField> VirtualPolynomial<F> {
         // print point len and self.aux_info.num_variables
         // println!("virtual poly `evaluate()`: point len: {}, self.aux_info.num_variables: {}", point.len(), self.aux_info.num_variables);
 
-
         let evals: Vec<F> = self
             .flattened_ml_extensions
             .iter()
             .map(|x| {
-                
                 // print num_vars
                 // let num_vars = x.lock().unwrap().num_vars;
                 // println!("virtual poly `evaluate()`: num_vars: {}", num_vars);
@@ -349,11 +350,10 @@ impl<F: PrimeField> VirtualPolynomial<F> {
         }
 
         let eq_x_r = build_eq_x_r(r)?;
-        
+
         // print read pointer of eq_x_r
         // let read_pos = eq_x_r.lock().unwrap().read_pointer.stream_position().unwrap();
         // println!("build_f_hat eq_x_r read pointer: {}", read_pos);
-        
 
         let mut res = self.clone();
         res.mul_by_mle(eq_x_r, F::one())?;
@@ -375,8 +375,6 @@ impl<F: PrimeField> VirtualPolynomial<F> {
     //         println!()
     //     }
     // }
-
-
 }
 
 /// This function build the eq(x, r) polynomial for any given r.
@@ -428,7 +426,10 @@ pub fn build_eq_x_r<F: PrimeField>(
 /// A helper function to build eq(x, r) recursively.
 /// This function takes `r.len()` steps, and for each step it requires a maximum
 /// `r.len()-1` multiplications.
-fn build_eq_x_r_helper<F: PrimeField>(r: &[F], buf: &mut DenseMLPolyStream<F>) -> Result<(), ArithErrors> {
+fn build_eq_x_r_helper<F: PrimeField>(
+    r: &[F],
+    buf: &mut DenseMLPolyStream<F>,
+) -> Result<(), ArithErrors> {
     if r.is_empty() {
         return Err(ArithErrors::InvalidParameters("r length is 0".to_string()));
     } else if r.len() == 1 {
@@ -444,7 +445,6 @@ fn build_eq_x_r_helper<F: PrimeField>(r: &[F], buf: &mut DenseMLPolyStream<F>) -
         //     println!("helper eq_x_r val: {}", val);
         // }
         // buf.read_restart();
-        
     } else {
         // println!("CASE else");
         build_eq_x_r_helper(&r[1..], buf)?;
@@ -476,7 +476,6 @@ fn build_eq_x_r_helper<F: PrimeField>(r: &[F], buf: &mut DenseMLPolyStream<F>) -
         //     println!("helper eq_x_r val: {}", val);
         // }
         buf.read_restart();
-
     }
 
     Ok(())
@@ -513,10 +512,10 @@ pub fn bit_decompose(input: u64, num_var: usize) -> Vec<bool> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use ark_test_curves::bls12_381::Fr;
+    use ark_ff::Field;
     use ark_ff::UniformRand;
     use ark_std::test_rng;
-    use ark_ff::Field;
+    use ark_test_curves::bls12_381::Fr;
 
     #[test]
     fn test_build_eq_x_r() {
@@ -525,10 +524,10 @@ mod test {
         let one = Fr::ONE;
         let expected_stream = vec![
             // Manually calculate expected values for eq(x, r) given r
-            (one - Fr::from(2)) * (one - Fr::from(3)), 
+            (one - Fr::from(2)) * (one - Fr::from(3)),
             Fr::from(2) * (one - Fr::from(3)),
             (one - Fr::from(2)) * Fr::from(3),
-            Fr::from(2) * Fr::from(3), 
+            Fr::from(2) * Fr::from(3),
         ];
 
         // Action
@@ -545,12 +544,15 @@ mod test {
         }
 
         // Assertion
-        assert_eq!(expected_stream.len(), result_values.len(), "Stream lengths do not match");
+        assert_eq!(
+            expected_stream.len(),
+            result_values.len(),
+            "Stream lengths do not match"
+        );
         for (expected, result) in expected_stream.iter().zip(result_values.iter()) {
             assert_eq!(expected, result, "Stream values do not match");
         }
     }
-
 
     #[test]
     fn test_virtual_polynomial_additions() -> Result<(), ArithErrors> {
@@ -614,7 +616,10 @@ mod test {
             for i in 0..1 << nv {
                 let point = bit_decompose(i, nv);
                 let point_fr: Vec<Fr> = point.iter().map(|&x| Fr::from(x)).collect();
-                assert_eq!(eq_x_r.lock().unwrap().evaluate(point_fr.as_ref()).unwrap(), eq_x_r2.lock().unwrap().evaluate(point_fr.as_ref()).unwrap());
+                assert_eq!(
+                    eq_x_r.lock().unwrap().evaluate(point_fr.as_ref()).unwrap(),
+                    eq_x_r2.lock().unwrap().evaluate(point_fr.as_ref()).unwrap()
+                );
             }
         }
     }

@@ -182,14 +182,16 @@ impl<F: PrimeField> SumCheckVerifier<F> for IOPVerifierState<F> {
                 // println!("evaluation: {}", evaluations[0] + evaluations[1]);
                 // println!("evaluation 0: {}", evaluations[0]);
                 // println!("evaluation 1: {}", evaluations[1]);
-                return Err(PolyIOPErrors::InvalidProof(format!("Prover message is NOT consistent with the claim.")));
-            } 
+                return Err(PolyIOPErrors::InvalidProof(format!(
+                    "Prover message is NOT consistent with the claim."
+                )));
+            }
             // else {
-                // println!("Prover message is consistent with the claim.");
-                // println!("expected: {}", expected);
-                // println!("evaluation: {}", evaluations[0] + evaluations[1]);
-                // println!("evaluation 0: {}", evaluations[0]);
-                // println!("evaluation 1: {}", evaluations[1]);
+            // println!("Prover message is consistent with the claim.");
+            // println!("expected: {}", expected);
+            // println!("evaluation: {}", evaluations[0] + evaluations[1]);
+            // println!("evaluation 0: {}", evaluations[0]);
+            // println!("evaluation 1: {}", evaluations[1]);
             // }
         }
         end_timer!(start);
@@ -347,9 +349,9 @@ mod test {
     use super::interpolate_uni_poly;
     use crate::hyperplonk::poly_iop::errors::PolyIOPErrors;
     // use ark_bls12_381::Fr;
-    use ark_test_curves::bls12_381::Fr;
     use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial, Polynomial};
     use ark_std::{vec::Vec, UniformRand};
+    use ark_test_curves::bls12_381::Fr;
 
     #[test]
     fn test_interpolation() -> Result<(), PolyIOPErrors> {

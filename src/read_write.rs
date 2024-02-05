@@ -36,7 +36,6 @@ pub trait ReadWriteStream: Send + Sync {
     fn num_vars(&self) -> usize;
 
     fn swap_read_write(&mut self);
-
 }
 
 #[derive(Debug)]
@@ -120,7 +119,6 @@ impl<F: Field> ReadWriteStream for DenseMLPolyStream<F> {
         self.num_vars
     }
 
-
     fn swap_read_write(&mut self) {
         // Truncate the read file to the current position
         let cur_read_pos = self.read_pointer.stream_position().unwrap();
@@ -177,7 +175,6 @@ impl<F: Field> DenseMLPolyStream<F> {
         stream.swap_read_write();
         stream
     }
-
 
     pub fn decrement_num_vars(&mut self) {
         if self.num_vars <= 0 {
@@ -257,12 +254,10 @@ impl<F: Field> DenseMLPolyStream<F> {
             // println!("===post evaluation===");
             // self.swap_read_write();
 
-
             Some(self.read_next().expect("Failed to read"))
         } else {
             None
         }
-        
     }
 
     pub fn rand<R: RngCore>(num_vars: usize, rng: &mut R) -> Self {
@@ -343,7 +338,11 @@ impl<F: Field> DenseMLPolyStream<F> {
 
         let list = multiplicands
             .into_iter()
-            .map(|x| Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(nv, x, None, None))))
+            .map(|x| {
+                Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(
+                    nv, x, None, None,
+                )))
+            })
             .collect();
 
         end_timer!(start);
@@ -397,12 +396,20 @@ pub trait DenseMLPoly<F: Field>: ReadWriteStream<Item = F> {
 
     // not super efficient as streams are sequentially accessed and read one field element only
     // used temporary variable to store the current field element for each stream, to take care of scenarios where a stream adds to itself
-    fn add_multi(streams: Vec<Arc<Mutex<Self>>>, read_path: Option<&str>, write_path: Option<&str>) -> Self 
-    where 
-        Self: Sized
+    fn add_multi(
+        streams: Vec<Arc<Mutex<Self>>>,
+        read_path: Option<&str>,
+        write_path: Option<&str>,
+    ) -> Self
+    where
+        Self: Sized,
     {
-        let num_vars = streams.first().expect("Streams cannot be empty")
-            .lock().expect("Failed to lock stream").num_vars();
+        let num_vars = streams
+            .first()
+            .expect("Streams cannot be empty")
+            .lock()
+            .expect("Failed to lock stream")
+            .num_vars();
         let mut result_stream = Self::new(num_vars, read_path, write_path);
 
         loop {
@@ -431,12 +438,20 @@ pub trait DenseMLPoly<F: Field>: ReadWriteStream<Item = F> {
         result_stream
     }
 
-    fn prod_multi(streams: Vec<Arc<Mutex<Self>>>, read_path: Option<&str>, write_path: Option<&str>) -> Self 
+    fn prod_multi(
+        streams: Vec<Arc<Mutex<Self>>>,
+        read_path: Option<&str>,
+        write_path: Option<&str>,
+    ) -> Self
     where
-        Self: Sized
+        Self: Sized,
     {
-        let num_vars = streams.first().expect("Streams cannot be empty")
-            .lock().expect("Failed to lock stream").num_vars();
+        let num_vars = streams
+            .first()
+            .expect("Streams cannot be empty")
+            .lock()
+            .expect("Failed to lock stream")
+            .num_vars();
         let mut result_stream = Self::new(num_vars, read_path, write_path);
 
         loop {
@@ -465,13 +480,19 @@ pub trait DenseMLPoly<F: Field>: ReadWriteStream<Item = F> {
         result_stream
     }
 
-    fn poly(streams: Vec<Arc<Mutex<Self>>>, products: Vec<(F, Vec<usize>)>, read_path: Option<&str>, write_path: Option<&str>) -> Self 
+    fn poly(
+        streams: Vec<Arc<Mutex<Self>>>,
+        products: Vec<(F, Vec<usize>)>,
+        read_path: Option<&str>,
+        write_path: Option<&str>,
+    ) -> Self
     where
-        Self: Sized {
+        Self: Sized,
+    {
         if streams.is_empty() {
             panic!("Streams cannot be empty");
         }
-        
+
         let num_vars = streams.first().unwrap().lock().unwrap().num_vars();
         let mut result_stream = Self::new(num_vars, read_path, write_path);
 
@@ -493,7 +514,10 @@ pub trait DenseMLPoly<F: Field>: ReadWriteStream<Item = F> {
             let mut sum = F::zero(); // Reset sum for each new value from the first stream
 
             // Check if any stream (other than the first) required for the current operation is exhausted
-            if products.iter().any(|(_, indices)| indices.iter().any(|&i| current_values[i].is_none())) {
+            if products
+                .iter()
+                .any(|(_, indices)| indices.iter().any(|&i| current_values[i].is_none()))
+            {
                 panic!("Error: One or more required streams are exhausted before the first stream");
             }
 
@@ -549,7 +573,10 @@ mod tests {
     use std::time::Instant;
 
     // Helper to create a stream from a list of Fr values.
-    fn create_stream_from_values(num_vars: usize, values: Vec<Fr>) -> Arc<Mutex<DenseMLPolyStream<Fr>>> {
+    fn create_stream_from_values(
+        num_vars: usize,
+        values: Vec<Fr>,
+    ) -> Arc<Mutex<DenseMLPolyStream<Fr>>> {
         let stream = DenseMLPolyStream::from_evaluations_vec(num_vars, values, None, None);
         Arc::new(Mutex::new(stream))
     }
@@ -573,22 +600,43 @@ mod tests {
         let products_mul = vec![(Fr::from(3), vec![0, 1, 1])];
 
         // Use poly for addition and multiplication
-        let result_add_stream = DenseMLPoly::poly(vec![stream_1.clone(), stream_2.clone()], products_add, None, None);
-        let result_mul_stream = DenseMLPoly::poly(vec![stream_1, stream_2], products_mul, None, None);
+        let result_add_stream = DenseMLPoly::poly(
+            vec![stream_1.clone(), stream_2.clone()],
+            products_add,
+            None,
+            None,
+        );
+        let result_mul_stream =
+            DenseMLPoly::poly(vec![stream_1, stream_2], products_mul, None, None);
 
         // Manually calculate the expected results for addition and multiplication
-        let expected_add = values_stream_1.iter().zip(values_stream_2.iter()).map(|(a, b)| *a + *b).collect::<Vec<Fr>>();
-        let expected_mul = values_stream_1.iter().zip(values_stream_2.iter()).map(|(a, b)| Fr::from(3) * *a * *b * *b).collect::<Vec<Fr>>();
+        let expected_add = values_stream_1
+            .iter()
+            .zip(values_stream_2.iter())
+            .map(|(a, b)| *a + *b)
+            .collect::<Vec<Fr>>();
+        let expected_mul = values_stream_1
+            .iter()
+            .zip(values_stream_2.iter())
+            .map(|(a, b)| Fr::from(3) * *a * *b * *b)
+            .collect::<Vec<Fr>>();
 
         // Compare results from poly with manually calculated results
-        for (expected, mut result_stream) in [expected_add, expected_mul].iter().zip([result_add_stream, result_mul_stream].into_iter()) {
+        for (expected, mut result_stream) in [expected_add, expected_mul]
+            .iter()
+            .zip([result_add_stream, result_mul_stream].into_iter())
+        {
             let mut result_values = Vec::new();
-            for _ in 0..10 { // Assuming we know the expected length
+            for _ in 0..10 {
+                // Assuming we know the expected length
                 if let Some(val) = result_stream.read_next() {
                     result_values.push(val);
                 }
             }
-            assert_eq!(*expected, result_values, "The stream values do not match the expected values.");
+            assert_eq!(
+                *expected, result_values,
+                "The stream values do not match the expected values."
+            );
         }
     }
 

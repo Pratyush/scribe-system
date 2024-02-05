@@ -174,12 +174,12 @@ impl<F: PrimeField> SumCheck<F> for PolyIOP<F> {
                 IOPProverState::prove_round_and_update_state(&mut prover_state, &challenge)?;
             // print the position of read pointer of each mle in poly
             for mle in poly.flattened_ml_extensions.iter() {
-                // read next on mle and print each element 
+                // read next on mle and print each element
                 let mut mle_stream = mle.lock().unwrap();
                 // println!("starting read pointer position of `prove` argument poly: {}", mle_stream.read_pointer.stream_position().unwrap());
             }
             for mle in prover_state.poly.flattened_ml_extensions.iter() {
-                // read next on mle and print each element 
+                // read next on mle and print each element
                 let mut mle_stream = mle.lock().unwrap();
                 // println!("starting read pointer position of prover_state poly: {}", mle_stream.read_pointer.stream_position().unwrap());
             }
@@ -233,14 +233,17 @@ mod test {
 
     use super::*;
     // use ark_bls12_381::Fr;
-    use ark_test_curves::bls12_381::Fr;
+    use crate::read_write::ReadWriteStream;
     use ark_ff::UniformRand;
     use ark_poly::{DenseMultilinearExtension, MultilinearExtension};
-    use ark_std::{rand::{rngs::StdRng, SeedableRng}, test_rng};
-    use std::sync::{Arc, Mutex};
-    use crate::read_write::ReadWriteStream;
+    use ark_std::{
+        rand::{rngs::StdRng, SeedableRng},
+        test_rng,
+    };
+    use ark_test_curves::bls12_381::Fr;
     use std::io::Seek;
     use std::str::FromStr;
+    use std::sync::{Arc, Mutex};
 
     fn test_sumcheck(
         nv: usize,
@@ -248,22 +251,22 @@ mod test {
         num_products: usize,
     ) -> Result<(), PolyIOPErrors> {
         let seed = [
-        1, 0, 0, 0, 23, 0, 0, 0, 200, 1, 0, 0, 210, 30, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0,
+            1, 0, 0, 0, 23, 0, 0, 0, 200, 1, 0, 0, 210, 30, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0,
         ];
         let mut rng = StdRng::from_seed(seed);
         let mut transcript = <PolyIOP<Fr> as SumCheck<Fr>>::init_transcript();
 
         let (poly, asserted_sum) =
             VirtualPolynomial::rand(nv, num_multiplicands_range, num_products, &mut rng)?;
-        
-          // print the position of read pointer of each mle in poly
+
+        // print the position of read pointer of each mle in poly
         // for mle in poly.flattened_ml_extensions.iter() {
-            // read next on mle and print each element 
-            // let mut mle_stream = mle.lock().unwrap();
-            // println!("starting read pointer position: {}", mle_stream.read_pointer.stream_position().unwrap());
+        // read next on mle and print each element
+        // let mut mle_stream = mle.lock().unwrap();
+        // println!("starting read pointer position: {}", mle_stream.read_pointer.stream_position().unwrap());
         // }
-        
+
         let proof = <PolyIOP<Fr> as SumCheck<Fr>>::prove(&poly, &mut transcript)?;
         let poly_info = poly.aux_info.clone();
         let mut transcript = <PolyIOP<Fr> as SumCheck<Fr>>::init_transcript();
@@ -276,14 +279,14 @@ mod test {
 
         // print read pointer position of each mle in poly
         // for mle in poly.flattened_ml_extensions.iter() {
-            // read next on mle and print each element 
-            // let mut mle_stream = mle.lock().unwrap();
-            // println!("ending read pointer position: {}", mle_stream.read_pointer.stream_position().unwrap());
+        // read next on mle and print each element
+        // let mut mle_stream = mle.lock().unwrap();
+        // println!("ending read pointer position: {}", mle_stream.read_pointer.stream_position().unwrap());
         // }
 
         // // loop over and print all elements of all ml extensions of poly
         // for mle in poly.flattened_ml_extensions.iter() {
-        //     // read next on mle and print each element 
+        //     // read next on mle and print each element
         //     let mut mle_stream = mle.lock().unwrap();
         //     while let (Some(elem)) =
         //     (mle_stream.read_next())
@@ -294,20 +297,28 @@ mod test {
 
         // print subclaim point
         // for point in subclaim.point.iter() {
-            // println!("evaluate point: {}", point);
+        // println!("evaluate point: {}", point);
         // }
 
         // print read pointer position of each mle in poly
         // for mle in poly.flattened_ml_extensions.iter() {
-            // read next on mle and print each element 
-            // let mut mle_stream = mle.lock().unwrap();
-            // println!("ending read pointer position: {}", mle_stream.read_pointer.stream_position().unwrap());
+        // read next on mle and print each element
+        // let mut mle_stream = mle.lock().unwrap();
+        // println!("ending read pointer position: {}", mle_stream.read_pointer.stream_position().unwrap());
         // }
 
-        let evaluated_point = poly.evaluate(std::slice::from_ref(&subclaim.point[poly_info.num_variables - 1])).unwrap();
+        let evaluated_point = poly
+            .evaluate(std::slice::from_ref(
+                &subclaim.point[poly_info.num_variables - 1],
+            ))
+            .unwrap();
         assert!(
             evaluated_point == subclaim.expected_evaluation, // expected_evaluation is interpolated; in the full protocol, the evaluated_point should be a commitment query at subclaim point rather than evaluated from scratch
-            "{}", format!("wrong subclaim: evaluated: {}, expected: {}", evaluated_point, subclaim.expected_evaluation)
+            "{}",
+            format!(
+                "wrong subclaim: evaluated: {}, expected: {}",
+                evaluated_point, subclaim.expected_evaluation
+            )
         );
         Ok(())
     }
@@ -318,17 +329,17 @@ mod test {
         num_products: usize,
     ) -> Result<(), PolyIOPErrors> {
         let seed = [
-        1, 0, 0, 0, 23, 0, 0, 0, 200, 1, 0, 0, 210, 30, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0,
+            1, 0, 0, 0, 23, 0, 0, 0, 200, 1, 0, 0, 210, 30, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0,
         ];
         let mut rng = StdRng::from_seed(seed);
         let (poly, asserted_sum) =
             VirtualPolynomial::<Fr>::rand(nv, num_multiplicands_range, num_products, &mut rng)?;
         // print the position of read pointer of each mle in poly
         // for mle in poly.flattened_ml_extensions.iter() {
-            // read next on mle and print each element 
-            // let mut mle_stream = mle.lock().unwrap();
-            // println!("starting read pointer position: {}", mle_stream.read_pointer.stream_position().unwrap());
+        // read next on mle and print each element
+        // let mut mle_stream = mle.lock().unwrap();
+        // println!("starting read pointer position: {}", mle_stream.read_pointer.stream_position().unwrap());
         // }
         let poly_info = poly.aux_info.clone();
         let mut prover_state = IOPProverState::prover_init(&poly)?;
@@ -356,19 +367,36 @@ mod test {
             IOPVerifierState::check_and_generate_subclaim(&verifier_state, &asserted_sum)
                 .expect("fail to generate subclaim");
 
-        let evaluated_point = poly.evaluate(std::slice::from_ref(&subclaim.point[poly_info.num_variables - 1])).unwrap();
+        let evaluated_point = poly
+            .evaluate(std::slice::from_ref(
+                &subclaim.point[poly_info.num_variables - 1],
+            ))
+            .unwrap();
         assert!(
             evaluated_point == subclaim.expected_evaluation, // the expected evaluation is interpolated; in the full protocol, the poly evaluation should be a commitment query at subclaim point rather than evaluated from scratch
-            "{}", format!("wrong subclaim: evaluated: {}, expected: {}", evaluated_point, subclaim.expected_evaluation)
+            "{}",
+            format!(
+                "wrong subclaim: evaluated: {}, expected: {}",
+                evaluated_point, subclaim.expected_evaluation
+            )
         );
         Ok(())
     }
 
     #[test]
     fn test_field() {
-        let even = Fr::from_str("46726240763639862128214388288720131204625575015731614850157206947646262134152").unwrap();
-        let odd = Fr::from_str("43289727388036023252294560744145593863815462211184144675663927741862919848062").unwrap();
-        let r = Fr::from_str("48518066819672969227993919640561737464634267551386147702542572494009347136503").unwrap();
+        let even = Fr::from_str(
+            "46726240763639862128214388288720131204625575015731614850157206947646262134152",
+        )
+        .unwrap();
+        let odd = Fr::from_str(
+            "43289727388036023252294560744145593863815462211184144675663927741862919848062",
+        )
+        .unwrap();
+        let r = Fr::from_str(
+            "48518066819672969227993919640561737464634267551386147702542572494009347136503",
+        )
+        .unwrap();
         let evaluated = even + r * (odd - even);
         // println!("evaluated: {}", evaluated);
     }
@@ -479,7 +507,11 @@ mod test {
             &mut transcript,
         )?;
 
-        let evaluated_point = poly.evaluate(std::slice::from_ref(&subclaim.point[poly_info.num_variables - 1])).unwrap();
+        let evaluated_point = poly
+            .evaluate(std::slice::from_ref(
+                &subclaim.point[poly_info.num_variables - 1],
+            ))
+            .unwrap();
         assert!(
             evaluated_point == subclaim.expected_evaluation,
             "wrong subclaim"
