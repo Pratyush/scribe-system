@@ -23,6 +23,8 @@ pub trait ReadWriteStream: Send + Sync {
 
     fn read_next(&mut self) -> Option<Self::Item>;
 
+    fn read_next_unchecked(&mut self) -> Option<Self::Item>;
+
     fn read_restart(&mut self);
 
     fn write_next(&mut self, field: Self::Item) -> Option<()>;
@@ -73,6 +75,11 @@ impl<F: Field> ReadWriteStream for DenseMLPolyStream<F> {
         }
 
         // Proceed with deserialization
+        F::deserialize_uncompressed_unchecked(&mut self.read_pointer).ok()
+    }
+
+    // used for creating eq_x_r, recursively building which requires reading one element while writing two elements
+    fn read_next_unchecked(&mut self) -> Option<Self::Item> {
         F::deserialize_uncompressed_unchecked(&mut self.read_pointer).ok()
     }
 

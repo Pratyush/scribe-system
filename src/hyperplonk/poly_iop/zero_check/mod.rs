@@ -144,6 +144,10 @@ mod test {
 
             let mut transcript = <PolyIOP<Fr> as ZeroCheck<Fr>>::init_transcript();
             transcript.append_message(b"testing", b"initializing transcript for testing")?;
+            // print products of poly
+            poly.products.iter().for_each(|p| {
+                println!("test_zero_check before prove product: {:?}", p);
+            });
             let proof = <PolyIOP<Fr> as ZeroCheck<Fr>>::prove(&poly, &mut transcript)?;
 
             let poly_info = poly.aux_info.clone();
@@ -151,8 +155,10 @@ mod test {
             transcript.append_message(b"testing", b"initializing transcript for testing")?;
             let zero_subclaim =
                 <PolyIOP<Fr> as ZeroCheck<Fr>>::verify(&proof, &poly_info, &mut transcript)?;
+            
+            let evaluated_point = poly.evaluate(std::slice::from_ref(&zero_subclaim.point[poly_info.num_variables - 1])).unwrap();
             assert!(
-                poly.evaluate(&zero_subclaim.point)? == zero_subclaim.expected_evaluation,
+                evaluated_point == zero_subclaim.expected_evaluation,
                 "wrong subclaim"
             );
         }
