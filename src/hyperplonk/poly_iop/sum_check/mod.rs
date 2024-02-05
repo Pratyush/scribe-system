@@ -457,9 +457,9 @@ mod test {
         assert_eq!(poly.flattened_ml_extensions.len(), 5);
 
         // print each product indices of virtualpolynomial
-        for (coeff, product) in poly.products.iter() {
-            println!("coeff: {}, product: {:?}", coeff, product);
-        }
+        // for (coeff, product) in poly.products.iter() {
+        //     println!("coeff: {}, product: {:?}", coeff, product);
+        // }
 
         // test memory usage for prover
         let prover = IOPProverState::<Fr>::prover_init(&poly).unwrap();

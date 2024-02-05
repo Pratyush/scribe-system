@@ -182,7 +182,7 @@ impl<F: PrimeField> VirtualPolynomial<F> {
                 indexed_product.push(curr_index);
             }
         }
-        println!("self.products: {:?}", &indexed_product);
+        // println!("self.products: {:?}", &indexed_product);
         self.products.push((coefficient, indexed_product));
         Ok(())
     }
@@ -249,7 +249,7 @@ impl<F: PrimeField> VirtualPolynomial<F> {
         // }
 
         // print point len and self.aux_info.num_variables
-        println!("virtual poly `evaluate()`: point len: {}, self.aux_info.num_variables: {}", point.len(), self.aux_info.num_variables);
+        // println!("virtual poly `evaluate()`: point len: {}, self.aux_info.num_variables: {}", point.len(), self.aux_info.num_variables);
 
 
         let evals: Vec<F> = self
@@ -258,8 +258,8 @@ impl<F: PrimeField> VirtualPolynomial<F> {
             .map(|x| {
                 
                 // print num_vars
-                let num_vars = x.lock().unwrap().num_vars;
-                println!("virtual poly `evaluate()`: num_vars: {}", num_vars);
+                // let num_vars = x.lock().unwrap().num_vars;
+                // println!("virtual poly `evaluate()`: num_vars: {}", num_vars);
 
                 x.lock()
                     .expect("Failed to lock mutex")
@@ -324,9 +324,9 @@ impl<F: PrimeField> VirtualPolynomial<F> {
         }
 
         // print products of self.products
-        poly.products.iter().for_each(|(_, p)| {
-            println!("rand_zero product: {:?}", p);
-        });
+        // poly.products.iter().for_each(|(_, p)| {
+        //     println!("rand_zero product: {:?}", p);
+        // });
 
         Ok(poly)
     }
@@ -351,8 +351,8 @@ impl<F: PrimeField> VirtualPolynomial<F> {
         let eq_x_r = build_eq_x_r(r)?;
         
         // print read pointer of eq_x_r
-        let read_pos = eq_x_r.lock().unwrap().read_pointer.stream_position().unwrap();
-        println!("build_f_hat eq_x_r read pointer: {}", read_pos);
+        // let read_pos = eq_x_r.lock().unwrap().read_pointer.stream_position().unwrap();
+        // println!("build_f_hat eq_x_r read pointer: {}", read_pos);
         
 
         let mut res = self.clone();
@@ -432,7 +432,7 @@ fn build_eq_x_r_helper<F: PrimeField>(r: &[F], buf: &mut DenseMLPolyStream<F>) -
     if r.is_empty() {
         return Err(ArithErrors::InvalidParameters("r length is 0".to_string()));
     } else if r.len() == 1 {
-        println!("CASE r.len == 1");
+        // println!("CASE r.len == 1");
         // initializing the buffer with [1-r_0, r_0]
         buf.write_next_unchecked(F::one() - r[0]);
         buf.write_next_unchecked(r[0]);
@@ -440,13 +440,13 @@ fn build_eq_x_r_helper<F: PrimeField>(r: &[F], buf: &mut DenseMLPolyStream<F>) -
         buf.swap_read_write();
 
         // print all read elements and restart read
-        while let Some(val) = buf.read_next() {
-            println!("helper eq_x_r val: {}", val);
-        }
-        buf.read_restart();
+        // while let Some(val) = buf.read_next() {
+        //     println!("helper eq_x_r val: {}", val);
+        // }
+        // buf.read_restart();
         
     } else {
-        println!("CASE else");
+        // println!("CASE else");
         build_eq_x_r_helper(&r[1..], buf)?;
 
         // suppose at the previous step we received [b_1, ..., b_k]
@@ -464,7 +464,7 @@ fn build_eq_x_r_helper<F: PrimeField>(r: &[F], buf: &mut DenseMLPolyStream<F>) -
         // using read_next_unchecked, because we write two elements for each element read
         while let Some(elem) = buf.read_next_unchecked() {
             // print elem
-            println!("helper eq_x_r elem: {}", elem);
+            // println!("helper eq_x_r elem: {}", elem);
             let tmp = r[0] * elem;
             buf.write_next_unchecked(elem - tmp);
             buf.write_next_unchecked(tmp);
@@ -472,9 +472,9 @@ fn build_eq_x_r_helper<F: PrimeField>(r: &[F], buf: &mut DenseMLPolyStream<F>) -
         buf.swap_read_write();
 
         // print all read elements and restart read
-        while let Some(val) = buf.read_next() {
-            println!("helper eq_x_r val: {}", val);
-        }
+        // while let Some(val) = buf.read_next() {
+        //     println!("helper eq_x_r val: {}", val);
+        // }
         buf.read_restart();
 
     }

@@ -145,9 +145,9 @@ mod test {
             let mut transcript = <PolyIOP<Fr> as ZeroCheck<Fr>>::init_transcript();
             transcript.append_message(b"testing", b"initializing transcript for testing")?;
             // print products of poly
-            poly.products.iter().for_each(|p| {
-                println!("test_zero_check before prove product: {:?}", p);
-            });
+            // poly.products.iter().for_each(|p| {
+            //     println!("test_zero_check before prove product: {:?}", p);
+            // });
             let proof = <PolyIOP<Fr> as ZeroCheck<Fr>>::prove(&poly, &mut transcript)?;
 
             let poly_info = poly.aux_info.clone();
