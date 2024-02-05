@@ -478,8 +478,10 @@ mod test {
             &poly_info,
             &mut transcript,
         )?;
+
+        let evaluated_point = poly.evaluate(std::slice::from_ref(&subclaim.point[poly_info.num_variables - 1])).unwrap();
         assert!(
-            poly.evaluate(&subclaim.point)? == subclaim.expected_evaluation,
+            evaluated_point == subclaim.expected_evaluation,
             "wrong subclaim"
         );
         Ok(())
