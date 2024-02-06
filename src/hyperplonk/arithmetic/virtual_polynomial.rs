@@ -375,6 +375,32 @@ impl<F: PrimeField> VirtualPolynomial<F> {
     //         println!()
     //     }
     // }
+
+    pub fn build_perm_check_poly(
+        h_p: Arc<Mutex<DenseMLPolyStream<F>>>,
+        h_q: Arc<Mutex<DenseMLPolyStream<F>>>,
+        p: Arc<Mutex<DenseMLPolyStream<F>>>,
+        q: Arc<Mutex<DenseMLPolyStream<F>>>,
+        pi: Arc<Mutex<DenseMLPolyStream<F>>>,
+        alpha: F,
+        r: F,
+    ) -> Result<VirtualPolynomial<F>, ArithErrors> {
+        // conduct a batch zero check on t_1 and t_2
+        // poly = t_1 + r * t_2 = h_p * (p + alpha * pi) - 1 + r * (h_q * (q + alpha) - 1)
+        // = -1-r + h_p*p + h_p*alpha*pi + r*h_q*q + r*h_q*alpha
+        let num_vars = h_p.lock().unwrap().num_vars;
+
+        let mut poly = VirtualPolynomial::new_from_mle(
+            &DenseMLPolyStream::const_mle(-r - F::ONE, num_vars, None, None),
+            F::one(),
+        );
+        poly.add_mle_list(vec![h_p.clone(), p], F::one()).unwrap();
+        poly.add_mle_list(vec![h_p, pi], alpha).unwrap();
+        poly.add_mle_list(vec![h_q.clone(), q], r).unwrap();
+        poly.add_mle_list(vec![h_q], alpha * r).unwrap();
+
+        Ok(poly)
+    }
 }
 
 /// This function build the eq(x, r) polynomial for any given r.
@@ -511,11 +537,102 @@ pub fn bit_decompose(input: u64, num_var: usize) -> Vec<bool> {
 
 #[cfg(test)]
 mod test {
+    use super::VirtualPolynomial;
     use super::*;
     use ark_ff::Field;
     use ark_ff::UniformRand;
     use ark_std::test_rng;
     use ark_test_curves::bls12_381::Fr;
+
+    #[test]
+    fn test_build_perm_check_poly() {
+        // Setup sample values for alpha and r
+        let alpha = Fr::from(11u64);
+        let r = Fr::from(12u64);
+
+        // Setup sample streams for h_p, h_q, p, q, and pi
+        let h_p = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(
+            1,
+            vec![Fr::from(1u64), Fr::from(2u64)],
+            None,
+            None,
+        )));
+        let h_q = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(
+            1,
+            vec![Fr::from(3u64), Fr::from(4u64)],
+            None,
+            None,
+        )));
+        let p = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(
+            1,
+            vec![Fr::from(5u64), Fr::from(6u64)],
+            None,
+            None,
+        )));
+        let q = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(
+            1,
+            vec![Fr::from(7u64), Fr::from(8u64)],
+            None,
+            None,
+        )));
+        let pi = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(
+            1,
+            vec![Fr::from(9u64), Fr::from(10u64)],
+            None,
+            None,
+        )));
+
+        // Call the function under test
+        let result_poly =
+            VirtualPolynomial::build_perm_check_poly(h_p, h_q, p, q, pi, alpha, r).unwrap();
+
+        // Define expected products directly
+        let expected_products = vec![
+            (Fr::from(1u64), vec![0]),
+            (Fr::from(1u64), vec![1, 2]),
+            (Fr::from(11u64), vec![1, 3]),
+            (Fr::from(12u64), vec![4, 5]),
+            (Fr::from(132u64), vec![4]),
+        ];
+
+        // Compare max_degree and num_variables
+        assert_eq!(result_poly.aux_info.max_degree, 2);
+        assert_eq!(result_poly.aux_info.num_variables, 1);
+
+        // Compare the length of products
+        assert_eq!(
+            result_poly.products.len(),
+            expected_products.len(),
+            "Products length mismatch"
+        );
+
+        // Detailed comparison of products
+        for (i, (expected_coef, expected_indices)) in expected_products.iter().enumerate() {
+            let (result_coef, result_indices) = &result_poly.products[i];
+            assert_eq!(
+                result_coef, expected_coef,
+                "Mismatch in coefficient at index {}",
+                i
+            );
+            assert_eq!(
+                result_indices, expected_indices,
+                "Mismatch in indices at index {}",
+                i
+            );
+        }
+
+        // Compare lengths of flattened_ml_extensions and raw_pointers_lookup_table
+        assert_eq!(
+            result_poly.flattened_ml_extensions.len(),
+            6,
+            "Mismatch in flattened_ml_extensions length"
+        );
+        assert_eq!(
+            result_poly.raw_pointers_lookup_table.len(),
+            6,
+            "Mismatch in raw_pointers_lookup_table length"
+        );
+    }
 
     #[test]
     fn test_build_eq_x_r() {

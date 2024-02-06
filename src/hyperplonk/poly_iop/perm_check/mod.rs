@@ -62,10 +62,7 @@ pub trait PermutationCheck<F: PrimeField>: ZeroCheck<F> {
         q: Self::MultilinearExtension,
         pi: Self::MultilinearExtension,
         transcript: &mut IOPTranscript<F>,
-    ) -> Result<
-        Self::PermutationCheckProof,
-        PolyIOPErrors,
-    >;
+    ) -> Result<Self::PermutationCheckProof, PolyIOPErrors>;
 
     /// Verify that for witness multilinear polynomials (f1, ..., fk, g1, ...,
     /// gk) it holds that
@@ -96,10 +93,7 @@ where
         mut q: Self::MultilinearExtension,
         mut pi: Self::MultilinearExtension,
         transcript: &mut IOPTranscript<F>,
-    ) -> Result<
-        Self::PermutationCheckProof,
-        PolyIOPErrors,
-    > {
+    ) -> Result<Self::PermutationCheckProof, PolyIOPErrors> {
         let start = start_timer!(|| "perm_check prove");
 
         // assume that p, q, and pi have equal length
@@ -111,12 +105,12 @@ where
         let (mut h_p, mut h_q) = util::compute_frac_poly(&p, &q, &pi, alpha).unwrap();
 
         // get challenge r for batch zero check of t_1 + r * t_2, where t_1 = h_p * (p + alpha * pi) - 1 and t_2 = h_q * (q + alpha) - 1
-        let r = transcript.get_and_append_challenge(b"r");
+        let r = transcript.get_and_append_challenge(b"r")?;
 
         // poly = t_1 + r * t_2 = h_p * (p + alpha * pi) - 1 + r * (h_q * (q + alpha) - 1)
-        let poly = VirtualPolynomial::build_perm_check_poly(&h_p, &h_q, &p, &q, &pi, alpha, r);
+        let poly = VirtualPolynomial::build_perm_check_poly(h_p, h_q, p, q, pi, alpha, r).unwrap();
 
-        let res =  <PolyIOP<F> as ZeroCheck<F>>::prove(&poly, transcript)?;
+        let res = <PolyIOP<F> as ZeroCheck<F>>::prove(&poly, transcript)?;
 
         Ok(res)
     }

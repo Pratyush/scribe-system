@@ -348,6 +348,20 @@ impl<F: Field> DenseMLPolyStream<F> {
         end_timer!(start);
         list
     }
+
+    pub fn const_mle(
+        c: F,
+        nv: usize,
+        read_path: Option<&str>,
+        write_path: Option<&str>,
+    ) -> Arc<Mutex<Self>> {
+        let mut stream = Self::new(nv, read_path, write_path);
+        for _ in 0..(1 << nv) {
+            stream.write_next_unchecked(c).expect("Failed to write");
+        }
+        stream.swap_read_write();
+        Arc::new(Mutex::new(stream))
+    }
 }
 
 // currently not very efficient as it reads and writes one field element at a time
