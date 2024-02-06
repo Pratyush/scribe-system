@@ -8,7 +8,7 @@ use crate::{
         },
         transcript::IOPTranscript,
     },
-    read_write::DenseMLPolyStream,
+    read_write::{DenseMLPolyStream, ReadWriteStream},
 };
 // use arithmetic::{VPAuxInfo, VirtualPolynomial};
 use ark_ff::PrimeField;
@@ -63,11 +63,7 @@ pub trait PermutationCheck<F: PrimeField>: ZeroCheck<F> {
         pi: Self::MultilinearExtension,
         transcript: &mut IOPTranscript<F>,
     ) -> Result<
-        (
-            Self::PermutationCheckProof,
-            // Self::MultilinearExtension,
-            // Self::MultilinearExtension,
-        ),
+        Self::PermutationCheckProof,
         PolyIOPErrors,
     >;
 
@@ -82,29 +78,13 @@ pub trait PermutationCheck<F: PrimeField>: ZeroCheck<F> {
     ) -> Result<Self::PermutationCheckSubClaim, PolyIOPErrors>;
 }
 
-/// A product check proof consists of
-/// - a zerocheck proof
-/// - a product polynomial commitment
-/// - a polynomial commitment for the fractional polynomial
-#[derive(Clone, Debug, Default, PartialEq)]
-pub struct PermutationCheckProof<
-    // E: Pairing,
-    // PCS: PolynomialCommitmentScheme<E>,
-    F: PrimeField,
-    ZC: ZeroCheck<F>,
-> {
-    pub zero_check_proof: ZC::ZeroCheckProof, // sumcheck proof
-                                              // pub prod_x_comm: PCS::Commitment,
-                                              // pub frac_comm: PCS::Commitment,
-}
-
 impl<F: PrimeField> PermutationCheck<F> for PolyIOP<F>
 where
 // E: Pairing,
 // PCS: PolynomialCommitmentScheme<E, Polynomial = Arc<DenseMultilinearExtension<E::ScalarField>>>,
 {
     type PermutationCheckSubClaim = PermutationCheckSubClaim<F, Self>;
-    type PermutationCheckProof = PermutationCheckProof<F, Self>;
+    type PermutationCheckProof = Self::ZeroCheckProof;
 
     fn init_transcript() -> Self::Transcript {
         IOPTranscript::<F>::new(b"Initializing PermuCheck transcript")
@@ -117,24 +97,28 @@ where
         mut pi: Self::MultilinearExtension,
         transcript: &mut IOPTranscript<F>,
     ) -> Result<
-        (
-            Self::PermutationCheckProof,
-            // Self::MultilinearExtension,
-            // Self::MultilinearExtension,
-        ),
+        Self::PermutationCheckProof,
         PolyIOPErrors,
     > {
         let start = start_timer!(|| "perm_check prove");
 
         // assume that p, q, and pi have equal length
 
-        // get challenge alpha
-        let alpha = transcript.get_and_append_challenge(b"alpha r")?;
+        // get challenge alpha for h_p = 1/(p + alpha * pi) and h_q = 1/(q + alpha)
+        let alpha = transcript.get_and_append_challenge(b"alpha")?;
 
         // compute the fractional polynomials h_p and h_q
-        let (mut h_p, mut h_q) = util::compute_frac_poly(p, q, pi, alpha).unwrap();
+        let (mut h_p, mut h_q) = util::compute_frac_poly(&p, &q, &pi, alpha).unwrap();
 
-        unimplemented!()
+        // get challenge r for batch zero check of t_1 + r * t_2, where t_1 = h_p * (p + alpha * pi) - 1 and t_2 = h_q * (q + alpha) - 1
+        let r = transcript.get_and_append_challenge(b"r");
+
+        // poly = t_1 + r * t_2 = h_p * (p + alpha * pi) - 1 + r * (h_q * (q + alpha) - 1)
+        let poly = VirtualPolynomial::build_perm_check_poly(&h_p, &h_q, &p, &q, &pi, alpha, r);
+
+        let res =  <PolyIOP<F> as ZeroCheck<F>>::prove(&poly, transcript)?;
+
+        Ok(res)
     }
 
     fn verify(
@@ -143,5 +127,75 @@ where
         transcript: &mut Self::Transcript,
     ) -> Result<Self::PermutationCheckSubClaim, PolyIOPErrors> {
         unimplemented!()
+    }
+}
+
+#[cfg(test)]
+mod test {
+
+    use super::ZeroCheck;
+    use crate::hyperplonk::arithmetic::virtual_polynomial::VirtualPolynomial;
+    use crate::hyperplonk::poly_iop::{errors::PolyIOPErrors, PolyIOP};
+    // use ark_bls12_381::Fr;
+    use ark_std::test_rng;
+    use ark_test_curves::bls12_381::Fr;
+
+    fn test_zerocheck(
+        nv: usize,
+        num_multiplicands_range: (usize, usize),
+        num_products: usize,
+    ) -> Result<(), PolyIOPErrors> {
+        let mut rng = test_rng();
+
+        {
+            // good path: zero virtual poly
+            let poly =
+                VirtualPolynomial::rand_zero(nv, num_multiplicands_range, num_products, &mut rng)?;
+
+            let mut transcript = <PolyIOP<Fr> as ZeroCheck<Fr>>::init_transcript();
+            transcript.append_message(b"testing", b"initializing transcript for testing")?;
+            // print products of poly
+            // poly.products.iter().for_each(|p| {
+            //     println!("test_zero_check before prove product: {:?}", p);
+            // });
+            let proof = <PolyIOP<Fr> as ZeroCheck<Fr>>::prove(&poly, &mut transcript)?;
+
+            let poly_info = poly.aux_info.clone();
+            let mut transcript = <PolyIOP<Fr> as ZeroCheck<Fr>>::init_transcript();
+            transcript.append_message(b"testing", b"initializing transcript for testing")?;
+            let zero_subclaim =
+                <PolyIOP<Fr> as ZeroCheck<Fr>>::verify(&proof, &poly_info, &mut transcript)?;
+
+            let evaluated_point = poly
+                .evaluate(std::slice::from_ref(
+                    &zero_subclaim.point[poly_info.num_variables - 1],
+                ))
+                .unwrap();
+            assert!(
+                evaluated_point == zero_subclaim.expected_evaluation,
+                "wrong subclaim"
+            );
+        }
+
+        {
+            // bad path: random virtual poly whose sum is not zero
+            let (poly, _sum) =
+                VirtualPolynomial::<Fr>::rand(nv, num_multiplicands_range, num_products, &mut rng)?;
+
+            let mut transcript = <PolyIOP<Fr> as ZeroCheck<Fr>>::init_transcript();
+            transcript.append_message(b"testing", b"initializing transcript for testing")?;
+            let proof = <PolyIOP<Fr> as ZeroCheck<Fr>>::prove(&poly, &mut transcript)?;
+
+            let poly_info = poly.aux_info.clone();
+            let mut transcript = <PolyIOP<Fr> as ZeroCheck<Fr>>::init_transcript();
+            transcript.append_message(b"testing", b"initializing transcript for testing")?;
+
+            assert!(
+                <PolyIOP<Fr> as ZeroCheck<Fr>>::verify(&proof, &poly_info, &mut transcript)
+                    .is_err()
+            );
+        }
+
+        Ok(())
     }
 }

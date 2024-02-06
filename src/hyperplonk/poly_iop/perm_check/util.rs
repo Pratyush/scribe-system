@@ -25,9 +25,9 @@ use crate::hyperplonk::poly_iop::zero_check::ZeroCheck;
 // use transcript::IOPTranscript;
 
 pub fn compute_frac_poly<F: PrimeField>(
-    p: Arc<Mutex<DenseMLPolyStream<F>>>,
-    q: Arc<Mutex<DenseMLPolyStream<F>>>,
-    pi: Arc<Mutex<DenseMLPolyStream<F>>>,
+    p: &Arc<Mutex<DenseMLPolyStream<F>>>,
+    q: &Arc<Mutex<DenseMLPolyStream<F>>>,
+    pi: &Arc<Mutex<DenseMLPolyStream<F>>>,
     alpha: F,
 ) -> Result<
     (
@@ -70,6 +70,10 @@ pub fn compute_frac_poly<F: PrimeField>(
         hq.write_next_unchecked(result)
             .expect("Failed to write to output stream for q");
     }
+
+    p.read_restart();
+    q.read_restart();
+    pi.read_restart();
 
     hp.swap_read_write();
     hq.swap_read_write();
@@ -117,7 +121,7 @@ mod tests {
         )));
 
         // Compute the fractional polynomials
-        let (output_hp, output_hq) = compute_frac_poly(p, q, pi, alpha).unwrap();
+        let (output_hp, output_hq) = compute_frac_poly(&p, &q, &pi, alpha).unwrap();
 
         // Expected results based on manual calculations or desired outcomes
         let expected_hp = vec![
