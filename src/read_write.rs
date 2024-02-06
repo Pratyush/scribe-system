@@ -237,6 +237,9 @@ impl<F: Field> DenseMLPolyStream<F> {
     // Evaluate at a specific point to one field element
     pub fn evaluate(&mut self, point: &[F]) -> Option<F> {
         if point.len() == self.num_vars {
+            println!("evaluate RUN");
+            println!("point len: {}", point.len());
+            println!("num_vars: {}", self.num_vars);
             // dbg!(self.read_pointer.stream_position().unwrap());
             self.fix_variables(point);
 
@@ -254,8 +257,15 @@ impl<F: Field> DenseMLPolyStream<F> {
             // println!("===post evaluation===");
             // self.swap_read_write();
 
-            Some(self.read_next().expect("Failed to read"))
+            let result = self.read_next().expect("Failed to read");
+
+            self.read_restart();
+
+            Some(result)
         } else {
+            println!("evaluate NOT RUN");
+            println!("point len: {}", point.len());
+            println!("num_vars: {}", self.num_vars);
             None
         }
     }

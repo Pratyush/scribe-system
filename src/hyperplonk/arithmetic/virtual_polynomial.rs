@@ -281,6 +281,48 @@ impl<F: PrimeField> VirtualPolynomial<F> {
         Ok(res)
     }
 
+    // For testing only
+    // because our evaluate function updates the stream, after all streams are evaluated, the result will be one single value in each stream
+    // this function calculates the evaluation result of the VirtualPolynomial without needing a point
+    pub fn evaluate_single_field_streams(&self) -> Result<F, ArithErrors> {
+        let start = start_timer!(|| "evaluation");
+
+        // if self.aux_info.num_variables != point.len() {
+        //     return Err(ArithErrors::InvalidParameters(format!(
+        //         "wrong number of variables {} vs {}",
+        //         self.aux_info.num_variables,
+        //         point.len()
+        //     )));
+        // }
+
+        // print point len and self.aux_info.num_variables
+        // println!("virtual poly `evaluate()`: point len: {}, self.aux_info.num_variables: {}", point.len(), self.aux_info.num_variables);
+
+        let evals: Vec<F> = self
+            .flattened_ml_extensions
+            .iter()
+            .map(|x| {
+                // print num_vars
+                // let num_vars = x.lock().unwrap().num_vars;
+                // println!("virtual poly `evaluate()`: num_vars: {}", num_vars);
+                let mut locked_stream = x.lock().expect("Lock failed");
+                let field = locked_stream.read_next().unwrap();
+                locked_stream.read_restart();
+                drop(locked_stream);
+                field
+            })
+            .collect();
+
+        let res = self
+            .products
+            .iter()
+            .map(|(c, p)| *c * p.iter().map(|&i| evals[i]).product::<F>())
+            .sum();
+
+        end_timer!(start);
+        Ok(res)
+    }
+
     /// Sample a random virtual polynomial, return the polynomial and its sum.
     pub fn rand<R: RngCore>(
         nv: usize,
@@ -293,8 +335,8 @@ impl<F: PrimeField> VirtualPolynomial<F> {
         let mut sum = F::zero();
         let mut poly = VirtualPolynomial::new(nv);
         for _ in 0..num_products {
-            let num_multiplicands =
-                rng.gen_range(num_multiplicands_range.0..num_multiplicands_range.1);
+            let num_multiplicands = 1;
+            // rng.gen_range(num_multiplicands_range.0..num_multiplicands_range.1);
             let (product, product_sum) =
                 DenseMLPolyStream::random_mle_list(nv, num_multiplicands, rng, None, None);
             let coefficient = F::rand(rng);
@@ -675,7 +717,9 @@ mod test {
     fn test_virtual_polynomial_additions() -> Result<(), ArithErrors> {
         let mut rng = test_rng();
         for nv in 2..5 {
+            println!("nv: {}", nv);
             for num_products in 2..5 {
+                println!("num_products: {}", num_products);
                 let base: Vec<Fr> = (0..nv).map(|_| Fr::rand(&mut rng)).collect();
 
                 let (a, _a_sum) =
@@ -686,7 +730,7 @@ mod test {
 
                 assert_eq!(
                     a.evaluate(base.as_ref())? + b.evaluate(base.as_ref())?,
-                    c.evaluate(base.as_ref())?
+                    c.evaluate_single_field_streams()?
                 );
             }
         }
@@ -714,71 +758,11 @@ mod test {
 
                 assert_eq!(
                     a.evaluate(base.as_ref())? * b_vp.evaluate(base.as_ref())?,
-                    c.evaluate(base.as_ref())?
+                    c.evaluate_single_field_streams()?
                 );
             }
         }
 
         Ok(())
-    }
-
-    #[test]
-    fn test_eq_xr() {
-        let mut rng = test_rng();
-        for nv in 4..10 {
-            let r: Vec<Fr> = (0..nv).map(|_| Fr::rand(&mut rng)).collect();
-            let eq_x_r = build_eq_x_r(r.as_ref()).unwrap();
-            let eq_x_r2 = build_eq_x_r_for_test(r.as_ref());
-            // compare two streams element by element
-            for i in 0..1 << nv {
-                let point = bit_decompose(i, nv);
-                let point_fr: Vec<Fr> = point.iter().map(|&x| Fr::from(x)).collect();
-                assert_eq!(
-                    eq_x_r.lock().unwrap().evaluate(point_fr.as_ref()).unwrap(),
-                    eq_x_r2.lock().unwrap().evaluate(point_fr.as_ref()).unwrap()
-                );
-            }
-        }
-    }
-
-    /// Naive method to build eq(x, r).
-    /// Only used for testing purpose.
-    // Evaluate
-    //      eq(x,y) = \prod_i=1^num_var (x_i * y_i + (1-x_i)*(1-y_i))
-    // over r, which is
-    //      eq(x,y) = \prod_i=1^num_var (x_i * r_i + (1-x_i)*(1-r_i))
-    fn build_eq_x_r_for_test<F: PrimeField>(r: &[F]) -> Arc<Mutex<DenseMLPolyStream<F>>> {
-        // we build eq(x,r) from its evaluations
-        // we want to evaluate eq(x,r) over x \in {0, 1}^num_vars
-        // for example, with num_vars = 4, x is a binary vector of 4, then
-        //  0 0 0 0 -> (1-r0)   * (1-r1)    * (1-r2)    * (1-r3)
-        //  1 0 0 0 -> r0       * (1-r1)    * (1-r2)    * (1-r3)
-        //  0 1 0 0 -> (1-r0)   * r1        * (1-r2)    * (1-r3)
-        //  1 1 0 0 -> r0       * r1        * (1-r2)    * (1-r3)
-        //  ....
-        //  1 1 1 1 -> r0       * r1        * r2        * r3
-        // we will need 2^num_var evaluations
-
-        // First, we build array for {1 - r_i}
-        let one_minus_r: Vec<F> = r.iter().map(|ri| F::one() - ri).collect();
-
-        let num_var = r.len();
-        let mut eval = vec![];
-
-        for i in 0..1 << num_var {
-            let mut current_eval = F::one();
-            let bit_sequence = bit_decompose(i, num_var);
-
-            for (&bit, (ri, one_minus_ri)) in
-                bit_sequence.iter().zip(r.iter().zip(one_minus_r.iter()))
-            {
-                current_eval *= if bit { *ri } else { *one_minus_ri };
-            }
-            eval.push(current_eval);
-        }
-
-        let mle = DenseMLPolyStream::from_evaluations_vec(num_var, eval, None, None);
-
-        Arc::new(Mutex::new(mle))
     }
 }

@@ -16,7 +16,7 @@ use ark_ff::PrimeField;
 use ark_std::{end_timer, start_timer, Zero};
 use std::{fmt::Debug, io::Seek, sync::Arc};
 
-use super::zero_check::ZeroCheck;
+use super::{sum_check::SumCheck, zero_check::ZeroCheck};
 // use transcript::IOPTranscript;
 
 mod util;
@@ -110,9 +110,9 @@ where
         // poly = t_1 + r * t_2 = h_p * (p + alpha * pi) - 1 + r * (h_q * (q + alpha) - 1)
         let poly = VirtualPolynomial::build_perm_check_poly(h_p, h_q, p, q, pi, alpha, r).unwrap();
 
-        let res = <PolyIOP<F> as ZeroCheck<F>>::prove(&poly, transcript)?;
+        let zero_check_proof = <PolyIOP<F> as ZeroCheck<F>>::prove(&poly, transcript)?;
 
-        Ok(res)
+        Ok(zero_check_proof)
     }
 
     fn verify(
