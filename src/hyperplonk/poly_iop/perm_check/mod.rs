@@ -19,6 +19,8 @@ use std::{fmt::Debug, io::Seek, sync::Arc};
 use super::zero_check::ZeroCheck;
 // use transcript::IOPTranscript;
 
+mod util;
+
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct PermutationCheckSubClaim<F: PrimeField, ZC: ZeroCheck<F>> {
     pub zero_check_sub_claim: ZC::ZeroCheckSubClaim,
@@ -92,15 +94,14 @@ pub struct PermutationCheckProof<
     ZC: ZeroCheck<F>,
 > {
     pub zero_check_proof: ZC::ZeroCheckProof, // sumcheck proof
-    // pub prod_x_comm: PCS::Commitment,
-    // pub frac_comm: PCS::Commitment,
+                                              // pub prod_x_comm: PCS::Commitment,
+                                              // pub frac_comm: PCS::Commitment,
 }
-
 
 impl<F: PrimeField> PermutationCheck<F> for PolyIOP<F>
 where
-    // E: Pairing,
-    // PCS: PolynomialCommitmentScheme<E, Polynomial = Arc<DenseMultilinearExtension<E::ScalarField>>>,
+// E: Pairing,
+// PCS: PolynomialCommitmentScheme<E, Polynomial = Arc<DenseMultilinearExtension<E::ScalarField>>>,
 {
     type PermutationCheckSubClaim = PermutationCheckSubClaim<F, Self>;
     type PermutationCheckProof = PermutationCheckProof<F, Self>;
@@ -110,19 +111,29 @@ where
     }
 
     fn prove(
-            // pcs_param: &PCS::ProverParam,
-            p: Self::MultilinearExtension,
-            q: Self::MultilinearExtension,
-            pi: Self::MultilinearExtension,
-            transcript: &mut IOPTranscript<F>,
-        ) -> Result<
-            (
-                Self::PermutationCheckProof,
-                // Self::MultilinearExtension,
-                // Self::MultilinearExtension,
-            ),
-            PolyIOPErrors,
-        > {
+        // pcs_param: &PCS::ProverParam,
+        mut p: Self::MultilinearExtension,
+        mut q: Self::MultilinearExtension,
+        mut pi: Self::MultilinearExtension,
+        transcript: &mut IOPTranscript<F>,
+    ) -> Result<
+        (
+            Self::PermutationCheckProof,
+            // Self::MultilinearExtension,
+            // Self::MultilinearExtension,
+        ),
+        PolyIOPErrors,
+    > {
+        let start = start_timer!(|| "perm_check prove");
+
+        // assume that p, q, and pi have equal length
+
+        // get challenge alpha
+        let alpha = transcript.get_and_append_challenge(b"alpha r")?;
+
+        // compute the fractional polynomials h_p and h_q
+        let (mut h_p, mut h_q) = util::compute_frac_poly(p, q, pi, alpha).unwrap();
+
         unimplemented!()
     }
 
@@ -133,7 +144,4 @@ where
     ) -> Result<Self::PermutationCheckSubClaim, PolyIOPErrors> {
         unimplemented!()
     }
-
-
-
 }
