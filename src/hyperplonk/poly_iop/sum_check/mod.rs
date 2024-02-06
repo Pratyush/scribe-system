@@ -20,9 +20,10 @@ use crate::{
 };
 // use arithmetic::{VPAuxInfo, VirtualPolynomial};
 use ark_ff::PrimeField;
+use ark_poly::DenseMultilinearExtension;
 // use ark_poly::DenseMultilinearExtension;
 use ark_std::{end_timer, start_timer};
-use std::{fmt::Debug, io::Seek, sync::Arc};
+use std::{fmt::Debug, io::Seek, sync::{Arc, Mutex}};
 // use transcript::IOPTranscript;
 
 mod prover;
@@ -32,7 +33,7 @@ mod verifier;
 pub trait SumCheck<F: PrimeField> {
     type VirtualPolynomial;
     type VPAuxInfo;
-    // type MultilinearExtension;
+    type MultilinearExtension;
 
     type SumCheckProof: Clone + Debug + Default + PartialEq;
     type Transcript;
@@ -140,7 +141,7 @@ impl<F: PrimeField> SumCheck<F> for PolyIOP<F> {
     type SumCheckProof = IOPProof<F>;
     type VirtualPolynomial = VirtualPolynomial<F>;
     type VPAuxInfo = VPAuxInfo<F>;
-    // type MultilinearExtension = Arc<DenseMultilinearExtension<F>>;
+    type MultilinearExtension = Arc<Mutex<DenseMLPolyStream<F>>>;
     type SumCheckSubClaim = SumCheckSubClaim<F>;
     type Transcript = IOPTranscript<F>;
 
