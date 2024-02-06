@@ -14,7 +14,7 @@ use crate::{
 use ark_ff::PrimeField;
 // use ark_poly::DenseMultilinearExtension;
 use ark_std::{end_timer, start_timer, Zero};
-use std::{fmt::Debug, io::Seek, sync::Arc};
+use std::{fmt::Debug, io::Seek, iter::Sum, sync::Arc};
 
 use super::{sum_check::SumCheck, zero_check::ZeroCheck};
 // use transcript::IOPTranscript;
@@ -61,6 +61,7 @@ pub trait PermutationCheck<F: PrimeField>: ZeroCheck<F> {
         p: Self::MultilinearExtension,
         q: Self::MultilinearExtension,
         pi: Self::MultilinearExtension,
+        index: Self::MultilinearExtension,
         transcript: &mut IOPTranscript<F>,
     ) -> Result<Self::PermutationCheckProof, PolyIOPErrors>;
 
@@ -92,6 +93,7 @@ where
         mut p: Self::MultilinearExtension,
         mut q: Self::MultilinearExtension,
         mut pi: Self::MultilinearExtension,
+        mut index: Self::MultilinearExtension,
         transcript: &mut IOPTranscript<F>,
     ) -> Result<Self::PermutationCheckProof, PolyIOPErrors> {
         let start = start_timer!(|| "perm_check prove");
@@ -104,15 +106,37 @@ where
         // compute the fractional polynomials h_p and h_q
         let (mut h_p, mut h_q) = util::compute_frac_poly(&p, &q, &pi, alpha).unwrap();
 
-        // get challenge r for batch zero check of t_1 + r * t_2, where t_1 = h_p * (p + alpha * pi) - 1 and t_2 = h_q * (q + alpha) - 1
-        let r = transcript.get_and_append_challenge(b"r")?;
+        // get challenge batch_factor for batch zero check of t_1 + batch_factor * t_2, where t_1 = h_p * (p + alpha * pi) - 1 and t_2 = h_q * (q + alpha) - 1
+        let batch_factor = transcript.get_and_append_challenge(b"batch_factor")?;
 
         // poly = t_1 + r * t_2 = h_p * (p + alpha * pi) - 1 + r * (h_q * (q + alpha) - 1)
-        let poly = VirtualPolynomial::build_perm_check_poly(h_p, h_q, p, q, pi, alpha, r).unwrap();
+        let poly = VirtualPolynomial::build_perm_check_poly(
+            h_p.clone(),
+            h_q.clone(),
+            p,
+            q,
+            pi,
+            index,
+            alpha,
+            batch_factor,
+        )
+        .unwrap();
 
-        let zero_check_proof = <PolyIOP<F> as ZeroCheck<F>>::prove(&poly, transcript)?;
+        // get challenge r for building eq_x_r
+        let length = poly.aux_info.num_variables;
+        let r = transcript.get_and_append_challenge_vectors(b"0check r", length)?;
+        let mut f_hat = poly.build_f_hat(r.as_ref())?;
 
-        Ok(zero_check_proof)
+        // get sumcheck for t_0 = sum over x in {0,1}^n of (h_q(x) - h_q(x)) = 0
+        // add term batch_factor^2 * t_0 to f_hat
+        // t_0 = h_p - h_q
+        let _ = f_hat.add_mle_list(vec![h_p], batch_factor * batch_factor);
+        let _ = f_hat.add_mle_list(vec![h_q], -batch_factor * batch_factor);
+
+        let res = <Self as SumCheck<F>>::prove(&f_hat, transcript);
+
+        end_timer!(start);
+        res
     }
 
     fn verify(

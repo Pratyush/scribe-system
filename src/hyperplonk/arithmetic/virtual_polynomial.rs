@@ -335,8 +335,8 @@ impl<F: PrimeField> VirtualPolynomial<F> {
         let mut sum = F::zero();
         let mut poly = VirtualPolynomial::new(nv);
         for _ in 0..num_products {
-            let num_multiplicands = 1;
-            // rng.gen_range(num_multiplicands_range.0..num_multiplicands_range.1);
+            let num_multiplicands =
+                rng.gen_range(num_multiplicands_range.0..num_multiplicands_range.1);
             let (product, product_sum) =
                 DenseMLPolyStream::random_mle_list(nv, num_multiplicands, rng, None, None);
             let coefficient = F::rand(rng);
@@ -424,12 +424,13 @@ impl<F: PrimeField> VirtualPolynomial<F> {
         p: Arc<Mutex<DenseMLPolyStream<F>>>,
         q: Arc<Mutex<DenseMLPolyStream<F>>>,
         pi: Arc<Mutex<DenseMLPolyStream<F>>>,
+        index: Arc<Mutex<DenseMLPolyStream<F>>>,
         alpha: F,
         r: F,
     ) -> Result<VirtualPolynomial<F>, ArithErrors> {
         // conduct a batch zero check on t_1 and t_2
-        // poly = t_1 + r * t_2 = h_p * (p + alpha * pi) - 1 + r * (h_q * (q + alpha) - 1)
-        // = -1-r + h_p*p + h_p*alpha*pi + r*h_q*q + r*h_q*alpha
+        // poly = t_1 + r * t_2 = h_p * (p + alpha * pi) - 1 + r * (h_q * (q + alpha * index) - 1)
+        // = -1-r + h_p*p + h_p*alpha*pi + r*h_q*q + r*h_q*alpha*index
         let num_vars = h_p.lock().unwrap().num_vars;
 
         let mut poly = VirtualPolynomial::new_from_mle(
@@ -439,7 +440,7 @@ impl<F: PrimeField> VirtualPolynomial<F> {
         poly.add_mle_list(vec![h_p.clone(), p], F::one()).unwrap();
         poly.add_mle_list(vec![h_p, pi], alpha).unwrap();
         poly.add_mle_list(vec![h_q.clone(), q], r).unwrap();
-        poly.add_mle_list(vec![h_q], alpha * r).unwrap();
+        poly.add_mle_list(vec![h_q, index], alpha * r).unwrap();
 
         Ok(poly)
     }
@@ -623,10 +624,16 @@ mod test {
             None,
             None,
         )));
+        let index = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(
+            1,
+            vec![Fr::from(13u64), Fr::from(14u64)],
+            None,
+            None,
+        )));
 
         // Call the function under test
         let result_poly =
-            VirtualPolynomial::build_perm_check_poly(h_p, h_q, p, q, pi, alpha, r).unwrap();
+            VirtualPolynomial::build_perm_check_poly(h_p, h_q, p, q, pi, index, alpha, r).unwrap();
 
         // Define expected products directly
         let expected_products = vec![
@@ -634,7 +641,7 @@ mod test {
             (Fr::from(1u64), vec![1, 2]),
             (Fr::from(11u64), vec![1, 3]),
             (Fr::from(12u64), vec![4, 5]),
-            (Fr::from(132u64), vec![4]),
+            (Fr::from(132u64), vec![4, 6]),
         ];
 
         // Compare max_degree and num_variables
@@ -666,12 +673,12 @@ mod test {
         // Compare lengths of flattened_ml_extensions and raw_pointers_lookup_table
         assert_eq!(
             result_poly.flattened_ml_extensions.len(),
-            6,
+            7,
             "Mismatch in flattened_ml_extensions length"
         );
         assert_eq!(
             result_poly.raw_pointers_lookup_table.len(),
-            6,
+            7,
             "Mismatch in raw_pointers_lookup_table length"
         );
     }
