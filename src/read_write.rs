@@ -374,6 +374,60 @@ impl<F: Field> DenseMLPolyStream<F> {
     }
 }
 
+/// A list of MLEs that represents an identity permutation
+/// loads vector from memory into stream, so is not memory efficient
+pub fn identity_permutation_mles<F: PrimeField>(
+    num_vars: usize,
+    num_chunks: usize,
+) -> Vec<Arc<Mutex<DenseMLPolyStream<F>>>> {
+    let mut res = vec![];
+    for i in 0..num_chunks {
+        let shift = (i * (1 << num_vars)) as u64;
+        let s_id_vec = (shift..shift + (1u64 << num_vars)).map(F::from).collect();
+        res.push(Arc::new(Mutex::new(
+            DenseMLPolyStream::from_evaluations_vec(num_vars, s_id_vec, None, None),
+        )));
+    }
+    res
+}
+
+pub fn random_permutation<F: PrimeField, R: RngCore>(
+    num_vars: usize,
+    num_chunks: usize,
+    rng: &mut R,
+) -> Vec<F> {
+    let len = (num_chunks as u64) * (1u64 << num_vars);
+    let mut s_id_vec: Vec<F> = (0..len).map(F::from).collect();
+    let mut s_perm_vec = vec![];
+    for _ in 0..len {
+        let index = rng.next_u64() as usize % s_id_vec.len();
+        s_perm_vec.push(s_id_vec.remove(index));
+    }
+    s_perm_vec
+}
+
+/// A list of MLEs that represent a random permutation
+pub fn random_permutation_mles<F: PrimeField, R: RngCore>(
+    num_vars: usize,
+    num_chunks: usize,
+    rng: &mut R,
+) -> Vec<Arc<Mutex<DenseMLPolyStream<F>>>> {
+    let s_perm_vec = random_permutation(num_vars, num_chunks, rng);
+    let mut res = vec![];
+    let n = 1 << num_vars;
+    for i in 0..num_chunks {
+        res.push(Arc::new(Mutex::new(
+            DenseMLPolyStream::from_evaluations_vec(
+                num_vars,
+                s_perm_vec[i * n..i * n + n].to_vec(),
+                None,
+                None,
+            ),
+        )));
+    }
+    res
+}
+
 // currently not very efficient as it reads and writes one field element at a time
 // in the future we could optimize by:
 // 1. read multiple streams in parallel

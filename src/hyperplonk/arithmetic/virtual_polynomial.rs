@@ -426,21 +426,23 @@ impl<F: PrimeField> VirtualPolynomial<F> {
         pi: Arc<Mutex<DenseMLPolyStream<F>>>,
         index: Arc<Mutex<DenseMLPolyStream<F>>>,
         alpha: F,
-        r: F,
+        batch_factor: F,
     ) -> Result<VirtualPolynomial<F>, ArithErrors> {
         // conduct a batch zero check on t_1 and t_2
-        // poly = t_1 + r * t_2 = h_p * (p + alpha * pi) - 1 + r * (h_q * (q + alpha * index) - 1)
-        // = -1-r + h_p*p + h_p*alpha*pi + r*h_q*q + r*h_q*alpha*index
+        // poly = t_1 + batch_factor * t_2 = h_p * (p + alpha * pi) - 1 + batch_factor * (h_q * (q + alpha * index) - 1)
+        // = -1-batch_factor + h_p*p + h_p*alpha*pi + batch_factor*h_q*q + batch_factor*h_q*alpha*index
         let num_vars = h_p.lock().unwrap().num_vars;
 
         let mut poly = VirtualPolynomial::new_from_mle(
-            &DenseMLPolyStream::const_mle(-r - F::ONE, num_vars, None, None),
+            &DenseMLPolyStream::const_mle(-batch_factor - F::ONE, num_vars, None, None),
             F::one(),
         );
         poly.add_mle_list(vec![h_p.clone(), p], F::one()).unwrap();
         poly.add_mle_list(vec![h_p, pi], alpha).unwrap();
-        poly.add_mle_list(vec![h_q.clone(), q], r).unwrap();
-        poly.add_mle_list(vec![h_q, index], alpha * r).unwrap();
+        poly.add_mle_list(vec![h_q.clone(), q], batch_factor)
+            .unwrap();
+        poly.add_mle_list(vec![h_q, index], alpha * batch_factor)
+            .unwrap();
 
         Ok(poly)
     }
