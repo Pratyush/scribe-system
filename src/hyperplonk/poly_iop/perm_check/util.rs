@@ -28,6 +28,7 @@ pub fn compute_frac_poly<F: PrimeField>(
     p: &Arc<Mutex<DenseMLPolyStream<F>>>,
     q: &Arc<Mutex<DenseMLPolyStream<F>>>,
     pi: &Arc<Mutex<DenseMLPolyStream<F>>>,
+    index: &Arc<Mutex<DenseMLPolyStream<F>>>,
     alpha: F,
 ) -> Result<
     (
@@ -48,6 +49,7 @@ pub fn compute_frac_poly<F: PrimeField>(
     let mut p = p.lock().unwrap();
     let mut q = q.lock().unwrap();
     let mut pi = pi.lock().unwrap();
+    let mut index = index.lock().unwrap();
 
     // Lock the output streams
     let mut hp = output_hp.lock().unwrap();
@@ -63,8 +65,8 @@ pub fn compute_frac_poly<F: PrimeField>(
     }
 
     // Stream processing for q
-    while let Some(q_val) = q.read_next() {
-        let result = (q_val + alpha)
+    while let (Some(q_val), Some(index_val)) = (q.read_next(), index.read_next()) {
+        let result = (q_val + alpha * index_val)
             .inverse()
             .expect("Failed to compute inverse");
         hq.write_next_unchecked(result)
@@ -119,9 +121,15 @@ mod tests {
             None,
             None,
         )));
+        let index = Arc::new(Mutex::new(DenseMLPolyStream::<Fr>::from_evaluations_vec(
+            1,
+            vec![Fr::from(7), Fr::from(8)],
+            None,
+            None,
+        )));
 
         // Compute the fractional polynomials
-        let (output_hp, output_hq) = compute_frac_poly(&p, &q, &pi, alpha).unwrap();
+        let (output_hp, output_hq) = compute_frac_poly(&p, &q, &pi, &index, alpha).unwrap();
 
         // Expected results based on manual calculations or desired outcomes
         let expected_hp = vec![
@@ -129,8 +137,8 @@ mod tests {
             (Fr::from(2) + Fr::from(6) * Fr::from(2)).inverse().unwrap(),
         ];
         let expected_hq = vec![
-            (Fr::from(3) + Fr::from(2)).inverse().unwrap(),
-            (Fr::from(4) + Fr::from(2)).inverse().unwrap(),
+            (Fr::from(3) + Fr::from(7) * Fr::from(2)).inverse().unwrap(),
+            (Fr::from(4) + Fr::from(8) * Fr::from(2)).inverse().unwrap(),
         ];
 
         // Convert output streams to vectors for easy comparison
