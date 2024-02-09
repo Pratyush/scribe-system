@@ -4,45 +4,48 @@
 // You should have received a copy of the MIT License
 // along with the HyperPlonk library. If not, see <https://mit-license.org/>.
 
-use crate::{
+use crate::hyperplonk::full_snark::{
     errors::HyperPlonkErrors,
     structs::{HyperPlonkIndex, HyperPlonkProof, HyperPlonkProvingKey, HyperPlonkVerifyingKey},
     utils::{build_f, eval_f, eval_perm_gate, prover_sanity_check, PcsAccumulator},
     witness::WitnessColumn,
     HyperPlonkSNARK,
 };
-use arithmetic::{evaluate_opt, gen_eval_point, VPAuxInfo};
-use ark_ec::pairing::Pairing;
+use crate::hyperplonk::arithmetic::virtual_polynomial::{
+    // evaluate_opt, gen_eval_point, 
+    VPAuxInfo};
+// use ark_ec::pairing::Pairing;
 use ark_poly::DenseMultilinearExtension;
 use ark_std::{end_timer, log2, start_timer, One, Zero};
 use rayon::iter::IntoParallelRefIterator;
 #[cfg(feature = "parallel")]
 use rayon::iter::ParallelIterator;
 use std::{marker::PhantomData, sync::Arc};
-use subroutines::{
-    pcs::prelude::{Commitment, PolynomialCommitmentScheme},
+use crate::hyperplonk::{
+    // pcs::prelude::{Commitment, PolynomialCommitmentScheme},
     poly_iop::{
         prelude::{PermutationCheck, ZeroCheck},
         PolyIOP,
     },
-    BatchProof,
+    // BatchProof,
 };
-use transcript::IOPTranscript;
+use crate::hyperplonk::transcript::IOPTranscript;
 
-impl<E, PCS> HyperPlonkSNARK<E, PCS> for PolyIOP<E::ScalarField>
-where
-    E: Pairing,
-    // Ideally we want to access polynomial as PCS::Polynomial, instead of instantiating it here.
-    // But since PCS::Polynomial can be both univariate or multivariate in our implementation
-    // we cannot bound PCS::Polynomial with a property trait bound.
-    PCS: PolynomialCommitmentScheme<
-        E,
-        Polynomial = Arc<DenseMultilinearExtension<E::ScalarField>>,
-        Point = Vec<E::ScalarField>,
-        Evaluation = E::ScalarField,
-        Commitment = Commitment<E>,
-        BatchProof = BatchProof<E, PCS>,
-    >,
+// impl<E, PCS> HyperPlonkSNARK<E, PCS> for PolyIOP<E::ScalarField>
+// where
+//     E: Pairing,
+//     // Ideally we want to access polynomial as PCS::Polynomial, instead of instantiating it here.
+//     // But since PCS::Polynomial can be both univariate or multivariate in our implementation
+//     // we cannot bound PCS::Polynomial with a property trait bound.
+//     PCS: PolynomialCommitmentScheme<
+//         E,
+//         Polynomial = Arc<DenseMultilinearExtension<E::ScalarField>>,
+//         Point = Vec<E::ScalarField>,
+//         Evaluation = E::ScalarField,
+//         Commitment = Commitment<E>,
+//         BatchProof = BatchProof<E, PCS>,
+//     >,
+impl HyperPlonkSNARK<F> for PolyIOP<F>
 {
     type Index = HyperPlonkIndex<E::ScalarField>;
     type ProvingKey = HyperPlonkProvingKey<E, PCS>;

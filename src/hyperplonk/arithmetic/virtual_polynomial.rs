@@ -580,6 +580,11 @@ pub fn bit_decompose(input: u64, num_var: usize) -> Vec<bool> {
     res
 }
 
+pub fn identity_permutation<F: PrimeField>(num_vars: usize, num_chunks: usize) -> Vec<F> {
+    let len = (num_chunks as u64) * (1u64 << num_vars);
+    (0..len).map(F::from).collect()
+}
+
 #[cfg(test)]
 mod test {
     use super::VirtualPolynomial;

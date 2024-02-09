@@ -4,7 +4,10 @@
 // You should have received a copy of the MIT License
 // along with the HyperPlonk library. If not, see <https://mit-license.org/>.
 
-pub use crate::hyperplonk::full_snark::{
-    custom_gate::CustomizedGates, errors::HyperPlonkErrors, mock::MockCircuit,
-    selectors::SelectorColumn, witness::WitnessColumn, HyperPlonkSNARK,
+pub use crate::hyperplonk::poly_iop::{
+    errors::PolyIOPErrors, perm_check::PermutationCheck, 
+    // prod_check::ProductCheck,
+    structs::IOPProof, sum_check::SumCheck, 
+    // utils::*, 
+    zero_check::ZeroCheck, PolyIOP,
 };

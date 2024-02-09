@@ -29,7 +29,7 @@ pub enum HyperPlonkErrors {
     SerializationError(SerializationError),
     /// PolyIOP error {0}
     PolyIOPErrors(PolyIOPErrors),
-    /// PCS error {0}
+    // /// PCS error {0}
     // PCSErrors(PCSError),
     /// Transcript error {0}
     TranscriptError(TranscriptError),

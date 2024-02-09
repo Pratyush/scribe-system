@@ -4,7 +4,9 @@
 // You should have received a copy of the MIT License
 // along with the HyperPlonk library. If not, see <https://mit-license.org/>.
 
-use crate::{build_mle, errors::HyperPlonkErrors};
+// use crate::{build_mle, errors::HyperPlonkErrors};
+use crate::hyperplonk::full_snark::errors::HyperPlonkErrors;
+use crate::build_mle;
 use ark_ff::PrimeField;
 use ark_poly::DenseMultilinearExtension;
 use ark_std::log2;

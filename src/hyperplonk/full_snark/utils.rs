@@ -4,91 +4,93 @@
 // You should have received a copy of the MIT License
 // along with the HyperPlonk library. If not, see <https://mit-license.org/>.
 
-use crate::{
+use crate::hyperplonk::full_snark::{
     custom_gate::CustomizedGates, errors::HyperPlonkErrors, structs::HyperPlonkParams,
     witness::WitnessColumn,
 };
-use arithmetic::{evaluate_opt, VirtualPolynomial};
-use ark_ec::pairing::Pairing;
+use crate::hyperplonk::arithmetic::virtual_polynomial::{
+    // evaluate_opt, 
+    VirtualPolynomial};
+// use ark_ec::pairing::Pairing;
 use ark_ff::PrimeField;
 use ark_poly::DenseMultilinearExtension;
 use std::{borrow::Borrow, sync::Arc};
-use subroutines::pcs::{prelude::Commitment, PolynomialCommitmentScheme};
-use transcript::IOPTranscript;
+// use subroutines::pcs::{prelude::Commitment, PolynomialCommitmentScheme};
+use crate::hyperplonk::transcript::IOPTranscript;
 
 /// An accumulator structure that holds a polynomial and
 /// its opening points
-#[derive(Debug)]
-pub(super) struct PcsAccumulator<E: Pairing, PCS: PolynomialCommitmentScheme<E>> {
-    // sequence:
-    // - prod(x) at 5 points
-    // - w_merged at perm check point
-    // - w_merged at zero check points (#witness points)
-    // - selector_merged at zero check points (#selector points)
-    // - w[0] at r_pi
-    pub(crate) num_var: usize,
-    pub(crate) polynomials: Vec<PCS::Polynomial>,
-    pub(crate) commitments: Vec<PCS::Commitment>,
-    pub(crate) points: Vec<PCS::Point>,
-    pub(crate) evals: Vec<PCS::Evaluation>,
-}
+// #[derive(Debug)]
+// pub(super) struct PcsAccumulator<E: Pairing, PCS: PolynomialCommitmentScheme<E>> {
+//     // sequence:
+//     // - prod(x) at 5 points
+//     // - w_merged at perm check point
+//     // - w_merged at zero check points (#witness points)
+//     // - selector_merged at zero check points (#selector points)
+//     // - w[0] at r_pi
+//     pub(crate) num_var: usize,
+//     pub(crate) polynomials: Vec<PCS::Polynomial>,
+//     pub(crate) commitments: Vec<PCS::Commitment>,
+//     pub(crate) points: Vec<PCS::Point>,
+//     pub(crate) evals: Vec<PCS::Evaluation>,
+// }
 
-impl<E, PCS> PcsAccumulator<E, PCS>
-where
-    E: Pairing,
-    PCS: PolynomialCommitmentScheme<
-        E,
-        Polynomial = Arc<DenseMultilinearExtension<E::ScalarField>>,
-        Point = Vec<E::ScalarField>,
-        Evaluation = E::ScalarField,
-        Commitment = Commitment<E>,
-    >,
-{
-    /// Create an empty accumulator.
-    pub(super) fn new(num_var: usize) -> Self {
-        Self {
-            num_var,
-            polynomials: vec![],
-            commitments: vec![],
-            points: vec![],
-            evals: vec![],
-        }
-    }
+// impl<E, PCS> PcsAccumulator<E, PCS>
+// where
+//     E: Pairing,
+//     PCS: PolynomialCommitmentScheme<
+//         E,
+//         Polynomial = Arc<DenseMultilinearExtension<E::ScalarField>>,
+//         Point = Vec<E::ScalarField>,
+//         Evaluation = E::ScalarField,
+//         Commitment = Commitment<E>,
+//     >,
+// {
+//     /// Create an empty accumulator.
+//     pub(super) fn new(num_var: usize) -> Self {
+//         Self {
+//             num_var,
+//             polynomials: vec![],
+//             commitments: vec![],
+//             points: vec![],
+//             evals: vec![],
+//         }
+//     }
 
-    /// Push a new evaluation point into the accumulator
-    pub(super) fn insert_poly_and_points(
-        &mut self,
-        poly: &PCS::Polynomial,
-        commit: &PCS::Commitment,
-        point: &PCS::Point,
-    ) {
-        assert!(poly.num_vars == point.len());
-        assert!(poly.num_vars == self.num_var);
+//     /// Push a new evaluation point into the accumulator
+//     pub(super) fn insert_poly_and_points(
+//         &mut self,
+//         poly: &PCS::Polynomial,
+//         commit: &PCS::Commitment,
+//         point: &PCS::Point,
+//     ) {
+//         assert!(poly.num_vars == point.len());
+//         assert!(poly.num_vars == self.num_var);
 
-        let eval = evaluate_opt(poly, point);
+//         let eval = evaluate_opt(poly, point);
 
-        self.evals.push(eval);
-        self.polynomials.push(poly.clone());
-        self.points.push(point.clone());
-        self.commitments.push(*commit);
-    }
+//         self.evals.push(eval);
+//         self.polynomials.push(poly.clone());
+//         self.points.push(point.clone());
+//         self.commitments.push(*commit);
+//     }
 
-    /// Batch open all the points over a merged polynomial.
-    /// A simple wrapper of PCS::multi_open
-    pub(super) fn multi_open(
-        &self,
-        prover_param: impl Borrow<PCS::ProverParam>,
-        transcript: &mut IOPTranscript<E::ScalarField>,
-    ) -> Result<PCS::BatchProof, HyperPlonkErrors> {
-        Ok(PCS::multi_open(
-            prover_param.borrow(),
-            self.polynomials.as_ref(),
-            self.points.as_ref(),
-            self.evals.as_ref(),
-            transcript,
-        )?)
-    }
-}
+//     /// Batch open all the points over a merged polynomial.
+//     /// A simple wrapper of PCS::multi_open
+//     pub(super) fn multi_open(
+//         &self,
+//         prover_param: impl Borrow<PCS::ProverParam>,
+//         transcript: &mut IOPTranscript<E::ScalarField>,
+//     ) -> Result<PCS::BatchProof, HyperPlonkErrors> {
+//         Ok(PCS::multi_open(
+//             prover_param.borrow(),
+//             self.polynomials.as_ref(),
+//             self.points.as_ref(),
+//             self.evals.as_ref(),
+//             transcript,
+//         )?)
+//     }
+// }
 
 /// Build MLE from matrix of witnesses.
 ///
@@ -295,7 +297,8 @@ pub(crate) fn eval_perm_gate<F: PrimeField>(
 #[cfg(test)]
 mod test {
     use super::*;
-    use ark_bls12_381::Fr;
+    // use ark_bls12_381::Fr;
+    use ark_test_curves::bls12_381::Fr;
     use ark_ff::PrimeField;
     use ark_poly::MultilinearExtension;
     #[test]

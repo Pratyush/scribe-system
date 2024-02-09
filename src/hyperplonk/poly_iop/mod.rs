@@ -6,6 +6,7 @@ pub mod perm_check;
 pub mod structs;
 pub mod sum_check;
 pub mod zero_check;
+pub mod prelude;
 
 #[derive(Clone, Debug, Default, Copy, PartialEq, Eq)]
 /// Struct for PolyIOP protocol.

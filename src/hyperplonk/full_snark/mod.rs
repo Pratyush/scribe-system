@@ -9,7 +9,8 @@
 // use ark_ec::pairing::Pairing;
 use errors::HyperPlonkErrors;
 // use subroutines::{pcs::prelude::PolynomialCommitmentScheme, poly_iop::prelude::PermutationCheck};
-use crate::hyperplonk::poly_iop::perm_check::PermutationCheck;
+use crate::hyperplonk::poly_iop::prelude::PermutationCheck;
+// use crate::hyperplonk::poly_iop::perm_check::PermutationCheck;
 use witness::WitnessColumn;
 
 mod custom_gate;
@@ -24,10 +25,11 @@ mod witness;
 
 /// A trait for HyperPlonk SNARKs.
 /// A HyperPlonk is derived from ZeroChecks and PermutationChecks.
-pub trait HyperPlonkSNARK<E, PCS>: PermutationCheck<E, PCS>
-where
-    E: Pairing,
-    PCS: PolynomialCommitmentScheme<E>,
+// pub trait HyperPlonkSNARK<E, PCS>: PermutationCheck<E, PCS>
+// where
+//     E: Pairing,
+//     PCS: PolynomialCommitmentScheme<E>,
+pub trait HyperPlonkSNARK<F>: PermutationCheck<F>
 {
     type Index;
     type ProvingKey;
@@ -46,7 +48,7 @@ where
     ///   polynomial commitments
     fn preprocess(
         index: &Self::Index,
-        pcs_srs: &PCS::SRS,
+        // pcs_srs: &PCS::SRS,
     ) -> Result<(Self::ProvingKey, Self::VerifyingKey), HyperPlonkErrors>;
 
     /// Generate HyperPlonk SNARK proof.
@@ -59,8 +61,10 @@ where
     /// - The HyperPlonk SNARK proof.
     fn prove(
         pk: &Self::ProvingKey,
-        pub_input: &[E::ScalarField],
-        witnesses: &[WitnessColumn<E::ScalarField>],
+        // pub_input: &[E::ScalarField],
+        pub_input: &[F],
+        // witnesses: &[WitnessColumn<E::ScalarField>],
+        witnesses: &[WitnessColumn<F>],
     ) -> Result<Self::Proof, HyperPlonkErrors>;
 
     /// Verify the HyperPlonk proof.
@@ -73,7 +77,8 @@ where
     /// - Return a boolean on whether the verification is successful
     fn verify(
         vk: &Self::VerifyingKey,
-        pub_input: &[E::ScalarField],
+        // pub_input: &[E::ScalarField],
+        pub_input: &[F],
         proof: &Self::Proof,
     ) -> Result<bool, HyperPlonkErrors>;
 }

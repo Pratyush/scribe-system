@@ -4,11 +4,11 @@
 // You should have received a copy of the MIT License
 // along with the HyperPlonk library. If not, see <https://mit-license.org/>.
 
-use arithmetic::identity_permutation;
+use crate::hyperplonk::arithmetic::virtual_polynomial::identity_permutation;
 use ark_ff::PrimeField;
 use ark_std::{log2, test_rng};
 
-use crate::{
+use crate::hyperplonk::full_snark::{
     custom_gate::CustomizedGates,
     selectors::SelectorColumn,
     structs::{HyperPlonkIndex, HyperPlonkParams},
@@ -142,124 +142,125 @@ impl<F: PrimeField> MockCircuit<F> {
     }
 }
 
-#[cfg(test)]
-mod test {
-    use super::*;
-    use crate::{errors::HyperPlonkErrors, HyperPlonkSNARK};
-    use ark_bls12_381::{Bls12_381, Fr};
-    use subroutines::{
-        pcs::{
-            prelude::{MultilinearKzgPCS, MultilinearUniversalParams},
-            PolynomialCommitmentScheme,
-        },
-        poly_iop::PolyIOP,
-    };
+// #[cfg(test)]
+// mod test {
+//     use super::*;
+//     use crate::hyperplonk::full_snark::{errors::HyperPlonkErrors, HyperPlonkSNARK};
+//     // use ark_test_curves::{Bls12_381, Fr};
+//     use ark_test_curves::bls12_381::Fr;
+//     use crate::hyperplonk::{
+//         // pcs::{
+//         //     prelude::{MultilinearKzgPCS, MultilinearUniversalParams},
+//         //     PolynomialCommitmentScheme,
+//         // },
+//         poly_iop::PolyIOP,
+//     };
 
-    const SUPPORTED_SIZE: usize = 20;
-    const MIN_NUM_VARS: usize = 8;
-    const MAX_NUM_VARS: usize = 15;
-    const CUSTOM_DEGREE: [usize; 6] = [1, 2, 4, 8, 16, 32];
+//     const SUPPORTED_SIZE: usize = 20;
+//     const MIN_NUM_VARS: usize = 8;
+//     const MAX_NUM_VARS: usize = 15;
+//     const CUSTOM_DEGREE: [usize; 6] = [1, 2, 4, 8, 16, 32];
 
-    #[test]
-    fn test_mock_circuit_sat() {
-        for i in 1..10 {
-            let vanilla_gate = CustomizedGates::vanilla_plonk_gate();
-            let circuit = MockCircuit::<Fr>::new(1 << i, &vanilla_gate);
-            assert!(circuit.is_satisfied());
+//     #[test]
+//     fn test_mock_circuit_sat() {
+//         for i in 1..10 {
+//             let vanilla_gate = CustomizedGates::vanilla_plonk_gate();
+//             let circuit = MockCircuit::<Fr>::new(1 << i, &vanilla_gate);
+//             assert!(circuit.is_satisfied());
 
-            let jf_gate = CustomizedGates::jellyfish_turbo_plonk_gate();
-            let circuit = MockCircuit::<Fr>::new(1 << i, &jf_gate);
-            assert!(circuit.is_satisfied());
+//             let jf_gate = CustomizedGates::jellyfish_turbo_plonk_gate();
+//             let circuit = MockCircuit::<Fr>::new(1 << i, &jf_gate);
+//             assert!(circuit.is_satisfied());
 
-            for num_witness in 2..10 {
-                for degree in CUSTOM_DEGREE {
-                    let mock_gate = CustomizedGates::mock_gate(num_witness, degree);
-                    let circuit = MockCircuit::<Fr>::new(1 << i, &mock_gate);
-                    assert!(circuit.is_satisfied());
-                }
-            }
-        }
-    }
+//             for num_witness in 2..10 {
+//                 for degree in CUSTOM_DEGREE {
+//                     let mock_gate = CustomizedGates::mock_gate(num_witness, degree);
+//                     let circuit = MockCircuit::<Fr>::new(1 << i, &mock_gate);
+//                     assert!(circuit.is_satisfied());
+//                 }
+//             }
+//         }
+//     }
 
-    fn test_mock_circuit_zkp_helper(
-        nv: usize,
-        gate: &CustomizedGates,
-        pcs_srs: &MultilinearUniversalParams<Bls12_381>,
-    ) -> Result<(), HyperPlonkErrors> {
-        let circuit = MockCircuit::<Fr>::new(1 << nv, gate);
-        assert!(circuit.is_satisfied());
+//     fn test_mock_circuit_zkp_helper(
+//         nv: usize,
+//         gate: &CustomizedGates,
+//         pcs_srs: &MultilinearUniversalParams<Bls12_381>,
+//     ) -> Result<(), HyperPlonkErrors> {
+//         let circuit = MockCircuit::<Fr>::new(1 << nv, gate);
+//         assert!(circuit.is_satisfied());
 
-        let index = circuit.index;
-        // generate pk and vks
-        let (pk, vk) =
-            <PolyIOP<Fr> as HyperPlonkSNARK<Bls12_381, MultilinearKzgPCS<Bls12_381>>>::preprocess(
-                &index, pcs_srs,
-            )?;
-        // generate a proof and verify
-        let proof =
-            <PolyIOP<Fr> as HyperPlonkSNARK<Bls12_381, MultilinearKzgPCS<Bls12_381>>>::prove(
-                &pk,
-                &circuit.public_inputs,
-                &circuit.witnesses,
-            )?;
+//         let index = circuit.index;
+//         // generate pk and vks
+//         let (pk, vk) =
+//             <PolyIOP<Fr> as HyperPlonkSNARK<Bls12_381, MultilinearKzgPCS<Bls12_381>>>::preprocess(
+//                 &index, pcs_srs,
+//             )?;
+//         // generate a proof and verify
+//         let proof =
+//             <PolyIOP<Fr> as HyperPlonkSNARK<Bls12_381, MultilinearKzgPCS<Bls12_381>>>::prove(
+//                 &pk,
+//                 &circuit.public_inputs,
+//                 &circuit.witnesses,
+//             )?;
 
-        let verify =
-            <PolyIOP<Fr> as HyperPlonkSNARK<Bls12_381, MultilinearKzgPCS<Bls12_381>>>::verify(
-                &vk,
-                &circuit.public_inputs,
-                &proof,
-            )?;
-        assert!(verify);
-        Ok(())
-    }
+//         let verify =
+//             <PolyIOP<Fr> as HyperPlonkSNARK<Bls12_381, MultilinearKzgPCS<Bls12_381>>>::verify(
+//                 &vk,
+//                 &circuit.public_inputs,
+//                 &proof,
+//             )?;
+//         assert!(verify);
+//         Ok(())
+//     }
 
-    #[test]
-    fn test_mock_circuit_zkp() -> Result<(), HyperPlonkErrors> {
-        let mut rng = test_rng();
-        let pcs_srs =
-            MultilinearKzgPCS::<Bls12_381>::gen_srs_for_testing(&mut rng, SUPPORTED_SIZE)?;
-        for nv in MIN_NUM_VARS..MAX_NUM_VARS {
-            let vanilla_gate = CustomizedGates::vanilla_plonk_gate();
-            test_mock_circuit_zkp_helper(nv, &vanilla_gate, &pcs_srs)?;
-        }
-        for nv in MIN_NUM_VARS..MAX_NUM_VARS {
-            let tubro_gate = CustomizedGates::jellyfish_turbo_plonk_gate();
-            test_mock_circuit_zkp_helper(nv, &tubro_gate, &pcs_srs)?;
-        }
-        let nv = 5;
-        for num_witness in 2..10 {
-            for degree in CUSTOM_DEGREE {
-                let mock_gate = CustomizedGates::mock_gate(num_witness, degree);
-                test_mock_circuit_zkp_helper(nv, &mock_gate, &pcs_srs)?;
-            }
-        }
+//     #[test]
+//     fn test_mock_circuit_zkp() -> Result<(), HyperPlonkErrors> {
+//         let mut rng = test_rng();
+//         let pcs_srs =
+//             MultilinearKzgPCS::<Bls12_381>::gen_srs_for_testing(&mut rng, SUPPORTED_SIZE)?;
+//         for nv in MIN_NUM_VARS..MAX_NUM_VARS {
+//             let vanilla_gate = CustomizedGates::vanilla_plonk_gate();
+//             test_mock_circuit_zkp_helper(nv, &vanilla_gate, &pcs_srs)?;
+//         }
+//         for nv in MIN_NUM_VARS..MAX_NUM_VARS {
+//             let tubro_gate = CustomizedGates::jellyfish_turbo_plonk_gate();
+//             test_mock_circuit_zkp_helper(nv, &tubro_gate, &pcs_srs)?;
+//         }
+//         let nv = 5;
+//         for num_witness in 2..10 {
+//             for degree in CUSTOM_DEGREE {
+//                 let mock_gate = CustomizedGates::mock_gate(num_witness, degree);
+//                 test_mock_circuit_zkp_helper(nv, &mock_gate, &pcs_srs)?;
+//             }
+//         }
 
-        Ok(())
-    }
+//         Ok(())
+//     }
 
-    #[test]
-    fn test_mock_circuit_e2e() -> Result<(), HyperPlonkErrors> {
-        let mut rng = test_rng();
-        let pcs_srs =
-            MultilinearKzgPCS::<Bls12_381>::gen_srs_for_testing(&mut rng, SUPPORTED_SIZE)?;
-        let nv = MAX_NUM_VARS;
+//     #[test]
+//     fn test_mock_circuit_e2e() -> Result<(), HyperPlonkErrors> {
+//         let mut rng = test_rng();
+//         let pcs_srs =
+//             MultilinearKzgPCS::<Bls12_381>::gen_srs_for_testing(&mut rng, SUPPORTED_SIZE)?;
+//         let nv = MAX_NUM_VARS;
 
-        let turboplonk_gate = CustomizedGates::jellyfish_turbo_plonk_gate();
-        test_mock_circuit_zkp_helper(nv, &turboplonk_gate, &pcs_srs)?;
+//         let turboplonk_gate = CustomizedGates::jellyfish_turbo_plonk_gate();
+//         test_mock_circuit_zkp_helper(nv, &turboplonk_gate, &pcs_srs)?;
 
-        Ok(())
-    }
+//         Ok(())
+//     }
 
-    #[test]
-    fn test_mock_long_selector_e2e() -> Result<(), HyperPlonkErrors> {
-        let mut rng = test_rng();
-        let pcs_srs =
-            MultilinearKzgPCS::<Bls12_381>::gen_srs_for_testing(&mut rng, SUPPORTED_SIZE)?;
-        let nv = MAX_NUM_VARS;
+//     #[test]
+//     fn test_mock_long_selector_e2e() -> Result<(), HyperPlonkErrors> {
+//         let mut rng = test_rng();
+//         let pcs_srs =
+//             MultilinearKzgPCS::<Bls12_381>::gen_srs_for_testing(&mut rng, SUPPORTED_SIZE)?;
+//         let nv = MAX_NUM_VARS;
 
-        let long_selector_gate = CustomizedGates::super_long_selector_gate();
-        test_mock_circuit_zkp_helper(nv, &long_selector_gate, &pcs_srs)?;
+//         let long_selector_gate = CustomizedGates::super_long_selector_gate();
+//         test_mock_circuit_zkp_helper(nv, &long_selector_gate, &pcs_srs)?;
 
-        Ok(())
-    }
-}
+//         Ok(())
+//     }
+// }
