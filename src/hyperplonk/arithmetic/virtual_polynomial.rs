@@ -466,7 +466,7 @@ impl<F: PrimeField> VirtualPolynomial<F> {
             &DenseMLPolyStream::const_mle(-batch_factor - F::ONE, num_vars, None, None),
             F::one(),
         );
-        poly.add_mle_list(vec![h_p.clone(), p], F::one()).unwrap();
+        poly.add_mle_list(vec![h_p.clone(), p.clone()], F::one()).unwrap();
         poly.add_mle_list(vec![h_p, pi], alpha).unwrap();
         poly.add_mle_list(vec![h_q.clone(), p], batch_factor)
             .unwrap();

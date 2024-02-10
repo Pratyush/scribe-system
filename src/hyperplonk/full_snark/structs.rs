@@ -6,7 +6,7 @@
 
 //! Main module for the HyperPlonk PolyIOP.
 
-use crate::{hyperplonk::full_snark::{custom_gate::CustomizedGates, prelude::HyperPlonkErrors, selectors::SelectorColumn}, read_write::{DenseMLPoly, DenseMLPolyStream}};
+use crate::{hyperplonk::{arithmetic::virtual_polynomial::VirtualPolynomial, full_snark::{custom_gate::CustomizedGates, prelude::HyperPlonkErrors, selectors::SelectorColumn}}, read_write::{DenseMLPoly, DenseMLPolyStream}};
 // use ark_ec::pairing::Pairing;
 use ark_ff::PrimeField;
 // use ark_poly::DenseMultilinearExtension;
@@ -22,7 +22,7 @@ use crate::hyperplonk::{
 ///   - a batch opening to all the MLEs at certain index
 ///   - the zero-check proof for checking custom gate-satisfiability
 ///   - the permutation-check proof for checking the copy constraints
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 // pub struct HyperPlonkProof<E, PC, PCS>
 pub struct HyperPlonkProof<PC, F: PrimeField>
 where
@@ -43,6 +43,12 @@ where
     pub zero_check_proof: <PC as ZeroCheck<F>>::ZeroCheckProof,
     // the permutation check proof for copy constraints
     pub perm_check_proof: PC::PermutationCheckProof,
+    // virtual poly for zero check, shouldn't return for zk but it's for benchmarking
+    pub zero_check_virtual_poly: VirtualPolynomial<F>,
+    pub hp: Arc<Mutex<DenseMLPolyStream<F>>>,
+    pub hq: Arc<Mutex<DenseMLPolyStream<F>>>,
+    pub eq_x_r: Arc<Mutex<DenseMLPolyStream<F>>>,
+    pub witness_polys_merge: Arc<Mutex<DenseMLPolyStream<F>>>,
 }
 
 /// The HyperPlonk instance parameters, consists of the following:

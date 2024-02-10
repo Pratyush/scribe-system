@@ -102,9 +102,11 @@ impl<F: PrimeField> MockCircuit<F> {
         };
 
         let permutation = identity_permutation(merged_nv as usize, 1);
+        let permutation_index = identity_permutation(merged_nv as usize, 1);
         let index = HyperPlonkIndex {
             params,
             permutation,
+            permutation_index,
             selectors,
         };
 
