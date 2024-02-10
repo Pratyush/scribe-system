@@ -8,7 +8,7 @@
 //! various functions associated with it.
 
 use crate::{
-    hyperplonk::arithmetic::errors::ArithErrors,
+    hyperplonk::{arithmetic::errors::ArithErrors, full_snark::prelude::WitnessColumn},
     read_write::{DenseMLPolyStream, ReadWriteStream},
 };
 use ark_ff::PrimeField;
@@ -21,6 +21,7 @@ use ark_std::{
 };
 use rayon::iter::IntoParallelRefMutIterator;
 use rayon::prelude::*;
+use core::num;
 use std::{
     cmp::max,
     collections::HashMap,
@@ -446,6 +447,61 @@ impl<F: PrimeField> VirtualPolynomial<F> {
 
         Ok(poly)
     }
+
+    pub fn build_perm_check_poly_plonk(
+        h_p: Arc<Mutex<DenseMLPolyStream<F>>>,
+        h_q: Arc<Mutex<DenseMLPolyStream<F>>>,
+        p: Arc<Mutex<DenseMLPolyStream<F>>>,
+        pi: Arc<Mutex<DenseMLPolyStream<F>>>,
+        index: Arc<Mutex<DenseMLPolyStream<F>>>,
+        alpha: F,
+        batch_factor: F,
+    ) -> Result<VirtualPolynomial<F>, ArithErrors> {
+        // conduct a batch zero check on t_1 and t_2
+        // poly = t_1 + batch_factor * t_2 = h_p * (p + alpha * pi) - 1 + batch_factor * (h_q * (q + alpha * index) - 1)
+        // = -1-batch_factor + h_p*p + h_p*alpha*pi + batch_factor*h_q*q + batch_factor*h_q*alpha*index
+        let num_vars = h_p.lock().unwrap().num_vars;
+
+        let mut poly = VirtualPolynomial::new_from_mle(
+            &DenseMLPolyStream::const_mle(-batch_factor - F::ONE, num_vars, None, None),
+            F::one(),
+        );
+        poly.add_mle_list(vec![h_p.clone(), p], F::one()).unwrap();
+        poly.add_mle_list(vec![h_p, pi], alpha).unwrap();
+        poly.add_mle_list(vec![h_q.clone(), p], batch_factor)
+            .unwrap();
+        poly.add_mle_list(vec![h_q, index], alpha * batch_factor)
+            .unwrap();
+
+        Ok(poly)
+    }
+
+}
+
+/// merge a set of polynomials. Returns an error if the
+/// polynomials do not share a same number of nvs.
+pub fn merge_clone_polynomials<F: PrimeField>(
+    polynomials: &[WitnessColumn<F>],
+    num_vars: usize, 
+) -> Result<Arc<Mutex<DenseMLPolyStream<F>>>, ArithErrors> {
+    let vec_len = polynomials[0].0.len();
+    // target length is the ceiling of the log of the number of polynomials
+    // we want to merge
+    let target_num_vars = ((polynomials.len() as f64).log2().ceil() as usize) + num_vars;
+    let mut scalars = vec![];
+    for poly in polynomials.iter() {
+        if vec_len != poly.0.len() {
+            return Err(ArithErrors::InvalidParameters(
+                "num_vars do not match for polynomials".to_string(),
+            ));
+        }
+        scalars.extend_from_slice(poly.0.as_slice());
+    }
+
+    scalars.extend_from_slice(vec![F::zero(); (1 << target_num_vars) - scalars.len()].as_ref());
+    Ok(Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(
+        target_num_vars, scalars, None, None
+    ))))
 }
 
 /// This function build the eq(x, r) polynomial for any given r.

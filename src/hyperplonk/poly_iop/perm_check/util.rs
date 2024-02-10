@@ -91,6 +91,66 @@ pub fn compute_frac_poly<F: PrimeField>(
     Ok((output_hp, output_hq))
 }
 
+pub fn compute_frac_poly_plonk<F: PrimeField>(
+    p: &Arc<Mutex<DenseMLPolyStream<F>>>,
+    pi: &Arc<Mutex<DenseMLPolyStream<F>>>,
+    index: &Arc<Mutex<DenseMLPolyStream<F>>>,
+    alpha: F,
+) -> Result<
+    (
+        Arc<Mutex<DenseMLPolyStream<F>>>,
+        Arc<Mutex<DenseMLPolyStream<F>>>,
+    ),
+    PolyIOPErrors,
+> {
+    // Initialize output streams for 1/(p + alpha * pi) and 1/(q + alpha)
+    let num_vars = p.lock().unwrap().num_vars();
+    let output_hp = Arc::new(Mutex::new(DenseMLPolyStream::<F>::new_from_tempfile(
+        num_vars
+    )));
+    let output_hq = Arc::new(Mutex::new(DenseMLPolyStream::<F>::new_from_tempfile(
+        num_vars
+    )));
+
+    // Lock the input streams to ensure exclusive access during computation
+    let mut p = p.lock().unwrap();
+    let mut pi = pi.lock().unwrap();
+    let mut index = index.lock().unwrap();
+
+    // Lock the output streams
+    let mut hp = output_hp.lock().unwrap();
+    let mut hq = output_hq.lock().unwrap();
+
+    // Stream processing for p and pi
+    while let (Some(p_val), Some(pi_val), Some(idx_val)) = (p.read_next(), pi.read_next(), index.read_next()) {
+        let hp_result = (p_val + alpha * pi_val)
+            .inverse()
+            .expect("Failed to compute inverse");
+        hp.write_next_unchecked(hp_result)
+            .expect("Failed to write to output stream for p and pi");
+        let hq_result = (p_val + alpha * idx_val)
+            .inverse()
+            .expect("Failed to compute inverse");
+        hq.write_next_unchecked(hq_result);
+    }
+
+
+    p.read_restart();
+    pi.read_restart();
+
+    hp.swap_read_write();
+    hq.swap_read_write();
+
+    drop(p);
+    drop(pi);
+
+    drop(hp);
+    drop(hq);
+
+    // Return the output streams
+    Ok((output_hp, output_hq))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

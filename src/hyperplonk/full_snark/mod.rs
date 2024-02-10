@@ -6,6 +6,7 @@
 
 //! Main module for the HyperPlonk SNARK.
 
+use ark_ff::PrimeField;
 // use ark_ec::pairing::Pairing;
 use errors::HyperPlonkErrors;
 // use subroutines::{pcs::prelude::PolynomialCommitmentScheme, poly_iop::prelude::PermutationCheck};
@@ -29,7 +30,7 @@ mod witness;
 // where
 //     E: Pairing,
 //     PCS: PolynomialCommitmentScheme<E>,
-pub trait HyperPlonkSNARK<F>: PermutationCheck<F>
+pub trait HyperPlonkSNARK<F: PrimeField>: PermutationCheck<F>
 {
     type Index;
     type ProvingKey;

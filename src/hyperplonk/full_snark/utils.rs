@@ -11,9 +11,11 @@ use crate::hyperplonk::full_snark::{
 use crate::hyperplonk::arithmetic::virtual_polynomial::{
     // evaluate_opt, 
     VirtualPolynomial};
+use crate::read_write::DenseMLPolyStream;
 // use ark_ec::pairing::Pairing;
 use ark_ff::PrimeField;
 use ark_poly::DenseMultilinearExtension;
+use std::sync::Mutex;
 use std::{borrow::Borrow, sync::Arc};
 // use subroutines::pcs::{prelude::Commitment, PolynomialCommitmentScheme};
 use crate::hyperplonk::transcript::IOPTranscript;
@@ -186,28 +188,32 @@ pub(crate) fn prover_sanity_check<F: PrimeField>(
 pub(crate) fn build_f<F: PrimeField>(
     gates: &CustomizedGates,
     num_vars: usize,
-    selector_mles: &[Arc<DenseMultilinearExtension<F>>],
-    witness_mles: &[Arc<DenseMultilinearExtension<F>>],
+    selector_mles: &[Arc<Mutex<DenseMLPolyStream<F>>>],
+    witness_mles: &[Arc<Mutex<DenseMLPolyStream<F>>>],
 ) -> Result<VirtualPolynomial<F>, HyperPlonkErrors> {
     // TODO: check that selector and witness lengths match what is in
     // the gate definition
 
     for selector_mle in selector_mles.iter() {
+        let selector_mle = selector_mle.lock().expect("lock failed");
         if selector_mle.num_vars != num_vars {
             return Err(HyperPlonkErrors::InvalidParameters(format!(
                 "selector has different number of vars: {} vs {}",
                 selector_mle.num_vars, num_vars
             )));
         }
+        drop(selector_mle)
     }
 
     for witness_mle in witness_mles.iter() {
+        let witness_mle = witness_mle.lock().expect("lock failed");
         if witness_mle.num_vars != num_vars {
             return Err(HyperPlonkErrors::InvalidParameters(format!(
                 "selector has different number of vars: {} vs {}",
                 witness_mle.num_vars, num_vars
             )));
         }
+        drop(witness_mle)
     }
 
     let mut res = VirtualPolynomial::<F>::new(num_vars);
@@ -296,11 +302,15 @@ pub(crate) fn eval_perm_gate<F: PrimeField>(
 
 #[cfg(test)]
 mod test {
+    use std::sync::Mutex;
+
+    use crate::read_write::DenseMLPolyStream;
+
     use super::*;
     // use ark_bls12_381::Fr;
     use ark_test_curves::bls12_381::Fr;
     use ark_ff::PrimeField;
-    use ark_poly::MultilinearExtension;
+    // use ark_poly::MultilinearExtension;
     #[test]
     fn test_build_gate() -> Result<(), HyperPlonkErrors> {
         test_build_gate_helper::<Fr>()
@@ -315,7 +325,7 @@ mod test {
         // 1, 0 |-> 0
         // 1, 1 |-> 5
         let ql_eval = vec![F::zero(), F::from(2u64), F::zero(), F::from(5u64)];
-        let ql = Arc::new(DenseMultilinearExtension::from_evaluations_vec(2, ql_eval));
+        let ql = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(2, ql_eval, None, None)));
 
         // W1 = x1x2 + x1 whose evaluations are
         // 0, 0 |-> 0
@@ -323,7 +333,7 @@ mod test {
         // 1, 0 |-> 1
         // 1, 1 |-> 2
         let w_eval = vec![F::zero(), F::zero(), F::from(1u64), F::from(2u64)];
-        let w1 = Arc::new(DenseMultilinearExtension::from_evaluations_vec(2, w_eval));
+        let w1 = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(2, w_eval, None, None)));
 
         // W2 = x1 + x2 whose evaluations are
         // 0, 0 |-> 0
@@ -331,7 +341,7 @@ mod test {
         // 1, 0 |-> 1
         // 1, 1 |-> 2
         let w_eval = vec![F::zero(), F::one(), F::from(1u64), F::from(2u64)];
-        let w2 = Arc::new(DenseMultilinearExtension::from_evaluations_vec(2, w_eval));
+        let w2 = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(2, w_eval, None, None)));
 
         // Example:
         //     q_L(X) * W_1(X)^5 - W_2(X)

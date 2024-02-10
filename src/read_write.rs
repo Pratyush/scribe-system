@@ -176,6 +176,11 @@ impl<F: Field> DenseMLPolyStream<F> {
         stream
     }
 
+    pub fn from_evaluations_slice(num_vars: usize, evaluations: &[F], read_path: Option<&str>,
+        write_path: Option<&str>) -> Self {
+        Self::from_evaluations_vec(num_vars, evaluations.to_vec(), read_path, write_path)
+    }
+
     pub fn decrement_num_vars(&mut self) {
         if self.num_vars <= 0 {
             panic!("Cannot decrement num_vars below 0");
