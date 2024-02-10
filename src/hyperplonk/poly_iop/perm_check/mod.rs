@@ -615,6 +615,204 @@ mod test {
         Ok(())
     }
 
+    fn test_permutation_check_helper_plonk<F: PrimeField>(
+        // pcs_param: &PCS::ProverParam,
+        fxs: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
+        // gxs: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
+        perms: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
+        indexes: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
+    ) -> Result<(), PolyIOPErrors>
+    {
+        let nv = fxs[0].lock().unwrap().num_vars;
+        // what's AuxInfo used for?
+        let poly_info = VPAuxInfo {
+            max_degree: fxs.len() + 1,
+            num_variables: nv,
+            phantom: PhantomData::default(),
+        };
+
+        // prover
+        let mut transcript = <PolyIOP<F> as PermutationCheck<F>>::init_transcript();
+        transcript.append_message(b"testing", b"initializing transcript for testing")?;
+        let (proof, h_p, h_q, eq_x_r) = <PolyIOP<F> as PermutationCheck<F>>::prove_plonk(
+            // pcs_param,
+            fxs[0].clone(),
+            // gxs[0].clone(),
+            perms[0].clone(),
+            indexes[0].clone(),
+            &mut transcript,
+        )?;
+
+        // verifier
+        let mut transcript = <PolyIOP<F> as PermutationCheck<F>>::init_transcript();
+        transcript.append_message(b"testing", b"initializing transcript for testing")?;
+
+        let PermutationCheckSubClaim {
+            point,
+            expected_evaluation,
+            permu_check_challenge,
+            batch_sum_check_challenge,
+            zero_check_init_challenge,
+        } = <PolyIOP<F> as PermutationCheck<F>>::verify(&proof, &poly_info, &mut transcript)?;
+
+        let mut poly = VirtualPolynomial::build_perm_check_poly_plonk(
+            h_p.clone(),
+            h_q.clone(),
+            fxs[0].clone(),
+            perms[0].clone(),
+            indexes[0].clone(),
+            permu_check_challenge,
+            batch_sum_check_challenge,
+        )
+        .unwrap();
+
+        poly.mul_by_mle(eq_x_r, F::ONE)?;
+
+        // get sumcheck for t_0 = sum over x in {0,1}^n of (h_q(x) - h_q(x)) = 0
+        // add term batch_factor^2 * t_0 to f_hat
+        // t_0 = h_p - h_q
+        let _ = poly.add_mle_list(
+            vec![h_p],
+            batch_sum_check_challenge * batch_sum_check_challenge,
+        );
+        let _ = poly.add_mle_list(
+            vec![h_q],
+            -batch_sum_check_challenge * batch_sum_check_challenge,
+        );
+
+        // // print challenges
+        // println!("test alpha: {}", permu_check_challenge);
+        // println!("test batch_factor: {}", batch_sum_check_challenge);
+        // zero_check_init_challenge.iter().for_each(|r| println!("test r: {}", r));
+        // // print products of poly
+        // for (coeff, products) in &poly.products {
+        //     println!("test poly coeff: {}, products: {:?}", coeff, products);
+        // }
+        // // print each stream of poly
+        // for (i, stream) in poly.flattened_ml_extensions.clone().iter().enumerate() {
+        //     let mut stream_locked = stream.lock().unwrap();
+        //     while let Some(val) = stream_locked.read_next() {
+        //         println!("test poly stream {}: {}", i, val);
+        //     }
+        //     stream_locked.read_restart();
+        //     drop(stream_locked);
+        // }
+
+        let evaluated_point = poly
+            .evaluate(std::slice::from_ref(&point[poly_info.num_variables - 1]))
+            .unwrap();
+        assert!(
+            evaluated_point == expected_evaluation,
+            "{}",
+            format!(
+                "wrong subclaim, expected: {}, got: {}",
+                expected_evaluation, evaluated_point
+            )
+        );
+
+        // check product subclaim
+        // if evaluate_opt(
+        //     &prod_x,
+        //     &perm_check_sub_claim.product_check_sub_claim.final_query.0,
+        // ) != perm_check_sub_claim.product_check_sub_claim.final_query.1
+        // {
+        //     return Err(PolyIOPErrors::InvalidVerifier("wrong subclaim".to_string()));
+        // };
+
+        Ok(())
+    }
+
+    fn test_permutation_check_plonk<F: PrimeField>(nv: usize) -> Result<(), PolyIOPErrors> {
+        let seed = [
+            1, 0, 0, 0, 23, 0, 0, 0, 200, 1, 0, 0, 210, 30, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0,
+        ];
+
+        // let srs = MultilinearKzgPCS::<Bls12_381>::gen_srs_for_testing(&mut rng, nv)?;
+        // let (pcs_param, _) = MultilinearKzgPCS::<Bls12_381>::trim(&srs, None, Some(nv))?;
+
+        {
+            let mut rng = StdRng::from_seed(seed);
+            let mut rng_2 = StdRng::from_seed(seed);
+
+            let id_perms = identity_permutation_mles::<Fr>(nv, 1);
+            let id_perms_2 = identity_permutation_mles::<Fr>(nv, 1);
+
+            // // print each entry of id_perms and id_perms_2
+            // let mut id_perms_locked = id_perms[0].lock().unwrap();
+            // let mut id_perms_2_locked = id_perms_2[0].lock().unwrap();
+            // while let Some(val) = id_perms_locked.read_next() {
+            //     println!("id_perms entry: {}", val);
+            // }
+            // while let Some(val) = id_perms_2_locked.read_next() {
+            //     println!("id_perms_2 entry: {}", val);
+            // }
+            // id_perms_locked.read_restart();
+            // id_perms_2_locked.read_restart();
+            // drop(id_perms_locked);
+            // drop(id_perms_2_locked);
+
+            // good path: (q1, q2) is a permutation of (q1, q2) itself under the identify
+            // map
+            let qs = vec![
+                Arc::new(Mutex::new(DenseMLPolyStream::rand(nv, &mut rng))),
+                // Arc::new(Mutex::new(DenseMLPolyStream::rand(nv, &mut rng))),
+            ];
+
+            // // print each entry of qs and qs_2
+            // let mut qs_locked = qs[0].lock().unwrap();
+            // let mut qs_2_locked = qs_2[0].lock().unwrap();
+            // while let Some(val) = qs_locked.read_next() {
+            //     println!("qs entry: {}", val);
+            // }
+            // while let Some(val) = qs_2_locked.read_next() {
+            //     println!("qs_2 entry: {}", val);
+            // }
+            // qs_locked.read_restart();
+            // qs_2_locked.read_restart();
+            // drop(qs_locked);
+            // drop(qs_2_locked);
+
+            // perms is the identity map
+            // test_permutation_check_helper::<Bls12_381, Kzg>(&pcs_param, &ws, &ws, &id_perms)?;
+            test_permutation_check_helper_plonk(qs, id_perms, id_perms_2)?;
+        }
+
+        // {
+        //     // good path: f = (w1, w2) is a permutation of g = (w2, w1) itself under a map
+        //     let mut fs = vec![
+        //         Arc::new(Mutex::new(DenseMLPolyStream::rand(nv, &mut rng))),
+        //         // Arc::new(Mutex::new(DenseMLPolyStream::rand(nv, &mut rng))),
+        //     ];
+        //     let gs = fs.clone();
+        //     fs.reverse();
+        //     // perms is the reverse identity map
+        //     let mut perms = id_perms.clone();
+        //     perms.reverse();
+        //     test_permutation_check_helper::<Bls12_381, Kzg>(&pcs_param, &fs, &gs, &perms)?;
+        // }
+
+        {
+            // bad path 1: w is a not permutation of w itself under a random map
+
+            let mut rng = StdRng::from_seed(seed);
+            let mut rng_3 = StdRng::from_seed(seed);
+
+            let id_perms = identity_permutation_mles(nv, 1);
+            // perms is a random map
+            let perms = random_permutation_mles(nv, 1, &mut rng_3);
+
+            let ws = vec![
+                Arc::new(Mutex::new(DenseMLPolyStream::rand(nv, &mut rng))),
+                // Arc::new(Mutex::new(DenseMLPolyStream::rand(nv, &mut rng))),
+            ];
+
+            assert!(test_permutation_check_helper_plonk::<Fr>(ws, perms, id_perms).is_err());
+        }
+
+        Ok(())
+    }
+
     #[test]
     fn test_normal_polynomial() -> Result<(), PolyIOPErrors> {
         test_permutation_check::<Fr>(5)
@@ -623,6 +821,18 @@ mod test {
     #[test]
     fn zero_polynomial_should_error() -> Result<(), PolyIOPErrors> {
         assert!(test_permutation_check::<Fr>(0).is_err());
+        Ok(())
+    }
+
+
+    #[test]
+    fn test_normal_polynomial_plonk() -> Result<(), PolyIOPErrors> {
+        test_permutation_check_plonk::<Fr>(5)
+    }
+
+    #[test]
+    fn zero_polynomial_should_error_plonk() -> Result<(), PolyIOPErrors> {
+        assert!(test_permutation_check_plonk::<Fr>(0).is_err());
         Ok(())
     }
 
