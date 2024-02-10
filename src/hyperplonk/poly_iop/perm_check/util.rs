@@ -103,6 +103,26 @@ pub fn compute_frac_poly_plonk<F: PrimeField>(
     ),
     PolyIOPErrors,
 > {
+
+    // // print all values of p, pi and index
+    // let mut p_lock = p.lock().unwrap();
+    // let mut pi_lock = pi.lock().unwrap();
+    // let mut index_lock = index.lock().unwrap();
+    // // use read_next
+    // while let (Some(p_val), Some(pi_val), Some(idx_val)) =
+    //     (p_lock.read_next(), pi_lock.read_next(), index_lock.read_next())
+    // {
+    //     // print the values
+    //     println!("p_val: {}", p_val);
+    //     println!("alpha: {}", alpha);
+    //     println!("pi_val: {}", pi_val);
+    //     println!("idx_val: {}", idx_val);
+    // }
+    // // drop all the locks
+    // drop(p_lock);
+    // drop(pi_lock);
+    // drop(index_lock);
+
     // Initialize output streams for 1/(p + alpha * pi) and 1/(q + alpha)
     let num_vars = p.lock().unwrap().num_vars();
     let output_hp = Arc::new(Mutex::new(DenseMLPolyStream::<F>::new_from_tempfile(
@@ -125,6 +145,11 @@ pub fn compute_frac_poly_plonk<F: PrimeField>(
     while let (Some(p_val), Some(pi_val), Some(idx_val)) =
         (p.read_next(), pi.read_next(), index.read_next())
     {
+        // // print the values
+        // println!("p_val: {}", p_val);
+        // println!("alpha: {}", alpha);
+        // println!("pi_val: {}", pi_val);
+
         let hp_result = (p_val + alpha * pi_val)
             .inverse()
             .expect("Failed to compute inverse");

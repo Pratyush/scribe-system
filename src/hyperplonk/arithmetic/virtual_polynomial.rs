@@ -167,6 +167,10 @@ impl<F: PrimeField> VirtualPolynomial<F> {
 
         for mle in mle_list {
             let mle_locked = mle.lock().expect("Failed to lock mutex");
+
+            // // print num_vars
+            // println!("add_mle_list num_vars: {}", mle_locked.num_vars);
+
             if mle_locked.num_vars != self.aux_info.num_variables {
                 return Err(ArithErrors::InvalidParameters(format!(
                     "product has a multiplicand with wrong number of variables {} vs {}",
@@ -462,6 +466,23 @@ impl<F: PrimeField> VirtualPolynomial<F> {
         // = -1-batch_factor + h_p*p + h_p*alpha*pi + batch_factor*h_q*q + batch_factor*h_q*alpha*index
         let num_vars = h_p.lock().unwrap().num_vars;
 
+        // // print num_vars
+        // println!("p num_vars: {}", num_vars);
+        // // print each element of h_p
+        // let mut h_p_lock = h_p.lock().unwrap();
+        // while let Some(val) = h_p_lock.read_next() {
+        //     println!("h_p val: {}", val);
+        // }
+        // drop(h_p_lock);
+        // // print each element of pi
+        // let mut pi_lock = pi.lock().unwrap();
+        // while let Some(val) = pi_lock.read_next() {
+        //     println!("pi val: {}", val);
+        // }
+        // // print pi num_vars
+        // println!("pi num_vars: {}", pi_lock.num_vars);
+        // drop(pi_lock);
+
         let mut poly = VirtualPolynomial::new_from_mle(
             &DenseMLPolyStream::const_mle(-batch_factor - F::ONE, num_vars, None, None),
             F::one(),
@@ -485,6 +506,12 @@ pub fn merge_polynomials<F: PrimeField>(
     num_vars: usize,
 ) -> Result<Arc<Mutex<DenseMLPolyStream<F>>>, ArithErrors> {
     let vec_len = polynomials[0].0.len();
+    // assert that vec_len is 2^num_vars
+    if vec_len != (1 << num_vars) {
+        return Err(ArithErrors::InvalidParameters(
+            "merge_polynomial() input WitnessColumn length is not 2^num_vars".to_string(),
+        ));
+    }
     // target length is the ceiling of the log of the number of polynomials
     // we want to merge
     let target_num_vars = ((polynomials.len() as f64).log2().ceil() as usize) + num_vars;
@@ -649,6 +676,59 @@ mod test {
     use ark_ff::UniformRand;
     use ark_std::test_rng;
     use ark_test_curves::bls12_381::Fr;
+
+    #[test]
+    fn test_merge_polynomials_success() {
+        let polynomials = vec![
+            WitnessColumn(vec![Fr::from(1), Fr::from(2), Fr::from(3), Fr::from(4)]),
+            WitnessColumn(vec![Fr::from(4), Fr::from(5), Fr::from(6), Fr::from(7)]),
+        ];
+        let stream = merge_polynomials(&polynomials, 2).unwrap();
+        
+        // Fetch the stream's values for comparison using stream.lock().unwrap().read_next()
+        let mut result_values = vec![];
+        {
+            let mut stream = stream.lock().unwrap();
+            stream.read_restart(); // Ensure we start reading from the beginning
+            while let Some(val) = stream.read_next() {
+                result_values.push(val);
+            }
+        }
+        // assert that result values are correct
+        assert_eq!(result_values, vec![Fr::from(1), Fr::from(2), Fr::from(3), Fr::from(4), Fr::from(4), Fr::from(5), Fr::from(6), Fr::from(7)]);
+    }
+
+    #[test]
+    fn test_merge_polynomials_failure_due_to_different_nvs() {
+        let polynomials = vec![
+            WitnessColumn(vec![Fr::from(1), Fr::from(2), Fr::from(3)]),
+            WitnessColumn(vec![Fr::from(4), Fr::from(5)]), // Different number of elements
+        ];
+        let result = merge_polynomials(&polynomials, 2);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_merge_polynomials_odd_number() {
+        let polynomials = vec![
+            WitnessColumn(vec![Fr::from(1), Fr::from(2), Fr::from(3), Fr::from(4)]),
+            WitnessColumn(vec![Fr::from(4), Fr::from(5), Fr::from(6), Fr::from(7)]),
+            WitnessColumn(vec![Fr::from(4), Fr::from(5), Fr::from(6), Fr::from(7)]),
+        ];
+        let stream = merge_polynomials(&polynomials, 2).unwrap();
+        
+        // Fetch the stream's values for comparison using stream.lock().unwrap().read_next()
+        let mut result_values = vec![];
+        {
+            let mut stream = stream.lock().unwrap();
+            stream.read_restart(); // Ensure we start reading from the beginning
+            while let Some(val) = stream.read_next() {
+                result_values.push(val);
+            }
+        }
+        // assert that result values are correct
+        assert_eq!(result_values, vec![Fr::from(1), Fr::from(2), Fr::from(3), Fr::from(4), Fr::from(4), Fr::from(5), Fr::from(6), Fr::from(7), Fr::from(4), Fr::from(5), Fr::from(6), Fr::from(7), Fr::from(0), Fr::from(0), Fr::from(0), Fr::from(0)]);
+    }
 
     #[test]
     fn test_build_perm_check_poly() {

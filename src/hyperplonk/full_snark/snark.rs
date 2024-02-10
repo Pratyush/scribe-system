@@ -90,15 +90,15 @@ impl<F: PrimeField> HyperPlonkSNARK<F> for PolyIOP<F> {
         }
 
         let perm_oracle = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_slice(
-            num_vars,
-            &index.permutation,
+            num_vars + log2(index.params.num_witness_columns()) as usize, // returns ceiling of log2 of num_wintess, added to num_vars after the merge
+            &index.permutation, // these are merged perm provided by the argument
             None,
             None,
         )));
 
         let perm_index_oracle = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_slice(
-            num_vars,
-            &index.permutation_index,
+            num_vars + log2(index.params.num_witness_columns()) as usize, // returns ceiling of log2 of num_wintess, added to num_vars after the merge
+            &index.permutation_index, // these are merged index provided by the argument
             None,
             None,
         )));
@@ -217,7 +217,10 @@ impl<F: PrimeField> HyperPlonkSNARK<F> for PolyIOP<F> {
         // it gets into this prove function as preprocessing probably can't take witnesses as they are private
         let witness_polys_merge = merge_polynomials(witnesses, num_vars).unwrap();
 
-        // let witness_polys_merge =
+        // feeding to the transcript is needed to get it started.
+        // the witness commitment should be feeded. however, we don't have that component yet
+        // this part should be updated once we have the PCS.
+        let _ = transcript.append_serializable_element(b"transcript start", &F::one());
 
         // let witness_commits = witness_polys
         //     .par_iter()
@@ -436,6 +439,11 @@ impl<F: PrimeField> HyperPlonkSNARK<F> for PolyIOP<F> {
 
         let mut transcript = IOPTranscript::<F>::new(b"hyperplonk");
 
+        // feeding to the transcript is needed to get it started.
+        // the witness commitment should be feeded. however, we don't have that component yet
+        // this part should be updated once we have the PCS.
+        let _ = transcript.append_serializable_element(b"transcript start", &F::one());
+
         let num_selectors = vk.params.num_selector_columns();
         let num_witnesses = vk.params.num_witness_columns();
         let num_vars = vk.params.num_variables();
@@ -500,6 +508,8 @@ impl<F: PrimeField> HyperPlonkSNARK<F> for PolyIOP<F> {
         //     transcript.append_serializable_element(b"w", w_com)?;
         // }
 
+        println!("gate check verify starts");
+
         let zero_check_sub_claim = <Self as ZeroCheck<F>>::verify(
             zero_check_proof,
             &zero_check_aux_info,
@@ -536,6 +546,8 @@ impl<F: PrimeField> HyperPlonkSNARK<F> for PolyIOP<F> {
             num_variables: num_vars,
             phantom: PhantomData::default(),
         };
+
+        println!("perm check verify starts");
 
         let PermutationCheckSubClaim {
             point: perm_check_point,
@@ -719,129 +731,133 @@ impl<F: PrimeField> HyperPlonkSNARK<F> for PolyIOP<F> {
     }
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-//     use crate::{
-//         custom_gate::CustomizedGates, selectors::SelectorColumn, structs::HyperPlonkParams,
-//         witness::WitnessColumn,
-//     };
-//     use arithmetic::{identity_permutation, random_permutation};
-//     use ark_bls12_381::Bls12_381;
-//     use ark_std::test_rng;
-//     use subroutines::pcs::prelude::MultilinearKzgPCS;
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::hyperplonk::full_snark::{
+        custom_gate::CustomizedGates, selectors::SelectorColumn, structs::HyperPlonkParams,
+        witness::WitnessColumn,
+    };
+    use crate::hyperplonk::arithmetic::{virtual_polynomial::identity_permutation};
+    use crate::read_write::random_permutation;
+    // use ark_bls12_381::Bls12_381;
+    use ark_std::test_rng;
+    use ark_test_curves::bls12_381::Fr;
+    // use subroutines::pcs::prelude::MultilinearKzgPCS;
 
-//     #[test]
-//     fn test_hyperplonk_e2e() -> Result<(), HyperPlonkErrors> {
-//         // Example:
-//         //     q_L(X) * W_1(X)^5 - W_2(X) = 0
-//         // is represented as
-//         // vec![
-//         //     ( 1,    Some(id_qL),    vec![id_W1, id_W1, id_W1, id_W1, id_W1]),
-//         //     (-1,    None,           vec![id_W2])
-//         // ]
-//         //
-//         // 4 public input
-//         // 1 selector,
-//         // 2 witnesses,
-//         // 2 variables for MLE,
-//         // 4 wires,
-//         let gates = CustomizedGates {
-//             gates: vec![(1, Some(0), vec![0, 0, 0, 0, 0]), (-1, None, vec![1])],
-//         };
-//         test_hyperplonk_helper::<Bls12_381>(gates)
-//     }
+    #[test]
+    fn test_hyperplonk_e2e() -> Result<(), HyperPlonkErrors> {
+        // Example:
+        //     q_L(X) * W_1(X)^5 - W_2(X) = 0
+        // is represented as
+        // vec![
+        //     ( 1,    Some(id_qL),    vec![id_W1, id_W1, id_W1, id_W1, id_W1]),
+        //     (-1,    None,           vec![id_W2])
+        // ]
+        //
+        // 4 public input
+        // 1 selector,
+        // 2 witnesses,
+        // 2 variables for MLE,
+        // 4 wires,
+        let gates = CustomizedGates {
+            gates: vec![(1, Some(0), vec![0, 0, 0, 0, 0]), (-1, None, vec![1])],
+        };
+        test_hyperplonk_helper::<Fr>(gates)
+    }
 
-//     fn test_hyperplonk_helper<E: Pairing>(
-//         gate_func: CustomizedGates,
-//     ) -> Result<(), HyperPlonkErrors> {
-//         let mut rng = test_rng();
-//         let pcs_srs = MultilinearKzgPCS::<E>::gen_srs_for_testing(&mut rng, 16)?;
+    fn test_hyperplonk_helper<F: PrimeField>(
+        gate_func: CustomizedGates,
+    ) -> Result<(), HyperPlonkErrors> {
+        let mut rng = test_rng();
+        // let pcs_srs = MultilinearKzgPCS::<E>::gen_srs_for_testing(&mut rng, 16)?;
 
-//         let num_constraints = 4;
-//         let num_pub_input = 4;
-//         let nv = log2(num_constraints) as usize;
-//         let num_witnesses = 2;
+        let num_constraints = 4;
+        let num_pub_input = 4;
+        let nv = log2(num_constraints) as usize;
+        let num_witnesses = 2;
 
-//         // generate index
-//         let params = HyperPlonkParams {
-//             num_constraints,
-//             num_pub_input,
-//             gate_func,
-//         };
-// let permutation = identity_permutation(nv, num_witnesses);
-//         let q1 = SelectorColumn(vec![
-//             E::ScalarField::one(),
-//             E::ScalarField::one(),
-//             E::ScalarField::one(),
-//             E::ScalarField::one(),
-//         ]);
-//         let index = HyperPlonkIndex {
-//             params,
-//             permutation,
-//             selectors: vec![q1],
-//         };
+        // generate index
+        let params = HyperPlonkParams {
+            num_constraints,
+            num_pub_input,
+            gate_func,
+        };
+        let permutation = identity_permutation(nv, num_witnesses);
+        let permutation_index = identity_permutation(nv, num_witnesses);
+        let q1 = SelectorColumn(vec![
+            F::one(),
+            F::one(),
+            F::one(),
+            F::one(),
+        ]);
+        let index = HyperPlonkIndex {
+            params,
+            permutation,
+            permutation_index,
+            selectors: vec![q1],
+        };
 
-//         // generate pk and vks
-//         let (pk, vk) =
-//             <PolyIOP<E::ScalarField> as HyperPlonkSNARK<E, MultilinearKzgPCS<E>>>::preprocess(
-//                 &index, &pcs_srs,
-//             )?;
+        // generate pk and vks
+        let (pk, vk) =
+            <PolyIOP<F> as HyperPlonkSNARK<F>>::preprocess(
+                &index
+            )?;
 
-//         // w1 := [0, 1, 2, 3]
-//         let w1 = WitnessColumn(vec![
-//             E::ScalarField::zero(),
-//             E::ScalarField::one(),
-//             E::ScalarField::from(2u128),
-//             E::ScalarField::from(3u128),
-//         ]);
-//         // w2 := [0^5, 1^5, 2^5, 3^5]
-//         let w2 = WitnessColumn(vec![
-//             E::ScalarField::zero(),
-//             E::ScalarField::one(),
-//             E::ScalarField::from(32u128),
-//             E::ScalarField::from(243u128),
-//         ]);
-//         // public input = w1
-//         let pi = w1.clone();
+        // w1 := [1, 1, 2, 3]
+        let w1 = WitnessColumn(vec![
+            F::one(),
+            F::one(),
+            F::from(2u128),
+            F::from(3u128),
+        ]);
+        // w2 := [1^5, 1^5, 2^5, 3^5]
+        let w2 = WitnessColumn(vec![
+            F::one(),
+            F::one(),
+            F::from(32u128),
+            F::from(243u128),
+        ]);
+        // public input = w1
+        let pi = w1.clone();
 
-//         // generate a proof and verify
-//         let proof = <PolyIOP<E::ScalarField> as HyperPlonkSNARK<E, MultilinearKzgPCS<E>>>::prove(
-//             &pk,
-//             &pi.0,
-//             &[w1.clone(), w2.clone()],
-//         )?;
+        // generate a proof and verify
+        let proof = <PolyIOP<F> as HyperPlonkSNARK<F>>::prove(
+            &pk,
+            &pi.0,
+            &[w1.clone(), w2.clone()],
+        )?;
 
-//         let _verify =
-//             <PolyIOP<E::ScalarField> as HyperPlonkSNARK<E, MultilinearKzgPCS<E>>>::verify(
-//                 &vk, &pi.0, &proof,
-//             )?;
+        let _verify =
+            <PolyIOP<F> as HyperPlonkSNARK<F>>::verify(
+                &vk, &pi.0, &proof,
+            )?;
 
-//         // bad path 1: wrong permutation
-//         let rand_perm: Vec<E::ScalarField> = random_permutation(nv, num_witnesses, &mut rng);
-//         let mut bad_index = index;
-//         bad_index.permutation = rand_perm;
-//         // generate pk and vks
-//         let (_, bad_vk) =
-//             <PolyIOP<E::ScalarField> as HyperPlonkSNARK<E, MultilinearKzgPCS<E>>>::preprocess(
-//                 &bad_index, &pcs_srs,
-//             )?;
-//         assert!(!<PolyIOP<E::ScalarField> as HyperPlonkSNARK<
-//             E,
-//             MultilinearKzgPCS<E>,
-//         >>::verify(&bad_vk, &pi.0, &proof,)?);
+        // bad path 1: wrong permutation
+        let rand_perm: Vec<F> = random_permutation(nv, num_witnesses, &mut rng);
+        let mut bad_index = index;
+        bad_index.permutation = rand_perm;
+        // generate pk and vks
+        let (_, bad_vk) =
+            <PolyIOP<F> as HyperPlonkSNARK<F>>::preprocess(
+                &bad_index
+            )?;
+        assert!(!<PolyIOP<F> as HyperPlonkSNARK<
+            F
+        >>::verify(&bad_vk, &pi.0, &proof,)?);
 
-//         // bad path 2: wrong witness
-//         let mut w1_bad = w1;
-//         w1_bad.0[0] = E::ScalarField::one();
-//         assert!(
-//             <PolyIOP<E::ScalarField> as HyperPlonkSNARK<E, MultilinearKzgPCS<E>>>::prove(
-//                 &pk,
-//                 &pi.0,
-//                 &[w1_bad, w2],
-//             )
-//             .is_err()
-//         );
+        // bad path 2: wrong witness
+        let mut w1_bad = w1;
+        w1_bad.0[0] = F::one();
+        assert!(
+            <PolyIOP<F> as HyperPlonkSNARK<F>>::prove(
+                &pk,
+                &pi.0,
+                &[w1_bad, w2],
+            )
+            .is_err()
+        );
 
-//         Ok(())
-//     }
+        Ok(())
+    }
+}
