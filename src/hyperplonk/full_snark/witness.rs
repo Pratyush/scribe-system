@@ -5,8 +5,8 @@
 // along with the HyperPlonk library. If not, see <https://mit-license.org/>.
 
 // use crate::{build_mle, errors::HyperPlonkErrors};
-use crate::hyperplonk::full_snark::errors::HyperPlonkErrors;
 use crate::build_mle;
+use crate::hyperplonk::full_snark::errors::HyperPlonkErrors;
 use crate::read_write::DenseMLPolyStream;
 use ark_ff::PrimeField;
 use ark_poly::DenseMultilinearExtension;

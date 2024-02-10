@@ -220,76 +220,77 @@ where
             Self::MultilinearExtension, // h_q
             Self::MultilinearExtension, // eq_x_r
         ),
-        PolyIOPErrors> {
-            let start = start_timer!(|| "perm_check prove");
+        PolyIOPErrors,
+    > {
+        let start = start_timer!(|| "perm_check prove");
 
-            // assume that p, q, and pi have equal length
-    
-            // get challenge alpha for h_p = 1/(p + alpha * pi) and h_q = 1/(q + alpha)
-            let alpha = transcript.get_and_append_challenge(b"alpha")?;
-    
-            // // print prover alpha
-            // println!("prover alpha: {}", alpha);
-    
-            // compute the fractional polynomials h_p and h_q
-            let (mut h_p, mut h_q) = util::compute_frac_poly_plonk(&p, &pi, &index, alpha).unwrap();
-    
-            // get challenge batch_factor for batch zero check of t_1 + batch_factor * t_2, where t_1 = h_p * (p + alpha * pi) - 1 and t_2 = h_q * (q + alpha) - 1
-            let batch_factor = transcript.get_and_append_challenge(b"batch_factor")?;
-    
-            // // print prover batch_factor
-            // println!("prover batch_factor: {}", batch_factor);
-    
-            // poly = t_1 + r * t_2 = h_p * (p + alpha * pi) - 1 + r * (h_q * (q + alpha) - 1)
-            let poly = VirtualPolynomial::build_perm_check_poly_plonk(
-                h_p.clone(),
-                h_q.clone(),
-                p,
-                pi,
-                index,
-                alpha,
-                batch_factor,
-            )
-            .unwrap();
-    
-            // get challenge r for building eq_x_r
-            let length = poly.aux_info.num_variables;
-            let r = transcript.get_and_append_challenge_vectors(b"0check r", length)?;
-    
-            // // print prover r
-            // r.iter().for_each(|r| println!("prover r: {}", r));
-    
-            let mut final_poly = poly.build_f_hat(r.as_ref())?;
-    
-            // get sumcheck for t_0 = sum over x in {0,1}^n of (h_p(x) - h_q(x)) = 0
-            // add term batch_factor^2 * t_0 to f_hat
-            // t_0 = h_p - h_q
-            let _ = final_poly.add_mle_list(vec![h_p.clone()], batch_factor * batch_factor);
-            let _ = final_poly.add_mle_list(vec![h_q.clone()], -batch_factor * batch_factor);
-    
-            // // print products of final_poly
-            // for (coeff, products) in &final_poly.products {
-            //     println!("prover final_poly coeff: {}, products: {:?}", coeff, products);
-            // }
-            // // print each stream of final poly
-            // for (i, stream) in final_poly.flattened_ml_extensions.clone().iter().enumerate() {
-            //     let mut stream_locked = stream.lock().unwrap();
-            //     while let Some(val) = stream_locked.read_next() {
-            //         println!("prover final_poly stream {}: {}", i, val);
-            //     }
-            //     stream_locked.read_restart();
-            //     drop(stream_locked);
-            // }
-    
-            let proof = <Self as SumCheck<F>>::prove(&final_poly, transcript)?;
-    
-            let eq_x_r = final_poly.flattened_ml_extensions
-                [final_poly.flattened_ml_extensions.len() - 1]
-                .clone();
-    
-            end_timer!(start);
-            Ok((proof, h_p, h_q, eq_x_r))
-        }
+        // assume that p, q, and pi have equal length
+
+        // get challenge alpha for h_p = 1/(p + alpha * pi) and h_q = 1/(q + alpha)
+        let alpha = transcript.get_and_append_challenge(b"alpha")?;
+
+        // // print prover alpha
+        // println!("prover alpha: {}", alpha);
+
+        // compute the fractional polynomials h_p and h_q
+        let (mut h_p, mut h_q) = util::compute_frac_poly_plonk(&p, &pi, &index, alpha).unwrap();
+
+        // get challenge batch_factor for batch zero check of t_1 + batch_factor * t_2, where t_1 = h_p * (p + alpha * pi) - 1 and t_2 = h_q * (q + alpha) - 1
+        let batch_factor = transcript.get_and_append_challenge(b"batch_factor")?;
+
+        // // print prover batch_factor
+        // println!("prover batch_factor: {}", batch_factor);
+
+        // poly = t_1 + r * t_2 = h_p * (p + alpha * pi) - 1 + r * (h_q * (q + alpha) - 1)
+        let poly = VirtualPolynomial::build_perm_check_poly_plonk(
+            h_p.clone(),
+            h_q.clone(),
+            p,
+            pi,
+            index,
+            alpha,
+            batch_factor,
+        )
+        .unwrap();
+
+        // get challenge r for building eq_x_r
+        let length = poly.aux_info.num_variables;
+        let r = transcript.get_and_append_challenge_vectors(b"0check r", length)?;
+
+        // // print prover r
+        // r.iter().for_each(|r| println!("prover r: {}", r));
+
+        let mut final_poly = poly.build_f_hat(r.as_ref())?;
+
+        // get sumcheck for t_0 = sum over x in {0,1}^n of (h_p(x) - h_q(x)) = 0
+        // add term batch_factor^2 * t_0 to f_hat
+        // t_0 = h_p - h_q
+        let _ = final_poly.add_mle_list(vec![h_p.clone()], batch_factor * batch_factor);
+        let _ = final_poly.add_mle_list(vec![h_q.clone()], -batch_factor * batch_factor);
+
+        // // print products of final_poly
+        // for (coeff, products) in &final_poly.products {
+        //     println!("prover final_poly coeff: {}, products: {:?}", coeff, products);
+        // }
+        // // print each stream of final poly
+        // for (i, stream) in final_poly.flattened_ml_extensions.clone().iter().enumerate() {
+        //     let mut stream_locked = stream.lock().unwrap();
+        //     while let Some(val) = stream_locked.read_next() {
+        //         println!("prover final_poly stream {}: {}", i, val);
+        //     }
+        //     stream_locked.read_restart();
+        //     drop(stream_locked);
+        // }
+
+        let proof = <Self as SumCheck<F>>::prove(&final_poly, transcript)?;
+
+        let eq_x_r = final_poly.flattened_ml_extensions
+            [final_poly.flattened_ml_extensions.len() - 1]
+            .clone();
+
+        end_timer!(start);
+        Ok((proof, h_p, h_q, eq_x_r))
+    }
 
     fn verify(
         proof: &Self::PermutationCheckProof,

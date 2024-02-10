@@ -4,13 +4,14 @@
 // You should have received a copy of the MIT License
 // along with the HyperPlonk library. If not, see <https://mit-license.org/>.
 
+use crate::hyperplonk::arithmetic::virtual_polynomial::{
+    // evaluate_opt,
+    VirtualPolynomial,
+};
 use crate::hyperplonk::full_snark::{
     custom_gate::CustomizedGates, errors::HyperPlonkErrors, structs::HyperPlonkParams,
     witness::WitnessColumn,
 };
-use crate::hyperplonk::arithmetic::virtual_polynomial::{
-    // evaluate_opt, 
-    VirtualPolynomial};
 use crate::read_write::DenseMLPolyStream;
 // use ark_ec::pairing::Pairing;
 use ark_ff::PrimeField;

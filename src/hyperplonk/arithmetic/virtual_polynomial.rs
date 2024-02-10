@@ -19,9 +19,9 @@ use ark_std::{
     rand::{Rng, RngCore},
     start_timer,
 };
+use core::num;
 use rayon::iter::IntoParallelRefMutIterator;
 use rayon::prelude::*;
-use core::num;
 use std::{
     cmp::max,
     collections::HashMap,
@@ -466,7 +466,8 @@ impl<F: PrimeField> VirtualPolynomial<F> {
             &DenseMLPolyStream::const_mle(-batch_factor - F::ONE, num_vars, None, None),
             F::one(),
         );
-        poly.add_mle_list(vec![h_p.clone(), p.clone()], F::one()).unwrap();
+        poly.add_mle_list(vec![h_p.clone(), p.clone()], F::one())
+            .unwrap();
         poly.add_mle_list(vec![h_p, pi], alpha).unwrap();
         poly.add_mle_list(vec![h_q.clone(), p], batch_factor)
             .unwrap();
@@ -475,14 +476,13 @@ impl<F: PrimeField> VirtualPolynomial<F> {
 
         Ok(poly)
     }
-
 }
 
 /// merge a set of polynomials. Returns an error if the
 /// polynomials do not share a same number of nvs.
 pub fn merge_polynomials<F: PrimeField>(
     polynomials: &[WitnessColumn<F>],
-    num_vars: usize, 
+    num_vars: usize,
 ) -> Result<Arc<Mutex<DenseMLPolyStream<F>>>, ArithErrors> {
     let vec_len = polynomials[0].0.len();
     // target length is the ceiling of the log of the number of polynomials
@@ -499,9 +499,9 @@ pub fn merge_polynomials<F: PrimeField>(
     }
 
     scalars.extend_from_slice(vec![F::zero(); (1 << target_num_vars) - scalars.len()].as_ref());
-    Ok(Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(
-        target_num_vars, scalars, None, None
-    ))))
+    Ok(Arc::new(Mutex::new(
+        DenseMLPolyStream::from_evaluations_vec(target_num_vars, scalars, None, None),
+    )))
 }
 
 /// This function build the eq(x, r) polynomial for any given r.

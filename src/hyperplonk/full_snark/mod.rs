@@ -30,8 +30,7 @@ mod witness;
 // where
 //     E: Pairing,
 //     PCS: PolynomialCommitmentScheme<E>,
-pub trait HyperPlonkSNARK<F: PrimeField>: PermutationCheck<F>
-{
+pub trait HyperPlonkSNARK<F: PrimeField>: PermutationCheck<F> {
     type Index;
     type ProvingKey;
     type VerifyingKey;

@@ -6,16 +6,24 @@
 
 //! Main module for the HyperPlonk PolyIOP.
 
-use crate::{hyperplonk::{arithmetic::virtual_polynomial::VirtualPolynomial, full_snark::{custom_gate::CustomizedGates, prelude::HyperPlonkErrors, selectors::SelectorColumn}}, read_write::{DenseMLPoly, DenseMLPolyStream}};
+use crate::{
+    hyperplonk::{
+        arithmetic::virtual_polynomial::VirtualPolynomial,
+        full_snark::{
+            custom_gate::CustomizedGates, prelude::HyperPlonkErrors, selectors::SelectorColumn,
+        },
+    },
+    read_write::{DenseMLPoly, DenseMLPolyStream},
+};
 // use ark_ec::pairing::Pairing;
 use ark_ff::PrimeField;
 // use ark_poly::DenseMultilinearExtension;
-use ark_std::log2;
-use std::sync::{Arc, Mutex};
 use crate::hyperplonk::{
     // pcs::PolynomialCommitmentScheme,
     poly_iop::prelude::{PermutationCheck, ZeroCheck},
 };
+use ark_std::log2;
+use std::sync::{Arc, Mutex};
 
 /// The proof for the HyperPlonk PolyIOP, consists of the following:
 ///   - the commitments to all witness MLEs
@@ -28,7 +36,7 @@ pub struct HyperPlonkProof<PC, F: PrimeField>
 where
     // E: Pairing,
     // PC: PermutationCheck<E, PCS>,
-    PC: PermutationCheck<F>, 
+    PC: PermutationCheck<F>,
     // PCS: PolynomialCommitmentScheme<E>,
 {
     // PCS commit for witnesses
@@ -145,7 +153,10 @@ pub struct HyperPlonkProvingKey<F: PrimeField> {
     pub params: HyperPlonkParams,
     /// The preprocessed permutation polynomials
     // pub permutation_oracles: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
-    pub permutation_oracles: (Arc<Mutex<DenseMLPolyStream<F>>>, Arc<Mutex<DenseMLPolyStream<F>>>), // (perm, index)
+    pub permutation_oracles: (
+        Arc<Mutex<DenseMLPolyStream<F>>>,
+        Arc<Mutex<DenseMLPolyStream<F>>>,
+    ), // (perm, index)
     /// The preprocessed selector polynomials
     pub selector_oracles: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
     // /// Commitments to the preprocessed selector polynomials
@@ -172,5 +183,8 @@ pub struct HyperPlonkVerifyingKey<F: PrimeField> {
     pub selector: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
     /// Permutation oracles' commitments
     // pub perm_commitments: Vec<PCS::Commitment>,
-    pub perm: (Arc<Mutex<DenseMLPolyStream<F>>>, Arc<Mutex<DenseMLPolyStream<F>>>), // (perm, index),
+    pub perm: (
+        Arc<Mutex<DenseMLPolyStream<F>>>,
+        Arc<Mutex<DenseMLPolyStream<F>>>,
+    ), // (perm, index),
 }

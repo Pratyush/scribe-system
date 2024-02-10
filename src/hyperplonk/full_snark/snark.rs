@@ -4,26 +4,35 @@
 // You should have received a copy of the MIT License
 // along with the HyperPlonk library. If not, see <https://mit-license.org/>.
 
-use crate::{hyperplonk::{arithmetic::virtual_polynomial::{merge_polynomials, VirtualPolynomial}, full_snark::{
-    errors::HyperPlonkErrors,
-    structs::{HyperPlonkIndex, HyperPlonkProof, HyperPlonkProvingKey, HyperPlonkVerifyingKey},
-    utils::{build_f, eval_f, eval_perm_gate, prover_sanity_check, 
-        // PcsAccumulator
-    },
-    witness::WitnessColumn,
-    HyperPlonkSNARK,
-}, poly_iop::perm_check::PermutationCheckSubClaim}, read_write::DenseMLPolyStream};
 use crate::hyperplonk::arithmetic::virtual_polynomial::{
-    // evaluate_opt, gen_eval_point, 
-    VPAuxInfo};
+    // evaluate_opt, gen_eval_point,
+    VPAuxInfo,
+};
+use crate::{
+    hyperplonk::{
+        arithmetic::virtual_polynomial::{merge_polynomials, VirtualPolynomial},
+        full_snark::{
+            errors::HyperPlonkErrors,
+            structs::{
+                HyperPlonkIndex, HyperPlonkProof, HyperPlonkProvingKey, HyperPlonkVerifyingKey,
+            },
+            utils::{
+                build_f,
+                eval_f,
+                eval_perm_gate,
+                prover_sanity_check,
+                // PcsAccumulator
+            },
+            witness::WitnessColumn,
+            HyperPlonkSNARK,
+        },
+        poly_iop::perm_check::PermutationCheckSubClaim,
+    },
+    read_write::DenseMLPolyStream,
+};
 use ark_ff::PrimeField;
 // use ark_ec::pairing::Pairing;
-use ark_poly::DenseMultilinearExtension;
-use ark_std::{end_timer, log2, start_timer, One, Zero};
-use rayon::iter::IntoParallelRefIterator;
-#[cfg(feature = "parallel")]
-use rayon::iter::ParallelIterator;
-use std::{marker::PhantomData, sync::{Arc, Mutex}};
+use crate::hyperplonk::transcript::IOPTranscript;
 use crate::hyperplonk::{
     // pcs::prelude::{Commitment, PolynomialCommitmentScheme},
     poly_iop::{
@@ -32,7 +41,15 @@ use crate::hyperplonk::{
     },
     // BatchProof,
 };
-use crate::hyperplonk::transcript::IOPTranscript;
+use ark_poly::DenseMultilinearExtension;
+use ark_std::{end_timer, log2, start_timer, One, Zero};
+use rayon::iter::IntoParallelRefIterator;
+#[cfg(feature = "parallel")]
+use rayon::iter::ParallelIterator;
+use std::{
+    marker::PhantomData,
+    sync::{Arc, Mutex},
+};
 
 // impl<E, PCS> HyperPlonkSNARK<E, PCS> for PolyIOP<E::ScalarField>
 // where
@@ -48,8 +65,7 @@ use crate::hyperplonk::transcript::IOPTranscript;
 //         Commitment = Commitment<E>,
 //         BatchProof = BatchProof<E, PCS>,
 //     >,
-impl <F: PrimeField> HyperPlonkSNARK<F> for PolyIOP<F>
-{
+impl<F: PrimeField> HyperPlonkSNARK<F> for PolyIOP<F> {
     type Index = HyperPlonkIndex<F>;
     type ProvingKey = HyperPlonkProvingKey<F>;
     type VerifyingKey = HyperPlonkVerifyingKey<F>;
@@ -76,15 +92,15 @@ impl <F: PrimeField> HyperPlonkSNARK<F> for PolyIOP<F>
         let perm_oracle = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_slice(
             num_vars,
             &index.permutation,
-            None, 
-            None
+            None,
+            None,
         )));
 
         let perm_index_oracle = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_slice(
             num_vars,
             &index.permutation_index,
-            None, 
-            None
+            None,
+            None,
         )));
 
         // build selector oracles and commit to it
@@ -201,7 +217,7 @@ impl <F: PrimeField> HyperPlonkSNARK<F> for PolyIOP<F>
         // it gets into this prove function as preprocessing probably can't take witnesses as they are private
         let witness_polys_merge = merge_polynomials(witnesses, num_vars).unwrap();
 
-        // let witness_polys_merge = 
+        // let witness_polys_merge =
 
         // let witness_commits = witness_polys
         //     .par_iter()
@@ -377,7 +393,7 @@ impl <F: PrimeField> HyperPlonkSNARK<F> for PolyIOP<F>
             // shouldn't return any of the following fields if it's zk but just doing benchmarking now
             zero_check_virtual_poly: fx,
             hp,
-            hq, 
+            hq,
             eq_x_r,
             witness_polys_merge,
         })
@@ -428,7 +444,15 @@ impl <F: PrimeField> HyperPlonkSNARK<F> for PolyIOP<F>
         let ell = log2(vk.params.num_pub_input) as usize;
 
         // decompose proof
-        let HyperPlonkProof { zero_check_proof, perm_check_proof, zero_check_virtual_poly, hp, hq, eq_x_r, witness_polys_merge} = proof;
+        let HyperPlonkProof {
+            zero_check_proof,
+            perm_check_proof,
+            zero_check_virtual_poly,
+            hp,
+            hq,
+            eq_x_r,
+            witness_polys_merge,
+        } = proof;
 
         // =======================================================================
         // 0. sanity checks
@@ -490,14 +514,14 @@ impl <F: PrimeField> HyperPlonkSNARK<F> for PolyIOP<F>
         //     ));
         // }
         let evaluated_point = zero_check_virtual_poly
-                .evaluate(std::slice::from_ref(
-                    &zero_check_sub_claim.point.last().unwrap(), // last field element of the point
-                ))
-                .unwrap();
-            assert!(
-                evaluated_point == zero_check_sub_claim.expected_evaluation,
-                "wrong subclaim"
-            );
+            .evaluate(std::slice::from_ref(
+                &zero_check_sub_claim.point.last().unwrap(), // last field element of the point
+            ))
+            .unwrap();
+        assert!(
+            evaluated_point == zero_check_sub_claim.expected_evaluation,
+            "wrong subclaim"
+        );
 
         end_timer!(step);
         // =======================================================================
@@ -512,7 +536,7 @@ impl <F: PrimeField> HyperPlonkSNARK<F> for PolyIOP<F>
             num_variables: num_vars,
             phantom: PhantomData::default(),
         };
-        
+
         let PermutationCheckSubClaim {
             point: perm_check_point,
             expected_evaluation,
@@ -524,7 +548,6 @@ impl <F: PrimeField> HyperPlonkSNARK<F> for PolyIOP<F>
             &perm_check_aux_info,
             &mut transcript,
         )?;
-
 
         let mut poly = VirtualPolynomial::build_perm_check_poly_plonk(
             hp.clone(),
@@ -562,7 +585,6 @@ impl <F: PrimeField> HyperPlonkSNARK<F> for PolyIOP<F>
                 expected_evaluation, evaluated_point
             )
         );
-
 
         // let alpha = perm_check_sub_claim.product_check_sub_claim.alpha;
         // let (beta, gamma) = perm_check_sub_claim.challenges;
@@ -747,7 +769,7 @@ impl <F: PrimeField> HyperPlonkSNARK<F> for PolyIOP<F>
 //             num_pub_input,
 //             gate_func,
 //         };
-        // let permutation = identity_permutation(nv, num_witnesses);
+// let permutation = identity_permutation(nv, num_witnesses);
 //         let q1 = SelectorColumn(vec![
 //             E::ScalarField::one(),
 //             E::ScalarField::one(),

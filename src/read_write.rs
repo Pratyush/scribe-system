@@ -176,8 +176,12 @@ impl<F: Field> DenseMLPolyStream<F> {
         stream
     }
 
-    pub fn from_evaluations_slice(num_vars: usize, evaluations: &[F], read_path: Option<&str>,
-        write_path: Option<&str>) -> Self {
+    pub fn from_evaluations_slice(
+        num_vars: usize,
+        evaluations: &[F],
+        read_path: Option<&str>,
+        write_path: Option<&str>,
+    ) -> Self {
         Self::from_evaluations_vec(num_vars, evaluations.to_vec(), read_path, write_path)
     }
 

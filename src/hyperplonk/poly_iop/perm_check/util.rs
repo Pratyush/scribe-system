@@ -106,10 +106,10 @@ pub fn compute_frac_poly_plonk<F: PrimeField>(
     // Initialize output streams for 1/(p + alpha * pi) and 1/(q + alpha)
     let num_vars = p.lock().unwrap().num_vars();
     let output_hp = Arc::new(Mutex::new(DenseMLPolyStream::<F>::new_from_tempfile(
-        num_vars
+        num_vars,
     )));
     let output_hq = Arc::new(Mutex::new(DenseMLPolyStream::<F>::new_from_tempfile(
-        num_vars
+        num_vars,
     )));
 
     // Lock the input streams to ensure exclusive access during computation
@@ -122,7 +122,9 @@ pub fn compute_frac_poly_plonk<F: PrimeField>(
     let mut hq = output_hq.lock().unwrap();
 
     // Stream processing for p and pi
-    while let (Some(p_val), Some(pi_val), Some(idx_val)) = (p.read_next(), pi.read_next(), index.read_next()) {
+    while let (Some(p_val), Some(pi_val), Some(idx_val)) =
+        (p.read_next(), pi.read_next(), index.read_next())
+    {
         let hp_result = (p_val + alpha * pi_val)
             .inverse()
             .expect("Failed to compute inverse");
@@ -133,7 +135,6 @@ pub fn compute_frac_poly_plonk<F: PrimeField>(
             .expect("Failed to compute inverse");
         hq.write_next_unchecked(hq_result);
     }
-
 
     p.read_restart();
     pi.read_restart();
