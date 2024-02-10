@@ -103,7 +103,6 @@ pub fn compute_frac_poly_plonk<F: PrimeField>(
     ),
     PolyIOPErrors,
 > {
-
     // // print all values of p, pi and index
     // let mut p_lock = p.lock().unwrap();
     // let mut pi_lock = pi.lock().unwrap();

@@ -684,7 +684,7 @@ mod test {
             WitnessColumn(vec![Fr::from(4), Fr::from(5), Fr::from(6), Fr::from(7)]),
         ];
         let stream = merge_polynomials(&polynomials, 2).unwrap();
-        
+
         // Fetch the stream's values for comparison using stream.lock().unwrap().read_next()
         let mut result_values = vec![];
         {
@@ -695,7 +695,19 @@ mod test {
             }
         }
         // assert that result values are correct
-        assert_eq!(result_values, vec![Fr::from(1), Fr::from(2), Fr::from(3), Fr::from(4), Fr::from(4), Fr::from(5), Fr::from(6), Fr::from(7)]);
+        assert_eq!(
+            result_values,
+            vec![
+                Fr::from(1),
+                Fr::from(2),
+                Fr::from(3),
+                Fr::from(4),
+                Fr::from(4),
+                Fr::from(5),
+                Fr::from(6),
+                Fr::from(7)
+            ]
+        );
     }
 
     #[test]
@@ -716,7 +728,7 @@ mod test {
             WitnessColumn(vec![Fr::from(4), Fr::from(5), Fr::from(6), Fr::from(7)]),
         ];
         let stream = merge_polynomials(&polynomials, 2).unwrap();
-        
+
         // Fetch the stream's values for comparison using stream.lock().unwrap().read_next()
         let mut result_values = vec![];
         {
@@ -727,7 +739,27 @@ mod test {
             }
         }
         // assert that result values are correct
-        assert_eq!(result_values, vec![Fr::from(1), Fr::from(2), Fr::from(3), Fr::from(4), Fr::from(4), Fr::from(5), Fr::from(6), Fr::from(7), Fr::from(4), Fr::from(5), Fr::from(6), Fr::from(7), Fr::from(0), Fr::from(0), Fr::from(0), Fr::from(0)]);
+        assert_eq!(
+            result_values,
+            vec![
+                Fr::from(1),
+                Fr::from(2),
+                Fr::from(3),
+                Fr::from(4),
+                Fr::from(4),
+                Fr::from(5),
+                Fr::from(6),
+                Fr::from(7),
+                Fr::from(4),
+                Fr::from(5),
+                Fr::from(6),
+                Fr::from(7),
+                Fr::from(0),
+                Fr::from(0),
+                Fr::from(0),
+                Fr::from(0)
+            ]
+        );
     }
 
     #[test]

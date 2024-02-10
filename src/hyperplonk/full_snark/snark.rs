@@ -734,11 +734,11 @@ impl<F: PrimeField> HyperPlonkSNARK<F> for PolyIOP<F> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::hyperplonk::arithmetic::virtual_polynomial::identity_permutation;
     use crate::hyperplonk::full_snark::{
         custom_gate::CustomizedGates, selectors::SelectorColumn, structs::HyperPlonkParams,
         witness::WitnessColumn,
     };
-    use crate::hyperplonk::arithmetic::{virtual_polynomial::identity_permutation};
     use crate::read_write::random_permutation;
     // use ark_bls12_381::Bls12_381;
     use ark_std::test_rng;
@@ -785,12 +785,7 @@ mod tests {
         };
         let permutation = identity_permutation(nv, num_witnesses);
         let permutation_index = identity_permutation(nv, num_witnesses);
-        let q1 = SelectorColumn(vec![
-            F::one(),
-            F::one(),
-            F::one(),
-            F::one(),
-        ]);
+        let q1 = SelectorColumn(vec![F::one(), F::one(), F::one(), F::one()]);
         let index = HyperPlonkIndex {
             params,
             permutation,
@@ -799,64 +794,35 @@ mod tests {
         };
 
         // generate pk and vks
-        let (pk, vk) =
-            <PolyIOP<F> as HyperPlonkSNARK<F>>::preprocess(
-                &index
-            )?;
+        let (pk, vk) = <PolyIOP<F> as HyperPlonkSNARK<F>>::preprocess(&index)?;
 
         // w1 := [1, 1, 2, 3]
-        let w1 = WitnessColumn(vec![
-            F::one(),
-            F::one(),
-            F::from(2u128),
-            F::from(3u128),
-        ]);
+        let w1 = WitnessColumn(vec![F::one(), F::one(), F::from(2u128), F::from(3u128)]);
         // w2 := [1^5, 1^5, 2^5, 3^5]
-        let w2 = WitnessColumn(vec![
-            F::one(),
-            F::one(),
-            F::from(32u128),
-            F::from(243u128),
-        ]);
+        let w2 = WitnessColumn(vec![F::one(), F::one(), F::from(32u128), F::from(243u128)]);
         // public input = w1
         let pi = w1.clone();
 
         // generate a proof and verify
-        let proof = <PolyIOP<F> as HyperPlonkSNARK<F>>::prove(
-            &pk,
-            &pi.0,
-            &[w1.clone(), w2.clone()],
-        )?;
+        let proof =
+            <PolyIOP<F> as HyperPlonkSNARK<F>>::prove(&pk, &pi.0, &[w1.clone(), w2.clone()])?;
 
-        let _verify =
-            <PolyIOP<F> as HyperPlonkSNARK<F>>::verify(
-                &vk, &pi.0, &proof,
-            )?;
+        let _verify = <PolyIOP<F> as HyperPlonkSNARK<F>>::verify(&vk, &pi.0, &proof)?;
 
         // bad path 1: wrong permutation
         let rand_perm: Vec<F> = random_permutation(nv, num_witnesses, &mut rng);
         let mut bad_index = index;
         bad_index.permutation = rand_perm;
         // generate pk and vks
-        let (_, bad_vk) =
-            <PolyIOP<F> as HyperPlonkSNARK<F>>::preprocess(
-                &bad_index
-            )?;
-        assert!(!<PolyIOP<F> as HyperPlonkSNARK<
-            F
-        >>::verify(&bad_vk, &pi.0, &proof,)?);
+        let (_, bad_vk) = <PolyIOP<F> as HyperPlonkSNARK<F>>::preprocess(&bad_index)?;
+        assert!(!<PolyIOP<F> as HyperPlonkSNARK<F>>::verify(
+            &bad_vk, &pi.0, &proof,
+        )?);
 
         // bad path 2: wrong witness
         let mut w1_bad = w1;
         w1_bad.0[0] = F::one();
-        assert!(
-            <PolyIOP<F> as HyperPlonkSNARK<F>>::prove(
-                &pk,
-                &pi.0,
-                &[w1_bad, w2],
-            )
-            .is_err()
-        );
+        assert!(<PolyIOP<F> as HyperPlonkSNARK<F>>::prove(&pk, &pi.0, &[w1_bad, w2],).is_err());
 
         Ok(())
     }
