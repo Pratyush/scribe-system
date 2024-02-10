@@ -33,7 +33,7 @@ where
 {
     // PCS commit for witnesses
     // pub witness_commits: Vec<PCS::Commitment>,
-    pub witnesses: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
+    // pub witnesses: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
     // pub batch_openings: PCS::BatchProof,
     // =======================================================================
     // IOP proofs

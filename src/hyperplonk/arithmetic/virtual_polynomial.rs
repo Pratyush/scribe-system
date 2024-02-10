@@ -480,7 +480,7 @@ impl<F: PrimeField> VirtualPolynomial<F> {
 
 /// merge a set of polynomials. Returns an error if the
 /// polynomials do not share a same number of nvs.
-pub fn merge_clone_polynomials<F: PrimeField>(
+pub fn merge_polynomials<F: PrimeField>(
     polynomials: &[WitnessColumn<F>],
     num_vars: usize, 
 ) -> Result<Arc<Mutex<DenseMLPolyStream<F>>>, ArithErrors> {
