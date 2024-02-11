@@ -46,3 +46,8 @@ parallel = [
 print-trace = [ 
     "ark-std/print-trace" 
     ] 
+
+# [[bench]]
+# name = "hyperplonk-benches"
+# path = "src/hyperplonk/benches/bench.rs"
+# harness = false

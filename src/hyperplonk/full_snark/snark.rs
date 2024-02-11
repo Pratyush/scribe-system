@@ -211,7 +211,7 @@ impl<F: PrimeField> HyperPlonkSNARK<F> for PolyIOP<F> {
         // 1. Commit Witness polynomials `w_i(x)` and append commitment to
         // transcript
         // =======================================================================
-        let step = start_timer!(|| "commit witnesses");
+        let step = start_timer!(|| "merge witnesses");
 
         let witness_polys: Vec<Arc<Mutex<DenseMLPolyStream<F>>>> = witnesses
             .iter()
@@ -248,7 +248,7 @@ impl<F: PrimeField> HyperPlonkSNARK<F> for PolyIOP<F> {
         //
         // in vanilla plonk, and obtain a ZeroCheckSubClaim
         // =======================================================================
-        let step = start_timer!(|| "ZeroCheck on f");
+        let step = start_timer!(|| "Gate identity");
 
         let fx = build_f(
             &pk.params.gate_func,
