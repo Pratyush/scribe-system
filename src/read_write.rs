@@ -141,8 +141,8 @@ impl<F: Field> ReadWriteStream for DenseMLPolyStream<F> {
 
 impl<F: Field> DenseMLPolyStream<F> {
     pub fn new_from_path(num_vars: usize, read_path: &str, write_path: &str) -> Self {
-        let read_pointer = BufReader::new(File::open(read_path).unwrap());
-        let write_pointer = BufWriter::new(File::create(write_path).unwrap());
+        let read_pointer = BufReader::with_capacity(1 << 20, File::open(read_path).unwrap());
+        let write_pointer = BufWriter::with_capacity(1 << 20, File::create(write_path).unwrap());
         Self {
             read_pointer,
             write_pointer,

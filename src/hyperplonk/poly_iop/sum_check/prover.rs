@@ -144,6 +144,17 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
 
             let mut sum = vec![F::zero(); products.len() + 1];
 
+            // a = {0, 1, 2, 3}
+            // b = {4, 5, 6, 7}
+            // c = {8, 9, 10, 11}
+
+            // polynomial = a * b + c ^ 2
+
+            // 0 * 4 + 8 ^ 2
+            // 0 * 5 + 9 ^ 2
+            // 0 * 6 + 10 ^ 2
+            // 0 * 7 + 11 ^ 2
+
             for b in 0..1 << (self.poly.aux_info.num_variables - self.round) {
                 // println!("sum check product b: {}", b);
                 // println!("sum check product round: {}", self.round);
