@@ -230,7 +230,7 @@ where
         let alpha = transcript.get_and_append_challenge(b"alpha")?;
 
         // // print prover alpha
-        println!("prover alpha: {}", alpha);
+        // println!("prover alpha: {}", alpha);
 
         // compute the fractional polynomials h_p and h_q
         let (mut h_p, mut h_q) = util::compute_frac_poly_plonk(&p, &pi, &index, alpha).unwrap();
@@ -297,11 +297,11 @@ where
 
         // get challenge r for building eq_x_r
         let length = poly.aux_info.num_variables;
-        println!("perm check prover append challenge r length: {}", length);
+        // println!("perm check prover append challenge r length: {}", length);
         let r = transcript.get_and_append_challenge_vectors(b"0check r", length)?;
 
         // print prover r
-        r.iter().for_each(|r| println!("prover r: {}", r));
+        // r.iter().for_each(|r| println!("prover r: {}", r));
 
         let mut final_poly = poly.build_f_hat(r.as_ref())?;
 
@@ -311,27 +311,27 @@ where
         let _ = final_poly.add_mle_list(vec![h_p.clone()], batch_factor * batch_factor);
         let _ = final_poly.add_mle_list(vec![h_q.clone()], -batch_factor * batch_factor);
 
-        // print products of final_poly
-        for (coeff, products) in &final_poly.products {
-            println!(
-                "prover final_poly coeff: {}, products: {:?}",
-                coeff, products
-            );
-        }
-        // print each stream of final poly
-        for (i, stream) in final_poly
-            .flattened_ml_extensions
-            .clone()
-            .iter()
-            .enumerate()
-        {
-            let mut stream_locked = stream.lock().unwrap();
-            while let Some(val) = stream_locked.read_next() {
-                println!("prover final_poly stream {}: {}", i, val);
-            }
-            stream_locked.read_restart();
-            drop(stream_locked);
-        }
+        // // print products of final_poly
+        // for (coeff, products) in &final_poly.products {
+        //     println!(
+        //         "prover final_poly coeff: {}, products: {:?}",
+        //         coeff, products
+        //     );
+        // }
+        // // print each stream of final poly
+        // for (i, stream) in final_poly
+        //     .flattened_ml_extensions
+        //     .clone()
+        //     .iter()
+        //     .enumerate()
+        // {
+        //     let mut stream_locked = stream.lock().unwrap();
+        //     while let Some(val) = stream_locked.read_next() {
+        //         println!("prover final_poly stream {}: {}", i, val);
+        //     }
+        //     stream_locked.read_restart();
+        //     drop(stream_locked);
+        // }
 
         let proof = <Self as SumCheck<F>>::prove(&final_poly, transcript)?;
 
@@ -356,29 +356,30 @@ where
                 "zero check: sum {} is not zero",
                 proof.proofs[0].evaluations[0] + proof.proofs[0].evaluations[1]
             )));
-        } else {
-            println!("SUCCESS! zero check sum is zero!");
-        }
+        } 
+        // else {
+        //     println!("SUCCESS! zero check sum is zero!");
+        // }
 
         // get challenge alpha for h_p = 1/(p + alpha * pi) and h_q = 1/(q + alpha * index)
         let alpha = transcript.get_and_append_challenge(b"alpha")?;
 
-        // print verifier alpha
-        println!("verifier alpha: {}", alpha);
+        // // print verifier alpha
+        // println!("verifier alpha: {}", alpha);
 
         // get challenge batch_factor for batch zero check of t_1 + batch_factor * t_2, where t_1 = h_p * (p + alpha * pi) - 1 and t_2 = h_q * (q + alpha) - 1
         let batch_factor = transcript.get_and_append_challenge(b"batch_factor")?;
 
-        // print verifier batch_factor
-        println!("verifier batch_factor: {}", batch_factor);
+        // // print verifier batch_factor
+        // println!("verifier batch_factor: {}", batch_factor);
 
         // get challenge r for building eq_x_r
         let length = aux_info.num_variables;
-        println!("perm check verifier append challenge r length: {}", length);
+        // println!("perm check verifier append challenge r length: {}", length);
         let r = transcript.get_and_append_challenge_vectors(b"0check r", length)?;
 
-        // print verifier r
-        r.iter().for_each(|r| println!("verifier r: {}", r));
+        // // print verifier r
+        // r.iter().for_each(|r| println!("verifier r: {}", r));
 
         // hat_fx's max degree is increased by eq(x, r).degree() which is 1
         let mut hat_fx_aux_info = aux_info.clone();
@@ -520,10 +521,10 @@ mod test {
         //     drop(stream_locked);
         // }
 
-        // print all elements of the point
-        point.iter().enumerate().for_each(|(i, val)| {
-            println!("permu check verifier subclaim point[{}]: {}", i, val);
-        });
+        // // print all elements of the point
+        // point.iter().enumerate().for_each(|(i, val)| {
+        //     println!("permu check verifier subclaim point[{}]: {}", i, val);
+        // });
 
         let evaluated_point = poly
             .evaluate(std::slice::from_ref(&point[poly_info.num_variables - 1]))

@@ -899,9 +899,9 @@ mod test {
     fn test_virtual_polynomial_additions() -> Result<(), ArithErrors> {
         let mut rng = test_rng();
         for nv in 2..5 {
-            println!("nv: {}", nv);
+            // println!("nv: {}", nv);
             for num_products in 2..5 {
-                println!("num_products: {}", num_products);
+                // println!("num_products: {}", num_products);
                 let base: Vec<Fr> = (0..nv).map(|_| Fr::rand(&mut rng)).collect();
 
                 let (a, _a_sum) =

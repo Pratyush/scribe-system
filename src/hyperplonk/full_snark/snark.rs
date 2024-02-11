@@ -530,7 +530,7 @@ impl<F: PrimeField> HyperPlonkSNARK<F> for PolyIOP<F> {
         //     transcript.append_serializable_element(b"w", w_com)?;
         // }
 
-        println!("gate check verify starts");
+        // println!("gate check verify starts");
 
         let zero_check_sub_claim = <Self as ZeroCheck<F>>::verify(
             zero_check_proof,
@@ -546,7 +546,7 @@ impl<F: PrimeField> HyperPlonkSNARK<F> for PolyIOP<F> {
         //     ));
         // }
 
-        println!("checkpoint 0");
+        // println!("checkpoint 0");
 
         let evaluated_point = zero_check_virtual_poly
             .evaluate(std::slice::from_ref(
@@ -554,7 +554,7 @@ impl<F: PrimeField> HyperPlonkSNARK<F> for PolyIOP<F> {
             ))
             .unwrap();
 
-        println!("checkpoint 1");
+        // println!("checkpoint 1");
 
         assert!(
             evaluated_point == zero_check_sub_claim.expected_evaluation,
@@ -575,7 +575,7 @@ impl<F: PrimeField> HyperPlonkSNARK<F> for PolyIOP<F> {
             phantom: PhantomData::default(),
         };
 
-        println!("perm check verify starts");
+        // println!("perm check verify starts");
 
         let PermutationCheckSubClaim {
             point: perm_check_point,
@@ -614,23 +614,23 @@ impl<F: PrimeField> HyperPlonkSNARK<F> for PolyIOP<F> {
             -batch_sum_check_challenge * batch_sum_check_challenge,
         );
 
-        // print all elements of all streams of poly
-        // lock, read_next, and print in a loop
-        poly.flattened_ml_extensions
-            .iter()
-            .enumerate()
-            .for_each(|(i, stream)| {
-                let mut locked = stream.lock().unwrap();
-                while let Some(val) = locked.read_next() {
-                    println!("snark verifier final stream[{}] val: {}", i, val);
-                }
-                locked.read_restart();
-                drop(locked);
-            });
-        // print all perm check point elements
-        perm_check_point.iter().for_each(|point| {
-            println!("snark verifier perm_check_point: {}", point);
-        });
+        // // print all elements of all streams of poly
+        // // lock, read_next, and print in a loop
+        // poly.flattened_ml_extensions
+        //     .iter()
+        //     .enumerate()
+        //     .for_each(|(i, stream)| {
+        //         let mut locked = stream.lock().unwrap();
+        //         while let Some(val) = locked.read_next() {
+        //             println!("snark verifier final stream[{}] val: {}", i, val);
+        //         }
+        //         locked.read_restart();
+        //         drop(locked);
+        //     });
+        // // print all perm check point elements
+        // perm_check_point.iter().for_each(|point| {
+        //     println!("snark verifier perm_check_point: {}", point);
+        // });
 
         let evaluated_point = poly
             .evaluate(std::slice::from_ref(&perm_check_point.last().unwrap()))

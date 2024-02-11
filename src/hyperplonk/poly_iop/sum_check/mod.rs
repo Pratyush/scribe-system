@@ -192,11 +192,11 @@ impl<F: PrimeField> SumCheck<F> for PolyIOP<F> {
             transcript.append_serializable_element(b"prover msg", &prover_msg)?;
             prover_msgs.push(prover_msg);
             challenge = Some(transcript.get_and_append_challenge(b"Internal round")?);
-            println!(
-                "round={}, prover challenge: {}",
-                i,
-                challenge.clone().unwrap()
-            );
+            // println!(
+            //     "round={}, prover challenge: {}",
+            //     i,
+            //     challenge.clone().unwrap()
+            // );
         }
         // pushing the last challenge point to the state
         if let Some(p) = challenge {
@@ -221,11 +221,11 @@ impl<F: PrimeField> SumCheck<F> for PolyIOP<F> {
         transcript.append_serializable_element(b"aux info", aux_info)?;
         let mut verifier_state = IOPVerifierState::verifier_init(aux_info);
 
-        // print num_var from aux_info
-        println!(
-            "sum check verifier aux_info.num_variables: {}",
-            aux_info.num_variables
-        );
+        // // print num_var from aux_info
+        // println!(
+        //     "sum check verifier aux_info.num_variables: {}",
+        //     aux_info.num_variables
+        // );
 
         for i in 0..aux_info.num_variables {
             let prover_msg = proof.proofs.get(i).expect("proof is incomplete");
@@ -235,7 +235,7 @@ impl<F: PrimeField> SumCheck<F> for PolyIOP<F> {
                 prover_msg,
                 transcript,
             )?;
-            println!("round={}, verifier challenge: {}", i, challenge);
+            // println!("round={}, verifier challenge: {}", i, challenge);
         }
 
         let res = IOPVerifierState::check_and_generate_subclaim(&verifier_state, &claimed_sum);
@@ -324,10 +324,10 @@ mod test {
         // println!("ending read pointer position: {}", mle_stream.read_pointer.stream_position().unwrap());
         // }
 
-        // print all subclaim.points
-        subclaim.point.iter().enumerate().for_each(|(i, point)| {
-            println!("sum check verifier subclaim point[{}]: {}", i, point);
-        });
+        // // print all subclaim.points
+        // subclaim.point.iter().enumerate().for_each(|(i, point)| {
+        //     println!("sum check verifier subclaim point[{}]: {}", i, point);
+        // });
 
         let evaluated_point = poly
             .evaluate(std::slice::from_ref(

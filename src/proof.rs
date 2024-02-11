@@ -162,10 +162,10 @@ mod tests {
             let verification_duration = start.elapsed().as_secs_f64();
             log_verification_times.push(verification_duration.ln());
 
-            println!(
-                "n = {}: Proof Creation Time: {:?}, Verification Time: {:?}",
-                n, duration, verification_duration
-            );
+            // println!(
+            //     "n = {}: Proof Creation Time: {:?}, Verification Time: {:?}",
+            //     n, duration, verification_duration
+            // );
 
             // Assert that the verification was successful
             assert!(verification_result.is_ok(), "Verification failed");
