@@ -77,7 +77,10 @@ impl<F: PrimeField> SumCheckVerifier<F> for IOPVerifierState<F> {
         let challenge = transcript.get_and_append_challenge(b"Internal round")?;
 
         // print verifier challenge
-        println!("sum check verifier challenge verify_round_and_update_state: {}", challenge);
+        println!(
+            "sum check verifier challenge verify_round_and_update_state: {}",
+            challenge
+        );
 
         self.challenges.push(challenge);
         self.polynomials_received
@@ -130,7 +133,9 @@ impl<F: PrimeField> SumCheckVerifier<F> for IOPVerifierState<F> {
             .zip(self.challenges.clone().into_par_iter())
             .map(|(evaluations, challenge)| {
                 println!("sum check verifier expected_vec challenge: {}", challenge);
-                evaluations.iter().for_each(|x| println!("sum check expecte_vec evaluations: {}", x));
+                evaluations
+                    .iter()
+                    .for_each(|x| println!("sum check expecte_vec evaluations: {}", x));
                 if evaluations.len() != self.max_degree + 1 {
                     return Err(PolyIOPErrors::InvalidVerifier(format!(
                         "incorrect number of evaluations: {} vs {}",
@@ -139,9 +144,14 @@ impl<F: PrimeField> SumCheckVerifier<F> for IOPVerifierState<F> {
                     )));
                 }
                 // debug print challenge
-                println!("sum check verifier challenge before interpolation: {}", challenge);
+                println!(
+                    "sum check verifier challenge before interpolation: {}",
+                    challenge
+                );
                 // debug print evaluations
-                evaluations.iter().for_each(|x| println!("sum check verifier evaluations before interpolation: {}", x));
+                evaluations.iter().for_each(|x| {
+                    println!("sum check verifier evaluations before interpolation: {}", x)
+                });
                 interpolate_uni_poly::<F>(&evaluations, challenge)
             })
             .collect::<Result<Vec<_>, PolyIOPErrors>>()?;
@@ -167,10 +177,13 @@ impl<F: PrimeField> SumCheckVerifier<F> for IOPVerifierState<F> {
         // insert the asserted_sum to the first position of the expected vector
         expected_vec.insert(0, *asserted_sum);
 
-        expected_vec.iter().for_each(|x| println!("sum check verifier expected_vec: {}", x));
-        self.polynomials_received
+        expected_vec
             .iter()
-            .for_each(|x| x.iter().for_each(|y| println!("sum check verifier polynomials_received: {}", y)));
+            .for_each(|x| println!("sum check verifier expected_vec: {}", x));
+        self.polynomials_received.iter().for_each(|x| {
+            x.iter()
+                .for_each(|y| println!("sum check verifier polynomials_received: {}", y))
+        });
 
         for (evaluations, &expected) in self
             .polynomials_received
@@ -183,7 +196,10 @@ impl<F: PrimeField> SumCheckVerifier<F> for IOPVerifierState<F> {
             if evaluations[0] + evaluations[1] != expected {
                 println!("sum check verifier Prover message is NOT consistent with the claim.");
                 println!("sum check verifier expected: {}", expected);
-                println!("sum check verifier evaluation: {}", evaluations[0] + evaluations[1]);
+                println!(
+                    "sum check verifier evaluation: {}",
+                    evaluations[0] + evaluations[1]
+                );
                 println!("sum check verifier evaluation 0: {}", evaluations[0]);
                 println!("sum check verifier evaluation 1: {}", evaluations[1]);
                 return Err(PolyIOPErrors::InvalidProof(format!(
@@ -191,13 +207,15 @@ impl<F: PrimeField> SumCheckVerifier<F> for IOPVerifierState<F> {
                     expected,
                     evaluations[0] + evaluations[1]
                 )));
-            }
-            else {
-            println!("sum check verifier Prover message is consistent with the claim.");
-            println!("sum check verifier expected: {}", expected);
-            println!("sum check verifier evaluation: {}", evaluations[0] + evaluations[1]);
-            println!("sum check verifier evaluation 0: {}", evaluations[0]);
-            println!("sum check verifier evaluation 1: {}", evaluations[1]);
+            } else {
+                println!("sum check verifier Prover message is consistent with the claim.");
+                println!("sum check verifier expected: {}", expected);
+                println!(
+                    "sum check verifier evaluation: {}",
+                    evaluations[0] + evaluations[1]
+                );
+                println!("sum check verifier evaluation 0: {}", evaluations[0]);
+                println!("sum check verifier evaluation 1: {}", evaluations[1]);
             }
         }
         end_timer!(start);

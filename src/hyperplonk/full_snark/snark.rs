@@ -265,7 +265,6 @@ impl<F: PrimeField> HyperPlonkSNARK<F> for PolyIOP<F> {
         // =======================================================================
         let step = start_timer!(|| "Permutation check on w_i(x)");
 
-        
         // // print all entries of pk.permutation_oracles.0
         // // lock, read_next, and print in a loop
         // let mut pi_locked = pk.permutation_oracles.0.lock().unwrap();
@@ -617,14 +616,17 @@ impl<F: PrimeField> HyperPlonkSNARK<F> for PolyIOP<F> {
 
         // print all elements of all streams of poly
         // lock, read_next, and print in a loop
-        poly.flattened_ml_extensions.iter().enumerate().for_each(|(i, stream)| {
-            let mut locked = stream.lock().unwrap();
-            while let Some(val) = locked.read_next() {
-                println!("snark verifier final stream[{}] val: {}", i, val);
-            }
-            locked.read_restart();
-            drop(locked);
-        });
+        poly.flattened_ml_extensions
+            .iter()
+            .enumerate()
+            .for_each(|(i, stream)| {
+                let mut locked = stream.lock().unwrap();
+                while let Some(val) = locked.read_next() {
+                    println!("snark verifier final stream[{}] val: {}", i, val);
+                }
+                locked.read_restart();
+                drop(locked);
+            });
         // print all perm check point elements
         perm_check_point.iter().for_each(|point| {
             println!("snark verifier perm_check_point: {}", point);
@@ -817,8 +819,8 @@ mod tests {
     ) -> Result<(), HyperPlonkErrors> {
         {
             let seed = [
-                1, 0, 0, 0, 23, 0, 0, 0, 200, 1, 0, 0, 210, 30, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                0, 0, 0, 0, 0,
+                1, 0, 0, 0, 23, 0, 0, 0, 200, 1, 0, 0, 210, 30, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0,
             ];
             let mut rng = StdRng::from_seed(seed);
             // let pcs_srs = MultilinearKzgPCS::<E>::gen_srs_for_testing(&mut rng, 16)?;
@@ -864,8 +866,8 @@ mod tests {
         {
             // bad path 1: wrong permutation
             let seed = [
-                1, 0, 0, 0, 23, 0, 0, 0, 200, 1, 0, 0, 210, 30, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                0, 0, 0, 0, 0,
+                1, 0, 0, 0, 23, 0, 0, 0, 200, 1, 0, 0, 210, 30, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0,
             ];
             let mut rng = StdRng::from_seed(seed);
             // let pcs_srs = MultilinearKzgPCS::<E>::gen_srs_for_testing(&mut rng, 16)?;
@@ -881,7 +883,7 @@ mod tests {
                 num_pub_input,
                 gate_func,
             };
-            
+
             // let permutation = identity_permutation(nv, num_witnesses);
             let rand_perm: Vec<F> = random_permutation(nv, num_witnesses, &mut rng);
 
@@ -907,10 +909,8 @@ mod tests {
             // generate a proof and verify
             let proof =
                 <PolyIOP<F> as HyperPlonkSNARK<F>>::prove(&pk, &pi.0, &[w1.clone(), w2.clone()])?;
-            
-            assert!(<PolyIOP<F> as HyperPlonkSNARK<F>>::verify(
-                &bad_vk, &pi.0, &proof,
-            ).is_err());
+
+            assert!(<PolyIOP<F> as HyperPlonkSNARK<F>>::verify(&bad_vk, &pi.0, &proof,).is_err());
         }
 
         Ok(())

@@ -283,7 +283,6 @@ where
         // drop(pi_locked);
         // drop(index_locked);
 
-
         // poly = t_1 + r * t_2 = h_p * (p + alpha * pi) - 1 + r * (h_q * (q + alpha) - 1)
         let poly = VirtualPolynomial::build_perm_check_poly_plonk(
             h_p.clone(),
@@ -314,10 +313,18 @@ where
 
         // print products of final_poly
         for (coeff, products) in &final_poly.products {
-            println!("prover final_poly coeff: {}, products: {:?}", coeff, products);
+            println!(
+                "prover final_poly coeff: {}, products: {:?}",
+                coeff, products
+            );
         }
         // print each stream of final poly
-        for (i, stream) in final_poly.flattened_ml_extensions.clone().iter().enumerate() {
+        for (i, stream) in final_poly
+            .flattened_ml_extensions
+            .clone()
+            .iter()
+            .enumerate()
+        {
             let mut stream_locked = stream.lock().unwrap();
             while let Some(val) = stream_locked.read_next() {
                 println!("prover final_poly stream {}: {}", i, val);
@@ -349,8 +356,7 @@ where
                 "zero check: sum {} is not zero",
                 proof.proofs[0].evaluations[0] + proof.proofs[0].evaluations[1]
             )));
-        }
-        else {
+        } else {
             println!("SUCCESS! zero check sum is zero!");
         }
 
@@ -531,7 +537,6 @@ mod test {
             )
         );
 
-
         // check product subclaim
         // if evaluate_opt(
         //     &prod_x,
@@ -672,8 +677,7 @@ mod test {
         // gxs: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
         perms: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
         indexes: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
-    ) -> Result<(), PolyIOPErrors>
-    {
+    ) -> Result<(), PolyIOPErrors> {
         let nv = fxs[0].lock().unwrap().num_vars;
         // what's AuxInfo used for?
         let poly_info = VPAuxInfo {
@@ -875,7 +879,6 @@ mod test {
         Ok(())
     }
 
-
     #[test]
     fn test_normal_polynomial_plonk() -> Result<(), PolyIOPErrors> {
         test_permutation_check_plonk::<Fr>(5)
@@ -1027,7 +1030,8 @@ mod test {
         let const_stream = vec![
             Fr::from_str(
                 "20086443583206044138769381348611728921123841425748464670052200089256562346170",
-            ); 8
+            );
+            8
         ];
 
         // h_p: 1
@@ -1039,32 +1043,23 @@ mod test {
             "22323872780816558412162794824919876766357723311744974297407616820794491520803",
             "4305093983429579788629380468490662609189317086065108312338092749561269233814",
             "15848907742739559681415110135783828158369540510463713418486883368824988258274",
-            "8118787551772789376105145207961680677583073203531653800345712231748522346003"
-        ].iter().map(|x| Fr::from_str(x).unwrap()).collect::<Vec<Fr>>();
+            "8118787551772789376105145207961680677583073203531653800345712231748522346003",
+        ]
+        .iter()
+        .map(|x| Fr::from_str(x).unwrap())
+        .collect::<Vec<Fr>>();
 
         // p: 2
-        let p = vec![
-            "1",
-            "1",
-            "2",
-            "3",
-            "1",
-            "1",
-            "32",
-            "243",
-        ].iter().map(|x| Fr::from_str(x).unwrap()).collect::<Vec<Fr>>();
+        let p = vec!["1", "1", "2", "3", "1", "1", "32", "243"]
+            .iter()
+            .map(|x| Fr::from_str(x).unwrap())
+            .collect::<Vec<Fr>>();
 
         // pi: 3
-        let pi = vec![
-            "0",
-            "1",
-            "2",
-            "3",
-            "4",
-            "5",
-            "6",
-            "7",
-        ].iter().map(|x| Fr::from_str(x).unwrap()).collect::<Vec<Fr>>();
+        let pi = vec!["0", "1", "2", "3", "4", "5", "6", "7"]
+            .iter()
+            .map(|x| Fr::from_str(x).unwrap())
+            .collect::<Vec<Fr>>();
 
         // h_q: 4
         let h_q = vec![
@@ -1075,20 +1070,17 @@ mod test {
             "22323872780816558412162794824919876766357723311744974297407616820794491520803",
             "4305093983429579788629380468490662609189317086065108312338092749561269233814",
             "15848907742739559681415110135783828158369540510463713418486883368824988258274",
-            "8118787551772789376105145207961680677583073203531653800345712231748522346003"
-        ].iter().map(|x| Fr::from_str(x).unwrap()).collect::<Vec<Fr>>();
+            "8118787551772789376105145207961680677583073203531653800345712231748522346003",
+        ]
+        .iter()
+        .map(|x| Fr::from_str(x).unwrap())
+        .collect::<Vec<Fr>>();
 
         // index: 5
-        let index = vec![
-            "0",
-            "1",
-            "2",
-            "3",
-            "4",
-            "5",
-            "6",
-            "7",
-        ].iter().map(|x| Fr::from_str(x).unwrap()).collect::<Vec<Fr>>();
+        let index = vec!["0", "1", "2", "3", "4", "5", "6", "7"]
+            .iter()
+            .map(|x| Fr::from_str(x).unwrap())
+            .collect::<Vec<Fr>>();
 
         // eq_x_r: 6
         let eq_x_r = vec![
@@ -1144,7 +1136,6 @@ mod test {
         )
         .unwrap();
 
-
         let one_minus_r0 = Fr::ONE - r0;
         println!("1 - r0: {}", one_minus_r0); // 19620098976595655225492472237485220161280334046168775356342939811477646883300
 
@@ -1170,7 +1161,6 @@ mod test {
 
         // prover messages
 
-
         // sum check 1 verifier challenge
         // sum check 1
         // 7107625909714992532569989007784690253926374951302217635787521060814038727176
@@ -1178,7 +1168,7 @@ mod test {
         // sum check 2 (permu check)
         // 36577718240179909774649478902868865140639356930588856487297637499589136645746
         // 41729687002910684453722951887148167036676882833019632592277701660781030721474
-        
+
         // sum check prover challenge
         // sum check 1
         // 7107625909714992532569989007784690253926374951302217635787521060814038727176
@@ -1187,7 +1177,5 @@ mod test {
         // 45018413506481449489540527157912145417517633782478331227473412464711368010598
         // 9136953733920443857830703956665810745067803432244826892211336535349370895322
         // 47343114729026404865635616202182229851661721699180461116008077057504261419561
-
-
     }
 }

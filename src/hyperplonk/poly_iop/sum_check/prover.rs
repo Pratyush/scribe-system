@@ -147,7 +147,10 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
             for b in 0..1 << (self.poly.aux_info.num_variables - self.round) {
                 println!("sum check product b: {}", b);
                 println!("sum check product round: {}", self.round);
-                println!("sum check product num_variables: {}", self.poly.aux_info.num_variables);
+                println!(
+                    "sum check product num_variables: {}",
+                    self.poly.aux_info.num_variables
+                );
 
                 // Use a HashMap to store stream values once per unique stream
                 let mut stream_values: std::collections::HashMap<usize, (F, F)> =
