@@ -94,7 +94,7 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
         //     .collect();
 
         if let Some(chal) = challenge {
-            // println!("ROUND CHALLENGE: {:?}", chal);
+            println!("sum check ROUND CHALLENGE: {}", chal);
             // challenge is None for the first round
             if self.round == 0 {
                 return Err(PolyIOPErrors::InvalidProver(
@@ -104,7 +104,7 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
             self.challenges.push(*chal);
 
             let r = self.challenges[self.round - 1];
-            // println!("prover challenge: {}", r);
+            println!("sum check prover challenge: {}", r);
             #[cfg(feature = "parallel")]
             self.poly
                 .flattened_ml_extensions
@@ -129,7 +129,7 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
         self.round += 1;
 
         // print products_list
-        // println!("products_list: {:?}", self.poly.products);
+        // println!("sum check products_list: {:?}", self.poly.products);
 
         let products_list = self.poly.products.clone();
         let mut products_sum = vec![F::zero(); self.poly.aux_info.max_degree + 1];
@@ -138,16 +138,16 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
         // f(r_1, ... r_m,, x_{m+1}... x_n)
 
         for (coefficient, products) in &products_list {
-            // println!("coefficient: {}", coefficient);
-            // println!("products: {:?}", products);
-            // println!("round: {}", self.round);
+            println!("sum check product coefficient: {}", coefficient);
+            println!("sum check product products: {:?}", products);
+            println!("sum check product round: {}", self.round);
 
             let mut sum = vec![F::zero(); products.len() + 1];
 
             for b in 0..1 << (self.poly.aux_info.num_variables - self.round) {
-                // println!("b: {}", b);
-                // println!("round: {}", self.round);
-                // println!("num_variables: {}", self.poly.aux_info.num_variables);
+                println!("sum check product b: {}", b);
+                println!("sum check product round: {}", self.round);
+                println!("sum check product num_variables: {}", self.poly.aux_info.num_variables);
 
                 // Use a HashMap to store stream values once per unique stream
                 let mut stream_values: std::collections::HashMap<usize, (F, F)> =
@@ -157,7 +157,7 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
                 for &f in products.iter() {
                     // Check if the stream has already been read
                     if !stream_values.contains_key(&f) {
-                        // println!(": {}", f);
+                        println!("sum check product: {}", f);
                         let stream = &self.poly.flattened_ml_extensions[f];
                         let mut locked_stream = stream.lock().expect("Failed to lock mutex");
 
@@ -179,8 +179,8 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
                 }
 
                 // Updating sum
-                // println!("buf length: {}", buf.len());
-                // println!("first eval: {}", buf[0].0);
+                println!("sum check product buf length: {}", buf.len());
+                println!("sum check product first eval: {}", buf[0].0);
                 sum[0] += buf.iter().map(|(eval, _)| *eval).product::<F>();
                 for acc in sum.iter_mut().skip(1) {
                     for (eval, step) in buf.iter_mut() {
@@ -202,7 +202,7 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
             // Multiplying sum by coefficient
             for s in &mut sum {
                 *s *= *coefficient;
-                // println!(" sum: {}", s)
+                println!("sum check product sum: {}", s)
             }
 
             // Extrapolation
@@ -228,8 +228,8 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
         //     .map(|x| Arc::new(x.clone()))
         //     .collect();
 
-        // println!("prover message 0: {}", products_sum[0]);
-        // println!("prover message 1: {}", products_sum[1]);
+        println!("sum check prover message 0: {}", products_sum[0]);
+        println!("sum check prover message 1: {}", products_sum[1]);
 
         Ok(IOPProverMessage {
             evaluations: products_sum,

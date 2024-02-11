@@ -162,6 +162,7 @@ pub fn compute_frac_poly_plonk<F: PrimeField>(
 
     p.read_restart();
     pi.read_restart();
+    index.read_restart();
 
     hp.swap_read_write();
     hq.swap_read_write();

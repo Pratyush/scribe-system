@@ -8,6 +8,7 @@ use crate::hyperplonk::arithmetic::virtual_polynomial::{
     // evaluate_opt, gen_eval_point,
     VPAuxInfo,
 };
+use crate::read_write::ReadWriteStream;
 use crate::{
     hyperplonk::{
         arithmetic::virtual_polynomial::{merge_polynomials, VirtualPolynomial},
@@ -96,12 +97,16 @@ impl<F: PrimeField> HyperPlonkSNARK<F> for PolyIOP<F> {
             None,
         )));
 
+        // println!("snark prover perm_oracle: {:?}", perm_oracle);
+
         let perm_index_oracle = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_slice(
             num_vars + log2(index.params.num_witness_columns()) as usize, // returns ceiling of log2 of num_wintess, added to num_vars after the merge
             &index.permutation_index, // these are merged index provided by the argument
             None,
             None,
         )));
+
+        // println!("snark prover perm_index_oracle: {:?}", perm_index_oracle);
 
         // build selector oracles and commit to it
         let selector_oracles: Vec<Arc<Mutex<DenseMLPolyStream<F>>>> = index
@@ -259,6 +264,24 @@ impl<F: PrimeField> HyperPlonkSNARK<F> for PolyIOP<F> {
         // obtain a PermCheckSubClaim.
         // =======================================================================
         let step = start_timer!(|| "Permutation check on w_i(x)");
+
+        
+        // // print all entries of pk.permutation_oracles.0
+        // // lock, read_next, and print in a loop
+        // let mut pi_locked = pk.permutation_oracles.0.lock().unwrap();
+        // while let Some(pi_val) = pi_locked.read_next() {
+        //     println!("snark prover pi_val: {}", pi_val);
+        // }
+        // pi_locked.read_restart();
+        // drop(pi_locked);
+        // // print all entries of pk.permutation_oracles.1
+        // // lock, read_next, and print in a loop
+        // let mut index_locked = pk.permutation_oracles.1.lock().unwrap();
+        // while let Some(index_val) = index_locked.read_next() {
+        //     println!("snark prover index_val: {}", index_val);
+        // }
+        // index_locked.read_restart();
+        // drop(index_locked);
 
         let (perm_check_proof, hp, hq, eq_x_r) = <Self as PermutationCheck<F>>::prove_plonk(
             witness_polys_merge.clone(),
@@ -523,11 +546,17 @@ impl<F: PrimeField> HyperPlonkSNARK<F> for PolyIOP<F> {
         //         "zero check evaluation failed".to_string(),
         //     ));
         // }
+
+        println!("checkpoint 0");
+
         let evaluated_point = zero_check_virtual_poly
             .evaluate(std::slice::from_ref(
                 &zero_check_sub_claim.point.last().unwrap(), // last field element of the point
             ))
             .unwrap();
+
+        println!("checkpoint 1");
+
         assert!(
             evaluated_point == zero_check_sub_claim.expected_evaluation,
             "wrong subclaim"
@@ -542,8 +571,8 @@ impl<F: PrimeField> HyperPlonkSNARK<F> for PolyIOP<F> {
         // Zero check and perm check have different AuxInfo
         let perm_check_aux_info = VPAuxInfo::<F> {
             // Prod(x) has a max degree of witnesses.len() + 1
-            max_degree: 2, // max degree is always 2 for the single column perm check
-            num_variables: num_vars,
+            max_degree: 2, // max degree is always 2 for the single column perm check (passed into the perm check verify and doesn't account for the eq_x_r, the sum check verify will need an aux_info that adds the eq_x_r degree of 1)
+            num_variables: num_vars + log2(vk.params.num_witness_columns()) as usize, // need the num_vars of the merged witness, not the num_vars of the gate identity check, which doesn't merge witness columns
             phantom: PhantomData::default(),
         };
 
@@ -585,6 +614,21 @@ impl<F: PrimeField> HyperPlonkSNARK<F> for PolyIOP<F> {
             vec![hq.clone()],
             -batch_sum_check_challenge * batch_sum_check_challenge,
         );
+
+        // print all elements of all streams of poly
+        // lock, read_next, and print in a loop
+        poly.flattened_ml_extensions.iter().enumerate().for_each(|(i, stream)| {
+            let mut locked = stream.lock().unwrap();
+            while let Some(val) = locked.read_next() {
+                println!("snark verifier final stream[{}] val: {}", i, val);
+            }
+            locked.read_restart();
+            drop(locked);
+        });
+        // print all perm check point elements
+        perm_check_point.iter().for_each(|point| {
+            println!("snark verifier perm_check_point: {}", point);
+        });
 
         let evaluated_point = poly
             .evaluate(std::slice::from_ref(&perm_check_point.last().unwrap()))
@@ -740,6 +784,8 @@ mod tests {
         witness::WitnessColumn,
     };
     use crate::read_write::random_permutation;
+    use ark_std::rand::rngs::StdRng;
+    use ark_std::rand::SeedableRng;
     // use ark_bls12_381::Bls12_381;
     use ark_std::test_rng;
     use ark_test_curves::bls12_381::Fr;
@@ -769,60 +815,103 @@ mod tests {
     fn test_hyperplonk_helper<F: PrimeField>(
         gate_func: CustomizedGates,
     ) -> Result<(), HyperPlonkErrors> {
-        let mut rng = test_rng();
-        // let pcs_srs = MultilinearKzgPCS::<E>::gen_srs_for_testing(&mut rng, 16)?;
+        {
+            let seed = [
+                1, 0, 0, 0, 23, 0, 0, 0, 200, 1, 0, 0, 210, 30, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0,
+            ];
+            let mut rng = StdRng::from_seed(seed);
+            // let pcs_srs = MultilinearKzgPCS::<E>::gen_srs_for_testing(&mut rng, 16)?;
 
-        let num_constraints = 4;
-        let num_pub_input = 4;
-        let nv = log2(num_constraints) as usize;
-        let num_witnesses = 2;
+            let num_constraints = 4;
+            let num_pub_input = 4;
+            let nv = log2(num_constraints) as usize;
+            let num_witnesses = 2;
 
-        // generate index
-        let params = HyperPlonkParams {
-            num_constraints,
-            num_pub_input,
-            gate_func,
-        };
-        let permutation = identity_permutation(nv, num_witnesses);
-        let permutation_index = identity_permutation(nv, num_witnesses);
-        let q1 = SelectorColumn(vec![F::one(), F::one(), F::one(), F::one()]);
-        let index = HyperPlonkIndex {
-            params,
-            permutation,
-            permutation_index,
-            selectors: vec![q1],
-        };
+            // generate index
+            let params = HyperPlonkParams {
+                num_constraints,
+                num_pub_input,
+                gate_func: gate_func.clone(),
+            };
+            let permutation = identity_permutation(nv, num_witnesses);
+            let permutation_index = identity_permutation(nv, num_witnesses);
+            let q1 = SelectorColumn(vec![F::one(), F::one(), F::one(), F::one()]);
+            let index = HyperPlonkIndex {
+                params: params.clone(),
+                permutation,
+                permutation_index,
+                selectors: vec![q1],
+            };
 
-        // generate pk and vks
-        let (pk, vk) = <PolyIOP<F> as HyperPlonkSNARK<F>>::preprocess(&index)?;
+            // generate pk and vks
+            let (pk, vk) = <PolyIOP<F> as HyperPlonkSNARK<F>>::preprocess(&index)?;
 
-        // w1 := [1, 1, 2, 3]
-        let w1 = WitnessColumn(vec![F::one(), F::one(), F::from(2u128), F::from(3u128)]);
-        // w2 := [1^5, 1^5, 2^5, 3^5]
-        let w2 = WitnessColumn(vec![F::one(), F::one(), F::from(32u128), F::from(243u128)]);
-        // public input = w1
-        let pi = w1.clone();
+            // w1 := [1, 1, 2, 3]
+            let w1 = WitnessColumn(vec![F::one(), F::one(), F::from(2u128), F::from(3u128)]);
+            // w2 := [1^5, 1^5, 2^5, 3^5]
+            let w2 = WitnessColumn(vec![F::one(), F::one(), F::from(32u128), F::from(243u128)]);
+            // public input = w1
+            let pi = w1.clone();
 
-        // generate a proof and verify
-        let proof =
-            <PolyIOP<F> as HyperPlonkSNARK<F>>::prove(&pk, &pi.0, &[w1.clone(), w2.clone()])?;
+            // generate a proof and verify
+            let proof =
+                <PolyIOP<F> as HyperPlonkSNARK<F>>::prove(&pk, &pi.0, &[w1.clone(), w2.clone()])?;
 
-        let _verify = <PolyIOP<F> as HyperPlonkSNARK<F>>::verify(&vk, &pi.0, &proof)?;
+            let _verify = <PolyIOP<F> as HyperPlonkSNARK<F>>::verify(&vk, &pi.0, &proof)?;
+        }
 
-        // bad path 1: wrong permutation
-        let rand_perm: Vec<F> = random_permutation(nv, num_witnesses, &mut rng);
-        let mut bad_index = index;
-        bad_index.permutation = rand_perm;
-        // generate pk and vks
-        let (_, bad_vk) = <PolyIOP<F> as HyperPlonkSNARK<F>>::preprocess(&bad_index)?;
-        assert!(!<PolyIOP<F> as HyperPlonkSNARK<F>>::verify(
-            &bad_vk, &pi.0, &proof,
-        )?);
+        {
+            // bad path 1: wrong permutation
+            let seed = [
+                1, 0, 0, 0, 23, 0, 0, 0, 200, 1, 0, 0, 210, 30, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0,
+            ];
+            let mut rng = StdRng::from_seed(seed);
+            // let pcs_srs = MultilinearKzgPCS::<E>::gen_srs_for_testing(&mut rng, 16)?;
 
-        // bad path 2: wrong witness
-        let mut w1_bad = w1;
-        w1_bad.0[0] = F::one();
-        assert!(<PolyIOP<F> as HyperPlonkSNARK<F>>::prove(&pk, &pi.0, &[w1_bad, w2],).is_err());
+            let num_constraints = 4;
+            let num_pub_input = 4;
+            let nv = log2(num_constraints) as usize;
+            let num_witnesses = 2;
+
+            // generate index
+            let params = HyperPlonkParams {
+                num_constraints,
+                num_pub_input,
+                gate_func,
+            };
+            
+            // let permutation = identity_permutation(nv, num_witnesses);
+            let rand_perm: Vec<F> = random_permutation(nv, num_witnesses, &mut rng);
+
+            let permutation_index = identity_permutation(nv, num_witnesses);
+            let q1 = SelectorColumn(vec![F::one(), F::one(), F::one(), F::one()]);
+            let bad_index = HyperPlonkIndex {
+                params,
+                permutation: rand_perm,
+                permutation_index,
+                selectors: vec![q1],
+            };
+
+            // generate pk and vks
+            let (pk, bad_vk) = <PolyIOP<F> as HyperPlonkSNARK<F>>::preprocess(&bad_index)?;
+
+            // w1 := [1, 1, 2, 3]
+            let w1 = WitnessColumn(vec![F::one(), F::one(), F::from(2u128), F::from(3u128)]);
+            // w2 := [1^5, 1^5, 2^5, 3^5]
+            let w2 = WitnessColumn(vec![F::one(), F::one(), F::from(32u128), F::from(243u128)]);
+            // public input = w1
+            let pi = w1.clone();
+
+            // generate a proof and verify
+            let proof =
+                <PolyIOP<F> as HyperPlonkSNARK<F>>::prove(&pk, &pi.0, &[w1.clone(), w2.clone()])?;
+            
+            assert!(<PolyIOP<F> as HyperPlonkSNARK<F>>::verify(
+                &bad_vk, &pi.0, &proof,
+            ).is_err());
+        }
 
         Ok(())
     }

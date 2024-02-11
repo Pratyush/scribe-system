@@ -230,7 +230,7 @@ where
         let alpha = transcript.get_and_append_challenge(b"alpha")?;
 
         // // print prover alpha
-        // println!("prover alpha: {}", alpha);
+        println!("prover alpha: {}", alpha);
 
         // compute the fractional polynomials h_p and h_q
         let (mut h_p, mut h_q) = util::compute_frac_poly_plonk(&p, &pi, &index, alpha).unwrap();
@@ -240,6 +240,49 @@ where
 
         // // print prover batch_factor
         // println!("prover batch_factor: {}", batch_factor);
+
+        // // print h_p, h_q, p, pi, index, alpha, batch_factor
+        // // lock and read_next() on each
+        // let mut h_p_locked = h_p.lock().unwrap();
+        // let mut h_q_locked = h_q.lock().unwrap();
+        // let mut p_locked = p.lock().unwrap();
+        // let mut pi_locked = pi.lock().unwrap();
+        // let mut index_locked = index.lock().unwrap();
+        // // loop and read_next
+        // while let Some(val) = h_p_locked.read_next() {
+        //     println!("prover h_p: {}", val);
+        // }
+        // while let Some(val) = h_q_locked.read_next() {
+        //     println!("prover h_q: {}", val);
+        // }
+        // while let Some(val) = p_locked.read_next() {
+        //     println!("prover p: {}", val);
+        // }
+        // if pi_locked.read_next().is_none() {
+        //     println!("prover pi is empty");
+        // }
+        // while let Some(val) = pi_locked.read_next() {
+        //     println!("prover pi: {}", val);
+        // }
+        // if index_locked.read_next().is_none() {
+        //     println!("prover index is empty");
+        // }
+        // while let Some(val) = index_locked.read_next() {
+        //     println!("prover index: {}", val);
+        // }
+        // // read_restart
+        // h_p_locked.read_restart();
+        // h_q_locked.read_restart();
+        // p_locked.read_restart();
+        // pi_locked.read_restart();
+        // index_locked.read_restart();
+        // // drop
+        // drop(h_p_locked);
+        // drop(h_q_locked);
+        // drop(p_locked);
+        // drop(pi_locked);
+        // drop(index_locked);
+
 
         // poly = t_1 + r * t_2 = h_p * (p + alpha * pi) - 1 + r * (h_q * (q + alpha) - 1)
         let poly = VirtualPolynomial::build_perm_check_poly_plonk(
@@ -255,10 +298,11 @@ where
 
         // get challenge r for building eq_x_r
         let length = poly.aux_info.num_variables;
+        println!("perm check prover append challenge r length: {}", length);
         let r = transcript.get_and_append_challenge_vectors(b"0check r", length)?;
 
-        // // print prover r
-        // r.iter().for_each(|r| println!("prover r: {}", r));
+        // print prover r
+        r.iter().for_each(|r| println!("prover r: {}", r));
 
         let mut final_poly = poly.build_f_hat(r.as_ref())?;
 
@@ -268,19 +312,19 @@ where
         let _ = final_poly.add_mle_list(vec![h_p.clone()], batch_factor * batch_factor);
         let _ = final_poly.add_mle_list(vec![h_q.clone()], -batch_factor * batch_factor);
 
-        // // print products of final_poly
-        // for (coeff, products) in &final_poly.products {
-        //     println!("prover final_poly coeff: {}, products: {:?}", coeff, products);
-        // }
-        // // print each stream of final poly
-        // for (i, stream) in final_poly.flattened_ml_extensions.clone().iter().enumerate() {
-        //     let mut stream_locked = stream.lock().unwrap();
-        //     while let Some(val) = stream_locked.read_next() {
-        //         println!("prover final_poly stream {}: {}", i, val);
-        //     }
-        //     stream_locked.read_restart();
-        //     drop(stream_locked);
-        // }
+        // print products of final_poly
+        for (coeff, products) in &final_poly.products {
+            println!("prover final_poly coeff: {}, products: {:?}", coeff, products);
+        }
+        // print each stream of final poly
+        for (i, stream) in final_poly.flattened_ml_extensions.clone().iter().enumerate() {
+            let mut stream_locked = stream.lock().unwrap();
+            while let Some(val) = stream_locked.read_next() {
+                println!("prover final_poly stream {}: {}", i, val);
+            }
+            stream_locked.read_restart();
+            drop(stream_locked);
+        }
 
         let proof = <Self as SumCheck<F>>::prove(&final_poly, transcript)?;
 
@@ -306,28 +350,29 @@ where
                 proof.proofs[0].evaluations[0] + proof.proofs[0].evaluations[1]
             )));
         }
-        // else {
-        //     println!("SUCCESS! zero check sum is zero!");
-        // }
+        else {
+            println!("SUCCESS! zero check sum is zero!");
+        }
 
         // get challenge alpha for h_p = 1/(p + alpha * pi) and h_q = 1/(q + alpha * index)
         let alpha = transcript.get_and_append_challenge(b"alpha")?;
 
-        // // print verifier alpha
-        // println!("verifier alpha: {}", alpha);
+        // print verifier alpha
+        println!("verifier alpha: {}", alpha);
 
         // get challenge batch_factor for batch zero check of t_1 + batch_factor * t_2, where t_1 = h_p * (p + alpha * pi) - 1 and t_2 = h_q * (q + alpha) - 1
         let batch_factor = transcript.get_and_append_challenge(b"batch_factor")?;
 
-        // // print verifier batch_factor
-        // println!("verifier batch_factor: {}", batch_factor);
+        // print verifier batch_factor
+        println!("verifier batch_factor: {}", batch_factor);
 
         // get challenge r for building eq_x_r
         let length = aux_info.num_variables;
+        println!("perm check verifier append challenge r length: {}", length);
         let r = transcript.get_and_append_challenge_vectors(b"0check r", length)?;
 
-        // // print verifier r
-        // r.iter().for_each(|r| println!("verifier r: {}", r));
+        // print verifier r
+        r.iter().for_each(|r| println!("verifier r: {}", r));
 
         // hat_fx's max degree is increased by eq(x, r).degree() which is 1
         let mut hat_fx_aux_info = aux_info.clone();
@@ -469,6 +514,11 @@ mod test {
         //     drop(stream_locked);
         // }
 
+        // print all elements of the point
+        point.iter().enumerate().for_each(|(i, val)| {
+            println!("permu check verifier subclaim point[{}]: {}", i, val);
+        });
+
         let evaluated_point = poly
             .evaluate(std::slice::from_ref(&point[poly_info.num_variables - 1]))
             .unwrap();
@@ -480,6 +530,7 @@ mod test {
                 expected_evaluation, evaluated_point
             )
         );
+
 
         // check product subclaim
         // if evaluate_opt(
@@ -968,5 +1019,175 @@ mod test {
         // let h_q = q.iter().map(|q| x * x).collect::<Vec<Fr>>();
 
         // prover messages
+    }
+
+    #[test]
+    fn calculate_field_for_test_full_snark() {
+        // - 1 - batch_factor (const): 0
+        let const_stream = vec![
+            Fr::from_str(
+                "20086443583206044138769381348611728921123841425748464670052200089256562346170",
+            ); 8
+        ];
+
+        // h_p: 1
+        let h_p = vec![
+            "1",
+            "33666782156884147470521640261842235188596244622672411309419176016482925987287",
+            "43051328666005168974984690385014100513143398561600024566011417358210753585900",
+            "46179510835712176143139040426071388954659116541242562318208831138786696118771",
+            "22323872780816558412162794824919876766357723311744974297407616820794491520803",
+            "4305093983429579788629380468490662609189317086065108312338092749561269233814",
+            "15848907742739559681415110135783828158369540510463713418486883368824988258274",
+            "8118787551772789376105145207961680677583073203531653800345712231748522346003"
+        ].iter().map(|x| Fr::from_str(x).unwrap()).collect::<Vec<Fr>>();
+
+        // p: 2
+        let p = vec![
+            "1",
+            "1",
+            "2",
+            "3",
+            "1",
+            "1",
+            "32",
+            "243",
+        ].iter().map(|x| Fr::from_str(x).unwrap()).collect::<Vec<Fr>>();
+
+        // pi: 3
+        let pi = vec![
+            "0",
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+        ].iter().map(|x| Fr::from_str(x).unwrap()).collect::<Vec<Fr>>();
+
+        // h_q: 4
+        let h_q = vec![
+            "1",
+            "33666782156884147470521640261842235188596244622672411309419176016482925987287",
+            "43051328666005168974984690385014100513143398561600024566011417358210753585900",
+            "46179510835712176143139040426071388954659116541242562318208831138786696118771",
+            "22323872780816558412162794824919876766357723311744974297407616820794491520803",
+            "4305093983429579788629380468490662609189317086065108312338092749561269233814",
+            "15848907742739559681415110135783828158369540510463713418486883368824988258274",
+            "8118787551772789376105145207961680677583073203531653800345712231748522346003"
+        ].iter().map(|x| Fr::from_str(x).unwrap()).collect::<Vec<Fr>>();
+
+        // index: 5
+        let index = vec![
+            "0",
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+        ].iter().map(|x| Fr::from_str(x).unwrap()).collect::<Vec<Fr>>();
+
+        // eq_x_r: 6
+        let eq_x_r = vec![
+            "11995796962058078291384152221285924687394859411809901239130972630375649748218",
+            "3069623161315654202591555927070056086053592581059744719648288679028080558760",
+            "19371130038405333464842587572626664764573272164324828926536328474875391266717",
+            "39225776864248047940157238290434303218156579559410893063369795543926428106625",
+            "11000089176085429653591174993823974880990202737013941796255912930821395825508",
+            "12873428272282438858921905087131813028262288704682069299066160624981304858079",
+            "29688957975173004295122297957934621666012552233547741217023384475343791227370",
+            "30082823075810584731732309474250539181628310109733793206780132740463701962263",
+        ];
+
+        // 1 * (- 1 - batch_factor) * eq_x_r
+        // prover final_poly coeff: 1, products: [0, 7]
+
+        // 1 * h_p * p * eq_x_r
+        // prover final_poly coeff: 1, products: [1, 2, 7]
+
+        // alpha * h_p * pi * eq_x_r
+        // prover final_poly coeff: 46768989744111976527193404927882014417138686501367131404245902097480820692517, products: [1, 3, 7]
+
+        // batch_factor * h_q * q * eq_x_r
+        // prover final_poly coeff: 11690901558063798869110566070432584089109599248433770057983072710385630152057, products: [4, 5, 7]
+
+        // (alpha * batch_factor) * h_q * index * eq_x_r
+        // prover final_poly coeff: 45013647124392960146610703642441223468120771381231137560614344880249679433230, products: [4, 6, 7]
+
+        // batch_factor * batch_factor * h_p
+        // prover final_poly coeff: 31813992623836710996112529321322891097929226721012340238743082530274941758853, products: [1]
+
+        // - batch_factor * batch_factor * h_q
+        // prover final_poly coeff: 20621882551289479483335211186863074739761325779515297583860576169663639425660, products: [4]
+
+        let alpha = Fr::from_str(
+            "16688610845721286109210309634358408533859722964125921675791449491049764255822",
+        )
+        .unwrap();
+        let batch_factor = Fr::from_str(
+            "32349431591920146340678359159574236916566711074779173152551458610682018838342",
+        )
+        .unwrap();
+        let r0 = Fr::from_str(
+            "32815776198530535253955268270700745676410218454358862466260718888460934301214",
+        )
+        .unwrap();
+        let r1 = Fr::from_str(
+            "13496937603384589472958952278874197154989609065961980768502323834732150193949",
+        )
+        .unwrap();
+        let r2 = Fr::from_str(
+            "31209423324225267059919947004954982919202801284449907696521932071671612688707",
+        )
+        .unwrap();
+
+
+        let one_minus_r0 = Fr::ONE - r0;
+        println!("1 - r0: {}", one_minus_r0); // 19620098976595655225492472237485220161280334046168775356342939811477646883300
+
+        let batch_factor_squared = batch_factor * batch_factor;
+        println!("batch_factor^2: {}", batch_factor_squared); // 4121609275410496301149756156656962260842089829966689949274475719641496001735
+
+        let neg_batch_factor_squared = -batch_factor_squared;
+        println!("-batch_factor^2: {}", neg_batch_factor_squared); // 48314265899715694178297984351529003576848462670560947873329182980297085182778
+
+        let alpha_batch_factor = alpha * batch_factor;
+        println!("alpha * batch_factor: {}", alpha_batch_factor); // 51043415881987800601633497734692734839394071539617523980357351605631320757089
+
+        let minus_one_minus_batch_factor = -Fr::ONE - batch_factor;
+        println!("- 1 - batch_factor: {}", minus_one_minus_batch_factor); // 20086443583206044138769381348611728921123841425748464670052200089256562346170
+
+        // prover final_poly coeff: 1, products: [0, 6]
+        // prover final_poly coeff: 1, products: [1, 2, 6]
+        // prover final_poly coeff: 16688610845721286109210309634358408533859722964125921675791449491049764255822, products: [1, 3, 6]
+        // prover final_poly coeff: 32349431591920146340678359159574236916566711074779173152551458610682018838342, products: [4, 2, 6]
+        // prover final_poly coeff: 51043415881987800601633497734692734839394071539617523980357351605631320757089, products: [4, 5, 6]
+        // prover final_poly coeff: 4121609275410496301149756156656962260842089829966689949274475719641496001735, products: [1]
+        // prover final_poly coeff: 48314265899715694178297984351529003576848462670560947873329182980297085182778, products: [4]
+
+        // prover messages
+
+
+        // sum check 1 verifier challenge
+        // sum check 1
+        // 7107625909714992532569989007784690253926374951302217635787521060814038727176
+        // 19652077529226059864526148652164263137229266777307200109779561246953901101178
+        // sum check 2 (permu check)
+        // 36577718240179909774649478902868865140639356930588856487297637499589136645746
+        // 41729687002910684453722951887148167036676882833019632592277701660781030721474
+        
+        // sum check prover challenge
+        // sum check 1
+        // 7107625909714992532569989007784690253926374951302217635787521060814038727176
+        // 19652077529226059864526148652164263137229266777307200109779561246953901101178
+        // sum check 2 (permu check)
+        // 45018413506481449489540527157912145417517633782478331227473412464711368010598
+        // 9136953733920443857830703956665810745067803432244826892211336535349370895322
+        // 47343114729026404865635616202182229851661721699180461116008077057504261419561
+
+
     }
 }
