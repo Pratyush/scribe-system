@@ -31,6 +31,7 @@ pub struct PermutationCheckSubClaim<F: PrimeField> {
     pub permu_check_challenge: F,
     pub batch_sum_check_challenge: F,
     pub zero_check_init_challenge: Vec<F>,
+    pub gamma: F,
 }
 
 pub trait PermutationCheck<F: PrimeField>: ZeroCheck<F> {
@@ -143,11 +144,14 @@ where
         // get challenge alpha for h_p = 1/(p + alpha * pi) and h_q = 1/(q + alpha)
         let alpha = transcript.get_and_append_challenge(b"alpha")?;
 
+        let gamma = transcript.get_and_append_challenge(b"gamma")?;
+
         // // print prover alpha
         // println!("prover alpha: {}", alpha);
 
         // compute the fractional polynomials h_p and h_q
-        let (mut h_p, mut h_q) = util::compute_frac_poly(&p, &q, &pi, &index, alpha).unwrap();
+        let (mut h_p, mut h_q) =
+            util::compute_frac_poly(&p, &q, &pi, &index, alpha, gamma).unwrap();
 
         // get challenge batch_factor for batch zero check of t_1 + batch_factor * t_2, where t_1 = h_p * (p + alpha * pi) - 1 and t_2 = h_q * (q + alpha) - 1
         let batch_factor = transcript.get_and_append_challenge(b"batch_factor")?;
@@ -165,6 +169,7 @@ where
             index,
             alpha,
             batch_factor,
+            gamma,
         )
         .unwrap();
 
@@ -229,11 +234,14 @@ where
         // get challenge alpha for h_p = 1/(p + alpha * pi) and h_q = 1/(q + alpha)
         let alpha = transcript.get_and_append_challenge(b"alpha")?;
 
+        let gamma = transcript.get_and_append_challenge(b"gamma")?;
+
         // // print prover alpha
         // println!("prover alpha: {}", alpha);
 
         // compute the fractional polynomials h_p and h_q
-        let (mut h_p, mut h_q) = util::compute_frac_poly_plonk(&p, &pi, &index, alpha).unwrap();
+        let (mut h_p, mut h_q) =
+            util::compute_frac_poly_plonk(&p, &pi, &index, alpha, gamma).unwrap();
 
         // get challenge batch_factor for batch zero check of t_1 + batch_factor * t_2, where t_1 = h_p * (p + alpha * pi) - 1 and t_2 = h_q * (q + alpha) - 1
         let batch_factor = transcript.get_and_append_challenge(b"batch_factor")?;
@@ -292,6 +300,7 @@ where
             index,
             alpha,
             batch_factor,
+            gamma,
         )
         .unwrap();
 
@@ -356,13 +365,15 @@ where
                 "zero check: sum {} is not zero",
                 proof.proofs[0].evaluations[0] + proof.proofs[0].evaluations[1]
             )));
-        } 
+        }
         // else {
         //     println!("SUCCESS! zero check sum is zero!");
         // }
 
-        // get challenge alpha for h_p = 1/(p + alpha * pi) and h_q = 1/(q + alpha * index)
+        // get challenge alpha for h_p = 1/(p + alpha * pi + gamma) and h_q = 1/(q + alpha * index + gamma)
         let alpha = transcript.get_and_append_challenge(b"alpha")?;
+
+        let gamma = transcript.get_and_append_challenge(b"gamma")?;
 
         // // print verifier alpha
         // println!("verifier alpha: {}", alpha);
@@ -395,6 +406,7 @@ where
             permu_check_challenge: alpha,
             batch_sum_check_challenge: batch_factor,
             zero_check_init_challenge: r,
+            gamma,
         })
     }
 }
@@ -475,6 +487,7 @@ mod test {
             permu_check_challenge,
             batch_sum_check_challenge,
             zero_check_init_challenge,
+            gamma,
         } = <PolyIOP<F> as PermutationCheck<F>>::verify(&proof, &poly_info, &mut transcript)?;
 
         let mut poly = VirtualPolynomial::build_perm_check_poly(
@@ -486,6 +499,7 @@ mod test {
             indexes[0].clone(),
             permu_check_challenge,
             batch_sum_check_challenge,
+            gamma,
         )
         .unwrap();
 
@@ -709,6 +723,7 @@ mod test {
             permu_check_challenge,
             batch_sum_check_challenge,
             zero_check_init_challenge,
+            gamma,
         } = <PolyIOP<F> as PermutationCheck<F>>::verify(&proof, &poly_info, &mut transcript)?;
 
         let mut poly = VirtualPolynomial::build_perm_check_poly_plonk(
@@ -719,6 +734,7 @@ mod test {
             indexes[0].clone(),
             permu_check_challenge,
             batch_sum_check_challenge,
+            gamma,
         )
         .unwrap();
 

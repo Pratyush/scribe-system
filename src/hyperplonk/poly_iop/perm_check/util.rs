@@ -30,6 +30,7 @@ pub fn compute_frac_poly<F: PrimeField>(
     pi: &Arc<Mutex<DenseMLPolyStream<F>>>,
     index: &Arc<Mutex<DenseMLPolyStream<F>>>,
     alpha: F,
+    gamma: F,
 ) -> Result<
     (
         Arc<Mutex<DenseMLPolyStream<F>>>,
@@ -57,7 +58,7 @@ pub fn compute_frac_poly<F: PrimeField>(
 
     // Stream processing for p and pi
     while let (Some(p_val), Some(pi_val)) = (p.read_next(), pi.read_next()) {
-        let result = (p_val + alpha * pi_val)
+        let result = (p_val + alpha * pi_val + gamma)
             .inverse()
             .expect("Failed to compute inverse");
         hp.write_next_unchecked(result)
@@ -66,7 +67,7 @@ pub fn compute_frac_poly<F: PrimeField>(
 
     // Stream processing for q
     while let (Some(q_val), Some(index_val)) = (q.read_next(), index.read_next()) {
-        let result = (q_val + alpha * index_val)
+        let result = (q_val + alpha * index_val + gamma)
             .inverse()
             .expect("Failed to compute inverse");
         hq.write_next_unchecked(result)
@@ -96,6 +97,7 @@ pub fn compute_frac_poly_plonk<F: PrimeField>(
     pi: &Arc<Mutex<DenseMLPolyStream<F>>>,
     index: &Arc<Mutex<DenseMLPolyStream<F>>>,
     alpha: F,
+    gamma: F,
 ) -> Result<
     (
         Arc<Mutex<DenseMLPolyStream<F>>>,
@@ -149,12 +151,12 @@ pub fn compute_frac_poly_plonk<F: PrimeField>(
         // println!("alpha: {}", alpha);
         // println!("pi_val: {}", pi_val);
 
-        let hp_result = (p_val + alpha * pi_val)
+        let hp_result = (p_val + alpha * pi_val + gamma)
             .inverse()
             .expect("Failed to compute inverse");
         hp.write_next_unchecked(hp_result)
             .expect("Failed to write to output stream for p and pi");
-        let hq_result = (p_val + alpha * idx_val)
+        let hq_result = (p_val + alpha * idx_val + gamma)
             .inverse()
             .expect("Failed to compute inverse");
         hq.write_next_unchecked(hq_result);
@@ -187,6 +189,7 @@ mod tests {
     #[test]
     fn test_compute_frac_poly() {
         let alpha = Fr::from(2);
+        let gamma = Fr::from(3);
 
         // Initialize p, q, pi with test values and alpha
         let p = Arc::new(Mutex::new(DenseMLPolyStream::<Fr>::from_evaluations_vec(
@@ -215,16 +218,24 @@ mod tests {
         )));
 
         // Compute the fractional polynomials
-        let (output_hp, output_hq) = compute_frac_poly(&p, &q, &pi, &index, alpha).unwrap();
+        let (output_hp, output_hq) = compute_frac_poly(&p, &q, &pi, &index, alpha, gamma).unwrap();
 
         // Expected results based on manual calculations or desired outcomes
         let expected_hp = vec![
-            (Fr::from(1) + Fr::from(5) * Fr::from(2)).inverse().unwrap(),
-            (Fr::from(2) + Fr::from(6) * Fr::from(2)).inverse().unwrap(),
+            (Fr::from(1) + Fr::from(5) * Fr::from(2) + Fr::from(3))
+                .inverse()
+                .unwrap(),
+            (Fr::from(2) + Fr::from(6) * Fr::from(2) + Fr::from(3))
+                .inverse()
+                .unwrap(),
         ];
         let expected_hq = vec![
-            (Fr::from(3) + Fr::from(7) * Fr::from(2)).inverse().unwrap(),
-            (Fr::from(4) + Fr::from(8) * Fr::from(2)).inverse().unwrap(),
+            (Fr::from(3) + Fr::from(7) * Fr::from(2) + Fr::from(3))
+                .inverse()
+                .unwrap(),
+            (Fr::from(4) + Fr::from(8) * Fr::from(2) + Fr::from(3))
+                .inverse()
+                .unwrap(),
         ];
 
         // Convert output streams to vectors for easy comparison

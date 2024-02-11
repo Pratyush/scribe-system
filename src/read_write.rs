@@ -152,8 +152,14 @@ impl<F: Field> DenseMLPolyStream<F> {
     }
 
     pub fn new_from_tempfile(num_vars: usize) -> Self {
-        let read_pointer = BufReader::new(tempfile().expect("Failed to create a temporary file"));
-        let write_pointer = BufWriter::new(tempfile().expect("Failed to create a temporary file"));
+        let read_pointer = BufReader::with_capacity(
+            1 << 20,
+            tempfile().expect("Failed to create a temporary file"),
+        );
+        let write_pointer = BufWriter::with_capacity(
+            1 << 20,
+            tempfile().expect("Failed to create a temporary file"),
+        );
         Self {
             read_pointer,
             write_pointer,

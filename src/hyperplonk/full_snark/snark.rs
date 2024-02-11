@@ -416,7 +416,10 @@ impl<F: PrimeField> HyperPlonkSNARK<F> for PolyIOP<F> {
         // end_timer!(start);
 
         let total_duration: Duration = durations.iter().sum();
-        println!("nv: {:?}, prover total: {:?}, gate: {:?}, perm: {:?}", num_vars, total_duration, durations[0], durations[1]);
+        println!(
+            "nv: {:?}, prover total: {:?}, gate: {:?}, perm: {:?}",
+            num_vars, total_duration, durations[0], durations[1]
+        );
 
         Ok(HyperPlonkProof {
             // PCS commit for witnesses
@@ -598,6 +601,7 @@ impl<F: PrimeField> HyperPlonkSNARK<F> for PolyIOP<F> {
             permu_check_challenge,
             batch_sum_check_challenge,
             zero_check_init_challenge,
+            gamma,
         } = <PolyIOP<F> as PermutationCheck<F>>::verify(
             perm_check_proof,
             &perm_check_aux_info,
@@ -612,6 +616,7 @@ impl<F: PrimeField> HyperPlonkSNARK<F> for PolyIOP<F> {
             vk.perm.1.clone(),
             permu_check_challenge,
             batch_sum_check_challenge,
+            gamma,
         )
         .unwrap();
 

@@ -432,10 +432,11 @@ impl<F: PrimeField> VirtualPolynomial<F> {
         index: Arc<Mutex<DenseMLPolyStream<F>>>,
         alpha: F,
         batch_factor: F,
+        gamma: F,
     ) -> Result<VirtualPolynomial<F>, ArithErrors> {
         // conduct a batch zero check on t_1 and t_2
-        // poly = t_1 + batch_factor * t_2 = h_p * (p + alpha * pi) - 1 + batch_factor * (h_q * (q + alpha * index) - 1)
-        // = -1-batch_factor + h_p*p + h_p*alpha*pi + batch_factor*h_q*q + batch_factor*h_q*alpha*index
+        // poly = t_1 + batch_factor * t_2 = h_p * (p + alpha * pi + gamma) - 1 + batch_factor * (h_q * (q + alpha * index + gamma) - 1)
+        // = -1-batch_factor + h_p*p + h_p*alpha*pi + batch_factor*h_q*q + batch_factor*h_q*alpha*index + gamma*h_p + gamma*batch_factor*h_q
         let num_vars = h_p.lock().unwrap().num_vars;
 
         let mut poly = VirtualPolynomial::new_from_mle(
@@ -443,11 +444,13 @@ impl<F: PrimeField> VirtualPolynomial<F> {
             F::one(),
         );
         poly.add_mle_list(vec![h_p.clone(), p], F::one()).unwrap();
-        poly.add_mle_list(vec![h_p, pi], alpha).unwrap();
+        poly.add_mle_list(vec![h_p.clone(), pi], alpha).unwrap();
         poly.add_mle_list(vec![h_q.clone(), q], batch_factor)
             .unwrap();
-        poly.add_mle_list(vec![h_q, index], alpha * batch_factor)
+        poly.add_mle_list(vec![h_q.clone(), index], alpha * batch_factor)
             .unwrap();
+        poly.add_mle_list(vec![h_p], gamma).unwrap();
+        poly.add_mle_list(vec![h_q], gamma * batch_factor).unwrap();
 
         Ok(poly)
     }
@@ -460,6 +463,7 @@ impl<F: PrimeField> VirtualPolynomial<F> {
         index: Arc<Mutex<DenseMLPolyStream<F>>>,
         alpha: F,
         batch_factor: F,
+        gamma: F,
     ) -> Result<VirtualPolynomial<F>, ArithErrors> {
         // conduct a batch zero check on t_1 and t_2
         // poly = t_1 + batch_factor * t_2 = h_p * (p + alpha * pi) - 1 + batch_factor * (h_q * (q + alpha * index) - 1)
@@ -489,11 +493,13 @@ impl<F: PrimeField> VirtualPolynomial<F> {
         );
         poly.add_mle_list(vec![h_p.clone(), p.clone()], F::one())
             .unwrap();
-        poly.add_mle_list(vec![h_p, pi], alpha).unwrap();
+        poly.add_mle_list(vec![h_p.clone(), pi], alpha).unwrap();
         poly.add_mle_list(vec![h_q.clone(), p], batch_factor)
             .unwrap();
-        poly.add_mle_list(vec![h_q, index], alpha * batch_factor)
+        poly.add_mle_list(vec![h_q.clone(), index], alpha * batch_factor)
             .unwrap();
+        poly.add_mle_list(vec![h_p], gamma).unwrap();
+        poly.add_mle_list(vec![h_q], gamma * batch_factor).unwrap();
 
         Ok(poly)
     }
@@ -766,6 +772,7 @@ mod test {
     fn test_build_perm_check_poly() {
         // Setup sample values for alpha and r
         let alpha = Fr::from(11u64);
+        let gamma = Fr::from(13u64);
         let r = Fr::from(12u64);
 
         // Setup sample streams for h_p, h_q, p, q, and pi
@@ -808,7 +815,8 @@ mod test {
 
         // Call the function under test
         let result_poly =
-            VirtualPolynomial::build_perm_check_poly(h_p, h_q, p, q, pi, index, alpha, r).unwrap();
+            VirtualPolynomial::build_perm_check_poly(h_p, h_q, p, q, pi, index, alpha, r, gamma)
+                .unwrap();
 
         // Define expected products directly
         let expected_products = vec![
@@ -817,6 +825,8 @@ mod test {
             (Fr::from(11u64), vec![1, 3]),
             (Fr::from(12u64), vec![4, 5]),
             (Fr::from(132u64), vec![4, 6]),
+            (Fr::from(13u64), vec![0]),
+            (Fr::from(156u64), vec![1]),
         ];
 
         // Compare max_degree and num_variables

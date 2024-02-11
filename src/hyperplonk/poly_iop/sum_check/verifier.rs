@@ -207,7 +207,7 @@ impl<F: PrimeField> SumCheckVerifier<F> for IOPVerifierState<F> {
                     expected,
                     evaluations[0] + evaluations[1]
                 )));
-            } 
+            }
             // else {
             //     println!("sum check verifier Prover message is consistent with the claim.");
             //     println!("sum check verifier expected: {}", expected);
