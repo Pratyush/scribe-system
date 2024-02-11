@@ -47,6 +47,7 @@ use ark_std::{end_timer, log2, start_timer, One, Zero};
 use rayon::iter::IntoParallelRefIterator;
 #[cfg(feature = "parallel")]
 use rayon::iter::ParallelIterator;
+use std::time::{Duration, Instant};
 use std::{
     marker::PhantomData,
     sync::{Arc, Mutex},
@@ -192,7 +193,9 @@ impl<F: PrimeField> HyperPlonkSNARK<F> for PolyIOP<F> {
         pub_input: &[F],
         witnesses: &[WitnessColumn<F>],
     ) -> Result<Self::Proof, HyperPlonkErrors> {
-        let start = start_timer!(|| "hyperplonk proving");
+        let mut durations: Vec<Duration> = Vec::new();
+
+        // let start = start_timer!(|| "hyperplonk proving");
         let mut transcript = IOPTranscript::<F>::new(b"hyperplonk");
 
         prover_sanity_check(&pk.params, pub_input, witnesses)?;
@@ -211,7 +214,7 @@ impl<F: PrimeField> HyperPlonkSNARK<F> for PolyIOP<F> {
         // 1. Commit Witness polynomials `w_i(x)` and append commitment to
         // transcript
         // =======================================================================
-        let step = start_timer!(|| "merge witnesses");
+        // let step = start_timer!(|| "merge witnesses");
 
         let witness_polys: Vec<Arc<Mutex<DenseMLPolyStream<F>>>> = witnesses
             .iter()
@@ -235,7 +238,7 @@ impl<F: PrimeField> HyperPlonkSNARK<F> for PolyIOP<F> {
         //     transcript.append_serializable_element(b"w", w_com)?;
         // }
 
-        end_timer!(step);
+        // end_timer!(step);
         // =======================================================================
         // 2 Run ZeroCheck on
         //
@@ -248,7 +251,8 @@ impl<F: PrimeField> HyperPlonkSNARK<F> for PolyIOP<F> {
         //
         // in vanilla plonk, and obtain a ZeroCheckSubClaim
         // =======================================================================
-        let step = start_timer!(|| "Gate identity");
+        // let step = start_timer!(|| "Gate identity");
+        let step = Instant::now();
 
         let fx = build_f(
             &pk.params.gate_func,
@@ -258,12 +262,16 @@ impl<F: PrimeField> HyperPlonkSNARK<F> for PolyIOP<F> {
         )?;
 
         let zero_check_proof = <Self as ZeroCheck<F>>::prove(&fx, &mut transcript)?;
-        end_timer!(step);
+
+        durations.push(step.elapsed());
+        // println!("Prover gate identity: {:?}", step.elapsed());
+
+        // end_timer!(step);
         // =======================================================================
         // 3. Run permutation check on `\{w_i(x)\}` and `permutation_oracle`, and
         // obtain a PermCheckSubClaim.
         // =======================================================================
-        let step = start_timer!(|| "Permutation check on w_i(x)");
+        // let step = start_timer!(|| "Permutation check on w_i(x)");
 
         // // print all entries of pk.permutation_oracles.0
         // // lock, read_next, and print in a loop
@@ -282,15 +290,19 @@ impl<F: PrimeField> HyperPlonkSNARK<F> for PolyIOP<F> {
         // index_locked.read_restart();
         // drop(index_locked);
 
+        let step = Instant::now();
+
         let (perm_check_proof, hp, hq, eq_x_r) = <Self as PermutationCheck<F>>::prove_plonk(
             witness_polys_merge.clone(),
             pk.permutation_oracles.0.clone(),
             pk.permutation_oracles.1.clone(),
             &mut transcript,
         )?;
-        let perm_check_point = &perm_check_proof.point;
 
-        end_timer!(step);
+        durations.push(step.elapsed());
+        // println!("Prover perm identity: {:?}", step.elapsed());
+
+        // end_timer!(step);
         // // =======================================================================
         // // 4. Generate evaluations and corresponding proofs
         // // - permcheck
@@ -401,7 +413,10 @@ impl<F: PrimeField> HyperPlonkSNARK<F> for PolyIOP<F> {
         // let batch_openings = pcs_acc.multi_open(&pk.pcs_param, &mut transcript)?;
         // end_timer!(step);
 
-        end_timer!(start);
+        // end_timer!(start);
+
+        let total_duration: Duration = durations.iter().sum();
+        println!("nv: {:?}, prover total: {:?}, gate: {:?}, perm: {:?}", num_vars, total_duration, durations[0], durations[1]);
 
         Ok(HyperPlonkProof {
             // PCS commit for witnesses
@@ -457,7 +472,7 @@ impl<F: PrimeField> HyperPlonkSNARK<F> for PolyIOP<F> {
         pub_input: &[F],
         proof: &Self::Proof,
     ) -> Result<bool, HyperPlonkErrors> {
-        let start = start_timer!(|| "hyperplonk verification");
+        // let start = start_timer!(|| "hyperplonk verification");
 
         let mut transcript = IOPTranscript::<F>::new(b"hyperplonk");
 
@@ -518,7 +533,7 @@ impl<F: PrimeField> HyperPlonkSNARK<F> for PolyIOP<F> {
         //     = q_l w_a(x) + q_r w_b(x) + q_m w_a(x)w_b(x) - q_o w_c(x)
         //
         // =======================================================================
-        let step = start_timer!(|| "verify zero check");
+        // let step = start_timer!(|| "verify zero check");
         // Zero check and perm check have different AuxInfo
         let zero_check_aux_info = VPAuxInfo::<F> {
             max_degree: vk.params.gate_func.degree(),
@@ -561,11 +576,11 @@ impl<F: PrimeField> HyperPlonkSNARK<F> for PolyIOP<F> {
             "wrong subclaim"
         );
 
-        end_timer!(step);
+        // end_timer!(step);
         // =======================================================================
         // 2. Verify perm_check_proof on `\{w_i(x)\}` and `permutation_oracle`
         // =======================================================================
-        let step = start_timer!(|| "verify permutation check");
+        // let step = start_timer!(|| "verify permutation check");
 
         // Zero check and perm check have different AuxInfo
         let perm_check_aux_info = VPAuxInfo::<F> {
@@ -676,7 +691,7 @@ impl<F: PrimeField> HyperPlonkSNARK<F> for PolyIOP<F> {
         //     ));
         // }
 
-        end_timer!(step);
+        // end_timer!(step);
         // // =======================================================================
         // // 3. Verify the opening against the commitment
         // // =======================================================================
@@ -772,7 +787,7 @@ impl<F: PrimeField> HyperPlonkSNARK<F> for PolyIOP<F> {
         // )?;
 
         // end_timer!(step);
-        end_timer!(start);
+        // end_timer!(start);
         Ok(true)
     }
 }
