@@ -428,7 +428,7 @@ pub fn merge_mles<F: PrimeField>(
     num_vars: usize,
 ) -> Result<Arc<Mutex<DenseMLPolyStream<F>>>, ArithErrors> {
     let target_num_vars = ((polynomials.len() as f64).log2().ceil() as usize) + num_vars;
-    
+
     for poly in polynomials.iter() {
         if poly.lock().unwrap().num_vars != num_vars {
             return Err(ArithErrors::InvalidParameters(
@@ -437,13 +437,22 @@ pub fn merge_mles<F: PrimeField>(
         }
     }
 
-    let res_stream = Arc::new(Mutex::new(DenseMLPolyStream::new(target_num_vars, None, None)));
+    let res_stream = Arc::new(Mutex::new(DenseMLPolyStream::new(
+        target_num_vars,
+        None,
+        None,
+    )));
 
     // read all poly till none and write each read element to res_stream
     for poly in polynomials.iter() {
         while let Some(elem) = poly.lock().unwrap().read_next() {
             res_stream.lock().unwrap().write_next_unchecked(elem);
         }
+    }
+
+    // restart all poly
+    for poly in polynomials.iter() {
+        poly.lock().unwrap().read_restart();
     }
 
     // pad the rest with zero
@@ -454,7 +463,6 @@ pub fn merge_mles<F: PrimeField>(
     res_stream.lock().unwrap().swap_read_write();
 
     Ok(res_stream)
-
 }
 
 pub fn random_permutation<F: PrimeField, R: RngCore>(

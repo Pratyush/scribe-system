@@ -19,8 +19,8 @@ merlin = "3.0.0"
 rayon = { version = "1.5.2", default-features = false, optional = true }
 log = "0.4.16"
 env_logger = "0.8.3" # this is a dev dependency really
-libc = "0.2"
-procinfo = "0.4"
+# libc = "0.2"
+# procinfo = "0.4"
 
 # following required by hyperplonk and might remove later
 displaydoc = { version = "0.2.3", default-features = false }

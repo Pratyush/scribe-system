@@ -11,8 +11,8 @@ use crate::{
     read_write::{DenseMLPoly, DenseMLPolyStream, ReadWriteStream},
 };
 // use arithmetic::{VPAuxInfo, VirtualPolynomial};
-use ark_ff::PrimeField;
 use ark_ff::fields::batch_inversion;
+use ark_ff::PrimeField;
 // use ark_poly::DenseMultilinearExtension;
 use ark_std::{end_timer, start_timer, Zero};
 use std::{
@@ -128,8 +128,12 @@ pub fn compute_frac_poly_plonk<F: PrimeField>(
     let batch_size = 1 << 20; // Maximum number of elements to process in a batch
 
     let num_vars = p.lock().unwrap().num_vars();
-    let output_hp = Arc::new(Mutex::new(DenseMLPolyStream::<F>::new_from_tempfile(num_vars)));
-    let output_hq = Arc::new(Mutex::new(DenseMLPolyStream::<F>::new_from_tempfile(num_vars)));
+    let output_hp = Arc::new(Mutex::new(DenseMLPolyStream::<F>::new_from_tempfile(
+        num_vars,
+    )));
+    let output_hq = Arc::new(Mutex::new(DenseMLPolyStream::<F>::new_from_tempfile(
+        num_vars,
+    )));
 
     // Prepare vectors for batch processing
     let mut hp_vals = Vec::new();
@@ -155,10 +159,11 @@ pub fn compute_frac_poly_plonk<F: PrimeField>(
             batch_inversion(&mut hq_vals);
 
             for (hp_val, hq_val) in hp_vals.drain(..).zip(hq_vals.drain(..)) {
-                hp.write_next_unchecked(hp_val).expect("Failed to write to hp stream");
-                hq.write_next_unchecked(hq_val).expect("Failed to write to hq stream");
+                hp.write_next_unchecked(hp_val)
+                    .expect("Failed to write to hp stream");
+                hq.write_next_unchecked(hq_val)
+                    .expect("Failed to write to hq stream");
             }
-
         }
     }
 
@@ -168,8 +173,10 @@ pub fn compute_frac_poly_plonk<F: PrimeField>(
         batch_inversion(&mut hq_vals);
 
         for (hp_val, hq_val) in hp_vals.iter().zip(hq_vals.iter()) {
-            hp.write_next_unchecked(*hp_val).expect("Failed to write remaining hp values");
-            hq.write_next_unchecked(*hq_val).expect("Failed to write remaining hq values");
+            hp.write_next_unchecked(*hp_val)
+                .expect("Failed to write remaining hp values");
+            hq.write_next_unchecked(*hq_val)
+                .expect("Failed to write remaining hq values");
         }
     }
 

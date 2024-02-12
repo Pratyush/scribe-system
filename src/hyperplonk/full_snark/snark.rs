@@ -85,7 +85,9 @@ impl<F: PrimeField> HyperPlonkSNARK<F> for PolyIOP<F> {
         //     PCS::trim(pcs_srs, None, Some(supported_ml_degree))?;
 
         // assert that index.permutation and index.permutation_index have the same length
-        if index.permutation.lock().unwrap().num_vars != index.permutation_index.lock().unwrap().num_vars {
+        if index.permutation.lock().unwrap().num_vars
+            != index.permutation_index.lock().unwrap().num_vars
+        {
             return Err(HyperPlonkErrors::InvalidParameters(
                 "permutation and permutation_index have different lengths".to_string(),
             ));
@@ -829,7 +831,12 @@ mod tests {
             };
             let permutation = identity_permutation_mle(merge_nv);
             let permutation_index = identity_permutation_mle(merge_nv);
-            let q1 = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(2, vec![F::one(), F::one(), F::one(), F::one()], None, None)));
+            let q1 = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(
+                2,
+                vec![F::one(), F::one(), F::one(), F::one()],
+                None,
+                None,
+            )));
             let index = HyperPlonkIndex {
                 params: params.clone(),
                 permutation,
@@ -841,9 +848,19 @@ mod tests {
             let (pk, vk) = <PolyIOP<F> as HyperPlonkSNARK<F>>::preprocess(&index)?;
 
             // w1 := [1, 1, 2, 3]
-            let w1 = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(2, vec![F::one(), F::one(), F::from(2u128), F::from(3u128)], None, None)));
+            let w1 = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(
+                2,
+                vec![F::one(), F::one(), F::from(2u128), F::from(3u128)],
+                None,
+                None,
+            )));
             // w2 := [1^5, 1^5, 2^5, 3^5]
-            let w2 = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(2, vec![F::one(), F::one(), F::from(32u128), F::from(243u128)], None, None)));
+            let w2 = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(
+                2,
+                vec![F::one(), F::one(), F::from(32u128), F::from(243u128)],
+                None,
+                None,
+            )));
             // public input = w1
             let pi = vec![F::one(), F::one(), F::from(2u128), F::from(3u128)];
 
@@ -877,10 +894,29 @@ mod tests {
             };
 
             // let permutation = identity_permutation(nv, num_witnesses);
-            let rand_perm = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(3, vec![F::from(1), F::from(3), F::from(6), F::from(7), F::from(2), F::from(5), F::from(0), F::from(4)], None, None)));
+            let rand_perm = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(
+                3,
+                vec![
+                    F::from(1),
+                    F::from(3),
+                    F::from(6),
+                    F::from(7),
+                    F::from(2),
+                    F::from(5),
+                    F::from(0),
+                    F::from(4),
+                ],
+                None,
+                None,
+            )));
 
             let permutation_index = identity_permutation_mle(merge_nv);
-            let q1 = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(2, vec![F::one(), F::one(), F::one(), F::one()], None, None)));
+            let q1 = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(
+                2,
+                vec![F::one(), F::one(), F::one(), F::one()],
+                None,
+                None,
+            )));
             let bad_index = HyperPlonkIndex {
                 params,
                 permutation: rand_perm,
@@ -892,9 +928,19 @@ mod tests {
             let (pk, bad_vk) = <PolyIOP<F> as HyperPlonkSNARK<F>>::preprocess(&bad_index)?;
 
             // w1 := [1, 1, 2, 3]
-            let w1 = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(2, vec![F::one(), F::one(), F::from(2u128), F::from(3u128)], None, None)));
+            let w1 = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(
+                2,
+                vec![F::one(), F::one(), F::from(2u128), F::from(3u128)],
+                None,
+                None,
+            )));
             // w2 := [1^5, 1^5, 2^5, 3^5]
-            let w2 = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(2, vec![F::one(), F::one(), F::from(32u128), F::from(243u128)], None, None)));
+            let w2 = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(
+                2,
+                vec![F::one(), F::one(), F::from(32u128), F::from(243u128)],
+                None,
+                None,
+            )));
             // public input = w1
             let pi = vec![F::one(), F::one(), F::from(2u128), F::from(3u128)];
 

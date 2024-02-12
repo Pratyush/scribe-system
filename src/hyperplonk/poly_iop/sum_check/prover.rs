@@ -64,8 +64,7 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
         challenge: &Option<F>,
     ) -> Result<Self::ProverMessage, PolyIOPErrors> {
         let start =
-            start_timer!(|| format!("sum check prove {}-th round and update state",
-        self.round));
+            start_timer!(|| format!("sum check prove {}-th round and update state", self.round));
 
         if self.round >= self.poly.aux_info.num_variables {
             return Err(PolyIOPErrors::InvalidProver(
@@ -249,7 +248,7 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
         // println!("sum check prover message 1: {}", products_sum[1]);
 
         end_timer!(start);
-        
+
         Ok(IOPProverMessage {
             evaluations: products_sum,
         })

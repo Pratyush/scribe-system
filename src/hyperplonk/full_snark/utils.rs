@@ -168,15 +168,13 @@ pub(crate) fn prover_sanity_check<F: PrimeField>(
     }
     // check public input matches witness[0]'s first 2^ell elements
     let mut pub_stream = witnesses[0].lock().unwrap();
-    let pub_stream_result: Vec<F> = (0..pub_input.len()).map(|_| {pub_stream.read_next().unwrap()}).collect();
+    let pub_stream_result: Vec<F> = (0..pub_input.len())
+        .map(|_| pub_stream.read_next().unwrap())
+        .collect();
     pub_stream.read_restart();
     drop(pub_stream);
 
-    for (i, (&pi, w)) in pub_input
-        .iter()
-        .zip(pub_stream_result)
-        .enumerate()
-    {
+    for (i, (&pi, w)) in pub_input.iter().zip(pub_stream_result).enumerate() {
         if pi != w {
             return Err(HyperPlonkErrors::InvalidProver(format!(
                 "The {:?}-th public input {:?} does not match witness[0] {:?}",
