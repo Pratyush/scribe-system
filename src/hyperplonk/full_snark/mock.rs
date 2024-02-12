@@ -155,6 +155,7 @@ impl<F: PrimeField> MockCircuit<F> {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::hyperplonk::full_snark::utils::memory_traces;
     use crate::hyperplonk::full_snark::{errors::HyperPlonkErrors, HyperPlonkSNARK};
     // use ark_test_curves::{Bls12_381, Fr};
     use crate::hyperplonk::{
@@ -218,6 +219,9 @@ mod test {
 
     #[test]
     fn test_mock_circuit_zkp() -> Result<(), HyperPlonkErrors> {
+        env_logger::init();
+        memory_traces();
+        
         let mut rng = test_rng();
         // let pcs_srs =
         //     MultilinearKzgPCS::<Bls12_381>::gen_srs_for_testing(&mut rng, SUPPORTED_SIZE)?;
