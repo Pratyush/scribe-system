@@ -22,6 +22,7 @@ use ark_std::{cfg_into_iter, end_timer, start_timer, vec::Vec};
 use rayon::prelude::{IntoParallelIterator, IntoParallelRefIterator};
 use std::io::Seek;
 use std::sync::Arc;
+use std::time::Instant;
 
 #[cfg(feature = "parallel")]
 use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
@@ -137,6 +138,8 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
         // Step 2: generate sum for the partial evaluated polynomial:
         // f(r_1, ... r_m,, x_{m+1}... x_n)
 
+        let mut total_read_time = std::time::Duration::new(0, 0);
+
         for (coefficient, products) in &products_list {
             // println!("sum check product coefficient: {}", coefficient);
             // println!("sum check product products: {:?}", products);
@@ -177,9 +180,15 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
 
                         // print read position
                         // println!("read position: {}", locked_stream.read_pointer.stream_position().unwrap());
-
+                        
+                        let read_start = Instant::now();
+                        
                         let eval = locked_stream.read_next().unwrap(); // Read once for eval
                         let step = locked_stream.read_next().unwrap() - eval; // Read once for step
+
+                        let read_elapsed = read_start.elapsed();
+                        total_read_time += read_elapsed;
+
                         stream_values.insert(f, (eval, step));
                     }
                 }
@@ -248,6 +257,8 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
         // println!("sum check prover message 1: {}", products_sum[1]);
 
         end_timer!(start);
+
+        println!("sum check prover total read time for round {} is {:?}", self.round - 1, total_read_time);
 
         Ok(IOPProverMessage {
             evaluations: products_sum,

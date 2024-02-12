@@ -24,6 +24,8 @@ env_logger = "0.8.3" # this is a dev dependency really
 
 # following required by hyperplonk and might remove later
 displaydoc = { version = "0.2.3", default-features = false }
+# ark-ec = { version = "^0.4.0", default-features = false }
+
 
 [dev-dependencies]
 
