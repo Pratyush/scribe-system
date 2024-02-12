@@ -4,8 +4,11 @@
 // You should have received a copy of the MIT License
 // along with the HyperPlonk library. If not, see <https://mit-license.org/>.
 
-use crate::hyperplonk::arithmetic::virtual_polynomial::identity_permutation;
+use std::sync::{Arc, Mutex};
+
+use crate::{hyperplonk::arithmetic::virtual_polynomial::identity_permutation, read_write::{identity_permutation_mle, DenseMLPolyStream, ReadWriteStream}};
 use ark_ff::PrimeField;
+use ark_ff::Field;
 use ark_std::{
     log2,
     rand::{rngs::StdRng, SeedableRng},
@@ -21,7 +24,8 @@ use crate::hyperplonk::full_snark::{
 
 pub struct MockCircuit<F: PrimeField> {
     pub public_inputs: Vec<F>,
-    pub witnesses: Vec<WitnessColumn<F>>,
+    pub witnesses: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
+    // pub merged_witness: Arc<Mutex<DenseMLPolyStream<F>>>,
     pub index: HyperPlonkIndex<F>,
 }
 
@@ -50,14 +54,20 @@ impl<F: PrimeField> MockCircuit<F> {
             0, 0, 0, 0, 0,
         ];
         let mut rng = StdRng::from_seed(seed);
-        let nv = log2(num_constraints);
+        let nv = log2(num_constraints) as usize;
         let num_selectors = gate.num_selector_columns();
         let num_witnesses = gate.num_witness_columns();
         let log_n_wires = log2(num_witnesses);
-        let merged_nv = nv + log_n_wires;
+        let merged_nv = nv + log_n_wires as usize;
+        
+        // create a Vec<Arc<Mutex<DenseMLPolyStream<F>>>> for selectors and witnesses
+        let mut selectors: Vec<Arc<Mutex<DenseMLPolyStream<F>>>> = (0..num_selectors)
+            .map(|_| Arc::new(Mutex::new(DenseMLPolyStream::new(nv, None, None))))
+            .collect();
 
-        let mut selectors: Vec<SelectorColumn<F>> = vec![SelectorColumn::default(); num_selectors];
-        let mut witnesses: Vec<WitnessColumn<F>> = vec![WitnessColumn::default(); num_witnesses];
+        let mut witnesses: Vec<Arc<Mutex<DenseMLPolyStream<F>>>> = (0..num_witnesses)
+            .map(|_| Arc::new(Mutex::new(DenseMLPolyStream::new(merged_nv, None, None))))
+            .collect();
 
         for _cs_counter in 0..num_constraints {
             let mut cur_selectors: Vec<F> = (0..(num_selectors - 1))
@@ -94,14 +104,27 @@ impl<F: PrimeField> MockCircuit<F> {
             }
             cur_selectors.push(last_selector);
             for i in 0..num_selectors {
-                selectors[i].append(cur_selectors[i]);
+                selectors[i].lock().unwrap().write_next_unchecked(cur_selectors[i]);
             }
             for i in 0..num_witnesses {
-                witnesses[i].append(cur_witness[i]);
+                witnesses[i].lock().unwrap().write_next_unchecked(cur_witness[i]);
             }
         }
+        // swap read and write for each stream
+        for i in 0..num_selectors {
+            selectors[i].lock().unwrap().swap_read_write();
+        }
+        for i in 0..num_witnesses {
+            witnesses[i].lock().unwrap().swap_read_write();
+        }
+
         let pub_input_len = ark_std::cmp::min(4, num_constraints);
-        let public_inputs = witnesses[0].0[0..pub_input_len].to_vec();
+        
+        // read the stream up to pub_input_len and restart it
+        let mut pub_stream = witnesses[0].lock().unwrap();
+        let public_inputs: Vec<F> = (0..pub_input_len).map(|i| pub_stream.read_next_unchecked().unwrap()).collect();
+        pub_stream.read_restart();
+        // let public_inputs = witnesses[0].0[0..pub_input_len].to_vec();
 
         let params = HyperPlonkParams {
             num_constraints,
@@ -109,8 +132,8 @@ impl<F: PrimeField> MockCircuit<F> {
             gate_func: gate.clone(),
         };
 
-        let permutation = identity_permutation(merged_nv as usize, 1);
-        let permutation_index = identity_permutation(merged_nv as usize, 1);
+        let permutation = identity_permutation_mle(merged_nv as usize);
+        let permutation_index = identity_permutation_mle(merged_nv as usize);
         let index = HyperPlonkIndex {
             params,
             permutation,
@@ -120,7 +143,7 @@ impl<F: PrimeField> MockCircuit<F> {
 
         Self {
             public_inputs,
-            witnesses,
+            witnesses: witnesses.clone(),
             index,
         }
     }
@@ -135,17 +158,25 @@ impl<F: PrimeField> MockCircuit<F> {
                     F::from(*coeff as u64)
                 };
                 cur_monomial = match q {
-                    Some(p) => cur_monomial * self.index.selectors[*p].0[current_row],
+                    Some(p) => cur_monomial * self.index.selectors[*p].lock().unwrap().read_next().unwrap(),
                     None => cur_monomial,
                 };
                 for wit_index in wit.iter() {
-                    cur_monomial *= self.witnesses[*wit_index].0[current_row];
+                    cur_monomial *= self.witnesses[*wit_index].lock().unwrap().read_next().unwrap();
                 }
                 cur += cur_monomial;
             }
             if !cur.is_zero() {
                 return false;
             }
+        }
+
+        // restart all streams
+        for i in 0..self.num_selector_columns() {
+            self.index.selectors[i].lock().unwrap().read_restart();
+        }
+        for i in 0..self.num_witness_columns() {
+            self.witnesses[i].lock().unwrap().read_restart();
         }
 
         true
@@ -208,7 +239,7 @@ mod test {
         let proof = <PolyIOP<Fr> as HyperPlonkSNARK<Fr>>::prove(
             &pk,
             &circuit.public_inputs,
-            &circuit.witnesses,
+            circuit.witnesses.clone(),
         )?;
 
         // let verify =
@@ -221,7 +252,7 @@ mod test {
     fn test_mock_circuit_zkp() -> Result<(), HyperPlonkErrors> {
         env_logger::init();
         memory_traces();
-        
+
         let mut rng = test_rng();
         // let pcs_srs =
         //     MultilinearKzgPCS::<Bls12_381>::gen_srs_for_testing(&mut rng, SUPPORTED_SIZE)?;

@@ -6,11 +6,13 @@
 
 //! Main module for the HyperPlonk SNARK.
 
+use std::sync::{Arc, Mutex};
+
 use ark_ff::PrimeField;
 // use ark_ec::pairing::Pairing;
 use errors::HyperPlonkErrors;
 // use subroutines::{pcs::prelude::PolynomialCommitmentScheme, poly_iop::prelude::PermutationCheck};
-use crate::hyperplonk::poly_iop::prelude::PermutationCheck;
+use crate::{hyperplonk::poly_iop::prelude::PermutationCheck, read_write::DenseMLPolyStream};
 // use crate::hyperplonk::poly_iop::perm_check::PermutationCheck;
 use witness::WitnessColumn;
 
@@ -64,7 +66,7 @@ pub trait HyperPlonkSNARK<F: PrimeField>: PermutationCheck<F> {
         // pub_input: &[E::ScalarField],
         pub_input: &[F],
         // witnesses: &[WitnessColumn<E::ScalarField>],
-        witnesses: &[WitnessColumn<F>],
+        witnesses: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
     ) -> Result<Self::Proof, HyperPlonkErrors>;
 
     /// Verify the HyperPlonk proof.

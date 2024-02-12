@@ -8,7 +8,7 @@ use crate::hyperplonk::arithmetic::virtual_polynomial::{
     // evaluate_opt, gen_eval_point,
     VPAuxInfo,
 };
-use crate::read_write::ReadWriteStream;
+use crate::read_write::{merge_mles, ReadWriteStream};
 use crate::{
     hyperplonk::{
         arithmetic::virtual_polynomial::{merge_polynomials, VirtualPolynomial},
@@ -85,36 +85,11 @@ impl<F: PrimeField> HyperPlonkSNARK<F> for PolyIOP<F> {
         //     PCS::trim(pcs_srs, None, Some(supported_ml_degree))?;
 
         // assert that index.permutation and index.permutation_index have the same length
-        if index.permutation.len() != index.permutation_index.len() {
+        if index.permutation.lock().unwrap().num_vars != index.permutation_index.lock().unwrap().num_vars {
             return Err(HyperPlonkErrors::InvalidParameters(
                 "permutation and permutation_index have different lengths".to_string(),
             ));
         }
-
-        let perm_oracle = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_slice(
-            num_vars + log2(index.params.num_witness_columns()) as usize, // returns ceiling of log2 of num_wintess, added to num_vars after the merge
-            &index.permutation, // these are merged perm provided by the argument
-            None,
-            None,
-        )));
-
-        // println!("snark prover perm_oracle: {:?}", perm_oracle);
-
-        let perm_index_oracle = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_slice(
-            num_vars + log2(index.params.num_witness_columns()) as usize, // returns ceiling of log2 of num_wintess, added to num_vars after the merge
-            &index.permutation_index, // these are merged index provided by the argument
-            None,
-            None,
-        )));
-
-        // println!("snark prover perm_index_oracle: {:?}", perm_index_oracle);
-
-        // build selector oracles and commit to it
-        let selector_oracles: Vec<Arc<Mutex<DenseMLPolyStream<F>>>> = index
-            .selectors
-            .iter()
-            .map(|s| Arc::new(Mutex::new(DenseMLPolyStream::from(s))))
-            .collect();
 
         // let selector_commitments = selector_oracles
         //     .par_iter()
@@ -124,8 +99,8 @@ impl<F: PrimeField> HyperPlonkSNARK<F> for PolyIOP<F> {
         Ok((
             Self::ProvingKey {
                 params: index.params.clone(),
-                permutation_oracles: (perm_oracle.clone(), perm_index_oracle.clone()),
-                selector_oracles: selector_oracles.clone(),
+                permutation_oracles: (index.permutation.clone(), index.permutation_index.clone()),
+                selector_oracles: index.selectors.clone(),
                 // selector_commitments: selector_commitments.clone(),
                 // permutation_commitments: perm_comms.clone(),
                 // pcs_param: pcs_prover_param,
@@ -135,8 +110,8 @@ impl<F: PrimeField> HyperPlonkSNARK<F> for PolyIOP<F> {
                 // pcs_param: pcs_verifier_param,
                 // selector_commitments,
                 // perm_commitments: perm_comms,
-                selector: selector_oracles,
-                perm: (perm_oracle, perm_index_oracle),
+                selector: index.selectors.clone(),
+                perm: (index.permutation.clone(), index.permutation_index.clone()),
             },
         ))
     }
@@ -191,14 +166,14 @@ impl<F: PrimeField> HyperPlonkSNARK<F> for PolyIOP<F> {
     fn prove(
         pk: &Self::ProvingKey,
         pub_input: &[F],
-        witnesses: &[WitnessColumn<F>],
+        witnesses: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
     ) -> Result<Self::Proof, HyperPlonkErrors> {
         let mut durations: Vec<Duration> = Vec::new();
 
         // let start = start_timer!(|| "hyperplonk proving");
         let mut transcript = IOPTranscript::<F>::new(b"hyperplonk");
 
-        prover_sanity_check(&pk.params, pub_input, witnesses)?;
+        prover_sanity_check(&pk.params, pub_input, witnesses.clone())?;
 
         // witness assignment of length 2^n
         let num_vars = pk.params.num_variables();
@@ -216,14 +191,9 @@ impl<F: PrimeField> HyperPlonkSNARK<F> for PolyIOP<F> {
         // =======================================================================
         // let step = start_timer!(|| "merge witnesses");
 
-        let witness_polys: Vec<Arc<Mutex<DenseMLPolyStream<F>>>> = witnesses
-            .iter()
-            .map(|w| Arc::new(Mutex::new(DenseMLPolyStream::from(w))))
-            .collect();
-
         // this should be a part of preprocessing, so not a part of prover time
         // it gets into this prove function as preprocessing probably can't take witnesses as they are private
-        let witness_polys_merge = merge_polynomials(witnesses, num_vars).unwrap();
+        let witness_polys_merge = merge_mles(witnesses.clone(), num_vars).unwrap();
 
         // feeding to the transcript is needed to get it started.
         // the witness commitment should be feeded. however, we don't have that component yet
@@ -258,7 +228,7 @@ impl<F: PrimeField> HyperPlonkSNARK<F> for PolyIOP<F> {
             &pk.params.gate_func,
             pk.params.num_variables(),
             &pk.selector_oracles,
-            &witness_polys,
+            &witnesses,
         )?;
 
         let zero_check_proof = <Self as ZeroCheck<F>>::prove(&fx, &mut transcript)?;
@@ -805,7 +775,7 @@ mod tests {
         custom_gate::CustomizedGates, selectors::SelectorColumn, structs::HyperPlonkParams,
         witness::WitnessColumn,
     };
-    use crate::read_write::random_permutation;
+    use crate::read_write::{identity_permutation_mle, random_permutation};
     use ark_std::rand::rngs::StdRng;
     use ark_std::rand::SeedableRng;
     // use ark_bls12_381::Bls12_381;
@@ -849,6 +819,7 @@ mod tests {
             let num_pub_input = 4;
             let nv = log2(num_constraints) as usize;
             let num_witnesses = 2;
+            let merge_nv = nv + log2(num_witnesses) as usize;
 
             // generate index
             let params = HyperPlonkParams {
@@ -856,9 +827,9 @@ mod tests {
                 num_pub_input,
                 gate_func: gate_func.clone(),
             };
-            let permutation = identity_permutation(nv, num_witnesses);
-            let permutation_index = identity_permutation(nv, num_witnesses);
-            let q1 = SelectorColumn(vec![F::one(), F::one(), F::one(), F::one()]);
+            let permutation = identity_permutation_mle(merge_nv);
+            let permutation_index = identity_permutation_mle(merge_nv);
+            let q1 = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(2, vec![F::one(), F::one(), F::one(), F::one()], None, None)));
             let index = HyperPlonkIndex {
                 params: params.clone(),
                 permutation,
@@ -870,17 +841,17 @@ mod tests {
             let (pk, vk) = <PolyIOP<F> as HyperPlonkSNARK<F>>::preprocess(&index)?;
 
             // w1 := [1, 1, 2, 3]
-            let w1 = WitnessColumn(vec![F::one(), F::one(), F::from(2u128), F::from(3u128)]);
+            let w1 = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(2, vec![F::one(), F::one(), F::from(2u128), F::from(3u128)], None, None)));
             // w2 := [1^5, 1^5, 2^5, 3^5]
-            let w2 = WitnessColumn(vec![F::one(), F::one(), F::from(32u128), F::from(243u128)]);
+            let w2 = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(2, vec![F::one(), F::one(), F::from(32u128), F::from(243u128)], None, None)));
             // public input = w1
-            let pi = w1.clone();
+            let pi = vec![F::one(), F::one(), F::from(2u128), F::from(3u128)];
 
             // generate a proof and verify
             let proof =
-                <PolyIOP<F> as HyperPlonkSNARK<F>>::prove(&pk, &pi.0, &[w1.clone(), w2.clone()])?;
+                <PolyIOP<F> as HyperPlonkSNARK<F>>::prove(&pk, &pi, vec![w1.clone(), w2.clone()])?;
 
-            let _verify = <PolyIOP<F> as HyperPlonkSNARK<F>>::verify(&vk, &pi.0, &proof)?;
+            let _verify = <PolyIOP<F> as HyperPlonkSNARK<F>>::verify(&vk, &pi, &proof)?;
         }
 
         {
@@ -896,6 +867,7 @@ mod tests {
             let num_pub_input = 4;
             let nv = log2(num_constraints) as usize;
             let num_witnesses = 2;
+            let merge_nv = nv + log2(num_witnesses) as usize;
 
             // generate index
             let params = HyperPlonkParams {
@@ -905,10 +877,10 @@ mod tests {
             };
 
             // let permutation = identity_permutation(nv, num_witnesses);
-            let rand_perm: Vec<F> = random_permutation(nv, num_witnesses, &mut rng);
+            let rand_perm = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(3, vec![F::from(1), F::from(3), F::from(6), F::from(7), F::from(2), F::from(5), F::from(0), F::from(4)], None, None)));
 
-            let permutation_index = identity_permutation(nv, num_witnesses);
-            let q1 = SelectorColumn(vec![F::one(), F::one(), F::one(), F::one()]);
+            let permutation_index = identity_permutation_mle(merge_nv);
+            let q1 = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(2, vec![F::one(), F::one(), F::one(), F::one()], None, None)));
             let bad_index = HyperPlonkIndex {
                 params,
                 permutation: rand_perm,
@@ -920,17 +892,17 @@ mod tests {
             let (pk, bad_vk) = <PolyIOP<F> as HyperPlonkSNARK<F>>::preprocess(&bad_index)?;
 
             // w1 := [1, 1, 2, 3]
-            let w1 = WitnessColumn(vec![F::one(), F::one(), F::from(2u128), F::from(3u128)]);
+            let w1 = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(2, vec![F::one(), F::one(), F::from(2u128), F::from(3u128)], None, None)));
             // w2 := [1^5, 1^5, 2^5, 3^5]
-            let w2 = WitnessColumn(vec![F::one(), F::one(), F::from(32u128), F::from(243u128)]);
+            let w2 = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(2, vec![F::one(), F::one(), F::from(32u128), F::from(243u128)], None, None)));
             // public input = w1
-            let pi = w1.clone();
+            let pi = vec![F::one(), F::one(), F::from(2u128), F::from(3u128)];
 
             // generate a proof and verify
             let proof =
-                <PolyIOP<F> as HyperPlonkSNARK<F>>::prove(&pk, &pi.0, &[w1.clone(), w2.clone()])?;
+                <PolyIOP<F> as HyperPlonkSNARK<F>>::prove(&pk, &pi, vec![w1.clone(), w2.clone()])?;
 
-            assert!(<PolyIOP<F> as HyperPlonkSNARK<F>>::verify(&bad_vk, &pi.0, &proof,).is_err());
+            assert!(<PolyIOP<F> as HyperPlonkSNARK<F>>::verify(&bad_vk, &pi, &proof,).is_err());
         }
 
         Ok(())

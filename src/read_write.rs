@@ -6,6 +6,7 @@ use ark_std::end_timer;
 use ark_std::rand::RngCore;
 use ark_std::start_timer;
 use core::marker::PhantomData;
+use core::num;
 use std::fs::read;
 use std::io::Seek;
 use std::sync::Arc;
@@ -15,6 +16,8 @@ use std::{
     io::{BufReader, BufWriter},
 };
 use tempfile::tempfile;
+
+use crate::hyperplonk::arithmetic::errors::ArithErrors;
 
 pub trait ReadWriteStream: Send + Sync {
     type Item;
@@ -404,6 +407,54 @@ pub fn identity_permutation_mles<F: PrimeField>(
         )));
     }
     res
+}
+
+// doesn't crash memory way of creating the identity stream
+pub fn identity_permutation_mle<F: PrimeField>(
+    num_vars: usize,
+) -> Arc<Mutex<DenseMLPolyStream<F>>> {
+    let mut res = DenseMLPolyStream::new(num_vars, None, None);
+    (0..1 << num_vars).for_each(|i| {
+        res.write_next_unchecked(F::from(i));
+    });
+    res.swap_read_write();
+    Arc::new(Mutex::new(res))
+}
+
+/// merge a set of polynomials. Returns an error if the
+/// polynomials do not share a same number of nvs.
+pub fn merge_mles<F: PrimeField>(
+    polynomials: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
+    num_vars: usize,
+) -> Result<Arc<Mutex<DenseMLPolyStream<F>>>, ArithErrors> {
+    let target_num_vars = ((polynomials.len() as f64).log2().ceil() as usize) + num_vars;
+    
+    for poly in polynomials.iter() {
+        if poly.lock().unwrap().num_vars != num_vars {
+            return Err(ArithErrors::InvalidParameters(
+                "num_vars do not match for polynomials".to_string(),
+            ));
+        }
+    }
+
+    let res_stream = Arc::new(Mutex::new(DenseMLPolyStream::new(target_num_vars, None, None)));
+
+    // read all poly till none and write each read element to res_stream
+    for poly in polynomials.iter() {
+        while let Some(elem) = poly.lock().unwrap().read_next() {
+            res_stream.lock().unwrap().write_next_unchecked(elem);
+        }
+    }
+
+    // pad the rest with zero
+    for _ in 0..((1 << target_num_vars) - polynomials.len() * (1 << num_vars)) {
+        res_stream.lock().unwrap().write_next_unchecked(F::zero());
+    }
+
+    res_stream.lock().unwrap().swap_read_write();
+
+    Ok(res_stream)
+
 }
 
 pub fn random_permutation<F: PrimeField, R: RngCore>(

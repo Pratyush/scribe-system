@@ -12,7 +12,7 @@ use crate::hyperplonk::full_snark::{
     custom_gate::CustomizedGates, errors::HyperPlonkErrors, structs::HyperPlonkParams,
     witness::WitnessColumn,
 };
-use crate::read_write::DenseMLPolyStream;
+use crate::read_write::{DenseMLPolyStream, ReadWriteStream};
 // use ark_ec::pairing::Pairing;
 use ark_ff::PrimeField;
 use ark_poly::DenseMultilinearExtension;
@@ -128,7 +128,7 @@ macro_rules! build_mle {
 pub(crate) fn prover_sanity_check<F: PrimeField>(
     params: &HyperPlonkParams,
     pub_input: &[F],
-    witnesses: &[WitnessColumn<F>],
+    witnesses: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
 ) -> Result<(), HyperPlonkErrors> {
     // public input length must be no greater than num_constraints
 
@@ -157,19 +157,24 @@ pub(crate) fn prover_sanity_check<F: PrimeField>(
 
     // witnesses length
     for (i, w) in witnesses.iter().enumerate() {
-        if w.0.len() != params.num_constraints {
+        if 1 << w.lock().unwrap().num_vars != params.num_constraints {
             return Err(HyperPlonkErrors::InvalidProver(format!(
                 "{}-th witness length is not correct: got {}, expect {}",
                 i,
-                w.0.len(),
+                w.lock().unwrap().num_vars,
                 params.num_constraints
             )));
         }
     }
     // check public input matches witness[0]'s first 2^ell elements
-    for (i, (&pi, &w)) in pub_input
+    let mut pub_stream = witnesses[0].lock().unwrap();
+    let pub_stream_result: Vec<F> = (0..pub_input.len()).map(|_| {pub_stream.read_next().unwrap()}).collect();
+    pub_stream.read_restart();
+    drop(pub_stream);
+
+    for (i, (&pi, w)) in pub_input
         .iter()
-        .zip(witnesses[0].0.iter().take(pub_input.len()))
+        .zip(pub_stream_result)
         .enumerate()
     {
         if pi != w {

@@ -116,12 +116,12 @@ impl HyperPlonkParams {
 ///   - HyperPlonk parameters
 ///   - the wire permutation
 ///   - the selector vectors
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct HyperPlonkIndex<F: PrimeField> {
     pub params: HyperPlonkParams,
-    pub permutation: Vec<F>,
-    pub permutation_index: Vec<F>,
-    pub selectors: Vec<SelectorColumn<F>>,
+    pub permutation: Arc<Mutex<DenseMLPolyStream<F>>>,
+    pub permutation_index: Arc<Mutex<DenseMLPolyStream<F>>>,
+    pub selectors: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
 }
 
 impl<F: PrimeField> HyperPlonkIndex<F> {
