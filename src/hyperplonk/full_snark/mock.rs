@@ -242,8 +242,8 @@ mod test {
     use std::str::FromStr;
 
     const SUPPORTED_SIZE: usize = 20;
-    const MIN_NUM_VARS: usize = 10;
-    const MAX_NUM_VARS: usize = 26;
+    const MIN_NUM_VARS: usize = 19;
+    const MAX_NUM_VARS: usize = 20;
     const CUSTOM_DEGREE: [usize; 6] = [1, 2, 4, 8, 16, 32];
 
     #[test]

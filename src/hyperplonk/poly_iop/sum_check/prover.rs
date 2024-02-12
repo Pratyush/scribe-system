@@ -140,6 +140,7 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
 
         let mut total_read_time = std::time::Duration::new(0, 0);
 
+        let mut polynomials = self.poly.flattened_ml_extensions.iter().map(|x| x.lock().unwrap()).collect::<Vec<_>>();
         for (coefficient, products) in &products_list {
             // println!("sum check product coefficient: {}", coefficient);
             // println!("sum check product products: {:?}", products);
@@ -175,16 +176,15 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
                     // Check if the stream has already been read
                     if !stream_values.contains_key(&f) {
                         // println!("sum check product: {}", f);
-                        let stream = &self.poly.flattened_ml_extensions[f];
-                        let mut locked_stream = stream.lock().expect("Failed to lock mutex");
+                        let stream = &mut polynomials[f];
 
                         // print read position
                         // println!("read position: {}", locked_stream.read_pointer.stream_position().unwrap());
                         
                         let read_start = Instant::now();
                         
-                        let eval = locked_stream.read_next().unwrap(); // Read once for eval
-                        let step = locked_stream.read_next().unwrap() - eval; // Read once for step
+                        let eval = stream.read_next().unwrap(); // Read once for eval
+                        let step = stream.read_next().unwrap() - eval; // Read once for step
 
                         let read_elapsed = read_start.elapsed();
                         total_read_time += read_elapsed;
@@ -215,12 +215,7 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
             }
 
             // restart all streams
-            self.poly
-                .flattened_ml_extensions
-                .iter_mut()
-                .for_each(|stream| {
-                    stream.lock().expect("Failed to lock mutex").read_restart();
-                });
+            polynomials.iter_mut().for_each(|stream| stream.read_restart());
 
             // Multiplying sum by coefficient
             for s in &mut sum {

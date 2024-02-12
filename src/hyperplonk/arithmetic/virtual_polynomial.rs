@@ -27,7 +27,6 @@ use std::{
     collections::HashMap,
     io::Seek,
     marker::PhantomData,
-    ops::Add,
     sync::{Arc, Mutex},
 };
 
@@ -83,25 +82,6 @@ pub struct VPAuxInfo<F: PrimeField> {
     pub phantom: PhantomData<F>,
 }
 
-impl<F: PrimeField> Add for &VirtualPolynomial<F> {
-    type Output = VirtualPolynomial<F>;
-    fn add(self, other: &VirtualPolynomial<F>) -> Self::Output {
-        let start = start_timer!(|| "virtual poly add");
-        let mut res = self.clone();
-        for products in other.products.iter() {
-            let cur: Vec<Arc<Mutex<DenseMLPolyStream<F>>>> = products
-                .1
-                .iter()
-                .map(|&x| other.flattened_ml_extensions[x].clone())
-                .collect();
-
-            res.add_mle_list(cur, products.0)
-                .expect("add product failed");
-        }
-        end_timer!(start);
-        res
-    }
-}
 
 // TODO: convert this into a trait
 impl<F: PrimeField> VirtualPolynomial<F> {
@@ -903,31 +883,6 @@ mod test {
         for (expected, result) in expected_stream.iter().zip(result_values.iter()) {
             assert_eq!(expected, result, "Stream values do not match");
         }
-    }
-
-    #[test]
-    fn test_virtual_polynomial_additions() -> Result<(), ArithErrors> {
-        let mut rng = test_rng();
-        for nv in 2..5 {
-            // println!("nv: {}", nv);
-            for num_products in 2..5 {
-                // println!("num_products: {}", num_products);
-                let base: Vec<Fr> = (0..nv).map(|_| Fr::rand(&mut rng)).collect();
-
-                let (a, _a_sum) =
-                    VirtualPolynomial::<Fr>::rand(nv, (2, 3), num_products, &mut rng)?;
-                let (b, _b_sum) =
-                    VirtualPolynomial::<Fr>::rand(nv, (2, 3), num_products, &mut rng)?;
-                let c = &a + &b;
-
-                assert_eq!(
-                    a.evaluate(base.as_ref())? + b.evaluate(base.as_ref())?,
-                    c.evaluate_single_field_streams()?
-                );
-            }
-        }
-
-        Ok(())
     }
 
     #[test]
