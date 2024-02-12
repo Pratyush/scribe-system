@@ -63,9 +63,9 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
         &mut self,
         challenge: &Option<F>,
     ) -> Result<Self::ProverMessage, PolyIOPErrors> {
-        // let start =
-        //     start_timer!(|| format!("sum check prove {}-th round and update state",
-        // self.round));
+        let start =
+            start_timer!(|| format!("sum check prove {}-th round and update state",
+        self.round));
 
         if self.round >= self.poly.aux_info.num_variables {
             return Err(PolyIOPErrors::InvalidProver(
@@ -73,7 +73,7 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
             ));
         }
 
-        // let fix_argument = start_timer!(|| "fix argument");
+        let fix_argument = start_timer!(|| "fix argument");
 
         // Step 1:
         // fix argument and evaluate f(x) over x_m = r; where r is the challenge
@@ -124,8 +124,9 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
                 "verifier message is empty".to_string(),
             ));
         }
-        // end_timer!(fix_argument);
+        end_timer!(fix_argument);
 
+        let generate_prover_message = start_timer!(|| "generate prover message");
         self.round += 1;
 
         // print products_list
@@ -236,6 +237,8 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
             }
         }
 
+        end_timer!(generate_prover_message);
+
         // update prover's state to the partial evaluated polynomial
         // self.poly.flattened_ml_extensions = flattened_ml_extensions
         //     .par_iter()
@@ -245,6 +248,8 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
         // println!("sum check prover message 0: {}", products_sum[0]);
         // println!("sum check prover message 1: {}", products_sum[1]);
 
+        end_timer!(start);
+        
         Ok(IOPProverMessage {
             evaluations: products_sum,
         })

@@ -12,6 +12,7 @@ use crate::{
 };
 // use arithmetic::{VPAuxInfo, VirtualPolynomial};
 use ark_ff::PrimeField;
+use ark_ff::fields::batch_inversion;
 // use ark_poly::DenseMultilinearExtension;
 use ark_std::{end_timer, start_timer, Zero};
 use std::{
@@ -124,42 +125,52 @@ pub fn compute_frac_poly_plonk<F: PrimeField>(
     // drop(pi_lock);
     // drop(index_lock);
 
-    // Initialize output streams for 1/(p + alpha * pi) and 1/(q + alpha)
-    let num_vars = p.lock().unwrap().num_vars();
-    let output_hp = Arc::new(Mutex::new(DenseMLPolyStream::<F>::new_from_tempfile(
-        num_vars,
-    )));
-    let output_hq = Arc::new(Mutex::new(DenseMLPolyStream::<F>::new_from_tempfile(
-        num_vars,
-    )));
+    let batch_size = 1 << 20; // Maximum number of elements to process in a batch
 
-    // Lock the input streams to ensure exclusive access during computation
+    let num_vars = p.lock().unwrap().num_vars();
+    let output_hp = Arc::new(Mutex::new(DenseMLPolyStream::<F>::new_from_tempfile(num_vars)));
+    let output_hq = Arc::new(Mutex::new(DenseMLPolyStream::<F>::new_from_tempfile(num_vars)));
+
+    // Prepare vectors for batch processing
+    let mut hp_vals = Vec::new();
+    let mut hq_vals = Vec::new();
+
     let mut p = p.lock().unwrap();
     let mut pi = pi.lock().unwrap();
     let mut index = index.lock().unwrap();
 
-    // Lock the output streams
+    // Write results to output streams
     let mut hp = output_hp.lock().unwrap();
     let mut hq = output_hq.lock().unwrap();
 
-    // Stream processing for p and pi
     while let (Some(p_val), Some(pi_val), Some(idx_val)) =
         (p.read_next(), pi.read_next(), index.read_next())
     {
-        // // print the values
-        // println!("p_val: {}", p_val);
-        // println!("alpha: {}", alpha);
-        // println!("pi_val: {}", pi_val);
+        hp_vals.push(p_val + alpha * pi_val + gamma);
+        hq_vals.push(p_val + alpha * idx_val + gamma);
+        // Check if we've reached the batch size
+        if hp_vals.len() >= batch_size {
+            // Perform batch inversion
+            batch_inversion(&mut hp_vals);
+            batch_inversion(&mut hq_vals);
 
-        let hp_result = (p_val + alpha * pi_val + gamma)
-            .inverse()
-            .expect("Failed to compute inverse");
-        hp.write_next_unchecked(hp_result)
-            .expect("Failed to write to output stream for p and pi");
-        let hq_result = (p_val + alpha * idx_val + gamma)
-            .inverse()
-            .expect("Failed to compute inverse");
-        hq.write_next_unchecked(hq_result);
+            for (hp_val, hq_val) in hp_vals.drain(..).zip(hq_vals.drain(..)) {
+                hp.write_next_unchecked(hp_val).expect("Failed to write to hp stream");
+                hq.write_next_unchecked(hq_val).expect("Failed to write to hq stream");
+            }
+
+        }
+    }
+
+    // Handle any remaining values that didn't fill the last batch
+    if !hp_vals.is_empty() {
+        batch_inversion(&mut hp_vals);
+        batch_inversion(&mut hq_vals);
+
+        for (hp_val, hq_val) in hp_vals.iter().zip(hq_vals.iter()) {
+            hp.write_next_unchecked(*hp_val).expect("Failed to write remaining hp values");
+            hq.write_next_unchecked(*hq_val).expect("Failed to write remaining hq values");
+        }
     }
 
     p.read_restart();

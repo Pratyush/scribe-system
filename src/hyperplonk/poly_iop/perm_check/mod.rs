@@ -227,7 +227,7 @@ where
         ),
         PolyIOPErrors,
     > {
-        let start = start_timer!(|| "perm_check prove");
+        let start = start_timer!(|| "perm check prove");
 
         // assume that p, q, and pi have equal length
 
@@ -240,8 +240,10 @@ where
         // println!("prover alpha: {}", alpha);
 
         // compute the fractional polynomials h_p and h_q
+        let step = start_timer!(|| "perm check prove batch inversion");
         let (mut h_p, mut h_q) =
             util::compute_frac_poly_plonk(&p, &pi, &index, alpha, gamma).unwrap();
+        end_timer!(step);
 
         // get challenge batch_factor for batch zero check of t_1 + batch_factor * t_2, where t_1 = h_p * (p + alpha * pi) - 1 and t_2 = h_q * (q + alpha) - 1
         let batch_factor = transcript.get_and_append_challenge(b"batch_factor")?;
@@ -342,7 +344,9 @@ where
         //     drop(stream_locked);
         // }
 
+        // let step = start_timer!(|| "perm check prove batch sum check");
         let proof = <Self as SumCheck<F>>::prove(&final_poly, transcript)?;
+        // end_timer!(step);
 
         let eq_x_r = final_poly.flattened_ml_extensions
             [final_poly.flattened_ml_extensions.len() - 1]
