@@ -135,7 +135,7 @@ impl<E: Pairing> StructuredReferenceString<E> for MultilinearUniversalParams<E> 
             ));
         }
 
-        let total_timer = start_timer!(|| "SRS generation");
+        let total_timer = start_timer!(|| format!("SRS generation for nv = {}", num_vars));
 
         let pp_generation_timer = start_timer!(|| "Prover Param generation");
 

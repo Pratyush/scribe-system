@@ -289,12 +289,15 @@ impl<F: Field> DenseMLPolyStream<F> {
     }
 
     pub fn rand<R: RngCore>(num_vars: usize, rng: &mut R) -> Self {
-        Self::from_evaluations_vec(
-            num_vars,
-            (0..(1 << num_vars)).map(|_| F::rand(rng)).collect(),
-            None,
-            None,
-        )
+        let step = start_timer!(|| format!("generate random stream for nv = {}", num_vars));
+        let mut stream = DenseMLPolyStream::new(num_vars, None, None);
+
+        let _ = (0..(1 << num_vars)).map(|_| stream.write_next_unchecked(F::rand(rng)));
+
+        stream.swap_read_write();
+        end_timer!(step);
+
+        stream
     }
 
     // create a vector of random field elements for each stream
