@@ -104,10 +104,12 @@ impl<E: Pairing> PolynomialCommitmentScheme<E> for MultilinearKzgPCS<E> {
         prover_param: impl Borrow<Self::ProverParam>,
         poly: &Self::Polynomial,
     ) -> Result<Self::Commitment, PCSError> {
+        
         let prover_param = prover_param.borrow();
         let mut poly_lock = poly.lock().unwrap();
         let poly_num_vars = poly_lock.num_vars;
-        let commit_timer: ark_std::perf_trace::TimerInfo = start_timer!(|| format!("commit of size 2^{}", poly_num_vars));
+        
+        let commit_timer: ark_std::perf_trace::TimerInfo = start_timer!(|| format!("commit poly nv = {}", poly_num_vars));
         if prover_param.num_vars < poly_num_vars {
             return Err(PCSError::InvalidParameters(format!(
                 "MlE length ({}) exceeds param limit ({})",
@@ -140,11 +142,13 @@ impl<E: Pairing> PolynomialCommitmentScheme<E> for MultilinearKzgPCS<E> {
             let commitment_batch = E::G1::msm_unchecked(evals_slice, &batch_scalars);
             final_commitment += commitment_batch;
         }
+        
+        let final_commitment = final_commitment.into_affine();
 
         poly_lock.read_restart();
 
         end_timer!(commit_timer);
-        Ok(Commitment(final_commitment.into_affine()))
+        Ok(Commitment(final_commitment))
     }
 
     // /// On input a polynomial `p` and a point `point`, outputs a proof for the
@@ -365,10 +369,11 @@ mod tests {
         poly: &Arc<Mutex<DenseMLPolyStream<Fr>>>,
         rng: &mut R,
     ) -> Result<(), PCSError> {
-        let nv = poly.num_vars();
+        let nv = poly.lock().unwrap().num_vars;
         assert_ne!(nv, 0);
         let (ck, vk) = MultilinearKzgPCS::trim(params, None, Some(nv))?;
         let point: Vec<_> = (0..nv).map(|_| Fr::rand(rng)).collect();
+        
         let com = MultilinearKzgPCS::commit(&ck, poly)?;
         // let (proof, value) = MultilinearKzgPCS::open(&ck, poly, &point)?;
 
@@ -381,6 +386,7 @@ mod tests {
         //     &vk, &com, &point, &value, &proof
         // )?);
 
+
         Ok(())
     }
 
@@ -388,16 +394,14 @@ mod tests {
     fn test_single_commit() -> Result<(), PCSError> {
         let mut rng = test_rng();
 
-        let params = MultilinearKzgPCS::<E>::gen_srs_for_testing(&mut rng, 10)?;
+        let SUPPORTED_DEGREE = 20;
+        let params = MultilinearKzgPCS::<E>::gen_srs_for_testing(&mut rng, SUPPORTED_DEGREE)?;
 
-        // normal polynomials
-        let poly1 = Arc::new(DenseMultilinearExtension::rand(8, &mut rng));
-        test_single_helper(&params, &poly1, &mut rng)?;
-
-        // single-variate polynomials
-        let poly2 = Arc::new(DenseMultilinearExtension::rand(1, &mut rng));
-        test_single_helper(&params, &poly2, &mut rng)?;
-
+        for i in 10..21 {
+            let poly1 = Arc::new(Mutex::new(DenseMLPolyStream::rand(i, &mut rng)));
+            test_single_helper(&params, &poly1, &mut rng)?;
+        }
+        
         Ok(())
     }
 

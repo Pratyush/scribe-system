@@ -8,7 +8,7 @@
 pub use crate::hyperplonk::pcs::{
     errors::PCSError,
     multilinear_kzg::{
-        batching::BatchProof,
+        // batching::BatchProof,
         srs::{MultilinearProverParam, MultilinearUniversalParams, MultilinearVerifierParam},
         MultilinearKzgPCS, MultilinearKzgProof,
     },

@@ -16,20 +16,19 @@ use crate::{hyperplonk::pcs::PCSError, read_write::{DenseMLPolyStream, DenseMLPo
 /// Generate eq(t,x), a product of multilinear polynomials with fixed t.
 /// eq(a,b) is takes extensions of a,b in {0,1}^num_vars such that if a and b in
 /// {0,1}^num_vars are equal then this polynomial evaluates to 1.
-pub(crate) fn eq_extension<F: PrimeField>(t: &[F]) -> Vec<Arc<Mutex<DenseMLPolyStream<F>>>> {
+pub(crate) fn eq_extension<F: PrimeField>(t: &[F]) -> Vec<DenseMultilinearExtension<F>> {
     let start = start_timer!(|| "eq extension");
 
     let dim = t.len();
     let mut result = Vec::new();
     for (i, &ti) in t.iter().enumerate().take(dim) {
-        let mut stream = DenseMLPolyStream::new(dim, None, None);
+        let mut poly = Vec::with_capacity(1 << dim);
         for x in 0..(1 << dim) {
             let xi = if x >> i & 1 == 1 { F::one() } else { F::zero() };
             let ti_xi = ti * xi;
-            stream.write_next_unchecked(ti_xi + ti_xi - xi - ti + F::one());
+            poly.push(ti_xi + ti_xi - xi - ti + F::one());
         }
-        stream.swap_read_write();
-        result.push(Arc::new(Mutex::new(stream)));
+        result.push(DenseMultilinearExtension::from_evaluations_vec(dim, poly));
     }
 
     end_timer!(start);
@@ -43,12 +42,12 @@ pub(crate) fn eq_eval<F: PrimeField>(x: &[F], y: &[F]) -> Result<F, PCSError> {
             "x and y have different length".to_string(),
         ));
     }
-    let start = start_timer!(|| "eq_eval");
+    // let start = start_timer!(|| "eq_eval");
     let mut res = F::one();
     for (&xi, &yi) in x.iter().zip(y.iter()) {
         let xi_yi = xi * yi;
         res *= xi_yi + xi_yi - xi - yi + F::one();
     }
-    end_timer!(start);
+    // end_timer!(start);
     Ok(res)
 }
