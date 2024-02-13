@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::{
     hyperplonk::arithmetic::virtual_polynomial::identity_permutation,
-    read_write::{identity_permutation_mle, DenseMLPolyStream, ReadWriteStream},
+    read_write::{identity_permutation_mles, identity_permutation_mle, DenseMLPolyStream, ReadWriteStream},
 };
 use ark_ff::Field;
 use ark_ff::PrimeField;
@@ -155,8 +155,8 @@ impl<F: PrimeField> MockCircuit<F> {
             gate_func: gate.clone(),
         };
 
-        let permutation = identity_permutation_mle(merged_nv as usize);
-        let permutation_index = identity_permutation_mle(merged_nv as usize);
+        let permutation = identity_permutation_mles(nv as usize, num_witnesses);
+        let permutation_index = identity_permutation_mles(nv as usize, num_witnesses);
         let index = HyperPlonkIndex {
             params,
             permutation,
@@ -242,8 +242,8 @@ mod test {
     use std::str::FromStr;
 
     const SUPPORTED_SIZE: usize = 20;
-    const MIN_NUM_VARS: usize = 19;
-    const MAX_NUM_VARS: usize = 20;
+    const MIN_NUM_VARS: usize = 10;
+    const MAX_NUM_VARS: usize = 21;
     const CUSTOM_DEGREE: [usize; 6] = [1, 2, 4, 8, 16, 32];
 
     #[test]

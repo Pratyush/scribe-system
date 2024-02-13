@@ -366,7 +366,7 @@ impl<F: PrimeField> VirtualPolynomial<F> {
     //
     // This function is used in ZeroCheck.
     pub fn build_f_hat(&self, r: &[F]) -> Result<Self, ArithErrors> {
-        let start = start_timer!(|| "zero check build hat f");
+        let start = start_timer!(|| "build and multiply by eq_x_r polynomial");
 
         if self.aux_info.num_variables != r.len() {
             return Err(ArithErrors::InvalidParameters(format!(
@@ -436,11 +436,11 @@ impl<F: PrimeField> VirtualPolynomial<F> {
     }
 
     pub fn build_perm_check_poly_plonk(
-        h_p: Arc<Mutex<DenseMLPolyStream<F>>>,
-        h_q: Arc<Mutex<DenseMLPolyStream<F>>>,
-        p: Arc<Mutex<DenseMLPolyStream<F>>>,
-        pi: Arc<Mutex<DenseMLPolyStream<F>>>,
-        index: Arc<Mutex<DenseMLPolyStream<F>>>,
+        h_p: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
+        h_q: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
+        p: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
+        pi: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
+        index: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
         alpha: F,
         batch_factor: F,
         gamma: F,
@@ -448,7 +448,7 @@ impl<F: PrimeField> VirtualPolynomial<F> {
         // conduct a batch zero check on t_1 and t_2
         // poly = t_1 + batch_factor * t_2 = h_p * (p + alpha * pi) - 1 + batch_factor * (h_q * (q + alpha * index) - 1)
         // = -1-batch_factor + h_p*p + h_p*alpha*pi + batch_factor*h_q*q + batch_factor*h_q*alpha*index
-        let num_vars = h_p.lock().unwrap().num_vars;
+        let num_vars = h_p[0].lock().unwrap().num_vars;
 
         // // print num_vars
         // println!("p num_vars: {}", num_vars);
@@ -467,21 +467,112 @@ impl<F: PrimeField> VirtualPolynomial<F> {
         // println!("pi num_vars: {}", pi_lock.num_vars);
         // drop(pi_lock);
 
+        // create constant = - 1 - batch_factor - batch_factor ^ 2 - ... - batch_factor ^ (num_vars - 1)
+        let mut constant = F::one();
+        let mut batch_factor_power = batch_factor;
+        for _ in 0..num_vars {
+            constant += batch_factor_power;
+            batch_factor_power *= batch_factor;
+        }
+
         let mut poly = VirtualPolynomial::new_from_mle(
-            &DenseMLPolyStream::const_mle(-batch_factor - F::ONE, num_vars, None, None),
+            &DenseMLPolyStream::const_mle(constant, num_vars, None, None),
             F::one(),
         );
-        poly.add_mle_list(vec![h_p.clone(), p.clone()], F::one())
-            .unwrap();
-        poly.add_mle_list(vec![h_p.clone(), pi], alpha).unwrap();
-        poly.add_mle_list(vec![h_q.clone(), p], batch_factor)
-            .unwrap();
-        poly.add_mle_list(vec![h_q.clone(), index], alpha * batch_factor)
-            .unwrap();
-        poly.add_mle_list(vec![h_p], gamma).unwrap();
-        poly.add_mle_list(vec![h_q], gamma * batch_factor).unwrap();
+
+        let mut batch_factor_lower_power = F::one();
+        let mut batch_factor_higher_power = batch_factor;
+
+        for i in 0..h_p.len() {
+            poly.add_mle_list(vec![h_p[i].clone(), p[i].clone()], batch_factor_lower_power)
+                .unwrap();
+            poly.add_mle_list(vec![h_p[i].clone(), pi[i].clone()], batch_factor_lower_power * alpha)
+                .unwrap();
+            poly.add_mle_list(vec![h_q[i].clone(), p[i].clone()], batch_factor_higher_power).unwrap();
+            poly.add_mle_list(vec![h_q[i].clone(), index[i].clone()], batch_factor_higher_power * alpha)
+                .unwrap();
+            poly.add_mle_list(vec![h_p[i].clone()], batch_factor_lower_power * gamma);
+            poly.add_mle_list(vec![h_q[i].clone()], batch_factor_higher_power * gamma).unwrap();
+            
+            batch_factor_lower_power = batch_factor_lower_power * batch_factor * batch_factor;
+            batch_factor_higher_power = batch_factor_higher_power * batch_factor * batch_factor;
+        }
 
         Ok(poly)
+    }
+
+    // same as build_perm_check_poly_plonk except that it adds to an existing virtual poly
+    // just to sketch up the prover quickly for benchmark, should be removed
+    // and replaced with a proper adding two virtual polynomials function
+    pub fn add_build_perm_check_poly_plonk(
+        self: &mut VirtualPolynomial<F>,
+        h_p: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
+        h_q: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
+        p: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
+        pi: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
+        index: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
+        alpha: F,
+        batch_factor: F,
+        gamma: F,
+    ) -> Result<(), ArithErrors> {
+
+        let start = start_timer!(|| "build perm check batch zero check polynomial");
+        // conduct a batch zero check on t_1 and t_2
+        // poly = t_1 + batch_factor * t_2 = h_p * (p + alpha * pi) - 1 + batch_factor * (h_q * (q + alpha * index) - 1)
+        // = -1-batch_factor + h_p*p + h_p*alpha*pi + batch_factor*h_q*q + batch_factor*h_q*alpha*index
+        let num_vars = h_p[0].lock().unwrap().num_vars;
+
+        // // print num_vars
+        // println!("p num_vars: {}", num_vars);
+        // // print each element of h_p
+        // let mut h_p_lock = h_p.lock().unwrap();
+        // while let Some(val) = h_p_lock.read_next() {
+        //     println!("h_p val: {}", val);
+        // }
+        // drop(h_p_lock);
+        // // print each element of pi
+        // let mut pi_lock = pi.lock().unwrap();
+        // while let Some(val) = pi_lock.read_next() {
+        //     println!("pi val: {}", val);
+        // }
+        // // print pi num_vars
+        // println!("pi num_vars: {}", pi_lock.num_vars);
+        // drop(pi_lock);
+
+        // create constant = - batch_factor - batch_factor ^ 2 - ... - batch_factor ^ (h_p.len() * 2)
+        let mut constant = -batch_factor;
+        let mut batch_factor_power = -batch_factor * batch_factor;
+        for _ in 0..(h_p.len() * 2 - 1) {
+            constant += batch_factor_power;
+            batch_factor_power *= batch_factor;
+        }
+
+        let mut constant_mle = 
+            DenseMLPolyStream::const_mle(constant, num_vars, None, None);
+
+        self.add_mle_list(vec![constant_mle], F::one()).unwrap();
+
+        let mut batch_factor_lower_power = batch_factor;
+        let mut batch_factor_higher_power = batch_factor * batch_factor;
+
+        for i in 0..h_p.len() {
+            self.add_mle_list(vec![h_p[i].clone(), p[i].clone()], batch_factor_lower_power)
+                .unwrap();
+            self.add_mle_list(vec![h_p[i].clone(), pi[i].clone()], batch_factor_lower_power * alpha)
+                .unwrap();
+            self.add_mle_list(vec![h_q[i].clone(), p[i].clone()], batch_factor_higher_power).unwrap();
+            self.add_mle_list(vec![h_q[i].clone(), index[i].clone()], batch_factor_higher_power * alpha)
+                .unwrap();
+            self.add_mle_list(vec![h_p[i].clone()], batch_factor_lower_power * gamma);
+            self.add_mle_list(vec![h_q[i].clone()], batch_factor_higher_power * gamma).unwrap();
+            
+            batch_factor_lower_power = batch_factor_lower_power * batch_factor * batch_factor;
+            batch_factor_higher_power = batch_factor_higher_power * batch_factor * batch_factor;
+        }
+
+        end_timer!(start);
+
+        Ok(())
     }
 }
 

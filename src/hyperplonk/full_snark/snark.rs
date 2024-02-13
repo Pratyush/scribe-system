@@ -8,6 +8,7 @@ use crate::hyperplonk::arithmetic::virtual_polynomial::{
     // evaluate_opt, gen_eval_point,
     VPAuxInfo,
 };
+use crate::hyperplonk::poly_iop::prelude::SumCheck;
 use crate::read_write::{merge_mles, ReadWriteStream};
 use crate::{
     hyperplonk::{
@@ -37,7 +38,9 @@ use crate::hyperplonk::transcript::IOPTranscript;
 use crate::hyperplonk::{
     // pcs::prelude::{Commitment, PolynomialCommitmentScheme},
     poly_iop::{
-        prelude::{PermutationCheck, ZeroCheck},
+        prelude::{
+            // PermutationCheck, 
+            ZeroCheck},
         PolyIOP,
     },
     // BatchProof,
@@ -52,6 +55,7 @@ use std::{
     marker::PhantomData,
     sync::{Arc, Mutex},
 };
+use crate::hyperplonk::poly_iop::perm_check::util::{compute_frac_poly_plonk};
 
 // impl<E, PCS> HyperPlonkSNARK<E, PCS> for PolyIOP<E::ScalarField>
 // where
@@ -85,8 +89,9 @@ impl<F: PrimeField> HyperPlonkSNARK<F> for PolyIOP<F> {
         //     PCS::trim(pcs_srs, None, Some(supported_ml_degree))?;
 
         // assert that index.permutation and index.permutation_index have the same length
-        if index.permutation.lock().unwrap().num_vars
-            != index.permutation_index.lock().unwrap().num_vars
+        // TODO: loop over all index.permutation and index.permutation_index and check that they have the same length
+        if index.permutation[0].lock().unwrap().num_vars
+            != index.permutation_index[0].lock().unwrap().num_vars
         {
             return Err(HyperPlonkErrors::InvalidParameters(
                 "permutation and permutation_index have different lengths".to_string(),
@@ -172,7 +177,7 @@ impl<F: PrimeField> HyperPlonkSNARK<F> for PolyIOP<F> {
     ) -> Result<Self::Proof, HyperPlonkErrors> {
         let mut durations: Vec<Duration> = Vec::new();
 
-        // let start = start_timer!(|| "hyperplonk proving");
+        let start = start_timer!(|| format!("hyperplonk proving nv = {}", pk.params.num_variables()));
         let mut transcript = IOPTranscript::<F>::new(b"hyperplonk");
 
         prover_sanity_check(&pk.params, pub_input, witnesses.clone())?;
@@ -195,7 +200,7 @@ impl<F: PrimeField> HyperPlonkSNARK<F> for PolyIOP<F> {
 
         // this should be a part of preprocessing, so not a part of prover time
         // it gets into this prove function as preprocessing probably can't take witnesses as they are private
-        let witness_polys_merge = merge_mles(witnesses.clone(), num_vars).unwrap();
+        // let witness_polys_merge = merge_mles(witnesses.clone(), num_vars).unwrap();
 
         // feeding to the transcript is needed to get it started.
         // the witness commitment should be feeded. however, we don't have that component yet
@@ -224,18 +229,19 @@ impl<F: PrimeField> HyperPlonkSNARK<F> for PolyIOP<F> {
         // in vanilla plonk, and obtain a ZeroCheckSubClaim
         // =======================================================================
         // let step = start_timer!(|| "Gate identity");
-        let step = Instant::now();
+        // let step = Instant::now();
 
-        let fx = build_f(
+        // gate identity zero check but without multiplying eq_x_r yet
+        let mut batch_sum_check = build_f(
             &pk.params.gate_func,
             pk.params.num_variables(),
             &pk.selector_oracles,
             &witnesses,
-        )?;
+        ).unwrap();
 
-        let zero_check_proof = <Self as ZeroCheck<F>>::prove(&fx, &mut transcript)?;
+        // let zero_check_proof = <Self as ZeroCheck<F>>::prove(&fx, &mut transcript)?;
 
-        durations.push(step.elapsed());
+        // durations.push(step.elapsed());
         // println!("Prover gate identity: {:?}", step.elapsed());
 
         // end_timer!(step);
@@ -262,16 +268,52 @@ impl<F: PrimeField> HyperPlonkSNARK<F> for PolyIOP<F> {
         // index_locked.read_restart();
         // drop(index_locked);
 
-        let step = Instant::now();
+        // let step = Instant::now();
 
-        let (perm_check_proof, hp, hq, eq_x_r) = <Self as PermutationCheck<F>>::prove_plonk(
-            witness_polys_merge.clone(),
-            pk.permutation_oracles.0.clone(),
-            pk.permutation_oracles.1.clone(),
-            &mut transcript,
-        )?;
+        // let (perm_check_proof, hp, hq, eq_x_r) = <Self as PermutationCheck<F>>::prove_plonk(
+        //     witnesses.clone(),
+        //     pk.permutation_oracles.0.clone(),
+        //     pk.permutation_oracles.1.clone(),
+        //     &mut transcript,
+        // )?;
+        
 
-        durations.push(step.elapsed());
+        let perm_identity_alpha = transcript.get_and_append_challenge(b"alpha")?;
+
+        let perm_identity_gamma = transcript.get_and_append_challenge(b"gamma")?;
+
+        let (mut h_ps, mut h_qs) =
+            compute_frac_poly_plonk(
+                witnesses.clone(), 
+                pk.permutation_oracles.0.clone(), 
+                pk.permutation_oracles.1.clone(), perm_identity_alpha, perm_identity_gamma).unwrap();
+
+        let batch_zero_check_factor = transcript.get_and_append_challenge(b"batch_zero_check_factor")?;
+
+        // add perm check's batch zero checks but without multiplying eq_x_r yet
+        batch_sum_check.add_build_perm_check_poly_plonk(
+            h_ps.clone(), h_qs.clone(), witnesses.clone(), 
+            pk.permutation_oracles.0.clone(), 
+            pk.permutation_oracles.1.clone(), 
+            perm_identity_alpha, batch_zero_check_factor, perm_identity_gamma
+        ).unwrap();
+
+        let r = transcript.get_and_append_challenge_vectors(b"0check r", num_vars)?;
+
+        // multiply by eq_x_r for the final batch zero check, which contains gate identity zero check (coeff = 1) and perm check's batch zero checks (coeff = powers of batch_zero_check_factor)
+        batch_sum_check.build_f_hat(r.as_ref()).unwrap();
+
+        let batch_sum_check_factor = transcript.get_and_append_challenge(b"batch_sum_check_factor")?;
+
+        // add perm check's sum check (coeff = batch_sum_check_factor)
+        for i in 0..h_ps.len() {
+            batch_sum_check.add_mle_list([h_ps[i].clone()], batch_sum_check_factor);
+            batch_sum_check.add_mle_list([h_qs[i].clone()], -batch_sum_check_factor);
+        }
+
+        let sum_check_proof = <Self as SumCheck<F>>::prove(&batch_sum_check, &mut transcript)?;
+
+        // durations.push(step.elapsed());
         // println!("Prover perm identity: {:?}", step.elapsed());
 
         // end_timer!(step);
@@ -385,13 +427,13 @@ impl<F: PrimeField> HyperPlonkSNARK<F> for PolyIOP<F> {
         // let batch_openings = pcs_acc.multi_open(&pk.pcs_param, &mut transcript)?;
         // end_timer!(step);
 
-        // end_timer!(start);
+        end_timer!(start);
 
-        let total_duration: Duration = durations.iter().sum();
-        println!(
-            "nv: {:?}, prover total: {:?}, gate: {:?}, perm: {:?}",
-            num_vars, total_duration, durations[0], durations[1]
-        );
+        // let total_duration: Duration = durations.iter().sum();
+        // println!(
+        //     "nv: {:?}, prover total: {:?}, gate: {:?}, perm: {:?}",
+        //     num_vars, total_duration, durations[0], durations[1]
+        // );
 
         Ok(HyperPlonkProof {
             // PCS commit for witnesses
@@ -402,555 +444,556 @@ impl<F: PrimeField> HyperPlonkSNARK<F> for PolyIOP<F> {
             // IOP proofs
             // =======================================================================
             // the custom gate zerocheck proof
-            zero_check_proof,
+            // zero_check_proof,
             // the permutation check proof for copy constraints
-            perm_check_proof,
+            // perm_check_proof,
+            sum_check_proof,
             // shouldn't return any of the following fields if it's zk but just doing benchmarking now
-            zero_check_virtual_poly: fx,
-            hp,
-            hq,
-            eq_x_r,
-            witness_polys_merge,
+            sum_check_virtual_poly: batch_sum_check,
+            h_ps,
+            h_qs,
+            // eq_x_r,
+            // witness_polys_merge,
         })
     }
 
-    /// Verify the HyperPlonk proof.
-    ///
-    /// Inputs:
-    /// - `vk`: verification key
-    /// - `pub_input`: online public input
-    /// - `proof`: HyperPlonk SNARK proof
-    /// Outputs:
-    /// - Return a boolean on whether the verification is successful
-    ///
-    /// 1. Verify zero_check_proof on
-    ///
-    ///     `f(q_0(x),...q_l(x), w_0(x),...w_d(x))`
-    ///
-    /// where `f` is the constraint polynomial i.e.,
-    /// ```ignore
-    ///     f(q_l, q_r, q_m, q_o, w_a, w_b, w_c)
-    ///     = q_l w_a(x) + q_r w_b(x) + q_m w_a(x)w_b(x) - q_o w_c(x)
-    /// ```
-    /// in vanilla plonk, and obtain a ZeroCheckSubClaim
-    ///
-    /// 2. Verify perm_check_proof on `\{w_i(x)\}` and `permutation_oracles`
-    ///
-    /// 3. check subclaim validity
-    ///
-    /// 4. Verify the opening against the commitment:
-    /// - check permutation check evaluations
-    /// - check zero check evaluations
-    /// - public input consistency checks
-    fn verify(
-        vk: &Self::VerifyingKey,
-        pub_input: &[F],
-        proof: &Self::Proof,
-    ) -> Result<bool, HyperPlonkErrors> {
-        // let start = start_timer!(|| "hyperplonk verification");
+    // /// Verify the HyperPlonk proof.
+    // ///
+    // /// Inputs:
+    // /// - `vk`: verification key
+    // /// - `pub_input`: online public input
+    // /// - `proof`: HyperPlonk SNARK proof
+    // /// Outputs:
+    // /// - Return a boolean on whether the verification is successful
+    // ///
+    // /// 1. Verify zero_check_proof on
+    // ///
+    // ///     `f(q_0(x),...q_l(x), w_0(x),...w_d(x))`
+    // ///
+    // /// where `f` is the constraint polynomial i.e.,
+    // /// ```ignore
+    // ///     f(q_l, q_r, q_m, q_o, w_a, w_b, w_c)
+    // ///     = q_l w_a(x) + q_r w_b(x) + q_m w_a(x)w_b(x) - q_o w_c(x)
+    // /// ```
+    // /// in vanilla plonk, and obtain a ZeroCheckSubClaim
+    // ///
+    // /// 2. Verify perm_check_proof on `\{w_i(x)\}` and `permutation_oracles`
+    // ///
+    // /// 3. check subclaim validity
+    // ///
+    // /// 4. Verify the opening against the commitment:
+    // /// - check permutation check evaluations
+    // /// - check zero check evaluations
+    // /// - public input consistency checks
+    // fn verify(
+    //     vk: &Self::VerifyingKey,
+    //     pub_input: &[F],
+    //     proof: &Self::Proof,
+    // ) -> Result<bool, HyperPlonkErrors> {
+    //     // let start = start_timer!(|| "hyperplonk verification");
 
-        let mut transcript = IOPTranscript::<F>::new(b"hyperplonk");
+    //     let mut transcript = IOPTranscript::<F>::new(b"hyperplonk");
 
-        // feeding to the transcript is needed to get it started.
-        // the witness commitment should be feeded. however, we don't have that component yet
-        // this part should be updated once we have the PCS.
-        let _ = transcript.append_serializable_element(b"transcript start", &F::one());
+    //     // feeding to the transcript is needed to get it started.
+    //     // the witness commitment should be feeded. however, we don't have that component yet
+    //     // this part should be updated once we have the PCS.
+    //     let _ = transcript.append_serializable_element(b"transcript start", &F::one());
 
-        let num_selectors = vk.params.num_selector_columns();
-        let num_witnesses = vk.params.num_witness_columns();
-        let num_vars = vk.params.num_variables();
+    //     let num_selectors = vk.params.num_selector_columns();
+    //     let num_witnesses = vk.params.num_witness_columns();
+    //     let num_vars = vk.params.num_variables();
 
-        //  online public input of length 2^\ell
-        let ell = log2(vk.params.num_pub_input) as usize;
+    //     //  online public input of length 2^\ell
+    //     let ell = log2(vk.params.num_pub_input) as usize;
 
-        // decompose proof
-        let HyperPlonkProof {
-            zero_check_proof,
-            perm_check_proof,
-            zero_check_virtual_poly,
-            hp,
-            hq,
-            eq_x_r,
-            witness_polys_merge,
-        } = proof;
+    //     // decompose proof
+    //     let HyperPlonkProof {
+    //         zero_check_proof,
+    //         perm_check_proof,
+    //         zero_check_virtual_poly,
+    //         hp,
+    //         hq,
+    //         eq_x_r,
+    //         witness_polys_merge,
+    //     } = proof;
 
-        // =======================================================================
-        // 0. sanity checks
-        // =======================================================================
-        // public input length
-        if pub_input.len() != vk.params.num_pub_input {
-            return Err(HyperPlonkErrors::InvalidProver(format!(
-                "Public input length is not correct: got {}, expect {}",
-                pub_input.len(),
-                1 << ell
-            )));
-        }
+    //     // =======================================================================
+    //     // 0. sanity checks
+    //     // =======================================================================
+    //     // public input length
+    //     if pub_input.len() != vk.params.num_pub_input {
+    //         return Err(HyperPlonkErrors::InvalidProver(format!(
+    //             "Public input length is not correct: got {}, expect {}",
+    //             pub_input.len(),
+    //             1 << ell
+    //         )));
+    //     }
 
-        // // Extract evaluations from openings
-        // let prod_evals = &proof.batch_openings.f_i_eval_at_point_i[0..4];
-        // let frac_evals = &proof.batch_openings.f_i_eval_at_point_i[4..7];
-        // let perm_evals = &proof.batch_openings.f_i_eval_at_point_i[7..7 + num_witnesses];
-        // let witness_perm_evals =
-        //     &proof.batch_openings.f_i_eval_at_point_i[7 + num_witnesses..7 + 2 * num_witnesses];
-        // let witness_gate_evals =
-        //     &proof.batch_openings.f_i_eval_at_point_i[7 + 2 * num_witnesses..7 + 3 * num_witnesses];
-        // let selector_evals = &proof.batch_openings.f_i_eval_at_point_i
-        //     [7 + 3 * num_witnesses..7 + 3 * num_witnesses + num_selectors];
-        // let pi_eval = proof.batch_openings.f_i_eval_at_point_i.last().unwrap();
+    //     // // Extract evaluations from openings
+    //     // let prod_evals = &proof.batch_openings.f_i_eval_at_point_i[0..4];
+    //     // let frac_evals = &proof.batch_openings.f_i_eval_at_point_i[4..7];
+    //     // let perm_evals = &proof.batch_openings.f_i_eval_at_point_i[7..7 + num_witnesses];
+    //     // let witness_perm_evals =
+    //     //     &proof.batch_openings.f_i_eval_at_point_i[7 + num_witnesses..7 + 2 * num_witnesses];
+    //     // let witness_gate_evals =
+    //     //     &proof.batch_openings.f_i_eval_at_point_i[7 + 2 * num_witnesses..7 + 3 * num_witnesses];
+    //     // let selector_evals = &proof.batch_openings.f_i_eval_at_point_i
+    //     //     [7 + 3 * num_witnesses..7 + 3 * num_witnesses + num_selectors];
+    //     // let pi_eval = proof.batch_openings.f_i_eval_at_point_i.last().unwrap();
 
-        // =======================================================================
-        // 1. Verify zero_check_proof on
-        //     `f(q_0(x),...q_l(x), w_0(x),...w_d(x))`
-        //
-        // where `f` is the constraint polynomial i.e.,
-        //
-        //     f(q_l, q_r, q_m, q_o, w_a, w_b, w_c)
-        //     = q_l w_a(x) + q_r w_b(x) + q_m w_a(x)w_b(x) - q_o w_c(x)
-        //
-        // =======================================================================
-        // let step = start_timer!(|| "verify zero check");
-        // Zero check and perm check have different AuxInfo
-        let zero_check_aux_info = VPAuxInfo::<F> {
-            max_degree: vk.params.gate_func.degree(),
-            num_variables: num_vars,
-            phantom: PhantomData::default(),
-        };
-        // // push witness to transcript
-        // for w_com in proof.witness_commits.iter() {
-        //     transcript.append_serializable_element(b"w", w_com)?;
-        // }
+    //     // =======================================================================
+    //     // 1. Verify zero_check_proof on
+    //     //     `f(q_0(x),...q_l(x), w_0(x),...w_d(x))`
+    //     //
+    //     // where `f` is the constraint polynomial i.e.,
+    //     //
+    //     //     f(q_l, q_r, q_m, q_o, w_a, w_b, w_c)
+    //     //     = q_l w_a(x) + q_r w_b(x) + q_m w_a(x)w_b(x) - q_o w_c(x)
+    //     //
+    //     // =======================================================================
+    //     // let step = start_timer!(|| "verify zero check");
+    //     // Zero check and perm check have different AuxInfo
+    //     let zero_check_aux_info = VPAuxInfo::<F> {
+    //         max_degree: vk.params.gate_func.degree(),
+    //         num_variables: num_vars,
+    //         phantom: PhantomData::default(),
+    //     };
+    //     // // push witness to transcript
+    //     // for w_com in proof.witness_commits.iter() {
+    //     //     transcript.append_serializable_element(b"w", w_com)?;
+    //     // }
 
-        // println!("gate check verify starts");
+    //     // println!("gate check verify starts");
 
-        let zero_check_sub_claim = <Self as ZeroCheck<F>>::verify(
-            zero_check_proof,
-            &zero_check_aux_info,
-            &mut transcript,
-        )?;
+    //     let zero_check_sub_claim = <Self as ZeroCheck<F>>::verify(
+    //         zero_check_proof,
+    //         &zero_check_aux_info,
+    //         &mut transcript,
+    //     )?;
 
-        // // check zero check subclaim
-        // let f_eval = eval_f(&vk.params.gate_func, selector_evals, witness_gate_evals)?;
-        // if f_eval != zero_check_sub_claim.expected_evaluation {
-        //     return Err(HyperPlonkErrors::InvalidProof(
-        //         "zero check evaluation failed".to_string(),
-        //     ));
-        // }
+    //     // // check zero check subclaim
+    //     // let f_eval = eval_f(&vk.params.gate_func, selector_evals, witness_gate_evals)?;
+    //     // if f_eval != zero_check_sub_claim.expected_evaluation {
+    //     //     return Err(HyperPlonkErrors::InvalidProof(
+    //     //         "zero check evaluation failed".to_string(),
+    //     //     ));
+    //     // }
 
-        // println!("checkpoint 0");
+    //     // println!("checkpoint 0");
 
-        let evaluated_point = zero_check_virtual_poly
-            .evaluate(std::slice::from_ref(
-                &zero_check_sub_claim.point.last().unwrap(), // last field element of the point
-            ))
-            .unwrap();
+    //     let evaluated_point = zero_check_virtual_poly
+    //         .evaluate(std::slice::from_ref(
+    //             &zero_check_sub_claim.point.last().unwrap(), // last field element of the point
+    //         ))
+    //         .unwrap();
 
-        // println!("checkpoint 1");
+    //     // println!("checkpoint 1");
 
-        assert!(
-            evaluated_point == zero_check_sub_claim.expected_evaluation,
-            "wrong subclaim"
-        );
+    //     assert!(
+    //         evaluated_point == zero_check_sub_claim.expected_evaluation,
+    //         "wrong subclaim"
+    //     );
 
-        // end_timer!(step);
-        // =======================================================================
-        // 2. Verify perm_check_proof on `\{w_i(x)\}` and `permutation_oracle`
-        // =======================================================================
-        // let step = start_timer!(|| "verify permutation check");
+    //     // end_timer!(step);
+    //     // =======================================================================
+    //     // 2. Verify perm_check_proof on `\{w_i(x)\}` and `permutation_oracle`
+    //     // =======================================================================
+    //     // let step = start_timer!(|| "verify permutation check");
 
-        // Zero check and perm check have different AuxInfo
-        let perm_check_aux_info = VPAuxInfo::<F> {
-            // Prod(x) has a max degree of witnesses.len() + 1
-            max_degree: 2, // max degree is always 2 for the single column perm check (passed into the perm check verify and doesn't account for the eq_x_r, the sum check verify will need an aux_info that adds the eq_x_r degree of 1)
-            num_variables: num_vars + log2(vk.params.num_witness_columns()) as usize, // need the num_vars of the merged witness, not the num_vars of the gate identity check, which doesn't merge witness columns
-            phantom: PhantomData::default(),
-        };
+    //     // Zero check and perm check have different AuxInfo
+    //     let perm_check_aux_info = VPAuxInfo::<F> {
+    //         // Prod(x) has a max degree of witnesses.len() + 1
+    //         max_degree: 2, // max degree is always 2 for the single column perm check (passed into the perm check verify and doesn't account for the eq_x_r, the sum check verify will need an aux_info that adds the eq_x_r degree of 1)
+    //         num_variables: num_vars + log2(vk.params.num_witness_columns()) as usize, // need the num_vars of the merged witness, not the num_vars of the gate identity check, which doesn't merge witness columns
+    //         phantom: PhantomData::default(),
+    //     };
 
-        // println!("perm check verify starts");
+    //     // println!("perm check verify starts");
 
-        let PermutationCheckSubClaim {
-            point: perm_check_point,
-            expected_evaluation,
-            permu_check_challenge,
-            batch_sum_check_challenge,
-            zero_check_init_challenge,
-            gamma,
-        } = <PolyIOP<F> as PermutationCheck<F>>::verify(
-            perm_check_proof,
-            &perm_check_aux_info,
-            &mut transcript,
-        )?;
+    //     let PermutationCheckSubClaim {
+    //         point: perm_check_point,
+    //         expected_evaluation,
+    //         permu_check_challenge,
+    //         batch_sum_check_challenge,
+    //         zero_check_init_challenge,
+    //         gamma,
+    //     } = <PolyIOP<F> as PermutationCheck<F>>::verify(
+    //         perm_check_proof,
+    //         &perm_check_aux_info,
+    //         &mut transcript,
+    //     )?;
 
-        let mut poly = VirtualPolynomial::build_perm_check_poly_plonk(
-            hp.clone(),
-            hq.clone(),
-            witness_polys_merge.clone(),
-            vk.perm.0.clone(),
-            vk.perm.1.clone(),
-            permu_check_challenge,
-            batch_sum_check_challenge,
-            gamma,
-        )
-        .unwrap();
+    //     let mut poly = VirtualPolynomial::build_perm_check_poly_plonk(
+    //         hp.clone(),
+    //         hq.clone(),
+    //         witness_polys_merge.clone(),
+    //         vk.perm.0.clone(),
+    //         vk.perm.1.clone(),
+    //         permu_check_challenge,
+    //         batch_sum_check_challenge,
+    //         gamma,
+    //     )
+    //     .unwrap();
 
-        poly.mul_by_mle(eq_x_r.clone(), F::ONE)?;
+    //     poly.mul_by_mle(eq_x_r.clone(), F::ONE)?;
 
-        // get sumcheck for t_0 = sum over x in {0,1}^n of (h_q(x) - h_q(x)) = 0
-        // add term batch_factor^2 * t_0 to f_hat
-        // t_0 = h_p - h_q
-        let _ = poly.add_mle_list(
-            vec![hp.clone()],
-            batch_sum_check_challenge * batch_sum_check_challenge,
-        );
-        let _ = poly.add_mle_list(
-            vec![hq.clone()],
-            -batch_sum_check_challenge * batch_sum_check_challenge,
-        );
+    //     // get sumcheck for t_0 = sum over x in {0,1}^n of (h_q(x) - h_q(x)) = 0
+    //     // add term batch_factor^2 * t_0 to f_hat
+    //     // t_0 = h_p - h_q
+    //     let _ = poly.add_mle_list(
+    //         vec![hp.clone()],
+    //         batch_sum_check_challenge * batch_sum_check_challenge,
+    //     );
+    //     let _ = poly.add_mle_list(
+    //         vec![hq.clone()],
+    //         -batch_sum_check_challenge * batch_sum_check_challenge,
+    //     );
 
-        // // print all elements of all streams of poly
-        // // lock, read_next, and print in a loop
-        // poly.flattened_ml_extensions
-        //     .iter()
-        //     .enumerate()
-        //     .for_each(|(i, stream)| {
-        //         let mut locked = stream.lock().unwrap();
-        //         while let Some(val) = locked.read_next() {
-        //             println!("snark verifier final stream[{}] val: {}", i, val);
-        //         }
-        //         locked.read_restart();
-        //         drop(locked);
-        //     });
-        // // print all perm check point elements
-        // perm_check_point.iter().for_each(|point| {
-        //     println!("snark verifier perm_check_point: {}", point);
-        // });
+    //     // // print all elements of all streams of poly
+    //     // // lock, read_next, and print in a loop
+    //     // poly.flattened_ml_extensions
+    //     //     .iter()
+    //     //     .enumerate()
+    //     //     .for_each(|(i, stream)| {
+    //     //         let mut locked = stream.lock().unwrap();
+    //     //         while let Some(val) = locked.read_next() {
+    //     //             println!("snark verifier final stream[{}] val: {}", i, val);
+    //     //         }
+    //     //         locked.read_restart();
+    //     //         drop(locked);
+    //     //     });
+    //     // // print all perm check point elements
+    //     // perm_check_point.iter().for_each(|point| {
+    //     //     println!("snark verifier perm_check_point: {}", point);
+    //     // });
 
-        let evaluated_point = poly
-            .evaluate(std::slice::from_ref(&perm_check_point.last().unwrap()))
-            .unwrap();
-        assert!(
-            evaluated_point == expected_evaluation,
-            "{}",
-            format!(
-                "wrong subclaim, expected: {}, got: {}",
-                expected_evaluation, evaluated_point
-            )
-        );
+    //     let evaluated_point = poly
+    //         .evaluate(std::slice::from_ref(&perm_check_point.last().unwrap()))
+    //         .unwrap();
+    //     assert!(
+    //         evaluated_point == expected_evaluation,
+    //         "{}",
+    //         format!(
+    //             "wrong subclaim, expected: {}, got: {}",
+    //             expected_evaluation, evaluated_point
+    //         )
+    //     );
 
-        // let alpha = perm_check_sub_claim.product_check_sub_claim.alpha;
-        // let (beta, gamma) = perm_check_sub_claim.challenges;
+    //     // let alpha = perm_check_sub_claim.product_check_sub_claim.alpha;
+    //     // let (beta, gamma) = perm_check_sub_claim.challenges;
 
-        // let mut id_evals = vec![];
-        // for i in 0..num_witnesses {
-        //     let ith_point = gen_eval_point(i, log2(num_witnesses) as usize, &perm_check_point[..]);
-        //     id_evals.push(vk.params.eval_id_oracle(&ith_point[..])?);
-        // }
+    //     // let mut id_evals = vec![];
+    //     // for i in 0..num_witnesses {
+    //     //     let ith_point = gen_eval_point(i, log2(num_witnesses) as usize, &perm_check_point[..]);
+    //     //     id_evals.push(vk.params.eval_id_oracle(&ith_point[..])?);
+    //     // }
 
-        // // check evaluation subclaim
-        // let perm_gate_eval = eval_perm_gate(
-        //     prod_evals,
-        //     frac_evals,
-        //     witness_perm_evals,
-        //     &id_evals[..],
-        //     perm_evals,
-        //     alpha,
-        //     beta,
-        //     gamma,
-        //     *perm_check_point.last().unwrap(),
-        // )?;
-        // if perm_gate_eval
-        //     != perm_check_sub_claim
-        //         .product_check_sub_claim
-        //         .zero_check_sub_claim
-        //         .expected_evaluation
-        // {
-        //     return Err(HyperPlonkErrors::InvalidVerifier(
-        //         "evaluation failed".to_string(),
-        //     ));
-        // }
+    //     // // check evaluation subclaim
+    //     // let perm_gate_eval = eval_perm_gate(
+    //     //     prod_evals,
+    //     //     frac_evals,
+    //     //     witness_perm_evals,
+    //     //     &id_evals[..],
+    //     //     perm_evals,
+    //     //     alpha,
+    //     //     beta,
+    //     //     gamma,
+    //     //     *perm_check_point.last().unwrap(),
+    //     // )?;
+    //     // if perm_gate_eval
+    //     //     != perm_check_sub_claim
+    //     //         .product_check_sub_claim
+    //     //         .zero_check_sub_claim
+    //     //         .expected_evaluation
+    //     // {
+    //     //     return Err(HyperPlonkErrors::InvalidVerifier(
+    //     //         "evaluation failed".to_string(),
+    //     //     ));
+    //     // }
 
-        // end_timer!(step);
-        // // =======================================================================
-        // // 3. Verify the opening against the commitment
-        // // =======================================================================
-        // let step = start_timer!(|| "assemble commitments");
+    //     // end_timer!(step);
+    //     // // =======================================================================
+    //     // // 3. Verify the opening against the commitment
+    //     // // =======================================================================
+    //     // let step = start_timer!(|| "assemble commitments");
 
-        // // generate evaluation points and commitments
-        // let mut comms = vec![];
-        // let mut points = vec![];
+    //     // // generate evaluation points and commitments
+    //     // let mut comms = vec![];
+    //     // let mut points = vec![];
 
-        // let perm_check_point_0 = [
-        //     &[E::ScalarField::zero()],
-        //     &perm_check_point[0..num_vars - 1],
-        // ]
-        // .concat();
-        // let perm_check_point_1 =
-        //     [&[E::ScalarField::one()], &perm_check_point[0..num_vars - 1]].concat();
-        // let prod_final_query_point = [
-        //     vec![E::ScalarField::zero()],
-        //     vec![E::ScalarField::one(); num_vars - 1],
-        // ]
-        // .concat();
+    //     // let perm_check_point_0 = [
+    //     //     &[E::ScalarField::zero()],
+    //     //     &perm_check_point[0..num_vars - 1],
+    //     // ]
+    //     // .concat();
+    //     // let perm_check_point_1 =
+    //     //     [&[E::ScalarField::one()], &perm_check_point[0..num_vars - 1]].concat();
+    //     // let prod_final_query_point = [
+    //     //     vec![E::ScalarField::zero()],
+    //     //     vec![E::ScalarField::one(); num_vars - 1],
+    //     // ]
+    //     // .concat();
 
-        // // prod(x)'s points
-        // comms.push(proof.perm_check_proof.prod_x_comm);
-        // comms.push(proof.perm_check_proof.prod_x_comm);
-        // comms.push(proof.perm_check_proof.prod_x_comm);
-        // comms.push(proof.perm_check_proof.prod_x_comm);
-        // points.push(perm_check_point.clone());
-        // points.push(perm_check_point_0.clone());
-        // points.push(perm_check_point_1.clone());
-        // points.push(prod_final_query_point);
-        // // frac(x)'s points
-        // comms.push(proof.perm_check_proof.frac_comm);
-        // comms.push(proof.perm_check_proof.frac_comm);
-        // comms.push(proof.perm_check_proof.frac_comm);
-        // points.push(perm_check_point.clone());
-        // points.push(perm_check_point_0);
-        // points.push(perm_check_point_1);
+    //     // // prod(x)'s points
+    //     // comms.push(proof.perm_check_proof.prod_x_comm);
+    //     // comms.push(proof.perm_check_proof.prod_x_comm);
+    //     // comms.push(proof.perm_check_proof.prod_x_comm);
+    //     // comms.push(proof.perm_check_proof.prod_x_comm);
+    //     // points.push(perm_check_point.clone());
+    //     // points.push(perm_check_point_0.clone());
+    //     // points.push(perm_check_point_1.clone());
+    //     // points.push(prod_final_query_point);
+    //     // // frac(x)'s points
+    //     // comms.push(proof.perm_check_proof.frac_comm);
+    //     // comms.push(proof.perm_check_proof.frac_comm);
+    //     // comms.push(proof.perm_check_proof.frac_comm);
+    //     // points.push(perm_check_point.clone());
+    //     // points.push(perm_check_point_0);
+    //     // points.push(perm_check_point_1);
 
-        // // perms' points
-        // for &pcom in vk.perm_commitments.iter() {
-        //     comms.push(pcom);
-        //     points.push(perm_check_point.clone());
-        // }
+    //     // // perms' points
+    //     // for &pcom in vk.perm_commitments.iter() {
+    //     //     comms.push(pcom);
+    //     //     points.push(perm_check_point.clone());
+    //     // }
 
-        // // witnesses' points
-        // // TODO: merge points
-        // for &wcom in proof.witness_commits.iter() {
-        //     comms.push(wcom);
-        //     points.push(perm_check_point.clone());
-        // }
-        // for &wcom in proof.witness_commits.iter() {
-        //     comms.push(wcom);
-        //     points.push(zero_check_point.clone());
-        // }
+    //     // // witnesses' points
+    //     // // TODO: merge points
+    //     // for &wcom in proof.witness_commits.iter() {
+    //     //     comms.push(wcom);
+    //     //     points.push(perm_check_point.clone());
+    //     // }
+    //     // for &wcom in proof.witness_commits.iter() {
+    //     //     comms.push(wcom);
+    //     //     points.push(zero_check_point.clone());
+    //     // }
 
-        // // selector_poly(zero_check_point)
-        // for &com in vk.selector_commitments.iter() {
-        //     comms.push(com);
-        //     points.push(zero_check_point.clone());
-        // }
+    //     // // selector_poly(zero_check_point)
+    //     // for &com in vk.selector_commitments.iter() {
+    //     //     comms.push(com);
+    //     //     points.push(zero_check_point.clone());
+    //     // }
 
-        // // - 4.4. public input consistency checks
-        // //   - pi_poly(r_pi) where r_pi is sampled from transcript
-        // let r_pi = transcript.get_and_append_challenge_vectors(b"r_pi", ell)?;
+    //     // // - 4.4. public input consistency checks
+    //     // //   - pi_poly(r_pi) where r_pi is sampled from transcript
+    //     // let r_pi = transcript.get_and_append_challenge_vectors(b"r_pi", ell)?;
 
-        // // check public evaluation
-        // let pi_step = start_timer!(|| "check public evaluation");
-        // let pi_poly = DenseMultilinearExtension::from_evaluations_slice(ell, pub_input);
-        // let expect_pi_eval = evaluate_opt(&pi_poly, &r_pi[..]);
-        // if expect_pi_eval != *pi_eval {
-        //     return Err(HyperPlonkErrors::InvalidProver(format!(
-        //         "Public input eval mismatch: got {}, expect {}",
-        //         pi_eval, expect_pi_eval,
-        //     )));
-        // }
-        // let r_pi_padded = [r_pi, vec![E::ScalarField::zero(); num_vars - ell]].concat();
+    //     // // check public evaluation
+    //     // let pi_step = start_timer!(|| "check public evaluation");
+    //     // let pi_poly = DenseMultilinearExtension::from_evaluations_slice(ell, pub_input);
+    //     // let expect_pi_eval = evaluate_opt(&pi_poly, &r_pi[..]);
+    //     // if expect_pi_eval != *pi_eval {
+    //     //     return Err(HyperPlonkErrors::InvalidProver(format!(
+    //     //         "Public input eval mismatch: got {}, expect {}",
+    //     //         pi_eval, expect_pi_eval,
+    //     //     )));
+    //     // }
+    //     // let r_pi_padded = [r_pi, vec![E::ScalarField::zero(); num_vars - ell]].concat();
 
-        // comms.push(proof.witness_commits[0]);
-        // points.push(r_pi_padded);
-        // assert_eq!(comms.len(), proof.batch_openings.f_i_eval_at_point_i.len());
-        // end_timer!(pi_step);
+    //     // comms.push(proof.witness_commits[0]);
+    //     // points.push(r_pi_padded);
+    //     // assert_eq!(comms.len(), proof.batch_openings.f_i_eval_at_point_i.len());
+    //     // end_timer!(pi_step);
 
-        // end_timer!(step);
-        // let step = start_timer!(|| "PCS batch verify");
-        // // check proof
-        // let res = PCS::batch_verify(
-        //     &vk.pcs_param,
-        //     &comms,
-        //     &points,
-        //     &proof.batch_openings,
-        //     &mut transcript,
-        // )?;
+    //     // end_timer!(step);
+    //     // let step = start_timer!(|| "PCS batch verify");
+    //     // // check proof
+    //     // let res = PCS::batch_verify(
+    //     //     &vk.pcs_param,
+    //     //     &comms,
+    //     //     &points,
+    //     //     &proof.batch_openings,
+    //     //     &mut transcript,
+    //     // )?;
 
-        // end_timer!(step);
-        // end_timer!(start);
-        Ok(true)
-    }
+    //     // end_timer!(step);
+    //     // end_timer!(start);
+    //     Ok(true)
+    // }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::hyperplonk::arithmetic::virtual_polynomial::identity_permutation;
-    use crate::hyperplonk::full_snark::{
-        custom_gate::CustomizedGates, selectors::SelectorColumn, structs::HyperPlonkParams,
-        witness::WitnessColumn,
-    };
-    use crate::read_write::{identity_permutation_mle, random_permutation};
-    use ark_std::rand::rngs::StdRng;
-    use ark_std::rand::SeedableRng;
-    // use ark_bls12_381::Bls12_381;
-    use ark_std::test_rng;
-    use ark_test_curves::bls12_381::Fr;
-    // use subroutines::pcs::prelude::MultilinearKzgPCS;
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+//     use crate::hyperplonk::arithmetic::virtual_polynomial::identity_permutation;
+//     use crate::hyperplonk::full_snark::{
+//         custom_gate::CustomizedGates, selectors::SelectorColumn, structs::HyperPlonkParams,
+//         witness::WitnessColumn,
+//     };
+//     use crate::read_write::{identity_permutation_mle, random_permutation};
+//     use ark_std::rand::rngs::StdRng;
+//     use ark_std::rand::SeedableRng;
+//     // use ark_bls12_381::Bls12_381;
+//     use ark_std::test_rng;
+//     use ark_test_curves::bls12_381::Fr;
+//     // use subroutines::pcs::prelude::MultilinearKzgPCS;
 
-    #[test]
-    fn test_hyperplonk_e2e() -> Result<(), HyperPlonkErrors> {
-        // Example:
-        //     q_L(X) * W_1(X)^5 - W_2(X) = 0
-        // is represented as
-        // vec![
-        //     ( 1,    Some(id_qL),    vec![id_W1, id_W1, id_W1, id_W1, id_W1]),
-        //     (-1,    None,           vec![id_W2])
-        // ]
-        //
-        // 4 public input
-        // 1 selector,
-        // 2 witnesses,
-        // 2 variables for MLE,
-        // 4 wires,
-        let gates = CustomizedGates {
-            gates: vec![(1, Some(0), vec![0, 0, 0, 0, 0]), (-1, None, vec![1])],
-        };
-        test_hyperplonk_helper::<Fr>(gates)
-    }
+//     #[test]
+//     fn test_hyperplonk_e2e() -> Result<(), HyperPlonkErrors> {
+//         // Example:
+//         //     q_L(X) * W_1(X)^5 - W_2(X) = 0
+//         // is represented as
+//         // vec![
+//         //     ( 1,    Some(id_qL),    vec![id_W1, id_W1, id_W1, id_W1, id_W1]),
+//         //     (-1,    None,           vec![id_W2])
+//         // ]
+//         //
+//         // 4 public input
+//         // 1 selector,
+//         // 2 witnesses,
+//         // 2 variables for MLE,
+//         // 4 wires,
+//         let gates = CustomizedGates {
+//             gates: vec![(1, Some(0), vec![0, 0, 0, 0, 0]), (-1, None, vec![1])],
+//         };
+//         test_hyperplonk_helper::<Fr>(gates)
+//     }
 
-    fn test_hyperplonk_helper<F: PrimeField>(
-        gate_func: CustomizedGates,
-    ) -> Result<(), HyperPlonkErrors> {
-        {
-            let seed = [
-                1, 0, 0, 0, 23, 0, 0, 0, 200, 1, 0, 0, 210, 30, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                0, 0, 0, 0, 0, 0,
-            ];
-            let mut rng = StdRng::from_seed(seed);
-            // let pcs_srs = MultilinearKzgPCS::<E>::gen_srs_for_testing(&mut rng, 16)?;
+//     fn test_hyperplonk_helper<F: PrimeField>(
+//         gate_func: CustomizedGates,
+//     ) -> Result<(), HyperPlonkErrors> {
+//         {
+//             let seed = [
+//                 1, 0, 0, 0, 23, 0, 0, 0, 200, 1, 0, 0, 210, 30, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+//                 0, 0, 0, 0, 0, 0,
+//             ];
+//             let mut rng = StdRng::from_seed(seed);
+//             // let pcs_srs = MultilinearKzgPCS::<E>::gen_srs_for_testing(&mut rng, 16)?;
 
-            let num_constraints = 4;
-            let num_pub_input = 4;
-            let nv = log2(num_constraints) as usize;
-            let num_witnesses = 2;
-            let merge_nv = nv + log2(num_witnesses) as usize;
+//             let num_constraints = 4;
+//             let num_pub_input = 4;
+//             let nv = log2(num_constraints) as usize;
+//             let num_witnesses = 2;
+//             // let merge_nv = nv + log2(num_witnesses) as usize;
 
-            // generate index
-            let params = HyperPlonkParams {
-                num_constraints,
-                num_pub_input,
-                gate_func: gate_func.clone(),
-            };
-            let permutation = identity_permutation_mle(merge_nv);
-            let permutation_index = identity_permutation_mle(merge_nv);
-            let q1 = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(
-                2,
-                vec![F::one(), F::one(), F::one(), F::one()],
-                None,
-                None,
-            )));
-            let index = HyperPlonkIndex {
-                params: params.clone(),
-                permutation,
-                permutation_index,
-                selectors: vec![q1],
-            };
+//             // generate index
+//             let params = HyperPlonkParams {
+//                 num_constraints,
+//                 num_pub_input,
+//                 gate_func: gate_func.clone(),
+//             };
+//             let permutation = identity_permutation_mle(nv);
+//             let permutation_index = identity_permutation_mle(nv);
+//             let q1 = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(
+//                 2,
+//                 vec![F::one(), F::one(), F::one(), F::one()],
+//                 None,
+//                 None,
+//             )));
+//             let index = HyperPlonkIndex {
+//                 params: params.clone(),
+//                 permutation,
+//                 permutation_index,
+//                 selectors: vec![q1],
+//             };
 
-            // generate pk and vks
-            let (pk, vk) = <PolyIOP<F> as HyperPlonkSNARK<F>>::preprocess(&index)?;
+//             // generate pk and vks
+//             let (pk, vk) = <PolyIOP<F> as HyperPlonkSNARK<F>>::preprocess(&index)?;
 
-            // w1 := [1, 1, 2, 3]
-            let w1 = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(
-                2,
-                vec![F::one(), F::one(), F::from(2u128), F::from(3u128)],
-                None,
-                None,
-            )));
-            // w2 := [1^5, 1^5, 2^5, 3^5]
-            let w2 = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(
-                2,
-                vec![F::one(), F::one(), F::from(32u128), F::from(243u128)],
-                None,
-                None,
-            )));
-            // public input = w1
-            let pi = vec![F::one(), F::one(), F::from(2u128), F::from(3u128)];
+//             // w1 := [1, 1, 2, 3]
+//             let w1 = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(
+//                 2,
+//                 vec![F::one(), F::one(), F::from(2u128), F::from(3u128)],
+//                 None,
+//                 None,
+//             )));
+//             // w2 := [1^5, 1^5, 2^5, 3^5]
+//             let w2 = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(
+//                 2,
+//                 vec![F::one(), F::one(), F::from(32u128), F::from(243u128)],
+//                 None,
+//                 None,
+//             )));
+//             // public input = w1
+//             let pi = vec![F::one(), F::one(), F::from(2u128), F::from(3u128)];
 
-            // generate a proof and verify
-            let proof =
-                <PolyIOP<F> as HyperPlonkSNARK<F>>::prove(&pk, &pi, vec![w1.clone(), w2.clone()])?;
+//             // generate a proof and verify
+//             let proof =
+//                 <PolyIOP<F> as HyperPlonkSNARK<F>>::prove(&pk, &pi, vec![w1.clone(), w2.clone()])?;
 
-            let _verify = <PolyIOP<F> as HyperPlonkSNARK<F>>::verify(&vk, &pi, &proof)?;
-        }
+//             let _verify = <PolyIOP<F> as HyperPlonkSNARK<F>>::verify(&vk, &pi, &proof)?;
+//         }
 
-        {
-            // bad path 1: wrong permutation
-            let seed = [
-                1, 0, 0, 0, 23, 0, 0, 0, 200, 1, 0, 0, 210, 30, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                0, 0, 0, 0, 0, 0,
-            ];
-            let mut rng = StdRng::from_seed(seed);
-            // let pcs_srs = MultilinearKzgPCS::<E>::gen_srs_for_testing(&mut rng, 16)?;
+//         {
+//             // bad path 1: wrong permutation
+//             let seed = [
+//                 1, 0, 0, 0, 23, 0, 0, 0, 200, 1, 0, 0, 210, 30, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+//                 0, 0, 0, 0, 0, 0,
+//             ];
+//             let mut rng = StdRng::from_seed(seed);
+//             // let pcs_srs = MultilinearKzgPCS::<E>::gen_srs_for_testing(&mut rng, 16)?;
 
-            let num_constraints = 4;
-            let num_pub_input = 4;
-            let nv = log2(num_constraints) as usize;
-            let num_witnesses = 2;
-            let merge_nv = nv + log2(num_witnesses) as usize;
+//             let num_constraints = 4;
+//             let num_pub_input = 4;
+//             let nv = log2(num_constraints) as usize;
+//             let num_witnesses = 2;
+//             let merge_nv = nv + log2(num_witnesses) as usize;
 
-            // generate index
-            let params = HyperPlonkParams {
-                num_constraints,
-                num_pub_input,
-                gate_func,
-            };
+//             // generate index
+//             let params = HyperPlonkParams {
+//                 num_constraints,
+//                 num_pub_input,
+//                 gate_func,
+//             };
 
-            // let permutation = identity_permutation(nv, num_witnesses);
-            let rand_perm = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(
-                3,
-                vec![
-                    F::from(1),
-                    F::from(3),
-                    F::from(6),
-                    F::from(7),
-                    F::from(2),
-                    F::from(5),
-                    F::from(0),
-                    F::from(4),
-                ],
-                None,
-                None,
-            )));
+//             // let permutation = identity_permutation(nv, num_witnesses);
+//             let rand_perm = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(
+//                 3,
+//                 vec![
+//                     F::from(1),
+//                     F::from(3),
+//                     F::from(6),
+//                     F::from(7),
+//                     F::from(2),
+//                     F::from(5),
+//                     F::from(0),
+//                     F::from(4),
+//                 ],
+//                 None,
+//                 None,
+//             )));
 
-            let permutation_index = identity_permutation_mle(merge_nv);
-            let q1 = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(
-                2,
-                vec![F::one(), F::one(), F::one(), F::one()],
-                None,
-                None,
-            )));
-            let bad_index = HyperPlonkIndex {
-                params,
-                permutation: rand_perm,
-                permutation_index,
-                selectors: vec![q1],
-            };
+//             let permutation_index = identity_permutation_mle(merge_nv);
+//             let q1 = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(
+//                 2,
+//                 vec![F::one(), F::one(), F::one(), F::one()],
+//                 None,
+//                 None,
+//             )));
+//             let bad_index = HyperPlonkIndex {
+//                 params,
+//                 permutation: rand_perm,
+//                 permutation_index,
+//                 selectors: vec![q1],
+//             };
 
-            // generate pk and vks
-            let (pk, bad_vk) = <PolyIOP<F> as HyperPlonkSNARK<F>>::preprocess(&bad_index)?;
+//             // generate pk and vks
+//             let (pk, bad_vk) = <PolyIOP<F> as HyperPlonkSNARK<F>>::preprocess(&bad_index)?;
 
-            // w1 := [1, 1, 2, 3]
-            let w1 = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(
-                2,
-                vec![F::one(), F::one(), F::from(2u128), F::from(3u128)],
-                None,
-                None,
-            )));
-            // w2 := [1^5, 1^5, 2^5, 3^5]
-            let w2 = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(
-                2,
-                vec![F::one(), F::one(), F::from(32u128), F::from(243u128)],
-                None,
-                None,
-            )));
-            // public input = w1
-            let pi = vec![F::one(), F::one(), F::from(2u128), F::from(3u128)];
+//             // w1 := [1, 1, 2, 3]
+//             let w1 = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(
+//                 2,
+//                 vec![F::one(), F::one(), F::from(2u128), F::from(3u128)],
+//                 None,
+//                 None,
+//             )));
+//             // w2 := [1^5, 1^5, 2^5, 3^5]
+//             let w2 = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(
+//                 2,
+//                 vec![F::one(), F::one(), F::from(32u128), F::from(243u128)],
+//                 None,
+//                 None,
+//             )));
+//             // public input = w1
+//             let pi = vec![F::one(), F::one(), F::from(2u128), F::from(3u128)];
 
-            // generate a proof and verify
-            let proof =
-                <PolyIOP<F> as HyperPlonkSNARK<F>>::prove(&pk, &pi, vec![w1.clone(), w2.clone()])?;
+//             // generate a proof and verify
+//             let proof =
+//                 <PolyIOP<F> as HyperPlonkSNARK<F>>::prove(&pk, &pi, vec![w1.clone(), w2.clone()])?;
 
-            assert!(<PolyIOP<F> as HyperPlonkSNARK<F>>::verify(&bad_vk, &pi, &proof,).is_err());
-        }
+//             assert!(<PolyIOP<F> as HyperPlonkSNARK<F>>::verify(&bad_vk, &pi, &proof,).is_err());
+//         }
 
-        Ok(())
-    }
-}
+//         Ok(())
+//     }
+// }

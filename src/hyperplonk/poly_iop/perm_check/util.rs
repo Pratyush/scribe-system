@@ -94,15 +94,15 @@ pub fn compute_frac_poly<F: PrimeField>(
 }
 
 pub fn compute_frac_poly_plonk<F: PrimeField>(
-    p: &Arc<Mutex<DenseMLPolyStream<F>>>,
-    pi: &Arc<Mutex<DenseMLPolyStream<F>>>,
-    index: &Arc<Mutex<DenseMLPolyStream<F>>>,
+    ps: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
+    pis: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
+    indices: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
     alpha: F,
     gamma: F,
 ) -> Result<
     (
-        Arc<Mutex<DenseMLPolyStream<F>>>,
-        Arc<Mutex<DenseMLPolyStream<F>>>,
+        Vec<Arc<Mutex<DenseMLPolyStream<F>>>>, // h_p's
+        Vec<Arc<Mutex<DenseMLPolyStream<F>>>>, // h_q's
     ),
     PolyIOPErrors,
 > {
@@ -125,76 +125,88 @@ pub fn compute_frac_poly_plonk<F: PrimeField>(
     // drop(pi_lock);
     // drop(index_lock);
 
+    let start = start_timer!(|| "compute h_p h_q ");
+
     let batch_size = 1 << 20; // Maximum number of elements to process in a batch
 
-    let num_vars = p.lock().unwrap().num_vars();
-    let output_hp = Arc::new(Mutex::new(DenseMLPolyStream::<F>::new_from_tempfile(
-        num_vars,
-    )));
-    let output_hq = Arc::new(Mutex::new(DenseMLPolyStream::<F>::new_from_tempfile(
-        num_vars,
-    )));
+    let mut outputs_hp = Vec::with_capacity(ps.len());
+    let mut outputs_hq = Vec::with_capacity(ps.len());
+    let num_vars = ps[0].lock().unwrap().num_vars();
 
-    // Prepare vectors for batch processing
-    let mut hp_vals = Vec::new();
-    let mut hq_vals = Vec::new();
+    for ((p, pi), index) in ps.into_iter().zip(pis).zip(indices) {
+        let output_hp = Arc::new(Mutex::new(DenseMLPolyStream::<F>::new_from_tempfile(
+            num_vars,
+        )));
+        let output_hq = Arc::new(Mutex::new(DenseMLPolyStream::<F>::new_from_tempfile(
+            num_vars,
+        )));
 
-    let mut p = p.lock().unwrap();
-    let mut pi = pi.lock().unwrap();
-    let mut index = index.lock().unwrap();
+        // Prepare vectors for batch processing
+        let mut hp_vals = Vec::with_capacity(batch_size);
+        let mut hq_vals = Vec::with_capacity(batch_size);
 
-    // Write results to output streams
-    let mut hp = output_hp.lock().unwrap();
-    let mut hq = output_hq.lock().unwrap();
+        let mut p = p.lock().unwrap();
+        let mut pi = pi.lock().unwrap();
+        let mut index = index.lock().unwrap();
 
-    while let (Some(p_val), Some(pi_val), Some(idx_val)) =
-        (p.read_next(), pi.read_next(), index.read_next())
-    {
-        hp_vals.push(p_val + alpha * pi_val + gamma);
-        hq_vals.push(p_val + alpha * idx_val + gamma);
-        // Check if we've reached the batch size
-        if hp_vals.len() >= batch_size {
-            // Perform batch inversion
+        // Write results to output streams
+        let mut hp = output_hp.lock().unwrap();
+        let mut hq = output_hq.lock().unwrap();
+
+        while let (Some(p_val), Some(pi_val), Some(idx_val)) =
+            (p.read_next(), pi.read_next(), index.read_next())
+        {
+            hp_vals.push(p_val + alpha * pi_val + gamma);
+            hq_vals.push(p_val + alpha * idx_val + gamma);
+            // Check if we've reached the batch size
+            if hp_vals.len() >= batch_size {
+                // Perform batch inversion
+                batch_inversion(&mut hp_vals);
+                batch_inversion(&mut hq_vals);
+
+                for (hp_val, hq_val) in hp_vals.drain(..).zip(hq_vals.drain(..)) {
+                    hp.write_next_unchecked(hp_val)
+                        .expect("Failed to write to hp stream");
+                    hq.write_next_unchecked(hq_val)
+                        .expect("Failed to write to hq stream");
+                }
+            }
+        }
+
+        // Handle any remaining values that didn't fill the last batch
+        if !hp_vals.is_empty() {
             batch_inversion(&mut hp_vals);
             batch_inversion(&mut hq_vals);
 
-            for (hp_val, hq_val) in hp_vals.drain(..).zip(hq_vals.drain(..)) {
-                hp.write_next_unchecked(hp_val)
-                    .expect("Failed to write to hp stream");
-                hq.write_next_unchecked(hq_val)
-                    .expect("Failed to write to hq stream");
+            for (hp_val, hq_val) in hp_vals.iter().zip(hq_vals.iter()) {
+                hp.write_next_unchecked(*hp_val)
+                    .expect("Failed to write remaining hp values");
+                hq.write_next_unchecked(*hq_val)
+                    .expect("Failed to write remaining hq values");
             }
         }
+
+        p.read_restart();
+        pi.read_restart();
+        index.read_restart();
+
+        hp.swap_read_write();
+        hq.swap_read_write();
+
+        drop(p);
+        drop(pi);
+
+        drop(hp);
+        drop(hq);
+
+        outputs_hp.push(output_hp);
+        outputs_hq.push(output_hq);
     }
 
-    // Handle any remaining values that didn't fill the last batch
-    if !hp_vals.is_empty() {
-        batch_inversion(&mut hp_vals);
-        batch_inversion(&mut hq_vals);
-
-        for (hp_val, hq_val) in hp_vals.iter().zip(hq_vals.iter()) {
-            hp.write_next_unchecked(*hp_val)
-                .expect("Failed to write remaining hp values");
-            hq.write_next_unchecked(*hq_val)
-                .expect("Failed to write remaining hq values");
-        }
-    }
-
-    p.read_restart();
-    pi.read_restart();
-    index.read_restart();
-
-    hp.swap_read_write();
-    hq.swap_read_write();
-
-    drop(p);
-    drop(pi);
-
-    drop(hp);
-    drop(hq);
+    end_timer!(start);
 
     // Return the output streams
-    Ok((output_hp, output_hq))
+    Ok((outputs_hp, outputs_hq))
 }
 
 #[cfg(test)]
