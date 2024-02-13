@@ -13,9 +13,7 @@ use crate::{
 use ark_ff::Field;
 use ark_ff::PrimeField;
 use ark_std::{
-    log2,
-    rand::{rngs::StdRng, SeedableRng},
-    test_rng,
+    end_timer, log2, rand::{rngs::StdRng, SeedableRng}, start_timer, test_rng
 };
 
 use crate::hyperplonk::full_snark::{
@@ -63,10 +61,12 @@ impl<F: PrimeField> MockCircuit<F> {
         let log_n_wires = log2(num_witnesses);
         let merged_nv = nv + log_n_wires as usize;
 
+        let start = start_timer!(|| "create mock circuit");
+        let step = start_timer!(|| "create selector and witness streams");
         // create a Vec<Arc<Mutex<DenseMLPolyStream<F>>>> for selectors and witnesses
         let mut selectors: Vec<Arc<Mutex<DenseMLPolyStream<F>>>> = (0..num_selectors)
             .map(|_| Arc::new(Mutex::new(DenseMLPolyStream::new(nv, None, None))))
-            .collect();
+            .collect(); 
 
         let mut witnesses: Vec<Arc<Mutex<DenseMLPolyStream<F>>>> = (0..num_witnesses)
             .map(|_| Arc::new(Mutex::new(DenseMLPolyStream::new(nv, None, None))))
@@ -137,6 +137,7 @@ impl<F: PrimeField> MockCircuit<F> {
         for i in 0..num_witnesses {
             witnesses[i].lock().unwrap().swap_read_write();
         }
+        end_timer!(step);
 
         let pub_input_len = ark_std::cmp::min(4, num_constraints);
 
@@ -155,15 +156,20 @@ impl<F: PrimeField> MockCircuit<F> {
             gate_func: gate.clone(),
         };
 
+        let step = start_timer!(|| "create permutation streams");
         let permutation = identity_permutation_mles(nv as usize, num_witnesses);
+        end_timer!(step);
+        let step = start_timer!(|| "create index streams");
         let permutation_index = identity_permutation_mles(nv as usize, num_witnesses);
+        end_timer!(step);
         let index = HyperPlonkIndex {
             params,
             permutation,
             permutation_index,
             selectors,
         };
-
+        
+        end_timer!(start);
         Self {
             public_inputs,
             witnesses: witnesses.clone(),
@@ -242,8 +248,8 @@ mod test {
     use std::str::FromStr;
 
     const SUPPORTED_SIZE: usize = 20;
-    const MIN_NUM_VARS: usize = 10;
-    const MAX_NUM_VARS: usize = 21;
+    const MIN_NUM_VARS: usize = 26;
+    const MAX_NUM_VARS: usize = 27;
     const CUSTOM_DEGREE: [usize; 6] = [1, 2, 4, 8, 16, 32];
 
     #[test]
