@@ -20,6 +20,7 @@ use ark_ff::{batch_inversion, PrimeField};
 // use ark_poly::DenseMultilinearExtension;
 use ark_std::{cfg_into_iter, end_timer, start_timer, vec::Vec};
 use rayon::prelude::{IntoParallelIterator, IntoParallelRefIterator};
+use std::collections::HashSet;
 use std::io::Seek;
 use std::sync::Arc;
 use std::time::Instant;
@@ -141,6 +142,10 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
         // let mut total_read_time = std::time::Duration::new(0, 0);
 
         let mut polynomials = self.poly.flattened_ml_extensions.iter().map(|x| x.lock().unwrap()).collect::<Vec<_>>();
+        
+        let mut stream_values: std::collections::HashMap<usize, (F, F)> =
+            std::collections::HashMap::new();
+
         for (coefficient, products) in &products_list {
             // println!("sum check product coefficient: {}", coefficient);
             // println!("sum check product products: {:?}", products);
@@ -159,6 +164,8 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
             // 0 * 6 + 10 ^ 2
             // 0 * 7 + 11 ^ 2
 
+            let unique_products: HashSet<usize> = products.iter().cloned().collect();
+
             for b in 0..1 << (self.poly.aux_info.num_variables - self.round) {
                 // println!("sum check product b: {}", b);
                 // println!("sum check product round: {}", self.round);
@@ -167,30 +174,25 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
                 //     self.poly.aux_info.num_variables
                 // );
 
-                // Use a HashMap to store stream values once per unique stream
-                let mut stream_values: std::collections::HashMap<usize, (F, F)> =
-                    std::collections::HashMap::new();
+                stream_values.clear();
 
                 // Read and store values only for unique streams
-                for &f in products.iter() {
-                    // Check if the stream has already been read
-                    if !stream_values.contains_key(&f) {
-                        // println!("sum check product: {}", f);
-                        let stream = &mut polynomials[f];
+                for &f in unique_products.iter() {
+                    // println!("sum check product: {}", f);
+                    let stream = &mut polynomials[f];
 
-                        // print read position
-                        // println!("read position: {}", locked_stream.read_pointer.stream_position().unwrap());
-                        
-                        // let read_start = Instant::now();
-                        
-                        let eval = stream.read_next().unwrap(); // Read once for eval
-                        let step = stream.read_next().unwrap() - eval; // Read once for step
+                    // print read position
+                    // println!("read position: {}", locked_stream.read_pointer.stream_position().unwrap());
+                    
+                    // let read_start = Instant::now();
+                    
+                    let eval = stream.read_next().unwrap(); // Read once for eval
+                    let step = stream.read_next().unwrap() - eval; // Read once for step
 
-                        // let read_elapsed = read_start.elapsed();
-                        // total_read_time += read_elapsed;
+                    // let read_elapsed = read_start.elapsed();
+                    // total_read_time += read_elapsed;
 
-                        stream_values.insert(f, (eval, step));
-                    }
+                    stream_values.insert(f, (eval, step));
                 }
 
                 let mut buf = vec![(F::zero(), F::zero()); products.len()];
