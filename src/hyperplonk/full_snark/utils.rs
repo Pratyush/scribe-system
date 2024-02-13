@@ -341,7 +341,7 @@ pub fn memory_traces() {
 
 //     use super::*;
 //     // use ark_bls12_381::Fr;
-//     use ark_test_curves::bls12_381::Fr;
+//     use ark_bls12_381::Fr;
 //     use ark_ff::PrimeField;
 //     // use ark_poly::MultilinearExtension;
 //     #[test]

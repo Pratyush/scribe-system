@@ -415,7 +415,7 @@ pub fn identity_permutation_mle<F: PrimeField>(
 ) -> Arc<Mutex<DenseMLPolyStream<F>>> {
     let mut res = DenseMLPolyStream::new(num_vars, None, None);
     (0..1 << num_vars).for_each(|i| {
-        res.write_next_unchecked(F::from(i));
+        res.write_next_unchecked(F::from(i as u64));
     });
     res.swap_read_write();
     Arc::new(Mutex::new(res))
@@ -721,7 +721,7 @@ mod tests {
     use ark_std::rand::distributions::{Distribution, Standard};
     use ark_std::rand::rngs::StdRng; // Using StdRng for the example
     use ark_std::rand::SeedableRng;
-    use ark_test_curves::bls12_381::Fr;
+    use ark_bls12_381::Fr;
     use std::time::Instant;
 
     // Helper to create a stream from a list of Fr values.
