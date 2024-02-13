@@ -265,9 +265,15 @@ impl<E: Pairing> StructuredReferenceString<E> for MultilinearUniversalParams<E> 
             h: E::G2::rand(rng).into_affine(),
             powers_of_g: (0..supported_degree + 1).rev()
                 .map(|degree| {
+                    let mut rand_g1 = E::G1::rand(rng).into_affine();
                     Evaluations {
                         evals: (0..(1 << degree))
-                            .map(|_| E::G1::rand(rng).into_affine())
+                            .map(|i| {
+                                if ((i % (1 << 10)) == 0) {
+                                    rand_g1 = E::G1::rand(rng).into_affine();
+                                }
+                                rand_g1
+                            })
                             .collect(),
                     }
                 })
