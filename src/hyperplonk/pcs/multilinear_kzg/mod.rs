@@ -403,7 +403,7 @@ mod tests {
         let SUPPORTED_DEGREE = 20;
         let params = MultilinearKzgPCS::<E>::gen_fake_srs_for_testing(&mut rng, SUPPORTED_DEGREE)?;
 
-        for i in 10..21 {
+        for i in 10..(SUPPORTED_DEGREE + 1) {
             let poly1 = Arc::new(Mutex::new(DenseMLPolyStream::<Fr>::rand(i, &mut rng)));
             test_single_helper(&params, &poly1, &mut rng)?;
         }
