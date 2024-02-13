@@ -12,9 +12,13 @@ use ark_ff::PrimeField;
 // use ark_ec::pairing::Pairing;
 use errors::HyperPlonkErrors;
 // use subroutines::{pcs::prelude::PolynomialCommitmentScheme, poly_iop::prelude::PermutationCheck};
-use crate::{hyperplonk::poly_iop::prelude::PermutationCheck, read_write::DenseMLPolyStream};
+use crate::{
+    // hyperplonk::poly_iop::prelude::PermutationCheck, 
+    read_write::DenseMLPolyStream};
 // use crate::hyperplonk::poly_iop::perm_check::PermutationCheck;
 use witness::WitnessColumn;
+
+use super::poly_iop::prelude::SumCheck;
 
 mod custom_gate;
 mod errors;
@@ -32,7 +36,7 @@ mod witness;
 // where
 //     E: Pairing,
 //     PCS: PolynomialCommitmentScheme<E>,
-pub trait HyperPlonkSNARK<F: PrimeField>: PermutationCheck<F> {
+pub trait HyperPlonkSNARK<F: PrimeField>: SumCheck<F> {
     type Index;
     type ProvingKey;
     type VerifyingKey;
@@ -69,18 +73,18 @@ pub trait HyperPlonkSNARK<F: PrimeField>: PermutationCheck<F> {
         witnesses: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
     ) -> Result<Self::Proof, HyperPlonkErrors>;
 
-    /// Verify the HyperPlonk proof.
-    ///
-    /// Inputs:
-    /// - `vk`: verifying key
-    /// - `pub_input`: online public input
-    /// - `proof`: HyperPlonk SNARK proof challenges
-    /// Outputs:
-    /// - Return a boolean on whether the verification is successful
-    fn verify(
-        vk: &Self::VerifyingKey,
-        // pub_input: &[E::ScalarField],
-        pub_input: &[F],
-        proof: &Self::Proof,
-    ) -> Result<bool, HyperPlonkErrors>;
+    // /// Verify the HyperPlonk proof.
+    // ///
+    // /// Inputs:
+    // /// - `vk`: verifying key
+    // /// - `pub_input`: online public input
+    // /// - `proof`: HyperPlonk SNARK proof challenges
+    // /// Outputs:
+    // /// - Return a boolean on whether the verification is successful
+    // fn verify(
+    //     vk: &Self::VerifyingKey,
+    //     // pub_input: &[E::ScalarField],
+    //     pub_input: &[F],
+    //     proof: &Self::Proof,
+    // ) -> Result<bool, HyperPlonkErrors>;
 }

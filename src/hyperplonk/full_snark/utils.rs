@@ -16,6 +16,7 @@ use crate::read_write::{DenseMLPolyStream, ReadWriteStream};
 // use ark_ec::pairing::Pairing;
 use ark_ff::PrimeField;
 use ark_poly::DenseMultilinearExtension;
+use ark_std::{end_timer, start_timer};
 use std::sync::Mutex;
 use std::{borrow::Borrow, sync::Arc};
 // use subroutines::pcs::{prelude::Commitment, PolynomialCommitmentScheme};
@@ -195,6 +196,8 @@ pub(crate) fn build_f<F: PrimeField>(
     selector_mles: &[Arc<Mutex<DenseMLPolyStream<F>>>],
     witness_mles: &[Arc<Mutex<DenseMLPolyStream<F>>>],
 ) -> Result<VirtualPolynomial<F>, HyperPlonkErrors> {
+    let start = start_timer!(|| "build gate identity polynomial");
+    
     // TODO: check that selector and witness lengths match what is in
     // the gate definition
 
@@ -237,6 +240,8 @@ pub(crate) fn build_f<F: PrimeField>(
         }
         res.add_mle_list(mle_list, coeff_fr)?;
     }
+
+    end_timer!(start);
 
     Ok(res)
 }
