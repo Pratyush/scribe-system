@@ -257,7 +257,7 @@ mod test {
         rand::{rngs::StdRng, SeedableRng},
         test_rng,
     };
-    use ark_test_curves::bls12_381::Fr;
+    use ark_bls12_381::Fr;
     use std::io::Seek;
     use std::str::FromStr;
     use std::sync::{Arc, Mutex};

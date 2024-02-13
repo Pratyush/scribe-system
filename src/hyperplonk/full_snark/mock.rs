@@ -238,7 +238,7 @@ mod test {
         // },
         poly_iop::PolyIOP,
     };
-    use ark_test_curves::bls12_381::Fr;
+    use ark_bls12_381::Fr;
     use std::str::FromStr;
 
     const SUPPORTED_SIZE: usize = 20;

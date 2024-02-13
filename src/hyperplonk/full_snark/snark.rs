@@ -825,7 +825,7 @@ impl<F: PrimeField> HyperPlonkSNARK<F> for PolyIOP<F> {
 //     use ark_std::rand::SeedableRng;
 //     // use ark_bls12_381::Bls12_381;
 //     use ark_std::test_rng;
-//     use ark_test_curves::bls12_381::Fr;
+//     use ark_bls12_381::Fr;
 //     // use subroutines::pcs::prelude::MultilinearKzgPCS;
 
 //     #[test]

@@ -752,7 +752,7 @@ mod test {
     use ark_ff::Field;
     use ark_ff::UniformRand;
     use ark_std::test_rng;
-    use ark_test_curves::bls12_381::Fr;
+    use ark_bls12_381::Fr;
 
     #[test]
     fn test_merge_polynomials_success() {

@@ -104,7 +104,7 @@ mod tests {
     use ark_std::rand::distributions::{Distribution, Standard};
     use ark_std::rand::rngs::StdRng; // Using StdRng for reproducibility
     use ark_std::rand::SeedableRng;
-    use ark_test_curves::bls12_381::Fr;
+    use ark_bls12_381::Fr;
     use std::time::Instant;
     use tempfile::tempfile;
 

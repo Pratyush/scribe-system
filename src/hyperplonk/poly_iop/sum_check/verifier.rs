@@ -376,7 +376,7 @@ mod test {
     // use ark_bls12_381::Fr;
     use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial, Polynomial};
     use ark_std::{vec::Vec, UniformRand};
-    use ark_test_curves::bls12_381::Fr;
+    use ark_bls12_381::Fr;
 
     #[test]
     fn test_interpolation() -> Result<(), PolyIOPErrors> {
