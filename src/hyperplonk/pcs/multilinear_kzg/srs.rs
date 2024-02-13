@@ -206,6 +206,12 @@ impl<E: Pairing> StructuredReferenceString<E> for MultilinearUniversalParams<E> 
             powers_of_g,
         };
 
+        println!("num_vars: {}", num_vars);
+        // print the length of each powers_of_g evaluation
+        for i in 0..num_vars + 1 {
+            println!("powers_of_g[{}] length: {}", i, pp.powers_of_g[i].evals.len());
+        }
+
         end_timer!(pp_generation_timer);
 
         let vp_generation_timer = start_timer!(|| "VP generation");
@@ -214,6 +220,10 @@ impl<E: Pairing> StructuredReferenceString<E> for MultilinearUniversalParams<E> 
             let h_table = FixedBase::get_window_table(scalar_bits, window_size, h);
             E::G2::normalize_batch(&FixedBase::msm(scalar_bits, window_size, &h_table, &t))
         };
+
+        // print length of h_mask
+        println!("h_mask length: {}", h_mask.len());
+
         end_timer!(vp_generation_timer);
         end_timer!(total_timer);
         Ok(Self {
@@ -221,6 +231,66 @@ impl<E: Pairing> StructuredReferenceString<E> for MultilinearUniversalParams<E> 
             h_mask,
         })
     }
+
+    fn gen_fake_srs_for_testing<R: Rng>(
+        rng: &mut R,
+        supported_degree: usize,
+    ) -> Result<Self, PCSError> {
+
+        // pub struct MultilinearUniversalParams<E: Pairing> {
+        //     /// prover parameters
+        //     pub prover_param: MultilinearProverParam<E>,
+        //     /// h^randomness: h^t1, h^t2, ..., **h^{t_nv}**
+        //     pub h_mask: Vec<E::G2Affine>,
+        // }
+
+        // pub struct MultilinearProverParam<E: Pairing> {
+        //     /// number of variables
+        //     pub num_vars: usize,
+        //     /// `pp_{0}`, `pp_{1}`, ...,pp_{nu_vars} defined
+        //     /// by XZZPD19 where pp_{nv-0}=g and
+        //     /// pp_{nv-i}=g^{eq((t_1,..t_i),(X_1,..X_i))}
+        //     pub powers_of_g: Vec<Evaluations<E::G1Affine>>,
+        //     /// generator for G1
+        //     pub g: E::G1Affine,
+        //     /// generator for G2
+        //     pub h: E::G2Affine,
+        // }
+
+        let start = start_timer!(|| format!("Fake SRS generation for nv = {}", supported_degree));
+
+        let pp = Self::ProverParam {
+            num_vars: supported_degree,
+            g: E::G1::rand(rng).into_affine(),
+            h: E::G2::rand(rng).into_affine(),
+            powers_of_g: (0..supported_degree + 1).rev()
+                .map(|degree| {
+                    Evaluations {
+                        evals: (0..(1 << degree))
+                            .map(|_| E::G1::rand(rng).into_affine())
+                            .collect(),
+                    }
+                })
+                .collect(),
+        };
+
+        let h_mask: Vec<_> = (0..supported_degree)
+            .map(|_| E::G2::rand(rng).into_affine())
+            .collect();
+
+        // print the length of each powers_of_g evaluation
+        for i in 0..supported_degree + 1 {
+            println!("powers_of_g[{}] length: {}", i, pp.powers_of_g[i].evals.len());
+        }
+
+        // print length of h_mask
+        println!("h_mask length: {}", h_mask.len());
+
+        end_timer!(start);
+
+        Ok(Self { prover_param: pp, h_mask })
+    }
+
 }
 
 /// fix first `pad` variables of `poly` represented in evaluation form to zero
