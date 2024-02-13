@@ -9,9 +9,10 @@
 // pub(crate) mod batching;
 pub(crate) mod srs;
 pub(crate) mod util;
+use crate::hyperplonk::pcs::StructuredReferenceString;
 
 use crate::hyperplonk::{
-    pcs::{prelude::Commitment, PCSError, PolynomialCommitmentScheme, StructuredReferenceString}, 
+    pcs::{prelude::Commitment, PCSError, PolynomialCommitmentScheme}, 
     // pcs::multilinear_kzg::batching::BatchProof
 };
 use crate::read_write::DenseMLPolyStream;
@@ -71,6 +72,10 @@ impl<E: Pairing> PolynomialCommitmentScheme<E> for MultilinearKzgPCS<E> {
     /// THE OUTPUT SRS SHOULD NOT BE USED IN PRODUCTION.
     fn gen_srs_for_testing<R: Rng>(rng: &mut R, log_size: usize) -> Result<Self::SRS, PCSError> {
         MultilinearUniversalParams::<E>::gen_srs_for_testing(rng, log_size)
+    }
+
+    fn gen_fake_srs_for_testing<R: Rng>(rng: &mut R, log_size: usize) -> Result<Self::SRS, PCSError> {
+        MultilinearUniversalParams::<E>::gen_fake_srs_for_testing(rng, log_size)
     }
 
     /// Trim the universal parameters to specialize the public parameters.
@@ -360,6 +365,7 @@ mod tests {
     use ark_ec::pairing::Pairing;
     use ark_poly::{DenseMultilinearExtension, MultilinearExtension};
     use ark_std::{test_rng, vec::Vec, UniformRand};
+    
 
     type E = Bls12_381;
     type Fr = <E as Pairing>::ScalarField;
@@ -395,10 +401,10 @@ mod tests {
         let mut rng = test_rng();
 
         let SUPPORTED_DEGREE = 20;
-        let params = MultilinearKzgPCS::<E>::gen_srs_for_testing(&mut rng, SUPPORTED_DEGREE)?;
+        let params = MultilinearKzgPCS::<E>::gen_fake_srs_for_testing(&mut rng, SUPPORTED_DEGREE)?;
 
         for i in 10..21 {
-            let poly1 = Arc::new(Mutex::new(DenseMLPolyStream::rand(i, &mut rng)));
+            let poly1 = Arc::new(Mutex::new(DenseMLPolyStream::<Fr>::rand(i, &mut rng)));
             test_single_helper(&params, &poly1, &mut rng)?;
         }
         

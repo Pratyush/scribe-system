@@ -54,6 +54,11 @@ pub trait PolynomialCommitmentScheme<E: Pairing> {
         supported_size: usize,
     ) -> Result<Self::SRS, PCSError>;
 
+    fn gen_fake_srs_for_testing<R: Rng>(
+        rng: &mut R,
+        supported_size: usize,
+    ) -> Result<Self::SRS, PCSError>;
+
     /// Trim the universal parameters to specialize the public parameters.
     /// Input both `supported_degree` for univariate and
     /// `supported_num_vars` for multilinear.
@@ -166,4 +171,9 @@ pub trait StructuredReferenceString<E: Pairing>: Sized {
     /// WARNING: THIS FUNCTION IS FOR TESTING PURPOSE ONLY.
     /// THE OUTPUT SRS SHOULD NOT BE USED IN PRODUCTION.
     fn gen_srs_for_testing<R: Rng>(rng: &mut R, supported_size: usize) -> Result<Self, PCSError>;
+
+    fn gen_fake_srs_for_testing<R: Rng>(
+        rng: &mut R,
+        supported_degree: usize,
+    ) -> Result<Self, PCSError>;
 }
