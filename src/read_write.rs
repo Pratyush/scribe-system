@@ -400,10 +400,14 @@ pub fn identity_permutation_mles<F: PrimeField>(
 ) -> Vec<Arc<Mutex<DenseMLPolyStream<F>>>> {
     let mut res = vec![];
     for i in 0..num_chunks {
+        let mut stream = DenseMLPolyStream::new(num_vars, None, None);
         let shift = (i * (1 << num_vars)) as u64;
-        let s_id_vec = (shift..shift + (1u64 << num_vars)).map(F::from).collect();
+        (shift..shift + (1u64 << num_vars)).for_each(|i| {
+            stream.write_next_unchecked(F::from(i as u64));
+        });
+        stream.swap_read_write();
         res.push(Arc::new(Mutex::new(
-            DenseMLPolyStream::from_evaluations_vec(num_vars, s_id_vec, None, None),
+            stream,
         )));
     }
     res

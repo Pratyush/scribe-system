@@ -13,9 +13,9 @@ pub use crate::hyperplonk::pcs::{
         MultilinearKzgPCS, MultilinearKzgProof,
     },
     structs::Commitment,
-    univariate_kzg::{
-        srs::{UnivariateProverParam, UnivariateUniversalParams, UnivariateVerifierParam},
-        UnivariateKzgBatchProof, UnivariateKzgPCS, UnivariateKzgProof,
-    },
+    // univariate_kzg::{
+    //     srs::{UnivariateProverParam, UnivariateUniversalParams, UnivariateVerifierParam},
+    //     UnivariateKzgBatchProof, UnivariateKzgPCS, UnivariateKzgProof,
+    // },
     PolynomialCommitmentScheme, StructuredReferenceString,
 };

@@ -19,6 +19,9 @@ use ark_std::{
     UniformRand,
 };
 use core::iter::FromIterator;
+use crate::read_write::DenseMLPolyStream;
+use crate::read_write::ReadWriteStream;
+use std::sync::{Arc, Mutex};
 
 /// Evaluations over {0,1}^n for G1 or G2
 #[derive(CanonicalSerialize, CanonicalDeserialize, Clone, Debug)]
@@ -144,7 +147,7 @@ impl<E: Pairing> StructuredReferenceString<E> for MultilinearUniversalParams<E> 
         let t: Vec<_> = (0..num_vars).map(|_| E::ScalarField::rand(rng)).collect();
         let scalar_bits = E::ScalarField::MODULUS_BIT_SIZE as usize;
 
-        let mut eq: LinkedList<Arc<Mutex<DenseMLPolyStream<E::ScalarField>>>> =
+        let mut eq: LinkedList<DenseMultilinearExtension<E::ScalarField>> =
             LinkedList::from_iter(eq_extension(&t).into_iter());
         let mut eq_arr = LinkedList::new();
         let mut base = eq.pop_back().unwrap().evaluations;

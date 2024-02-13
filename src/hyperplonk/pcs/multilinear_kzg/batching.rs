@@ -10,21 +10,20 @@
 // The sumcheck based batch opening therefore cannot stay in the PCS repo --
 // which creates a cyclic dependency.
 
-use crate::hyperplonk::{
+use crate::{hyperplonk::{
     pcs::{
         multilinear_kzg::util::eq_eval,
         prelude::{Commitment, PCSError},
         PolynomialCommitmentScheme,
     },
-    poly_iop::{prelude::SumCheck, PolyIOP},
-    IOPProof,
-};
+    poly_iop::{prelude::SumCheck, structs::IOPProof, PolyIOP},
+}, read_write::DenseMLPolyStream};
 
 use crate::hyperplonk::arithmetic::virtual_polynomial::{*, build_eq_x_r};
 use ark_ec::{pairing::Pairing, scalar_mul::variable_base::VariableBaseMSM, CurveGroup};
 
 use ark_std::{end_timer, log2, start_timer, One, Zero};
-use std::{collections::BTreeMap, iter, marker::PhantomData, ops::Deref, sync::Arc};
+use std::{collections::BTreeMap, iter, marker::PhantomData, ops::Deref, sync::{Arc, Mutex}};
 use crate::hyperplonk::transcript::IOPTranscript;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
