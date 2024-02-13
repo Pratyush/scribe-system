@@ -29,7 +29,7 @@ pub trait PolynomialCommitmentScheme<E: Pairing> {
     /// Structured reference string
     type SRS: Clone + Debug;
     /// Polynomial and its associated types
-    type Polynomial: Clone + Debug + Hash + PartialEq + Eq;
+    type Polynomial: Clone + Debug;
     /// Polynomial input domain
     type Point: Clone + Ord + Debug + Sync + Hash + PartialEq + Eq;
     /// Polynomial Evaluation
@@ -39,7 +39,7 @@ pub trait PolynomialCommitmentScheme<E: Pairing> {
     /// Proofs
     type Proof: Clone + CanonicalSerialize + CanonicalDeserialize + Debug + PartialEq + Eq;
     /// Batch proofs
-    type BatchProof;
+    // type BatchProof;
 
     /// Build SRS for testing.
     ///
@@ -84,51 +84,51 @@ pub trait PolynomialCommitmentScheme<E: Pairing> {
         poly: &Self::Polynomial,
     ) -> Result<Self::Commitment, PCSError>;
 
-    /// On input a polynomial `p` and a point `point`, outputs a proof for the
-    /// same.
-    fn open(
-        prover_param: impl Borrow<Self::ProverParam>,
-        polynomial: &Self::Polynomial,
-        point: &Self::Point,
-    ) -> Result<(Self::Proof, Self::Evaluation), PCSError>;
+    // /// On input a polynomial `p` and a point `point`, outputs a proof for the
+    // /// same.
+    // fn open(
+    //     prover_param: impl Borrow<Self::ProverParam>,
+    //     polynomial: &Self::Polynomial,
+    //     point: &Self::Point,
+    // ) -> Result<(Self::Proof, Self::Evaluation), PCSError>;
 
-    /// Input a list of multilinear extensions, and a same number of points, and
-    /// a transcript, compute a multi-opening for all the polynomials.
-    fn multi_open(
-        _prover_param: impl Borrow<Self::ProverParam>,
-        _polynomials: &[Self::Polynomial],
-        _points: &[Self::Point],
-        _evals: &[Self::Evaluation],
-        _transcript: &mut IOPTranscript<E::ScalarField>,
-    ) -> Result<Self::BatchProof, PCSError> {
-        // the reason we use unimplemented!() is to enable developers to implement the
-        // trait without always implementing the batching APIs.
-        unimplemented!()
-    }
+    // /// Input a list of multilinear extensions, and a same number of points, and
+    // /// a transcript, compute a multi-opening for all the polynomials.
+    // fn multi_open(
+    //     _prover_param: impl Borrow<Self::ProverParam>,
+    //     _polynomials: &[Self::Polynomial],
+    //     _points: &[Self::Point],
+    //     _evals: &[Self::Evaluation],
+    //     _transcript: &mut IOPTranscript<E::ScalarField>,
+    // ) -> Result<Self::BatchProof, PCSError> {
+    //     // the reason we use unimplemented!() is to enable developers to implement the
+    //     // trait without always implementing the batching APIs.
+    //     unimplemented!()
+    // }
 
-    /// Verifies that `value` is the evaluation at `x` of the polynomial
-    /// committed inside `comm`.
-    fn verify(
-        verifier_param: &Self::VerifierParam,
-        commitment: &Self::Commitment,
-        point: &Self::Point,
-        value: &E::ScalarField,
-        proof: &Self::Proof,
-    ) -> Result<bool, PCSError>;
+    // /// Verifies that `value` is the evaluation at `x` of the polynomial
+    // /// committed inside `comm`.
+    // fn verify(
+    //     verifier_param: &Self::VerifierParam,
+    //     commitment: &Self::Commitment,
+    //     point: &Self::Point,
+    //     value: &E::ScalarField,
+    //     proof: &Self::Proof,
+    // ) -> Result<bool, PCSError>;
 
-    /// Verifies that `value_i` is the evaluation at `x_i` of the polynomial
-    /// `poly_i` committed inside `comm`.
-    fn batch_verify(
-        _verifier_param: &Self::VerifierParam,
-        _commitments: &[Self::Commitment],
-        _points: &[Self::Point],
-        _batch_proof: &Self::BatchProof,
-        _transcript: &mut IOPTranscript<E::ScalarField>,
-    ) -> Result<bool, PCSError> {
-        // the reason we use unimplemented!() is to enable developers to implement the
-        // trait without always implementing the batching APIs.
-        unimplemented!()
-    }
+    // /// Verifies that `value_i` is the evaluation at `x_i` of the polynomial
+    // /// `poly_i` committed inside `comm`.
+    // fn batch_verify(
+    //     _verifier_param: &Self::VerifierParam,
+    //     _commitments: &[Self::Commitment],
+    //     _points: &[Self::Point],
+    //     _batch_proof: &Self::BatchProof,
+    //     _transcript: &mut IOPTranscript<E::ScalarField>,
+    // ) -> Result<bool, PCSError> {
+    //     // the reason we use unimplemented!() is to enable developers to implement the
+    //     // trait without always implementing the batching APIs.
+    //     unimplemented!()
+    // }
 }
 
 /// API definitions for structured reference string

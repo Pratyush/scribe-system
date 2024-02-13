@@ -5,7 +5,7 @@
 // along with the HyperPlonk library. If not, see <https://mit-license.org/>.
 
 //! Useful utilities for KZG PCS
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use ark_ff::PrimeField;
 use ark_poly::DenseMultilinearExtension;
