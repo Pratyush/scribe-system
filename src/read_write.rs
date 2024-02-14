@@ -39,6 +39,8 @@ pub trait ReadWriteStream: Send + Sync {
     fn num_vars(&self) -> usize;
 
     fn swap_read_write(&mut self);
+
+    fn new_read_stream(&mut self);
 }
 
 #[derive(Debug)]
@@ -140,6 +142,13 @@ impl<F: Field> ReadWriteStream for DenseMLPolyStream<F> {
             std::mem::swap(self.read_pointer.get_mut(), self.write_pointer.get_mut());
         }
     }
+
+    fn new_read_stream(&mut self) {
+        self.read_pointer = BufReader::with_capacity(
+            1 << 20,
+            tempfile().expect("Failed to create a temporary file"),
+        );
+    }
 }
 
 impl<F: Field> DenseMLPolyStream<F> {
@@ -170,6 +179,8 @@ impl<F: Field> DenseMLPolyStream<F> {
             f: PhantomData,
         }
     }
+
+  
 
     pub fn from_evaluations_vec(
         num_vars: usize,
@@ -395,6 +406,7 @@ impl<F: Field> DenseMLPolyStream<F> {
         stream.swap_read_write();
         Arc::new(Mutex::new(stream))
     }
+
 }
 
 /// A list of MLEs that represents an identity permutation
@@ -534,6 +546,29 @@ pub trait DenseMLPoly<F: Field>: ReadWriteStream<Item = F> {
         }
 
         result_stream
+    }
+
+    // TODO: clear the read stream after writing to self
+    // NOTE that this function modifies the self stream, and doesn't create a new stream
+    fn add_assign(&mut self, f: F, other: &mut Self) {
+        // Create a new stream for the result.
+        // let mut result_stream = Self::new(self.num_vars(), read_path, write_path);
+        
+        // Restart both input streams to ensure they are read from the beginning
+        self.read_restart();
+        other.read_restart();
+
+        while let (Some(a), Some(b)) = (self.read_next(), other.read_next()) {
+            // Perform addition and write the result to the new stream
+            self.write_next_unchecked(a + f * b);
+        }
+
+        
+        self.new_read_stream(); // replaces the read pointer but the old read pointer temp file isn't deleted
+
+        self.swap_read_write();
+
+        // result_stream
     }
 
     fn prod(mut self, mut other: Self, read_path: Option<&str>, write_path: Option<&str>) -> Self

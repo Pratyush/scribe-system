@@ -629,6 +629,7 @@ pub fn build_eq_x_r<F: PrimeField>(
 
     Ok(Arc::new(Mutex::new(stream)))
 }
+
 /// This function build the eq(x, r) polynomial for any given r, and output the
 /// evaluation of eq(x, r) in its vector form.
 ///
@@ -636,23 +637,65 @@ pub fn build_eq_x_r<F: PrimeField>(
 ///      eq(x,y) = \prod_i=1^num_var (x_i * y_i + (1-x_i)*(1-y_i))
 /// over r, which is
 ///      eq(x,y) = \prod_i=1^num_var (x_i * r_i + (1-x_i)*(1-r_i))
-// pub fn build_eq_x_r_vec<F: PrimeField>(r: &[F]) -> Result<Vec<F>, ArithErrors> {
-//     // we build eq(x,r) from its evaluations
-//     // we want to evaluate eq(x,r) over x \in {0, 1}^num_vars
-//     // for example, with num_vars = 4, x is a binary vector of 4, then
-//     //  0 0 0 0 -> (1-r0)   * (1-r1)    * (1-r2)    * (1-r3)
-//     //  1 0 0 0 -> r0       * (1-r1)    * (1-r2)    * (1-r3)
-//     //  0 1 0 0 -> (1-r0)   * r1        * (1-r2)    * (1-r3)
-//     //  1 1 0 0 -> r0       * r1        * (1-r2)    * (1-r3)
-//     //  ....
-//     //  1 1 1 1 -> r0       * r1        * r2        * r3
-//     // we will need 2^num_var evaluations
+pub fn build_eq_x_r_vec<F: PrimeField>(r: &[F]) -> Result<Vec<F>, ArithErrors> {
+    // we build eq(x,r) from its evaluations
+    // we want to evaluate eq(x,r) over x \in {0, 1}^num_vars
+    // for example, with num_vars = 4, x is a binary vector of 4, then
+    //  0 0 0 0 -> (1-r0)   * (1-r1)    * (1-r2)    * (1-r3)
+    //  1 0 0 0 -> r0       * (1-r1)    * (1-r2)    * (1-r3)
+    //  0 1 0 0 -> (1-r0)   * r1        * (1-r2)    * (1-r3)
+    //  1 1 0 0 -> r0       * r1        * (1-r2)    * (1-r3)
+    //  ....
+    //  1 1 1 1 -> r0       * r1        * r2        * r3
+    // we will need 2^num_var evaluations
 
-//     let mut eval = Vec::new();
-//     build_eq_x_r_helper(r, &mut eval)?;
+    let mut eval = Vec::new();
+    build_eq_x_r_vec_helper(r, &mut eval)?;
 
-//     Ok(eval)
-// }
+    Ok(eval)
+}
+
+/// A helper function to build eq(x, r) recursively.
+/// This function takes `r.len()` steps, and for each step it requires a maximum
+/// `r.len()-1` multiplications.
+fn build_eq_x_r_vec_helper<F: PrimeField>(r: &[F], buf: &mut Vec<F>) -> Result<(), ArithErrors> {
+    if r.is_empty() {
+        return Err(ArithErrors::InvalidParameters("r length is 0".to_string()));
+    } else if r.len() == 1 {
+        // initializing the buffer with [1-r_0, r_0]
+        buf.push(F::one() - r[0]);
+        buf.push(r[0]);
+    } else {
+        build_eq_x_r_vec_helper(&r[1..], buf)?;
+
+        // suppose at the previous step we received [b_1, ..., b_k]
+        // for the current step we will need
+        // if x_0 = 0:   (1-r0) * [b_1, ..., b_k]
+        // if x_0 = 1:   r0 * [b_1, ..., b_k]
+        // let mut res = vec![];
+        // for &b_i in buf.iter() {
+        //     let tmp = r[0] * b_i;
+        //     res.push(b_i - tmp);
+        //     res.push(tmp);
+        // }
+        // *buf = res;
+
+        let mut res = vec![F::zero(); buf.len() << 1];
+        res.par_iter_mut().enumerate().for_each(|(i, val)| {
+            let bi = buf[i >> 1];
+            let tmp = r[0] * bi;
+            if i & 1 == 0 {
+                *val = bi - tmp;
+            } else {
+                *val = tmp;
+            }
+        });
+        *buf = res;
+    }
+
+    Ok(())
+}
+
 
 /// A helper function to build eq(x, r) recursively.
 /// This function takes `r.len()` steps, and for each step it requires a maximum

@@ -10,6 +10,7 @@
 pub(crate) mod srs;
 pub(crate) mod util;
 use crate::hyperplonk::pcs::StructuredReferenceString;
+use crate::hyperplonk::full_snark::utils::memory_traces;
 
 use crate::hyperplonk::{
     pcs::{prelude::Commitment, PCSError, PolynomialCommitmentScheme}, 
@@ -31,7 +32,9 @@ use ark_std::{
     string::ToString, sync::Arc, vec, vec::Vec, One, Zero,
 };
 use std::{ops::Mul, sync::Mutex};
-// use batching::{batch_verify_internal, multi_open_internal};
+// use batching::{
+    // batch_verify_internal, 
+    // multi_open_internal};
 use srs::{MultilinearProverParam, MultilinearUniversalParams, MultilinearVerifierParam};
 use crate::hyperplonk::transcript::IOPTranscript;
 use crate::read_write::ReadWriteStream;
@@ -293,70 +296,70 @@ impl<E: Pairing> PolynomialCommitmentScheme<E> for MultilinearKzgPCS<E> {
 //     Ok((MultilinearKzgProof { proofs }, eval))
 // }
 
-/// Verifies that `value` is the evaluation at `x` of the polynomial
-/// committed inside `comm`.
-///
-/// This function takes
-/// - num_var number of pairing product.
-/// - num_var number of MSM
-fn verify_internal<E: Pairing>(
-    verifier_param: &MultilinearVerifierParam<E>,
-    commitment: &Commitment<E>,
-    point: &[E::ScalarField],
-    value: &E::ScalarField,
-    proof: &MultilinearKzgProof<E>,
-) -> Result<bool, PCSError> {
-    let verify_timer = start_timer!(|| "verify");
-    let num_var = point.len();
+// /// Verifies that `value` is the evaluation at `x` of the polynomial
+// /// committed inside `comm`.
+// ///
+// /// This function takes
+// /// - num_var number of pairing product.
+// /// - num_var number of MSM
+// fn verify_internal<E: Pairing>(
+//     verifier_param: &MultilinearVerifierParam<E>,
+//     commitment: &Commitment<E>,
+//     point: &[E::ScalarField],
+//     value: &E::ScalarField,
+//     proof: &MultilinearKzgProof<E>,
+// ) -> Result<bool, PCSError> {
+//     let verify_timer = start_timer!(|| "verify");
+//     let num_var = point.len();
 
-    if num_var > verifier_param.num_vars {
-        return Err(PCSError::InvalidParameters(format!(
-            "point length ({}) exceeds param limit ({})",
-            num_var, verifier_param.num_vars
-        )));
-    }
+//     if num_var > verifier_param.num_vars {
+//         return Err(PCSError::InvalidParameters(format!(
+//             "point length ({}) exceeds param limit ({})",
+//             num_var, verifier_param.num_vars
+//         )));
+//     }
 
-    let prepare_inputs_timer = start_timer!(|| "prepare pairing inputs");
+//     let prepare_inputs_timer = start_timer!(|| "prepare pairing inputs");
 
-    let scalar_size = E::ScalarField::MODULUS_BIT_SIZE as usize;
-    let window_size = FixedBase::get_mul_window_size(num_var);
+//     let scalar_size = E::ScalarField::MODULUS_BIT_SIZE as usize;
+//     let window_size = FixedBase::get_mul_window_size(num_var);
 
-    let h_table =
-        FixedBase::get_window_table(scalar_size, window_size, verifier_param.h.into_group());
-    let h_mul: Vec<E::G2> = FixedBase::msm(scalar_size, window_size, &h_table, point);
+//     let h_table =
+//         FixedBase::get_window_table(scalar_size, window_size, verifier_param.h.into_group());
+//     let h_mul: Vec<E::G2> = FixedBase::msm(scalar_size, window_size, &h_table, point);
 
-    let ignored = verifier_param.num_vars - num_var;
-    let h_vec: Vec<_> = (0..num_var)
-        .map(|i| verifier_param.h_mask[ignored + i].into_group() - h_mul[i])
-        .collect();
-    let h_vec: Vec<E::G2Affine> = E::G2::normalize_batch(&h_vec);
-    end_timer!(prepare_inputs_timer);
+//     let ignored = verifier_param.num_vars - num_var;
+//     let h_vec: Vec<_> = (0..num_var)
+//         .map(|i| verifier_param.h_mask[ignored + i].into_group() - h_mul[i])
+//         .collect();
+//     let h_vec: Vec<E::G2Affine> = E::G2::normalize_batch(&h_vec);
+//     end_timer!(prepare_inputs_timer);
 
-    let pairing_product_timer = start_timer!(|| "pairing product");
+//     let pairing_product_timer = start_timer!(|| "pairing product");
 
-    let mut pairings: Vec<_> = proof
-        .proofs
-        .iter()
-        .map(|&x| E::G1Prepared::from(x))
-        .zip(h_vec.into_iter().take(num_var).map(E::G2Prepared::from))
-        .collect();
+//     let mut pairings: Vec<_> = proof
+//         .proofs
+//         .iter()
+//         .map(|&x| E::G1Prepared::from(x))
+//         .zip(h_vec.into_iter().take(num_var).map(E::G2Prepared::from))
+//         .collect();
 
-    pairings.push((
-        E::G1Prepared::from(
-            (verifier_param.g.mul(*value) - commitment.0.into_group()).into_affine(),
-        ),
-        E::G2Prepared::from(verifier_param.h),
-    ));
+//     pairings.push((
+//         E::G1Prepared::from(
+//             (verifier_param.g.mul(*value) - commitment.0.into_group()).into_affine(),
+//         ),
+//         E::G2Prepared::from(verifier_param.h),
+//     ));
 
-    let ps = pairings.iter().map(|(p, _)| p.clone());
-    let hs = pairings.iter().map(|(_, h)| h.clone());
+//     let ps = pairings.iter().map(|(p, _)| p.clone());
+//     let hs = pairings.iter().map(|(_, h)| h.clone());
 
-    let res = E::multi_pairing(ps, hs) == ark_ec::pairing::PairingOutput(E::TargetField::one());
+//     let res = E::multi_pairing(ps, hs) == ark_ec::pairing::PairingOutput(E::TargetField::one());
 
-    end_timer!(pairing_product_timer);
-    end_timer!(verify_timer);
-    Ok(res)
-}
+//     end_timer!(pairing_product_timer);
+//     end_timer!(verify_timer);
+//     Ok(res)
+// }
 
 #[cfg(test)]
 mod tests {
@@ -398,9 +401,12 @@ mod tests {
 
     #[test]
     fn test_single_commit() -> Result<(), PCSError> {
+        env_logger::init();
+        memory_traces();
+
         let mut rng = test_rng();
 
-        let SUPPORTED_DEGREE = 20;
+        let SUPPORTED_DEGREE = 25;
         let params = MultilinearKzgPCS::<E>::gen_fake_srs_for_testing(&mut rng, SUPPORTED_DEGREE)?;
 
         for i in 10..(SUPPORTED_DEGREE + 1) {
