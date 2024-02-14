@@ -38,7 +38,7 @@ pub trait PolynomialCommitmentScheme<E: Pairing> {
     type Commitment: Clone + CanonicalSerialize + CanonicalDeserialize + Debug + PartialEq + Eq;
     /// Proofs
     type Proof: Clone + CanonicalSerialize + CanonicalDeserialize + Debug + PartialEq + Eq;
-    /// Batch proofs
+    // /// Batch proofs
     // type BatchProof;
 
     /// Build SRS for testing.
