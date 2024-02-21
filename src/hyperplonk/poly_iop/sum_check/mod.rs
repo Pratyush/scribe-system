@@ -181,22 +181,22 @@ impl<F: PrimeField> SumCheck<F> for PolyIOP<F> {
             for mle in poly.flattened_ml_extensions.iter() {
                 // read next on mle and print each element
                 let mut mle_stream = mle.lock().unwrap();
-                // println!("starting read pointer position of `prove` argument poly: {}", mle_stream.read_pointer.stream_position().unwrap());
+                println!("starting read pointer position of `prove` argument poly: {}", mle_stream.read_pointer.stream_position().unwrap());
             }
             for mle in prover_state.poly.flattened_ml_extensions.iter() {
                 // read next on mle and print each element
                 let mut mle_stream = mle.lock().unwrap();
-                // println!("starting read pointer position of prover_state poly: {}", mle_stream.read_pointer.stream_position().unwrap());
+                println!("starting read pointer position of prover_state poly: {}", mle_stream.read_pointer.stream_position().unwrap());
             }
-            // println!("round={}, prover challenge: {:?}", i, challenge);
+            println!("round={}, prover challenge: {:?}", i, challenge);
             transcript.append_serializable_element(b"prover msg", &prover_msg)?;
             prover_msgs.push(prover_msg);
             challenge = Some(transcript.get_and_append_challenge(b"Internal round")?);
-            // println!(
-            //     "round={}, prover challenge: {}",
-            //     i,
-            //     challenge.clone().unwrap()
-            // );
+            println!(
+                "round={}, prover challenge: {}",
+                i,
+                challenge.clone().unwrap()
+            );
         }
         // pushing the last challenge point to the state
         if let Some(p) = challenge {
@@ -221,11 +221,11 @@ impl<F: PrimeField> SumCheck<F> for PolyIOP<F> {
         transcript.append_serializable_element(b"aux info", aux_info)?;
         let mut verifier_state = IOPVerifierState::verifier_init(aux_info);
 
-        // // print num_var from aux_info
-        // println!(
-        //     "sum check verifier aux_info.num_variables: {}",
-        //     aux_info.num_variables
-        // );
+        // print num_var from aux_info
+        println!(
+            "sum check verifier aux_info.num_variables: {}",
+            aux_info.num_variables
+        );
 
         for i in 0..aux_info.num_variables {
             let prover_msg = proof.proofs.get(i).expect("proof is incomplete");
@@ -235,7 +235,7 @@ impl<F: PrimeField> SumCheck<F> for PolyIOP<F> {
                 prover_msg,
                 transcript,
             )?;
-            // println!("round={}, verifier challenge: {}", i, challenge);
+            println!("round={}, verifier challenge: {}", i, challenge);
         }
 
         let res = IOPVerifierState::check_and_generate_subclaim(&verifier_state, &claimed_sum);

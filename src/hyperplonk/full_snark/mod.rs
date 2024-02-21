@@ -73,18 +73,18 @@ pub trait HyperPlonkSNARK<F: PrimeField>: SumCheck<F> {
         witnesses: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
     ) -> Result<Self::Proof, HyperPlonkErrors>;
 
-    // /// Verify the HyperPlonk proof.
-    // ///
-    // /// Inputs:
-    // /// - `vk`: verifying key
-    // /// - `pub_input`: online public input
-    // /// - `proof`: HyperPlonk SNARK proof challenges
-    // /// Outputs:
-    // /// - Return a boolean on whether the verification is successful
-    // fn verify(
-    //     vk: &Self::VerifyingKey,
-    //     // pub_input: &[E::ScalarField],
-    //     pub_input: &[F],
-    //     proof: &Self::Proof,
-    // ) -> Result<bool, HyperPlonkErrors>;
+    /// Verify the HyperPlonk proof.
+    ///
+    /// Inputs:
+    /// - `vk`: verifying key
+    /// - `pub_input`: online public input
+    /// - `proof`: HyperPlonk SNARK proof challenges
+    /// Outputs:
+    /// - Return a boolean on whether the verification is successful
+    fn verify(
+        vk: &Self::VerifyingKey,
+        // pub_input: &[E::ScalarField],
+        pub_input: &[F],
+        proof: &Self::Proof,
+    ) -> Result<bool, HyperPlonkErrors>;
 }
