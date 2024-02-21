@@ -248,8 +248,8 @@ mod test {
     use std::str::FromStr;
 
     const SUPPORTED_SIZE: usize = 20;
-    const MIN_NUM_VARS: usize = 26;
-    const MAX_NUM_VARS: usize = 27;
+    const MIN_NUM_VARS: usize = 5;
+    const MAX_NUM_VARS: usize = 10;
     const CUSTOM_DEGREE: [usize; 6] = [1, 2, 4, 8, 16, 32];
 
     #[test]
@@ -336,9 +336,9 @@ mod test {
             circuit.witnesses.clone(),
         )?;
 
-        // let verify =
-        //     <PolyIOP<Fr> as HyperPlonkSNARK<Fr>>::verify(&vk, &circuit.public_inputs, &proof)?;
-        // assert!(verify);
+        let verify =
+            <PolyIOP<Fr> as HyperPlonkSNARK<Fr>>::verify(&vk, &circuit.public_inputs, &proof)?;
+        assert!(verify);
         Ok(())
     }
 
