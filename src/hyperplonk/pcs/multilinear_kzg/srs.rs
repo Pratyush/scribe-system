@@ -285,12 +285,12 @@ impl<E: Pairing> StructuredReferenceString<E> for MultilinearUniversalParams<E> 
             .collect();
 
         // print the length of each powers_of_g evaluation
-        for i in 0..supported_degree + 1 {
-            println!("powers_of_g[{}] length: {}", i, pp.powers_of_g[i].evals.len());
-        }
+        // for i in 0..supported_degree + 1 {
+        //     println!("powers_of_g[{}] length: {}", i, pp.powers_of_g[i].evals.len());
+        // }
 
         // print length of h_mask
-        println!("h_mask length: {}", h_mask.len());
+        // println!("h_mask length: {}", h_mask.len());
 
         end_timer!(start);
 

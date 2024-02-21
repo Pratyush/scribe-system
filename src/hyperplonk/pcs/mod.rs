@@ -89,13 +89,13 @@ pub trait PolynomialCommitmentScheme<E: Pairing> {
         poly: &Self::Polynomial,
     ) -> Result<Self::Commitment, PCSError>;
 
-    // /// On input a polynomial `p` and a point `point`, outputs a proof for the
-    // /// same.
-    // fn open(
-    //     prover_param: impl Borrow<Self::ProverParam>,
-    //     polynomial: &Self::Polynomial,
-    //     point: &Self::Point,
-    // ) -> Result<(Self::Proof, Self::Evaluation), PCSError>;
+    /// On input a polynomial `p` and a point `point`, outputs a proof for the
+    /// same.
+    fn open(
+        prover_param: impl Borrow<Self::ProverParam>,
+        polynomial: &Self::Polynomial,
+        point: &Self::Point,
+    ) -> Result<(Self::Proof, Self::Evaluation), PCSError>;
 
     // /// Input a list of multilinear extensions, and a same number of points, and
     // /// a transcript, compute a multi-opening for all the polynomials.
@@ -111,15 +111,15 @@ pub trait PolynomialCommitmentScheme<E: Pairing> {
     //     unimplemented!()
     // }
 
-    // /// Verifies that `value` is the evaluation at `x` of the polynomial
-    // /// committed inside `comm`.
-    // fn verify(
-    //     verifier_param: &Self::VerifierParam,
-    //     commitment: &Self::Commitment,
-    //     point: &Self::Point,
-    //     value: &E::ScalarField,
-    //     proof: &Self::Proof,
-    // ) -> Result<bool, PCSError>;
+    /// Verifies that `value` is the evaluation at `x` of the polynomial
+    /// committed inside `comm`.
+    fn verify(
+        verifier_param: &Self::VerifierParam,
+        commitment: &Self::Commitment,
+        point: &Self::Point,
+        value: &E::ScalarField,
+        proof: &Self::Proof,
+    ) -> Result<bool, PCSError>;
 
     // /// Verifies that `value_i` is the evaluation at `x_i` of the polynomial
     // /// `poly_i` committed inside `comm`.
