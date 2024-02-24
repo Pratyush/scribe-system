@@ -39,7 +39,7 @@ pub trait PolynomialCommitmentScheme<E: Pairing> {
     /// Proofs
     type Proof: Clone + CanonicalSerialize + CanonicalDeserialize + Debug + PartialEq + Eq;
     // /// Batch proofs
-    // type BatchProof;
+    type BatchProof;
 
     /// Build SRS for testing.
     ///
@@ -97,19 +97,20 @@ pub trait PolynomialCommitmentScheme<E: Pairing> {
         point: &Self::Point,
     ) -> Result<(Self::Proof, Self::Evaluation), PCSError>;
 
-    // /// Input a list of multilinear extensions, and a same number of points, and
-    // /// a transcript, compute a multi-opening for all the polynomials.
-    // fn multi_open(
-    //     _prover_param: impl Borrow<Self::ProverParam>,
-    //     _polynomials: &[Self::Polynomial],
-    //     _points: &[Self::Point],
-    //     _evals: &[Self::Evaluation],
-    //     _transcript: &mut IOPTranscript<E::ScalarField>,
-    // ) -> Result<Self::BatchProof, PCSError> {
-    //     // the reason we use unimplemented!() is to enable developers to implement the
-    //     // trait without always implementing the batching APIs.
-    //     unimplemented!()
-    // }
+    // this is the multi poly multi point version
+    /// Input a list of multilinear extensions, and a same number of points, and
+    /// a transcript, compute a multi-opening for all the polynomials.
+    fn multi_open(
+        _prover_param: impl Borrow<Self::ProverParam>,
+        _polynomials: &[Self::Polynomial],
+        _points: &[Self::Point],
+        _evals: &[Self::Evaluation],
+        _transcript: &mut IOPTranscript<E::ScalarField>,
+    ) -> Result<Self::BatchProof, PCSError> {
+        // the reason we use unimplemented!() is to enable developers to implement the
+        // trait without always implementing the batching APIs.
+        unimplemented!()
+    }
 
     /// Verifies that `value` is the evaluation at `x` of the polynomial
     /// committed inside `comm`.

@@ -550,7 +550,7 @@ pub trait DenseMLPoly<F: Field>: ReadWriteStream<Item = F> {
 
     // TODO: clear the read stream after writing to self
     // NOTE that this function modifies the self stream, and doesn't create a new stream
-    fn add_assign(&mut self, f: F, other: &mut Self) {
+    fn add_assign(mut self, f: F, mut other: Self) where Self: Sized{
         // Create a new stream for the result.
         // let mut result_stream = Self::new(self.num_vars(), read_path, write_path);
         

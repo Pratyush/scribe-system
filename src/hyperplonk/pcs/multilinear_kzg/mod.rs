@@ -6,7 +6,7 @@
 
 //! Main module for multilinear KZG commitment scheme
 
-// pub(crate) mod batching;
+pub(crate) mod batching;
 pub(crate) mod srs;
 pub(crate) mod util;
 use crate::hyperplonk::pcs::StructuredReferenceString;
@@ -14,7 +14,7 @@ use crate::hyperplonk::full_snark::utils::memory_traces;
 
 use crate::hyperplonk::{
     pcs::{prelude::Commitment, PCSError, PolynomialCommitmentScheme}, 
-    // pcs::multilinear_kzg::batching::BatchProof
+    pcs::multilinear_kzg::batching::BatchProof
 };
 use crate::read_write::DenseMLPolyStream;
 use crate::read_write::DenseMLPoly;
@@ -32,9 +32,10 @@ use ark_std::{
     string::ToString, sync::Arc, vec, vec::Vec, One, Zero,
 };
 use std::{ops::Mul, sync::Mutex};
-// use batching::{
+use crate::hyperplonk::pcs::multilinear_kzg::batching::{
     // batch_verify_internal, 
-    // multi_open_internal};
+    // multi_open_internal
+};
 use srs::{MultilinearProverParam, MultilinearUniversalParams, MultilinearVerifierParam};
 use crate::hyperplonk::transcript::IOPTranscript;
 use crate::read_write::ReadWriteStream;
@@ -64,7 +65,7 @@ impl<E: Pairing> PolynomialCommitmentScheme<E> for MultilinearKzgPCS<E> {
     // Commitments and proofs
     type Commitment = Commitment<E>;
     type Proof = MultilinearKzgProof<E>;
-    // type BatchProof = BatchProof<E, Self>;
+    type BatchProof = BatchProof<E, Self>;
 
     /// Build SRS for testing.
     ///
@@ -176,6 +177,7 @@ impl<E: Pairing> PolynomialCommitmentScheme<E> for MultilinearKzgPCS<E> {
         open_internal(prover_param.borrow(), polynomial.clone(), point)
     }
 
+    // this is the multi poly multi point version
     // /// Input a list of multilinear extensions, and a same number of points, and
     // /// a transcript, compute a multi-opening for all the polynomials.
     // fn multi_open(
@@ -339,7 +341,7 @@ fn open_internal<E: Pairing>(
 
     let eval = poly_lock.read_next().unwrap();
     poly_lock.read_restart();
-    
+
     end_timer!(open_timer);
     Ok((MultilinearKzgProof { proofs }, eval))
 }
