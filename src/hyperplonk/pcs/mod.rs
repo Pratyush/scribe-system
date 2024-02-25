@@ -5,7 +5,7 @@
 // along with the HyperPlonk library. If not, see <https://mit-license.org/>.
 
 mod errors;
-mod multilinear_kzg;
+pub mod multilinear_kzg;
 mod structs;
 // mod univariate_kzg;
 
@@ -111,6 +111,15 @@ pub trait PolynomialCommitmentScheme<E: Pairing> {
         // trait without always implementing the batching APIs.
         unimplemented!()
     }
+
+    // just a RLN of regular open
+    fn multi_open_single_point(
+        prover_param: impl Borrow<Self::ProverParam>,
+        polynomials: &[Self::Polynomial],
+        points: Self::Point,
+        evals: &[Self::Evaluation],
+        transcript: &mut IOPTranscript<E::ScalarField>,
+    ) -> Result<(Self::Proof, Self::Evaluation), PCSError>;
 
     /// Verifies that `value` is the evaluation at `x` of the polynomial
     /// committed inside `comm`.

@@ -41,6 +41,24 @@ where
     pub(crate) g_prime_proof: PCS::Proof,
 }
 
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct BatchProofSinglePoint<E, PCS>
+where
+    E: Pairing,
+    PCS: PolynomialCommitmentScheme<E>,
+{
+    /// rlc of f_i(point_i)
+    pub rlc_eval: E::ScalarField,
+    /// proof for rlc of polynomials
+    pub(crate) proof: PCS::Proof,
+    pub perm_evals: Vec<E::ScalarField>,
+    pub perm_index_evals: Vec<E::ScalarField>,
+    pub selector_evals: Vec<E::ScalarField>,
+    pub witness_evals: Vec<E::ScalarField>,
+    pub hp_evals: Vec<E::ScalarField>,
+    pub hq_evals: Vec<E::ScalarField>,
+}
+
 // /// Steps:
 // /// 1. get challenge point t from transcript
 // /// 2. build eq(t,i) for i in [0..k]

@@ -409,6 +409,20 @@ impl<F: Field> DenseMLPolyStream<F> {
 
 }
 
+pub fn copy_mle<F: PrimeField>(
+    mle: &Arc<Mutex<DenseMLPolyStream<F>>>,
+    read_path: Option<&str>,
+    write_path: Option<&str>,
+) -> Arc<Mutex<DenseMLPolyStream<F>>> {
+    let mut stream = mle.lock().unwrap();
+    let mut new_stream = DenseMLPolyStream::new(stream.num_vars, read_path, write_path);
+    while let Some(e) = stream.read_next() {
+        new_stream.write_next_unchecked(e).expect("Failed to write");
+    }
+    new_stream.swap_read_write();
+    Arc::new(Mutex::new(new_stream))
+}
+
 /// A list of MLEs that represents an identity permutation
 /// loads vector from memory into stream, so is not memory efficient
 pub fn identity_permutation_mles<F: PrimeField>(

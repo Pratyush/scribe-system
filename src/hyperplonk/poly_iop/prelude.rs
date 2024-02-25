@@ -11,6 +11,6 @@ pub use crate::hyperplonk::poly_iop::{
     structs::IOPProof,
     sum_check::SumCheck,
     // utils::*,
-    zero_check::ZeroCheck,
+    // zero_check::ZeroCheck,
     PolyIOP,
 };

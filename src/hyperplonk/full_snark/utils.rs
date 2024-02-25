@@ -12,7 +12,10 @@ use crate::hyperplonk::full_snark::{
     custom_gate::CustomizedGates, errors::HyperPlonkErrors, structs::HyperPlonkParams,
     witness::WitnessColumn,
 };
+use crate::hyperplonk::pcs::prelude::{Commitment, PCSError};
+use crate::hyperplonk::pcs::PolynomialCommitmentScheme;
 use crate::read_write::{DenseMLPolyStream, ReadWriteStream};
+use ark_ec::pairing::Pairing;
 // use ark_ec::pairing::Pairing;
 use ark_ff::PrimeField;
 use ark_poly::DenseMultilinearExtension;
@@ -24,77 +27,81 @@ use crate::hyperplonk::transcript::IOPTranscript;
 
 /// An accumulator structure that holds a polynomial and
 /// its opening points
-// #[derive(Debug)]
-// pub(super) struct PcsAccumulator<E: Pairing, PCS: PolynomialCommitmentScheme<E>> {
-//     // sequence:
-//     // - prod(x) at 5 points
-//     // - w_merged at perm check point
-//     // - w_merged at zero check points (#witness points)
-//     // - selector_merged at zero check points (#selector points)
-//     // - w[0] at r_pi
-//     pub(crate) num_var: usize,
-//     pub(crate) polynomials: Vec<PCS::Polynomial>,
-//     pub(crate) commitments: Vec<PCS::Commitment>,
-//     pub(crate) points: Vec<PCS::Point>,
-//     pub(crate) evals: Vec<PCS::Evaluation>,
-// }
+#[derive(Debug)]
+pub(super) struct PcsAccumulator<E: Pairing, PCS: PolynomialCommitmentScheme<E>> {
+    // sequence:
+    // - prod(x) at 5 points
+    // - w_merged at perm check point
+    // - w_merged at zero check points (#witness points)
+    // - selector_merged at zero check points (#selector points)
+    // - w[0] at r_pi
+    pub(crate) num_var: usize,
+    pub(crate) polynomials: Vec<PCS::Polynomial>,
+    pub(crate) commitments: Vec<PCS::Commitment>,
+    pub(crate) points: Vec<PCS::Point>,
+    pub(crate) evals: Vec<PCS::Evaluation>,
+}
 
-// impl<E, PCS> PcsAccumulator<E, PCS>
-// where
-//     E: Pairing,
-//     PCS: PolynomialCommitmentScheme<
-//         E,
-//         Polynomial = Arc<DenseMultilinearExtension<E::ScalarField>>,
-//         Point = Vec<E::ScalarField>,
-//         Evaluation = E::ScalarField,
-//         Commitment = Commitment<E>,
-//     >,
-// {
-//     /// Create an empty accumulator.
-//     pub(super) fn new(num_var: usize) -> Self {
-//         Self {
-//             num_var,
-//             polynomials: vec![],
-//             commitments: vec![],
-//             points: vec![],
-//             evals: vec![],
-//         }
-//     }
+impl<E, PCS> PcsAccumulator<E, PCS>
+where
+    E: Pairing,
+    PCS: PolynomialCommitmentScheme<
+        E,
+        Polynomial = Arc<Mutex<DenseMLPolyStream<E::ScalarField>>>,
+        Point = Vec<E::ScalarField>,
+        Evaluation = E::ScalarField,
+        Commitment = Commitment<E>,
+    >,
+{
+    /// Create an empty accumulator.
+    pub(super) fn new(num_var: usize) -> Self {
+        Self {
+            num_var,
+            polynomials: vec![],
+            commitments: vec![],
+            points: vec![],
+            evals: vec![],
+        }
+    }
 
-//     /// Push a new evaluation point into the accumulator
-//     pub(super) fn insert_poly_and_points(
-//         &mut self,
-//         poly: &PCS::Polynomial,
-//         commit: &PCS::Commitment,
-//         point: &PCS::Point,
-//     ) {
-//         assert!(poly.num_vars == point.len());
-//         assert!(poly.num_vars == self.num_var);
+    /// Push a new evaluation point into the accumulator
+    pub(super) fn insert_poly_and_points(
+        &mut self,
+        poly: &PCS::Polynomial,
+        commit: &PCS::Commitment,
+        point: &PCS::Point,
+    ) {
+        let poly_num_vars = poly.lock().unwrap().num_vars;
+        // assert!(poly_num_vars == point.len());
+        // assert!(poly_num_vars == self.num_var);
 
-//         let eval = evaluate_opt(poly, point);
+        let eval = poly.lock().unwrap().evaluate(std::slice::from_ref(
+            point.last().unwrap()), // last field element of the point
+        ).unwrap();
 
-//         self.evals.push(eval);
-//         self.polynomials.push(poly.clone());
-//         self.points.push(point.clone());
-//         self.commitments.push(*commit);
-//     }
+        self.evals.push(eval);
+        self.polynomials.push(poly.clone());
+        self.points.push(point.clone());
+        self.commitments.push(*commit);
+    }
 
-//     /// Batch open all the points over a merged polynomial.
-//     /// A simple wrapper of PCS::multi_open
-//     pub(super) fn multi_open(
-//         &self,
-//         prover_param: impl Borrow<PCS::ProverParam>,
-//         transcript: &mut IOPTranscript<E::ScalarField>,
-//     ) -> Result<PCS::BatchProof, HyperPlonkErrors> {
-//         Ok(PCS::multi_open(
-//             prover_param.borrow(),
-//             self.polynomials.as_ref(),
-//             self.points.as_ref(),
-//             self.evals.as_ref(),
-//             transcript,
-//         )?)
-//     }
-// }
+    /// Batch open all the points over a merged polynomial.
+    /// A simple wrapper of PCS::multi_open
+    pub(super) fn multi_open_single_point(
+        &self,
+        prover_param: impl Borrow<PCS::ProverParam>,
+        transcript: &mut IOPTranscript<E::ScalarField>,
+    ) -> Result<(PCS::Proof, PCS::Evaluation), PCSError> {
+        // default uses the first point and assumes that all points are the same
+        Ok(PCS::multi_open_single_point(
+            prover_param.borrow(),
+            self.polynomials.as_ref(),
+            self.points[0].clone(),
+            self.evals.as_ref(),
+            transcript,
+        )?)
+    }
+}
 
 /// Build MLE from matrix of witnesses.
 ///

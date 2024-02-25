@@ -8,6 +8,7 @@
 
 use std::sync::{Arc, Mutex};
 
+use ark_ec::pairing::Pairing;
 use ark_ff::PrimeField;
 // use ark_ec::pairing::Pairing;
 use errors::HyperPlonkErrors;
@@ -18,7 +19,7 @@ use crate::{
 // use crate::hyperplonk::poly_iop::perm_check::PermutationCheck;
 use witness::WitnessColumn;
 
-use super::poly_iop::prelude::SumCheck;
+use super::{pcs::PolynomialCommitmentScheme, poly_iop::prelude::SumCheck};
 
 mod custom_gate;
 mod errors;
@@ -36,7 +37,9 @@ mod witness;
 // where
 //     E: Pairing,
 //     PCS: PolynomialCommitmentScheme<E>,
-pub trait HyperPlonkSNARK<F: PrimeField>: SumCheck<F> {
+pub trait HyperPlonkSNARK<E, PCS>: SumCheck<E::ScalarField>
+where E: Pairing,
+      PCS: PolynomialCommitmentScheme<E>{
     type Index;
     type ProvingKey;
     type VerifyingKey;
@@ -54,7 +57,7 @@ pub trait HyperPlonkSNARK<F: PrimeField>: SumCheck<F> {
     ///   polynomial commitments
     fn preprocess(
         index: &Self::Index,
-        // pcs_srs: &PCS::SRS,
+        pcs_srs: &PCS::SRS,
     ) -> Result<(Self::ProvingKey, Self::VerifyingKey), HyperPlonkErrors>;
 
     /// Generate HyperPlonk SNARK proof.
@@ -68,9 +71,9 @@ pub trait HyperPlonkSNARK<F: PrimeField>: SumCheck<F> {
     fn prove(
         pk: &Self::ProvingKey,
         // pub_input: &[E::ScalarField],
-        pub_input: &[F],
+        pub_input: &[E::ScalarField],
         // witnesses: &[WitnessColumn<E::ScalarField>],
-        witnesses: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
+        witnesses: Vec<Arc<Mutex<DenseMLPolyStream<E::ScalarField>>>>,
     ) -> Result<Self::Proof, HyperPlonkErrors>;
 
     /// Verify the HyperPlonk proof.
@@ -84,7 +87,7 @@ pub trait HyperPlonkSNARK<F: PrimeField>: SumCheck<F> {
     fn verify(
         vk: &Self::VerifyingKey,
         // pub_input: &[E::ScalarField],
-        pub_input: &[F],
+        pub_input: &[E::ScalarField],
         proof: &Self::Proof,
     ) -> Result<bool, HyperPlonkErrors>;
 }

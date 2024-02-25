@@ -24,7 +24,7 @@ use ark_ec::{
     scalar_mul::{fixed_base::FixedBase, variable_base::VariableBaseMSM},
     AffineRepr, CurveGroup,
 };
-use ark_ff::PrimeField;
+use ark_ff::{Field, PrimeField};
 use ark_poly::{DenseMultilinearExtension, MultilinearExtension};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::{
@@ -39,6 +39,7 @@ use crate::hyperplonk::pcs::multilinear_kzg::batching::{
 use srs::{MultilinearProverParam, MultilinearUniversalParams, MultilinearVerifierParam};
 use crate::hyperplonk::transcript::IOPTranscript;
 use crate::read_write::ReadWriteStream;
+
 
 /// KZG Polynomial Commitment Scheme on multilinear polynomials.
 pub struct MultilinearKzgPCS<E: Pairing> {
@@ -195,6 +196,56 @@ impl<E: Pairing> PolynomialCommitmentScheme<E> for MultilinearKzgPCS<E> {
     //         transcript,
     //     )
     // }
+
+    // this is the multi poly single point version
+    /// Input a list of multilinear extensions, and a same number of points, and
+    /// a transcript, compute a multi-opening for all the polynomials.
+    fn multi_open_single_point(
+        prover_param: impl Borrow<Self::ProverParam>,
+        polynomials: &[Self::Polynomial],
+        point: Self::Point,
+        evals: &[Self::Evaluation],
+        transcript: &mut IOPTranscript<E::ScalarField>,
+    ) -> Result<(Self::Proof, E::ScalarField), PCSError> {
+        let alpha = transcript.get_and_append_challenge(b"opening rlc").unwrap();
+        
+        // assert that poly has same num_vars as points length
+        let mut num_vars = polynomials[0].lock().unwrap().num_vars;
+        assert_eq!(num_vars, point.len());
+        
+        // create random linear combination of polynomials, a new stream in the form of poly0 + alpha * poly1 + alpha^2 * poly2 + ...
+        let mut poly = DenseMLPolyStream::<E::ScalarField>::new(num_vars, None, None);
+
+        // create a vector of 1, alpha, alpha^2, ..., alpha^polynomials.len()
+        let alphas = (0..polynomials.len()).map(|i| alpha.pow(&[i as u64])).collect::<Vec<E::ScalarField>>();
+
+        // lock all polynomials and make sure they all have the same num_vars
+        let mut polys_locks = polynomials.iter().map(|p| p.lock().unwrap()).collect::<Vec<_>>();
+        for poly_lock in &polys_locks {
+            assert_eq!(poly_lock.num_vars, num_vars, "All polynomials must have the same number of variables.");
+        }
+
+        // for each locked polynomial, read the next element using polynomial_lock.read_next()
+        // if the return value is Some(), multiply it to the corresponding alpha and sum it
+        // write the sum to the result poly using poly.write_next_unchecked(sum)
+        // note that there's a sum for each value read from the polynomials, so the result poly will have the same length as the source polynomials
+        for var_index in 0..(1 << num_vars) {
+            let mut sum = E::ScalarField::zero();
+            for (i, poly_lock) in polys_locks.iter_mut().enumerate() {
+                if let Some(val) = poly_lock.read_next() {
+                    // Multiply it to the corresponding alpha and sum it
+                    sum += val * &alphas[i];
+                }
+            }
+            // Write the sum to the result poly
+            poly.write_next_unchecked(sum);
+        }
+
+        poly.swap_read_write();
+
+
+        open_internal(prover_param.borrow(), Arc::new(Mutex::new(poly)), &point)
+    }
 
     /// Verifies that `value` is the evaluation at `x` of the polynomial
     /// committed inside `comm`.

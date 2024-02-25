@@ -7,6 +7,7 @@
 //! Error module.
 
 use crate::hyperplonk::arithmetic::errors::ArithErrors;
+use crate::hyperplonk::pcs::prelude::PCSError;
 use ark_serialize::SerializationError;
 use ark_std::string::String;
 use displaydoc::Display;
@@ -29,8 +30,8 @@ pub enum HyperPlonkErrors {
     SerializationError(SerializationError),
     /// PolyIOP error {0}
     PolyIOPErrors(PolyIOPErrors),
-    // /// PCS error {0}
-    // PCSErrors(PCSError),
+    /// PCS error {0}
+    PCSErrors(PCSError),
     /// Transcript error {0}
     TranscriptError(TranscriptError),
     /// Arithmetic Error: {0}
@@ -49,11 +50,11 @@ impl From<PolyIOPErrors> for HyperPlonkErrors {
     }
 }
 
-// impl From<PCSError> for HyperPlonkErrors {
-//     fn from(e: PCSError) -> Self {
-//         Self::PCSErrors(e)
-//     }
-// }
+impl From<PCSError> for HyperPlonkErrors {
+    fn from(e: PCSError) -> Self {
+        Self::PCSErrors(e)
+    }
+}
 
 impl From<TranscriptError> for HyperPlonkErrors {
     fn from(e: TranscriptError) -> Self {
