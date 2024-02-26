@@ -1,24 +1,10 @@
-// Copyright (c) 2023 Espresso Systems (espressosys.com)
-// This file is part of the HyperPlonk library.
-
-// You should have received a copy of the MIT License
-// along with the HyperPlonk library. If not, see <https://mit-license.org/>.
-
-//! Main module for multilinear KZG commitment scheme
-
 pub(crate) mod batching;
 pub(crate) mod srs;
 pub(crate) mod util;
-use crate::hyperplonk::full_snark::utils::memory_traces;
 use crate::hyperplonk::pcs::StructuredReferenceString;
 
-use crate::hyperplonk::{
-    pcs::multilinear_kzg::batching::BatchProof,
-    pcs::{prelude::Commitment, PCSError, PolynomialCommitmentScheme},
-};
-use crate::read_write::DenseMLPoly;
+use crate::hyperplonk::pcs::{prelude::Commitment, PCSError, PolynomialCommitmentScheme};
 use crate::read_write::DenseMLPolyStream;
-// use crate::hyperplonk::arithmetic::evaluate_opt;
 use crate::hyperplonk::transcript::IOPTranscript;
 use crate::read_write::ReadWriteStream;
 use ark_ec::{
@@ -27,11 +13,10 @@ use ark_ec::{
     AffineRepr, CurveGroup,
 };
 use ark_ff::{Field, PrimeField};
-use ark_poly::{DenseMultilinearExtension, MultilinearExtension};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::{
     borrow::Borrow, end_timer, format, marker::PhantomData, rand::Rng, start_timer,
-    string::ToString, sync::Arc, vec, vec::Vec, One, Zero,
+    string::ToString, sync::Arc, vec::Vec, One, Zero,
 };
 use srs::{MultilinearProverParam, MultilinearUniversalParams, MultilinearVerifierParam};
 use std::{ops::Mul, sync::Mutex};
@@ -61,7 +46,6 @@ impl<E: Pairing> PolynomialCommitmentScheme<E> for MultilinearKzgPCS<E> {
     // Commitments and proofs
     type Commitment = Commitment<E>;
     type Proof = MultilinearKzgProof<E>;
-    type BatchProof = BatchProof<E, Self>;
 
     /// Build SRS for testing.
     ///
@@ -178,25 +162,6 @@ impl<E: Pairing> PolynomialCommitmentScheme<E> for MultilinearKzgPCS<E> {
         open_internal(prover_param.borrow(), polynomial.clone(), point)
     }
 
-    // this is the multi poly multi point version
-    // /// Input a list of multilinear extensions, and a same number of points, and
-    // /// a transcript, compute a multi-opening for all the polynomials.
-    // fn multi_open(
-    //     prover_param: impl Borrow<Self::ProverParam>,
-    //     polynomials: &[Self::Polynomial],
-    //     points: &[Self::Point],
-    //     evals: &[Self::Evaluation],
-    //     transcript: &mut IOPTranscript<E::ScalarField>,
-    // ) -> Result<BatchProof<E, Self>, PCSError> {
-    //     multi_open_internal(
-    //         prover_param.borrow(),
-    //         polynomials,
-    //         points,
-    //         evals,
-    //         transcript,
-    //     )
-    // }
-
     // this is the multi poly single point version
     /// Input a list of multilinear extensions, and a same number of points, and
     /// a transcript, compute a multi-opening for all the polynomials.
@@ -204,13 +169,12 @@ impl<E: Pairing> PolynomialCommitmentScheme<E> for MultilinearKzgPCS<E> {
         prover_param: impl Borrow<Self::ProverParam>,
         polynomials: &[Self::Polynomial],
         point: Self::Point,
-        evals: &[Self::Evaluation],
         transcript: &mut IOPTranscript<E::ScalarField>,
     ) -> Result<(Self::Proof, E::ScalarField), PCSError> {
         let alpha = transcript.get_and_append_challenge(b"opening rlc").unwrap();
 
         // assert that poly has same num_vars as points length
-        let mut num_vars = polynomials[0].lock().unwrap().num_vars;
+        let num_vars = polynomials[0].lock().unwrap().num_vars;
         assert_eq!(num_vars, point.len());
 
         // create random linear combination of polynomials, a new stream in the form of poly0 + alpha * poly1 + alpha^2 * poly2 + ...
@@ -237,7 +201,7 @@ impl<E: Pairing> PolynomialCommitmentScheme<E> for MultilinearKzgPCS<E> {
         // if the return value is Some(), multiply it to the corresponding alpha and sum it
         // write the sum to the result poly using poly.write_next_unchecked(sum)
         // note that there's a sum for each value read from the polynomials, so the result poly will have the same length as the source polynomials
-        for var_index in 0..(1 << num_vars) {
+        for _ in 0..(1 << num_vars) {
             let mut sum = E::ScalarField::zero();
             for (i, poly_lock) in polys_locks.iter_mut().enumerate() {
                 if let Some(val) = poly_lock.read_next() {
@@ -269,18 +233,6 @@ impl<E: Pairing> PolynomialCommitmentScheme<E> for MultilinearKzgPCS<E> {
     ) -> Result<bool, PCSError> {
         verify_internal(verifier_param, commitment, point, value, proof)
     }
-
-    // /// Verifies that `value_i` is the evaluation at `x_i` of the polynomial
-    // /// `poly_i` committed inside `comm`.
-    // fn batch_verify(
-    //     verifier_param: &Self::VerifierParam,
-    //     commitments: &[Self::Commitment],
-    //     points: &[Self::Point],
-    //     batch_proof: &Self::BatchProof,
-    //     transcript: &mut IOPTranscript<E::ScalarField>,
-    // ) -> Result<bool, PCSError> {
-    //     batch_verify_internal(verifier_param, commitments, points, batch_proof, transcript)
-    // }
 }
 
 /// On input a polynomial `p` and a point `point`, outputs a proof for the
@@ -328,11 +280,6 @@ fn open_internal<E: Pairing>(
     {
         let ith_round = start_timer!(|| format!("{}-th round", i));
 
-        let k = nv - 1 - i;
-        let cur_dim = 1 << k;
-        // let mut q = vec![E::ScalarField::zero(); cur_dim];
-        // let mut r = vec![E::ScalarField::zero(); cur_dim];
-
         // evaluation and commit together
         let batch_size = 1 << 20; // Define the batch size.
         let mut final_commitment = E::G1::zero(); // Start with the identity element.
@@ -370,34 +317,10 @@ fn open_internal<E: Pairing>(
 
         poly_lock.decrement_num_vars();
         poly_lock.swap_read_write();
-        //====
-
-        // for b in 0..(1 << k) {
-        //     // q[b] = f[1, b] - f[0, b]
-        //     q[b] = f[(b << 1) + 1] - f[b << 1];
-
-        //     // r[b] = f[0, b] + q[b] * p
-        //     r[b] = f[b << 1] + (q[b] * point_at_k);
-        // }
-        // f = r;
-
-        // // this is a MSM over G1 and is likely to be the bottleneck
-        // let msm_timer = start_timer!(|| format!("msm of size {} at round {}", gi.evals.len(), i));
-
-        // proofs.push(E::G1::msm_unchecked(&gi.evals, &q).into_affine());
-        // end_timer!(msm_timer);
 
         end_timer!(ith_round);
     }
-    // // print poly num_vars
-    // println!("poly num_vars: {}", poly_lock.num_vars);
-    // // read all poly elements and print
-    // while let Some(poly_elem) = poly_lock.read_next() {
-    //     println!("poly_elem: {}", poly_elem);
-    // }
-    // poly_lock.read_restart();
-
-    // assert that poly has 0 vars now (only 1 point)
+    
     assert_eq!(poly_lock.num_vars, 0);
 
     let eval = poly_lock.read_next().unwrap();
@@ -478,10 +401,11 @@ fn verify_internal<E: Pairing>(
 
 #[cfg(test)]
 mod tests {
+    use crate::hyperplonk::full_snark::utils::memory_traces;
+
     use super::*;
     use ark_bls12_381::Bls12_381;
     use ark_ec::pairing::Pairing;
-    use ark_poly::{DenseMultilinearExtension, MultilinearExtension};
     use ark_std::{test_rng, vec::Vec, UniformRand};
 
     type E = Bls12_381;

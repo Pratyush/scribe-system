@@ -1,17 +1,8 @@
-// Copyright (c) 2023 Espresso Systems (espressosys.com)
-// This file is part of the HyperPlonk library.
-
-// You should have received a copy of the MIT License
-// along with the HyperPlonk library. If not, see <https://mit-license.org/>.
-
-//! Implementing Structured Reference Strings for multilinear polynomial KZG
 use crate::hyperplonk::pcs::{
     multilinear_kzg::util::{eq_eval, eq_extension},
     prelude::PCSError,
     StructuredReferenceString,
 };
-use crate::read_write::DenseMLPolyStream;
-use crate::read_write::ReadWriteStream;
 use ark_ec::{pairing::Pairing, scalar_mul::fixed_base::FixedBase, AffineRepr, CurveGroup};
 use ark_ff::{Field, PrimeField, Zero};
 use ark_poly::DenseMultilinearExtension;
@@ -21,7 +12,6 @@ use ark_std::{
     UniformRand,
 };
 use core::iter::FromIterator;
-use std::sync::{Arc, Mutex};
 
 /// Evaluations over {0,1}^n for G1 or G2
 #[derive(CanonicalSerialize, CanonicalDeserialize, Clone, Debug)]
@@ -240,26 +230,6 @@ impl<E: Pairing> StructuredReferenceString<E> for MultilinearUniversalParams<E> 
         rng: &mut R,
         supported_degree: usize,
     ) -> Result<Self, PCSError> {
-        // pub struct MultilinearUniversalParams<E: Pairing> {
-        //     /// prover parameters
-        //     pub prover_param: MultilinearProverParam<E>,
-        //     /// h^randomness: h^t1, h^t2, ..., **h^{t_nv}**
-        //     pub h_mask: Vec<E::G2Affine>,
-        // }
-
-        // pub struct MultilinearProverParam<E: Pairing> {
-        //     /// number of variables
-        //     pub num_vars: usize,
-        //     /// `pp_{0}`, `pp_{1}`, ...,pp_{nu_vars} defined
-        //     /// by XZZPD19 where pp_{nv-0}=g and
-        //     /// pp_{nv-i}=g^{eq((t_1,..t_i),(X_1,..X_i))}
-        //     pub powers_of_g: Vec<Evaluations<E::G1Affine>>,
-        //     /// generator for G1
-        //     pub g: E::G1Affine,
-        //     /// generator for G2
-        //     pub h: E::G2Affine,
-        // }
-
         let start = start_timer!(|| format!("Fake SRS generation for nv = {}", supported_degree));
 
         let pp = Self::ProverParam {
@@ -288,13 +258,16 @@ impl<E: Pairing> StructuredReferenceString<E> for MultilinearUniversalParams<E> 
             .map(|_| E::G2::rand(rng).into_affine())
             .collect();
 
-        // print the length of each powers_of_g evaluation
-        // for i in 0..supported_degree + 1 {
-        //     println!("powers_of_g[{}] length: {}", i, pp.powers_of_g[i].evals.len());
-        // }
-
+        #[cfg(debug_assertions)]
+        {
+// print the length of each powers_of_g evaluation
+        for i in 0..supported_degree + 1 {
+            println!("powers_of_g[{}] length: {}", i, pp.powers_of_g[i].evals.len());
+        }
         // print length of h_mask
-        // println!("h_mask length: {}", h_mask.len());
+        println!("h_mask length: {}", h_mask.len());
+        }
+        
 
         end_timer!(start);
 

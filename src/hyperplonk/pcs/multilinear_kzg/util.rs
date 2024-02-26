@@ -1,20 +1,8 @@
-// Copyright (c) 2023 Espresso Systems (espressosys.com)
-// This file is part of the HyperPlonk library.
-
-// You should have received a copy of the MIT License
-// along with the HyperPlonk library. If not, see <https://mit-license.org/>.
-
-//! Useful utilities for KZG PCS
-use std::sync::{Arc, Mutex};
-
 use ark_ff::PrimeField;
 use ark_poly::DenseMultilinearExtension;
 use ark_std::{end_timer, start_timer, vec::Vec};
 
-use crate::{
-    hyperplonk::pcs::PCSError,
-    read_write::{DenseMLPoly, DenseMLPolyStream, ReadWriteStream},
-};
+use crate::hyperplonk::pcs::PCSError;
 
 /// Generate eq(t,x), a product of multilinear polynomials with fixed t.
 /// eq(a,b) is takes extensions of a,b in {0,1}^num_vars such that if a and b in

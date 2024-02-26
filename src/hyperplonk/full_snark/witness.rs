@@ -1,17 +1,7 @@
-// Copyright (c) 2023 Espresso Systems (espressosys.com)
-// This file is part of the HyperPlonk library.
-
-// You should have received a copy of the MIT License
-// along with the HyperPlonk library. If not, see <https://mit-license.org/>.
-
-// use crate::{build_mle, errors::HyperPlonkErrors};
-use crate::build_mle;
 use crate::hyperplonk::full_snark::errors::HyperPlonkErrors;
 use crate::read_write::DenseMLPolyStream;
 use ark_ff::PrimeField;
-use ark_poly::DenseMultilinearExtension;
 use ark_std::log2;
-use std::sync::Arc;
 
 /// A row of witnesses of width `#wires`
 #[derive(Debug, Clone)]
@@ -66,21 +56,5 @@ impl<F: PrimeField> From<&WitnessColumn<F>> for DenseMLPolyStream<F> {
     fn from(witness: &WitnessColumn<F>) -> Self {
         let nv = witness.get_nv();
         Self::from_evaluations_slice(nv, witness.0.as_ref(), None, None)
-    }
-}
-
-impl<F: PrimeField> WitnessRow<F> {
-    /// Build MLE from matrix of witnesses.
-    ///
-    /// Given a matrix := [row1, row2, ...] where
-    /// row1:= (a1, a2, ...)
-    /// row2:= (b1, b2, ...)
-    /// row3:= (c1, c2, ...)
-    ///
-    /// output mle(a1,b1,c1, ...), mle(a2,b2,c2, ...), ...
-    pub fn build_mles(
-        matrix: &[Self],
-    ) -> Result<Vec<Arc<DenseMultilinearExtension<F>>>, HyperPlonkErrors> {
-        build_mle!(matrix)
     }
 }

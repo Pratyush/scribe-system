@@ -1,40 +1,21 @@
-// Copyright (c) 2023 Espresso Systems (espressosys.com)
-// This file is part of the HyperPlonk library.
-
-// You should have received a copy of the MIT License
-// along with the HyperPlonk library. If not, see <https://mit-license.org/>.
-
-use crate::hyperplonk::arithmetic::virtual_polynomial::{
-    // evaluate_opt,
-    VirtualPolynomial,
-};
+use crate::hyperplonk::arithmetic::virtual_polynomial::VirtualPolynomial;
 use crate::hyperplonk::full_snark::{
     custom_gate::CustomizedGates, errors::HyperPlonkErrors, structs::HyperPlonkParams,
-    witness::WitnessColumn,
 };
 use crate::hyperplonk::pcs::prelude::{Commitment, PCSError};
 use crate::hyperplonk::pcs::PolynomialCommitmentScheme;
 use crate::read_write::{DenseMLPolyStream, ReadWriteStream};
 use ark_ec::pairing::Pairing;
-// use ark_ec::pairing::Pairing;
 use ark_ff::PrimeField;
-use ark_poly::DenseMultilinearExtension;
 use ark_std::{end_timer, start_timer};
 use std::sync::Mutex;
 use std::{borrow::Borrow, sync::Arc};
-// use subroutines::pcs::{prelude::Commitment, PolynomialCommitmentScheme};
 use crate::hyperplonk::transcript::IOPTranscript;
 
 /// An accumulator structure that holds a polynomial and
 /// its opening points
 #[derive(Debug)]
 pub(super) struct PcsAccumulator<E: Pairing, PCS: PolynomialCommitmentScheme<E>> {
-    // sequence:
-    // - prod(x) at 5 points
-    // - w_merged at perm check point
-    // - w_merged at zero check points (#witness points)
-    // - selector_merged at zero check points (#selector points)
-    // - w[0] at r_pi
     pub(crate) num_var: usize,
     pub(crate) polynomials: Vec<PCS::Polynomial>,
     pub(crate) commitments: Vec<PCS::Commitment>,
@@ -72,14 +53,9 @@ where
         point: &PCS::Point,
     ) {
         let poly_num_vars = poly.lock().unwrap().num_vars;
-        // assert!(poly_num_vars == point.len());
-        // assert!(poly_num_vars == self.num_var);
+        assert!(poly_num_vars == point.len());
+        assert!(poly_num_vars == self.num_var);
 
-        // let eval = poly.lock().unwrap().evaluate(std::slice::from_ref(
-        //     point.last().unwrap()), // last field element of the point
-        // ).unwrap();
-
-        // self.evals.push(eval);
         self.polynomials.push(poly.clone());
         self.points.push(point.clone());
         self.commitments.push(*commit);
@@ -93,43 +69,14 @@ where
         transcript: &mut IOPTranscript<E::ScalarField>,
     ) -> Result<(PCS::Proof, PCS::Evaluation), PCSError> {
         // default uses the first point and assumes that all points are the same
+        // TODO: confirm that all points are the same
         Ok(PCS::multi_open_single_point(
             prover_param.borrow(),
             self.polynomials.as_ref(),
             self.points[0].clone(),
-            self.evals.as_ref(),
             transcript,
         )?)
     }
-}
-
-/// Build MLE from matrix of witnesses.
-///
-/// Given a matrix := [row1, row2, ...] where
-/// row1:= (a1, a2, ...)
-/// row2:= (b1, b2, ...)
-/// row3:= (c1, c2, ...)
-///
-/// output mle(a1,b1,c1, ...), mle(a2,b2,c2, ...), ...
-#[macro_export]
-macro_rules! build_mle {
-    ($rows:expr) => {{
-        let mut res = Vec::with_capacity($rows.len());
-        let num_vars = log2($rows.len()) as usize;
-        let num_mles = $rows[0].0.len();
-
-        for i in 0..num_mles {
-            let mut cur_coeffs = Vec::new();
-            for row in $rows.iter() {
-                cur_coeffs.push(row.0[i])
-            }
-            res.push(Arc::new(DenseMultilinearExtension::from_evaluations_vec(
-                num_vars, cur_coeffs,
-            )))
-        }
-
-        Ok(res)
-    }};
 }
 
 /// Sanity-check for HyperPlonk SNARK proving
@@ -139,7 +86,6 @@ pub(crate) fn prover_sanity_check<F: PrimeField>(
     witnesses: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
 ) -> Result<(), HyperPlonkErrors> {
     // public input length must be no greater than num_constraints
-
     if pub_input.len() > params.num_constraints {
         return Err(HyperPlonkErrors::InvalidProver(format!(
             "Public input length {} is greater than num constraits {}",
@@ -281,45 +227,6 @@ pub(crate) fn eval_f<F: PrimeField>(
     Ok(res)
 }
 
-// check perm check subclaim:
-// proof.witness_perm_check_eval ?= perm_check_sub_claim.expected_eval
-// Q(x) := prod(x) - p1(x) * p2(x)
-//     + alpha * frac(x) * g1(x) * ... * gk(x)
-//     - alpha * f1(x) * ... * fk(x)
-//
-// where p1(x) = (1-x1) * frac(x2, ..., xn, 0)
-//             + x1 * prod(x2, ..., xn, 0),
-// and p2(x) = (1-x1) * frac(x2, ..., xn, 1)
-//           + x1 * prod(x2, ..., xn, 1)
-// and gi(x) = (wi(x) + beta * perms_i(x) + gamma)
-// and fi(x) = (wi(x) + beta * s_id_i(x) + gamma)
-#[allow(clippy::too_many_arguments)]
-pub(crate) fn eval_perm_gate<F: PrimeField>(
-    prod_evals: &[F],
-    frac_evals: &[F],
-    witness_perm_evals: &[F],
-    id_evals: &[F],
-    perm_evals: &[F],
-    alpha: F,
-    beta: F,
-    gamma: F,
-    x1: F,
-) -> Result<F, HyperPlonkErrors> {
-    let p1_eval = frac_evals[1] + x1 * (prod_evals[1] - frac_evals[1]);
-    let p2_eval = frac_evals[2] + x1 * (prod_evals[2] - frac_evals[2]);
-    let mut f_prod_eval = F::one();
-    for (&w_eval, &id_eval) in witness_perm_evals.iter().zip(id_evals.iter()) {
-        f_prod_eval *= w_eval + beta * id_eval + gamma;
-    }
-    let mut g_prod_eval = F::one();
-    for (&w_eval, &p_eval) in witness_perm_evals.iter().zip(perm_evals.iter()) {
-        g_prod_eval *= w_eval + beta * p_eval + gamma;
-    }
-    let res =
-        prod_evals[0] - p1_eval * p2_eval + alpha * (frac_evals[0] * g_prod_eval - f_prod_eval);
-    Ok(res)
-}
-
 pub fn memory_traces() {
     #[cfg(all(feature = "print-trace", target_os = "linux"))]
     {
@@ -344,104 +251,126 @@ pub fn memory_traces() {
     }
 }
 
-// #[cfg(test)]
-// mod test {
-//     use std::sync::Mutex;
+#[cfg(test)]
+mod test {
+    use std::sync::Mutex;
+    use crate::read_write::{copy_mle, DenseMLPolyStream};
+    use super::*;
+    use ark_bls12_381::Fr;
+    use ark_ff::PrimeField;
 
-//     use crate::read_write::DenseMLPolyStream;
+    // TODO: this is currently failing, fix this
+    #[test]
+    fn test_build_gate() -> Result<(), HyperPlonkErrors> {
+        test_build_gate_helper::<Fr>()
+    }
 
-//     use super::*;
-//     // use ark_bls12_381::Fr;
-//     use ark_bls12_381::Fr;
-//     use ark_ff::PrimeField;
-//     // use ark_poly::MultilinearExtension;
-//     #[test]
-//     fn test_build_gate() -> Result<(), HyperPlonkErrors> {
-//         test_build_gate_helper::<Fr>()
-//     }
+    fn test_build_gate_helper<F: PrimeField>() -> Result<(), HyperPlonkErrors> {
+        let num_vars = 2;
 
-//     fn test_build_gate_helper<F: PrimeField>() -> Result<(), HyperPlonkErrors> {
-//         let num_vars = 2;
+        // ql = 3x1x2 + 2x2 whose evaluations are
+        // 0, 0 |-> 0
+        // 0, 1 |-> 2
+        // 1, 0 |-> 0
+        // 1, 1 |-> 5
+        let ql_eval = vec![F::zero(), F::from(2u64), F::zero(), F::from(5u64)];
+        let ql = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(2, ql_eval, None, None)));
 
-//         // ql = 3x1x2 + 2x2 whose evaluations are
-//         // 0, 0 |-> 0
-//         // 0, 1 |-> 2
-//         // 1, 0 |-> 0
-//         // 1, 1 |-> 5
-//         let ql_eval = vec![F::zero(), F::from(2u64), F::zero(), F::from(5u64)];
-//         let ql = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(2, ql_eval, None, None)));
+        // W1 = x1x2 + x1 whose evaluations are
+        // 0, 0 |-> 0
+        // 0, 1 |-> 0
+        // 1, 0 |-> 1
+        // 1, 1 |-> 2
+        let w_eval = vec![F::zero(), F::zero(), F::from(1u64), F::from(2u64)];
+        let w1 = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(2, w_eval, None, None)));
 
-//         // W1 = x1x2 + x1 whose evaluations are
-//         // 0, 0 |-> 0
-//         // 0, 1 |-> 0
-//         // 1, 0 |-> 1
-//         // 1, 1 |-> 2
-//         let w_eval = vec![F::zero(), F::zero(), F::from(1u64), F::from(2u64)];
-//         let w1 = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(2, w_eval, None, None)));
+        // W2 = x1 + x2 whose evaluations are
+        // 0, 0 |-> 0
+        // 0, 1 |-> 1
+        // 1, 0 |-> 1
+        // 1, 1 |-> 2
+        let w_eval = vec![F::zero(), F::one(), F::from(1u64), F::from(2u64)];
+        let w2 = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(2, w_eval, None, None)));
 
-//         // W2 = x1 + x2 whose evaluations are
-//         // 0, 0 |-> 0
-//         // 0, 1 |-> 1
-//         // 1, 0 |-> 1
-//         // 1, 1 |-> 2
-//         let w_eval = vec![F::zero(), F::one(), F::from(1u64), F::from(2u64)];
-//         let w2 = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(2, w_eval, None, None)));
+        // Example:
+        //     q_L(X) * W_1(X)^5 - W_2(X)
+        // is represented as
+        // vec![
+        //     ( 1,    Some(id_qL),    vec![id_W1, id_W1, id_W1, id_W1, id_W1]),
+        //     (-1,    None,           vec![id_W2])
+        // ]
+        let gates = CustomizedGates {
+            gates: vec![(1, Some(0), vec![0, 0, 0, 0, 0]), (-1, None, vec![1])],
+        };
+        let f = build_f(&gates, num_vars, &[ql.clone()], &[w1.clone(), w2.clone()])?;
 
-//         // Example:
-//         //     q_L(X) * W_1(X)^5 - W_2(X)
-//         // is represented as
-//         // vec![
-//         //     ( 1,    Some(id_qL),    vec![id_W1, id_W1, id_W1, id_W1, id_W1]),
-//         //     (-1,    None,           vec![id_W2])
-//         // ]
-//         let gates = CustomizedGates {
-//             gates: vec![(1, Some(0), vec![0, 0, 0, 0, 0]), (-1, None, vec![1])],
-//         };
-//         let f = build_f(&gates, num_vars, &[ql.clone()], &[w1.clone(), w2.clone()])?;
+        // Sanity check on build_f
+        // f(0, 0) = 0
+        assert_eq!(f.evaluate(&[F::zero(), F::zero()])?, F::zero());
+        // f(0, 1) = 2 * 0^5 + (-1) * 1 = -1
+        assert_eq!(f.evaluate(&[F::zero(), F::one()])?, -F::one());
+        // f(1, 0) = 0 * 1^5 + (-1) * 1 = -1
+        assert_eq!(f.evaluate(&[F::one(), F::zero()])?, -F::one());
+        // f(1, 1) = 5 * 2^5 + (-1) * 2 = 158
+        assert_eq!(f.evaluate(&[F::one(), F::one()])?, F::from(158u64));
 
-//         // Sanity check on build_f
-//         // f(0, 0) = 0
-//         assert_eq!(f.evaluate(&[F::zero(), F::zero()])?, F::zero());
-//         // f(0, 1) = 2 * 0^5 + (-1) * 1 = -1
-//         assert_eq!(f.evaluate(&[F::zero(), F::one()])?, -F::one());
-//         // f(1, 0) = 0 * 1^5 + (-1) * 1 = -1
-//         assert_eq!(f.evaluate(&[F::one(), F::zero()])?, -F::one());
-//         // f(1, 1) = 5 * 2^5 + (-1) * 2 = 158
-//         assert_eq!(f.evaluate(&[F::one(), F::one()])?, F::from(158u64));
-
-//         // test eval_f
-//         {
-//             let point = [F::zero(), F::zero()];
-//             let selector_evals = ql.evaluate(&point).unwrap();
-//             let witness_evals = [w1.evaluate(&point).unwrap(), w2.evaluate(&point).unwrap()];
-//             let eval_f = eval_f(&gates, &[selector_evals], &witness_evals)?;
-//             // f(0, 0) = 0
-//             assert_eq!(eval_f, F::zero());
-//         }
-//         {
-//             let point = [F::zero(), F::one()];
-//             let selector_evals = ql.evaluate(&point).unwrap();
-//             let witness_evals = [w1.evaluate(&point).unwrap(), w2.evaluate(&point).unwrap()];
-//             let eval_f = eval_f(&gates, &[selector_evals], &witness_evals)?;
-//             // f(0, 1) = 2 * 0^5 + (-1) * 1 = -1
-//             assert_eq!(eval_f, -F::one());
-//         }
-//         {
-//             let point = [F::one(), F::zero()];
-//             let selector_evals = ql.evaluate(&point).unwrap();
-//             let witness_evals = [w1.evaluate(&point).unwrap(), w2.evaluate(&point).unwrap()];
-//             let eval_f = eval_f(&gates, &[selector_evals], &witness_evals)?;
-//             // f(1, 0) = 0 * 1^5 + (-1) * 1 = -1
-//             assert_eq!(eval_f, -F::one());
-//         }
-//         {
-//             let point = [F::one(), F::one()];
-//             let selector_evals = ql.evaluate(&point).unwrap();
-//             let witness_evals = [w1.evaluate(&point).unwrap(), w2.evaluate(&point).unwrap()];
-//             let eval_f = eval_f(&gates, &[selector_evals], &witness_evals)?;
-//             // f(1, 1) = 5 * 2^5 + (-1) * 2 = 158
-//             assert_eq!(eval_f, F::from(158u64));
-//         }
-//         Ok(())
-//     }
-// }
+        // test eval_f
+        {
+            let ql = copy_mle(&ql, None, None);
+            let w1 = copy_mle(&w1, None, None);
+            let w2 = copy_mle(&w2, None, None);
+            let mut ql = ql.lock().unwrap();
+            let mut w1 = w1.lock().unwrap();
+            let mut w2 = w2.lock().unwrap();
+            let point = [F::zero(), F::zero()];
+            let selector_evals = ql.evaluate(&point).unwrap();
+            let witness_evals = [w1.evaluate(&point).unwrap(), w2.evaluate(&point).unwrap()];
+            let eval_f = eval_f(&gates, &[selector_evals], &witness_evals)?;
+            // f(0, 0) = 0
+            assert_eq!(eval_f, F::zero());
+        }
+        {
+            let ql = copy_mle(&ql, None, None);
+            let w1 = copy_mle(&w1, None, None);
+            let w2 = copy_mle(&w2, None, None);
+            let mut ql = ql.lock().unwrap();
+            let mut w1 = w1.lock().unwrap();
+            let mut w2 = w2.lock().unwrap();
+            let point = [F::zero(), F::one()];
+            let selector_evals = ql.evaluate(&point).unwrap();
+            let witness_evals = [w1.evaluate(&point).unwrap(), w2.evaluate(&point).unwrap()];
+            let eval_f = eval_f(&gates, &[selector_evals], &witness_evals)?;
+            // f(0, 1) = 2 * 0^5 + (-1) * 1 = -1
+            assert_eq!(eval_f, -F::one());
+        }
+        {
+            let ql = copy_mle(&ql, None, None);
+            let w1 = copy_mle(&w1, None, None);
+            let w2 = copy_mle(&w2, None, None);
+            let mut ql = ql.lock().unwrap();
+            let mut w1 = w1.lock().unwrap();
+            let mut w2 = w2.lock().unwrap();
+            let point = [F::one(), F::zero()];
+            let selector_evals = ql.evaluate(&point).unwrap();
+            let witness_evals = [w1.evaluate(&point).unwrap(), w2.evaluate(&point).unwrap()];
+            let eval_f = eval_f(&gates, &[selector_evals], &witness_evals)?;
+            // f(1, 0) = 0 * 1^5 + (-1) * 1 = -1
+            assert_eq!(eval_f, -F::one());
+        }
+        {
+            let ql = copy_mle(&ql, None, None);
+            let w1 = copy_mle(&w1, None, None);
+            let w2 = copy_mle(&w2, None, None);
+            let mut ql = ql.lock().unwrap();
+            let mut w1 = w1.lock().unwrap();
+            let mut w2 = w2.lock().unwrap();
+            let point = [F::one(), F::one()];
+            let selector_evals = ql.evaluate(&point).unwrap();
+            let witness_evals = [w1.evaluate(&point).unwrap(), w2.evaluate(&point).unwrap()];
+            let eval_f = eval_f(&gates, &[selector_evals], &witness_evals)?;
+            // f(1, 1) = 5 * 2^5 + (-1) * 2 = 158
+            assert_eq!(eval_f, F::from(158u64));
+        }
+        Ok(())
+    }
+}

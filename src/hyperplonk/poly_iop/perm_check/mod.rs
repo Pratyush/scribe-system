@@ -1,23 +1,16 @@
-use crate::{
-    hyperplonk::{
+use crate::hyperplonk::{
         arithmetic::virtual_polynomial::{VPAuxInfo, VirtualPolynomial},
         poly_iop::{
             errors::PolyIOPErrors,
-            structs::{IOPProof, IOPProverState, IOPVerifierState},
             PolyIOP,
         },
         transcript::IOPTranscript,
-    },
-    read_write::{DenseMLPolyStream, ReadWriteStream},
-};
-// use arithmetic::{VPAuxInfo, VirtualPolynomial};
+    };
 use ark_ff::PrimeField;
-// use ark_poly::DenseMultilinearExtension;
-use ark_std::{end_timer, start_timer, Zero};
-use std::{fmt::Debug, io::Seek, iter::Sum, sync::Arc};
+use ark_std::{end_timer, start_timer};
+use std::fmt::Debug;
 
 use super::{sum_check::SumCheck, zero_check::ZeroCheck};
-// use transcript::IOPTranscript;
 
 pub mod util;
 
@@ -46,23 +39,6 @@ pub trait PermutationCheck<F: PrimeField>: ZeroCheck<F> {
     /// ProductCheck prover/verifier.
     fn init_transcript() -> Self::Transcript;
 
-    /// Proves that two lists of n-variate multilinear polynomials `(f1, f2,
-    /// ..., fk)` and `(g1, ..., gk)` satisfy:
-    ///   \prod_{x \in {0,1}^n} f1(x) * ... * fk(x)
-    /// = \prod_{x \in {0,1}^n} g1(x) * ... * gk(x)
-    ///
-    /// Inputs:
-    /// - fxs: the list of numerator multilinear polynomial
-    /// - gxs: the list of denominator multilinear polynomial
-    /// - transcript: the IOP transcript
-    /// - pk: PCS committing key
-    ///
-    /// Outputs
-    /// - the product check proof
-    /// - the product polynomial (used for testing)
-    /// - the fractional polynomial (used for testing)
-    ///
-    /// Cost: O(N)
     #[allow(clippy::type_complexity)]
     fn prove(
         // pcs_param: &PCS::ProverParam,
@@ -81,27 +57,6 @@ pub trait PermutationCheck<F: PrimeField>: ZeroCheck<F> {
         PolyIOPErrors,
     >;
 
-    // #[allow(clippy::type_complexity)]
-    // fn prove_plonk(
-    //     // pcs_param: &PCS::ProverParam,
-    //     p: Vec<Self::MultilinearExtension>,
-    //     pi: Vec<Self::MultilinearExtension>,
-    //     index: Vec<Self::MultilinearExtension>,
-    //     transcript: &mut IOPTranscript<F>,
-    // ) -> Result<
-    //     (
-    //         Self::PermutationCheckProof,
-    //         Vec<Self::MultilinearExtension>,
-    //         Vec<Self::MultilinearExtension>,
-    //         Self::MultilinearExtension,
-    //     ),
-    //     PolyIOPErrors,
-    // >;
-
-    /// Verify that for witness multilinear polynomials (f1, ..., fk, g1, ...,
-    /// gk) it holds that
-    ///      `\prod_{x \in {0,1}^n} f1(x) * ... * fk(x)
-    ///     = \prod_{x \in {0,1}^n} g1(x) * ... * gk(x)`
     fn verify(
         proof: &Self::PermutationCheckProof,
         aux_info: &VPAuxInfo<F>,
@@ -123,10 +78,10 @@ where
 
     fn prove(
         // pcs_param: &PCS::ProverParam,
-        mut p: Self::MultilinearExtension,
-        mut q: Self::MultilinearExtension,
-        mut pi: Self::MultilinearExtension,
-        mut index: Self::MultilinearExtension,
+        p: Self::MultilinearExtension,
+        q: Self::MultilinearExtension,
+        pi: Self::MultilinearExtension,
+        index: Self::MultilinearExtension,
         transcript: &mut IOPTranscript<F>,
     ) -> Result<
         (
@@ -146,11 +101,11 @@ where
 
         let gamma = transcript.get_and_append_challenge(b"gamma")?;
 
-        // // print prover alpha
-        // println!("prover alpha: {}", alpha);
+        #[cfg(debug_assertions)]
+        println!("prover alpha: {}", alpha);
 
         // compute the fractional polynomials h_p and h_q
-        let (mut h_p, mut h_q) =
+        let (h_p, h_q) =
             util::compute_frac_poly(&p, &q, &pi, &index, alpha, gamma).unwrap();
 
         // get challenge batch_factor for batch zero check of t_1 + batch_factor * t_2, where t_1 = h_p * (p + alpha * pi) - 1 and t_2 = h_q * (q + alpha) - 1

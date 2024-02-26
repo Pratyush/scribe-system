@@ -1,13 +1,6 @@
-// Copyright (c) 2023 Espresso Systems (espressosys.com)
-// This file is part of the HyperPlonk library.
-
-// You should have received a copy of the MIT License
-// along with the HyperPlonk library. If not, see <https://mit-license.org/>.
-
 mod errors;
 pub mod multilinear_kzg;
 mod structs;
-// mod univariate_kzg;
 
 pub mod prelude;
 
@@ -38,8 +31,6 @@ pub trait PolynomialCommitmentScheme<E: Pairing> {
     type Commitment: Clone + CanonicalSerialize + CanonicalDeserialize + Debug + PartialEq + Eq;
     /// Proofs
     type Proof: Clone + CanonicalSerialize + CanonicalDeserialize + Debug + PartialEq + Eq;
-    // /// Batch proofs
-    type BatchProof;
 
     /// Build SRS for testing.
     ///
@@ -97,27 +88,11 @@ pub trait PolynomialCommitmentScheme<E: Pairing> {
         point: &Self::Point,
     ) -> Result<(Self::Proof, Self::Evaluation), PCSError>;
 
-    // this is the multi poly multi point version
-    /// Input a list of multilinear extensions, and a same number of points, and
-    /// a transcript, compute a multi-opening for all the polynomials.
-    fn multi_open(
-        _prover_param: impl Borrow<Self::ProverParam>,
-        _polynomials: &[Self::Polynomial],
-        _points: &[Self::Point],
-        _evals: &[Self::Evaluation],
-        _transcript: &mut IOPTranscript<E::ScalarField>,
-    ) -> Result<Self::BatchProof, PCSError> {
-        // the reason we use unimplemented!() is to enable developers to implement the
-        // trait without always implementing the batching APIs.
-        unimplemented!()
-    }
-
     // just a RLN of regular open
     fn multi_open_single_point(
         prover_param: impl Borrow<Self::ProverParam>,
         polynomials: &[Self::Polynomial],
         points: Self::Point,
-        evals: &[Self::Evaluation],
         transcript: &mut IOPTranscript<E::ScalarField>,
     ) -> Result<(Self::Proof, Self::Evaluation), PCSError>;
 
@@ -130,20 +105,6 @@ pub trait PolynomialCommitmentScheme<E: Pairing> {
         value: &E::ScalarField,
         proof: &Self::Proof,
     ) -> Result<bool, PCSError>;
-
-    // /// Verifies that `value_i` is the evaluation at `x_i` of the polynomial
-    // /// `poly_i` committed inside `comm`.
-    // fn batch_verify(
-    //     _verifier_param: &Self::VerifierParam,
-    //     _commitments: &[Self::Commitment],
-    //     _points: &[Self::Point],
-    //     _batch_proof: &Self::BatchProof,
-    //     _transcript: &mut IOPTranscript<E::ScalarField>,
-    // ) -> Result<bool, PCSError> {
-    //     // the reason we use unimplemented!() is to enable developers to implement the
-    //     // trait without always implementing the batching APIs.
-    //     unimplemented!()
-    // }
 }
 
 /// API definitions for structured reference string
