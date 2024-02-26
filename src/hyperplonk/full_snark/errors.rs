@@ -1,19 +1,10 @@
-// Copyright (c) 2023 Espresso Systems (espressosys.com)
-// This file is part of the HyperPlonk library.
-
-// You should have received a copy of the MIT License
-// along with the HyperPlonk library. If not, see <https://mit-license.org/>.
-
-//! Error module.
-
 use crate::hyperplonk::arithmetic::errors::ArithErrors;
 use crate::hyperplonk::pcs::prelude::PCSError;
+use crate::hyperplonk::poly_iop::errors::PolyIOPErrors;
+use crate::hyperplonk::transcript::TranscriptError;
 use ark_serialize::SerializationError;
 use ark_std::string::String;
 use displaydoc::Display;
-// use subroutines::{pcs::prelude::PCSError, poly_iop::prelude::PolyIOPErrors};
-use crate::hyperplonk::poly_iop::errors::PolyIOPErrors;
-use crate::hyperplonk::transcript::TranscriptError;
 
 /// A `enum` specifying the possible failure modes of hyperplonk.
 #[derive(Display, Debug)]
