@@ -24,10 +24,7 @@ use ark_poly::Polynomial;
 // use ark_poly::DenseMultilinearExtension;
 use crate::hyperplonk::pcs::multilinear_kzg::batching::BatchProofSinglePoint;
 use ark_std::log2;
-use std::{
-    iter::Sum,
-    sync::{Arc, Mutex},
-};
+use std::sync::{Arc, Mutex};
 
 /// The proof for the HyperPlonk PolyIOP, consists of the following:
 ///   - the commitments to all witness MLEs
@@ -35,36 +32,17 @@ use std::{
 ///   - the zero-check proof for checking custom gate-satisfiability
 ///   - the permutation-check proof for checking the copy constraints
 #[derive(Clone)]
-// pub struct HyperPlonkProof<E, PC, PCS>
 pub struct HyperPlonkProof<E, SC, PCS>
 where
     E: Pairing,
     SC: SumCheck<E::ScalarField>,
-    // PC: PermutationCheck<E, PCS>,
-    // PC: PermutationCheck<F>,
     PCS: PolynomialCommitmentScheme<E>,
 {
-    // PCS commit for witnesses
     pub witness_commits: Vec<PCS::Commitment>,
-    // pub witnesses: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
-    // pub batch_openings: PCS::BatchProof,
     pub opening: BatchProofSinglePoint<E, PCS>, // proof,
-    // =======================================================================
-    // IOP proofs
-    // =======================================================================
-    // the custom gate zerocheck proof
-    // pub zero_check_proof: <PC as ZeroCheck<E::ScalarField>>::ZeroCheckProof,
-    // pub zero_check_proof: <PC as ZeroCheck<F>>::ZeroCheckProof,
-    // the permutation check proof for copy constraints
-    // pub perm_check_proof: PC::PermutationCheckProof,
     pub sum_check_proof: SC::SumCheckProof,
-    // virtual poly for zero check, shouldn't return for zk but it's for benchmarking
-    // pub sum_check_virtual_poly: VirtualPolynomial<F>,
     pub h_comm: Vec<PCS::Commitment>,
     pub h_prime_comm: Vec<PCS::Commitment>,
-    // pub eq_x_r: Arc<Mutex<DenseMLPolyStream<F>>>,
-    // pub witness_polys_merge: Arc<Mutex<DenseMLPolyStream<F>>>,
-    pub batch_sum_check: VirtualPolynomial<E::ScalarField>,
 }
 
 /// The HyperPlonk instance parameters, consists of the following:

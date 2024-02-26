@@ -1,22 +1,8 @@
-// Copyright (c) 2023 Espresso Systems (espressosys.com)
-// This file is part of the HyperPlonk library.
-
-// You should have received a copy of the MIT License
-// along with the HyperPlonk library. If not, see <https://mit-license.org/>.
-
-//! Main module for the HyperPlonk SNARK.
-
 use std::sync::{Arc, Mutex};
 
+use crate::read_write::DenseMLPolyStream;
 use ark_ec::pairing::Pairing;
-use ark_ff::PrimeField;
-// use ark_ec::pairing::Pairing;
 use errors::HyperPlonkErrors;
-// use subroutines::{pcs::prelude::PolynomialCommitmentScheme, poly_iop::prelude::PermutationCheck};
-use crate::{
-    // hyperplonk::poly_iop::prelude::PermutationCheck,
-    read_write::DenseMLPolyStream,
-};
 
 use super::{pcs::PolynomialCommitmentScheme, poly_iop::prelude::SumCheck};
 
@@ -31,11 +17,7 @@ pub mod utils;
 mod witness;
 
 /// A trait for HyperPlonk SNARKs.
-/// A HyperPlonk is derived from ZeroChecks and PermutationChecks.
-// pub trait HyperPlonkSNARK<E, PCS>: PermutationCheck<E, PCS>
-// where
-//     E: Pairing,
-//     PCS: PolynomialCommitmentScheme<E>,
+/// A HyperPlonk is derived from SumCheck
 pub trait HyperPlonkSNARK<E, PCS>: SumCheck<E::ScalarField>
 where
     E: Pairing,
@@ -71,9 +53,7 @@ where
     /// - The HyperPlonk SNARK proof.
     fn prove(
         pk: &Self::ProvingKey,
-        // pub_input: &[E::ScalarField],
         pub_input: &[E::ScalarField],
-        // witnesses: &[WitnessColumn<E::ScalarField>],
         witnesses: Vec<Arc<Mutex<DenseMLPolyStream<E::ScalarField>>>>,
     ) -> Result<Self::Proof, HyperPlonkErrors>;
 
@@ -87,7 +67,6 @@ where
     /// - Return a boolean on whether the verification is successful
     fn verify(
         vk: &Self::VerifyingKey,
-        // pub_input: &[E::ScalarField],
         pub_input: &[E::ScalarField],
         proof: &Self::Proof,
     ) -> Result<bool, HyperPlonkErrors>;

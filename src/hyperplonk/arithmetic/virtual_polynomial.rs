@@ -495,7 +495,7 @@ impl<F: PrimeField> VirtualPolynomial<F> {
         alpha: F,
         batch_factor: F,
         gamma: F,
-    ) -> Result<Arc<Mutex<DenseMLPolyStream<F>>>, ArithErrors> {
+    ) -> Result<(), ArithErrors> {
         // return smart pointer to const mle
         let start = start_timer!(|| "build perm check batch zero check polynomial");
         let num_vars = h_p[0].lock().unwrap().num_vars;
@@ -565,7 +565,7 @@ impl<F: PrimeField> VirtualPolynomial<F> {
 
         end_timer!(start);
 
-        Ok(constant_mle)
+        Ok(())
     }
 }
 
