@@ -8,9 +8,12 @@
 
 use crate::{
     hyperplonk::{
-        arithmetic::virtual_polynomial::VirtualPolynomial, full_snark::{
+        arithmetic::virtual_polynomial::VirtualPolynomial,
+        full_snark::{
             custom_gate::CustomizedGates, prelude::HyperPlonkErrors, selectors::SelectorColumn,
-        }, pcs::PolynomialCommitmentScheme, poly_iop::prelude::SumCheck
+        },
+        pcs::PolynomialCommitmentScheme,
+        poly_iop::prelude::SumCheck,
     },
     read_write::{DenseMLPoly, DenseMLPolyStream},
 };
@@ -19,9 +22,12 @@ use ark_ec::pairing::Pairing;
 use ark_ff::PrimeField;
 use ark_poly::Polynomial;
 // use ark_poly::DenseMultilinearExtension;
-use ark_std::log2;
-use std::{iter::Sum, sync::{Arc, Mutex}};
 use crate::hyperplonk::pcs::multilinear_kzg::batching::BatchProofSinglePoint;
+use ark_std::log2;
+use std::{
+    iter::Sum,
+    sync::{Arc, Mutex},
+};
 
 /// The proof for the HyperPlonk PolyIOP, consists of the following:
 ///   - the commitments to all witness MLEs
@@ -42,7 +48,7 @@ where
     pub witness_commits: Vec<PCS::Commitment>,
     // pub witnesses: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
     // pub batch_openings: PCS::BatchProof,
-    pub opening: BatchProofSinglePoint<E, PCS>, // proof, 
+    pub opening: BatchProofSinglePoint<E, PCS>, // proof,
     // =======================================================================
     // IOP proofs
     // =======================================================================
@@ -51,7 +57,6 @@ where
     // pub zero_check_proof: <PC as ZeroCheck<F>>::ZeroCheckProof,
     // the permutation check proof for copy constraints
     // pub perm_check_proof: PC::PermutationCheckProof,
-    
     pub sum_check_proof: SC::SumCheckProof,
     // virtual poly for zero check, shouldn't return for zk but it's for benchmarking
     // pub sum_check_virtual_poly: VirtualPolynomial<F>,
@@ -165,10 +170,7 @@ pub struct HyperPlonkProvingKey<E: Pairing, PCS: PolynomialCommitmentScheme<E>> 
     // /// Commitments to the preprocessed selector polynomials
     pub selector_commitments: Vec<PCS::Commitment>,
     // /// Commitments to the preprocessed permutation polynomials
-    pub permutation_commitments: (
-        Vec<PCS::Commitment>,
-        Vec<PCS::Commitment>,
-    ),
+    pub permutation_commitments: (Vec<PCS::Commitment>, Vec<PCS::Commitment>),
     // /// The parameters for PCS commitment
     pub pcs_param: PCS::ProverParam,
 }
@@ -189,8 +191,8 @@ pub struct HyperPlonkVerifyingKey<E: Pairing, PCS: PolynomialCommitmentScheme<E>
     // pub selector: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
     /// Permutation oracles' commitments
     pub perm_commitments: (Vec<PCS::Commitment>, Vec<PCS::Commitment>), // (perm, index)
-    // pub perm: (
-    //     Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
-    //     Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
-    // ), // (perm, index),
+                                                                        // pub perm: (
+                                                                        //     Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
+                                                                        //     Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
+                                                                        // ), // (perm, index),
 }

@@ -212,8 +212,8 @@ pub fn compute_frac_poly_plonk<F: PrimeField>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ark_ff::Field;
     use ark_bls12_381::Fr;
+    use ark_ff::Field;
     use std::sync::{Arc, Mutex};
 
     #[test]

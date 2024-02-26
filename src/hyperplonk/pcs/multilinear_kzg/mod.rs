@@ -9,16 +9,18 @@
 pub(crate) mod batching;
 pub(crate) mod srs;
 pub(crate) mod util;
-use crate::hyperplonk::pcs::StructuredReferenceString;
 use crate::hyperplonk::full_snark::utils::memory_traces;
+use crate::hyperplonk::pcs::StructuredReferenceString;
 
 use crate::hyperplonk::{
-    pcs::{prelude::Commitment, PCSError, PolynomialCommitmentScheme}, 
-    pcs::multilinear_kzg::batching::BatchProof
+    pcs::multilinear_kzg::batching::BatchProof,
+    pcs::{prelude::Commitment, PCSError, PolynomialCommitmentScheme},
 };
-use crate::read_write::DenseMLPolyStream;
 use crate::read_write::DenseMLPoly;
+use crate::read_write::DenseMLPolyStream;
 // use crate::hyperplonk::arithmetic::evaluate_opt;
+use crate::hyperplonk::transcript::IOPTranscript;
+use crate::read_write::ReadWriteStream;
 use ark_ec::{
     pairing::Pairing,
     scalar_mul::{fixed_base::FixedBase, variable_base::VariableBaseMSM},
@@ -31,15 +33,8 @@ use ark_std::{
     borrow::Borrow, end_timer, format, marker::PhantomData, rand::Rng, start_timer,
     string::ToString, sync::Arc, vec, vec::Vec, One, Zero,
 };
-use std::{ops::Mul, sync::Mutex};
-use crate::hyperplonk::pcs::multilinear_kzg::batching::{
-    // batch_verify_internal, 
-    // multi_open_internal
-};
 use srs::{MultilinearProverParam, MultilinearUniversalParams, MultilinearVerifierParam};
-use crate::hyperplonk::transcript::IOPTranscript;
-use crate::read_write::ReadWriteStream;
-
+use std::{ops::Mul, sync::Mutex};
 
 /// KZG Polynomial Commitment Scheme on multilinear polynomials.
 pub struct MultilinearKzgPCS<E: Pairing> {
@@ -79,7 +74,10 @@ impl<E: Pairing> PolynomialCommitmentScheme<E> for MultilinearKzgPCS<E> {
         MultilinearUniversalParams::<E>::gen_srs_for_testing(rng, log_size)
     }
 
-    fn gen_fake_srs_for_testing<R: Rng>(rng: &mut R, log_size: usize) -> Result<Self::SRS, PCSError> {
+    fn gen_fake_srs_for_testing<R: Rng>(
+        rng: &mut R,
+        log_size: usize,
+    ) -> Result<Self::SRS, PCSError> {
         MultilinearUniversalParams::<E>::gen_fake_srs_for_testing(rng, log_size)
     }
 
@@ -99,7 +97,7 @@ impl<E: Pairing> PolynomialCommitmentScheme<E> for MultilinearKzgPCS<E> {
                 return Err(PCSError::InvalidParameters(
                     "multilinear should receive a num_var param".to_string(),
                 ))
-            },
+            }
         };
         let (ml_ck, ml_vk) = srs.borrow().trim(supported_num_vars)?;
 
@@ -114,12 +112,12 @@ impl<E: Pairing> PolynomialCommitmentScheme<E> for MultilinearKzgPCS<E> {
         prover_param: impl Borrow<Self::ProverParam>,
         poly: &Self::Polynomial,
     ) -> Result<Self::Commitment, PCSError> {
-        
         let prover_param = prover_param.borrow();
         let mut poly_lock = poly.lock().unwrap();
         let poly_num_vars = poly_lock.num_vars;
-        
-        let commit_timer: ark_std::perf_trace::TimerInfo = start_timer!(|| format!("commit poly nv = {}", poly_num_vars));
+
+        let commit_timer: ark_std::perf_trace::TimerInfo =
+            start_timer!(|| format!("commit poly nv = {}", poly_num_vars));
         if prover_param.num_vars < poly_num_vars {
             return Err(PCSError::InvalidParameters(format!(
                 "MlE length ({}) exceeds param limit ({})",
@@ -137,10 +135,11 @@ impl<E: Pairing> PolynomialCommitmentScheme<E> for MultilinearKzgPCS<E> {
             batch_scalars.push(scalar);
             if batch_scalars.len() == batch_size {
                 // Process the current batch
-                let evals_slice = &prover_param.powers_of_g[ignored].evals[total_scalars_processed..total_scalars_processed + batch_size];
+                let evals_slice = &prover_param.powers_of_g[ignored].evals
+                    [total_scalars_processed..total_scalars_processed + batch_size];
                 let commitment_batch = E::G1::msm_unchecked(evals_slice, &batch_scalars);
                 final_commitment += commitment_batch;
-    
+
                 total_scalars_processed += batch_size; // Update the total number of scalars processed
                 batch_scalars.clear(); // Reset for next batch
             }
@@ -148,11 +147,12 @@ impl<E: Pairing> PolynomialCommitmentScheme<E> for MultilinearKzgPCS<E> {
 
         // Process any remaining scalars in the last batch
         if !batch_scalars.is_empty() {
-            let evals_slice = &prover_param.powers_of_g[ignored].evals[total_scalars_processed..total_scalars_processed + batch_scalars.len()];
+            let evals_slice = &prover_param.powers_of_g[ignored].evals
+                [total_scalars_processed..total_scalars_processed + batch_scalars.len()];
             let commitment_batch = E::G1::msm_unchecked(evals_slice, &batch_scalars);
             final_commitment += commitment_batch;
         }
-        
+
         let final_commitment = final_commitment.into_affine();
 
         poly_lock.read_restart();
@@ -208,21 +208,29 @@ impl<E: Pairing> PolynomialCommitmentScheme<E> for MultilinearKzgPCS<E> {
         transcript: &mut IOPTranscript<E::ScalarField>,
     ) -> Result<(Self::Proof, E::ScalarField), PCSError> {
         let alpha = transcript.get_and_append_challenge(b"opening rlc").unwrap();
-        
+
         // assert that poly has same num_vars as points length
         let mut num_vars = polynomials[0].lock().unwrap().num_vars;
         assert_eq!(num_vars, point.len());
-        
+
         // create random linear combination of polynomials, a new stream in the form of poly0 + alpha * poly1 + alpha^2 * poly2 + ...
         let mut poly = DenseMLPolyStream::<E::ScalarField>::new(num_vars, None, None);
 
         // create a vector of 1, alpha, alpha^2, ..., alpha^polynomials.len()
-        let alphas = (0..polynomials.len()).map(|i| alpha.pow(&[i as u64])).collect::<Vec<E::ScalarField>>();
+        let alphas = (0..polynomials.len())
+            .map(|i| alpha.pow(&[i as u64]))
+            .collect::<Vec<E::ScalarField>>();
 
         // lock all polynomials and make sure they all have the same num_vars
-        let mut polys_locks = polynomials.iter().map(|p| p.lock().unwrap()).collect::<Vec<_>>();
+        let mut polys_locks = polynomials
+            .iter()
+            .map(|p| p.lock().unwrap())
+            .collect::<Vec<_>>();
         for poly_lock in &polys_locks {
-            assert_eq!(poly_lock.num_vars, num_vars, "All polynomials must have the same number of variables.");
+            assert_eq!(
+                poly_lock.num_vars, num_vars,
+                "All polynomials must have the same number of variables."
+            );
         }
 
         // for each locked polynomial, read the next element using polynomial_lock.read_next()
@@ -242,7 +250,6 @@ impl<E: Pairing> PolynomialCommitmentScheme<E> for MultilinearKzgPCS<E> {
         }
 
         poly.swap_read_write();
-
 
         open_internal(prover_param.borrow(), Arc::new(Mutex::new(poly)), &point)
     }
@@ -325,23 +332,25 @@ fn open_internal<E: Pairing>(
         let cur_dim = 1 << k;
         // let mut q = vec![E::ScalarField::zero(); cur_dim];
         // let mut r = vec![E::ScalarField::zero(); cur_dim];
-        
+
         // evaluation and commit together
         let batch_size = 1 << 20; // Define the batch size.
         let mut final_commitment = E::G1::zero(); // Start with the identity element.
         let mut total_scalars_processed = 0usize; // Track the total number of scalars processed.
 
         let mut batch_scalars = Vec::with_capacity(batch_size);
-        while let (Some(poly_even), Some(poly_odd))= (poly_lock.read_next(), poly_lock.read_next()) {
+        while let (Some(poly_even), Some(poly_odd)) = (poly_lock.read_next(), poly_lock.read_next())
+        {
             let q = poly_odd - poly_even;
             batch_scalars.push(q);
             poly_lock.write_next(poly_even + (q * point_at_k));
             if batch_scalars.len() == batch_size {
                 // Process the current batch
-                let evals_slice = &gi.evals[total_scalars_processed..total_scalars_processed + batch_size];
+                let evals_slice =
+                    &gi.evals[total_scalars_processed..total_scalars_processed + batch_size];
                 let commitment_batch = E::G1::msm_unchecked(evals_slice, &batch_scalars);
                 final_commitment += commitment_batch;
-    
+
                 total_scalars_processed += batch_size; // Update the total number of scalars processed
                 batch_scalars.clear(); // Reset for next batch
             }
@@ -349,11 +358,12 @@ fn open_internal<E: Pairing>(
 
         // Process any remaining scalars in the last batch
         if !batch_scalars.is_empty() {
-            let evals_slice = &gi.evals[total_scalars_processed..total_scalars_processed + batch_scalars.len()];
+            let evals_slice =
+                &gi.evals[total_scalars_processed..total_scalars_processed + batch_scalars.len()];
             let commitment_batch = E::G1::msm_unchecked(evals_slice, &batch_scalars);
             final_commitment += commitment_batch;
         }
-        
+
         let final_commitment = final_commitment.into_affine();
 
         proofs.push(final_commitment);
@@ -361,7 +371,7 @@ fn open_internal<E: Pairing>(
         poly_lock.decrement_num_vars();
         poly_lock.swap_read_write();
         //====
-        
+
         // for b in 0..(1 << k) {
         //     // q[b] = f[1, b] - f[0, b]
         //     q[b] = f[(b << 1) + 1] - f[b << 1];
@@ -370,7 +380,7 @@ fn open_internal<E: Pairing>(
         //     r[b] = f[b << 1] + (q[b] * point_at_k);
         // }
         // f = r;
-        
+
         // // this is a MSM over G1 and is likely to be the bottleneck
         // let msm_timer = start_timer!(|| format!("msm of size {} at round {}", gi.evals.len(), i));
 
@@ -473,7 +483,6 @@ mod tests {
     use ark_ec::pairing::Pairing;
     use ark_poly::{DenseMultilinearExtension, MultilinearExtension};
     use ark_std::{test_rng, vec::Vec, UniformRand};
-    
 
     type E = Bls12_381;
     type Fr = <E as Pairing>::ScalarField;
@@ -487,7 +496,7 @@ mod tests {
         assert_ne!(nv, 0);
         let (ck, vk) = MultilinearKzgPCS::trim(params, None, Some(nv))?;
         let point: Vec<_> = (0..nv).map(|_| Fr::rand(rng)).collect();
-        
+
         let com = MultilinearKzgPCS::commit(&ck, poly)?;
         let (proof, value) = MultilinearKzgPCS::open(&ck, poly, &point)?;
 
@@ -499,7 +508,6 @@ mod tests {
         assert!(!MultilinearKzgPCS::verify(
             &vk, &com, &point, &value, &proof
         )?);
-
 
         Ok(())
     }
@@ -519,7 +527,7 @@ mod tests {
             let poly1 = Arc::new(Mutex::new(DenseMLPolyStream::<Fr>::rand(i, &mut rng)));
             test_single_helper(&params, &poly1, &mut rng)?;
         }
-        
+
         Ok(())
     }
 

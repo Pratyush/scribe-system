@@ -11,7 +11,10 @@ use ark_ff::PrimeField;
 use ark_poly::DenseMultilinearExtension;
 use ark_std::{end_timer, start_timer, vec::Vec};
 
-use crate::{hyperplonk::pcs::PCSError, read_write::{DenseMLPolyStream, DenseMLPoly, ReadWriteStream}};
+use crate::{
+    hyperplonk::pcs::PCSError,
+    read_write::{DenseMLPoly, DenseMLPolyStream, ReadWriteStream},
+};
 
 /// Generate eq(t,x), a product of multilinear polynomials with fixed t.
 /// eq(a,b) is takes extensions of a,b in {0,1}^num_vars such that if a and b in

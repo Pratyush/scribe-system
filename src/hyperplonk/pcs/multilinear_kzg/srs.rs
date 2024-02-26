@@ -10,6 +10,8 @@ use crate::hyperplonk::pcs::{
     prelude::PCSError,
     StructuredReferenceString,
 };
+use crate::read_write::DenseMLPolyStream;
+use crate::read_write::ReadWriteStream;
 use ark_ec::{pairing::Pairing, scalar_mul::fixed_base::FixedBase, AffineRepr, CurveGroup};
 use ark_ff::{Field, PrimeField, Zero};
 use ark_poly::DenseMultilinearExtension;
@@ -19,8 +21,6 @@ use ark_std::{
     UniformRand,
 };
 use core::iter::FromIterator;
-use crate::read_write::DenseMLPolyStream;
-use crate::read_write::ReadWriteStream;
 use std::sync::{Arc, Mutex};
 
 /// Evaluations over {0,1}^n for G1 or G2
@@ -209,7 +209,11 @@ impl<E: Pairing> StructuredReferenceString<E> for MultilinearUniversalParams<E> 
         println!("num_vars: {}", num_vars);
         // print the length of each powers_of_g evaluation
         for i in 0..num_vars + 1 {
-            println!("powers_of_g[{}] length: {}", i, pp.powers_of_g[i].evals.len());
+            println!(
+                "powers_of_g[{}] length: {}",
+                i,
+                pp.powers_of_g[i].evals.len()
+            );
         }
 
         end_timer!(pp_generation_timer);
@@ -236,7 +240,6 @@ impl<E: Pairing> StructuredReferenceString<E> for MultilinearUniversalParams<E> 
         rng: &mut R,
         supported_degree: usize,
     ) -> Result<Self, PCSError> {
-
         // pub struct MultilinearUniversalParams<E: Pairing> {
         //     /// prover parameters
         //     pub prover_param: MultilinearProverParam<E>,
@@ -263,7 +266,8 @@ impl<E: Pairing> StructuredReferenceString<E> for MultilinearUniversalParams<E> 
             num_vars: supported_degree,
             g: E::G1::rand(rng).into_affine(),
             h: E::G2::rand(rng).into_affine(),
-            powers_of_g: (0..supported_degree + 1).rev()
+            powers_of_g: (0..supported_degree + 1)
+                .rev()
                 .map(|degree| {
                     let mut rand_g1 = E::G1::rand(rng).into_affine();
                     Evaluations {
@@ -294,9 +298,11 @@ impl<E: Pairing> StructuredReferenceString<E> for MultilinearUniversalParams<E> 
 
         end_timer!(start);
 
-        Ok(Self { prover_param: pp, h_mask })
+        Ok(Self {
+            prover_param: pp,
+            h_mask,
+        })
     }
-
 }
 
 /// fix first `pad` variables of `poly` represented in evaluation form to zero

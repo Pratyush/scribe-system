@@ -14,8 +14,9 @@ use ark_ff::PrimeField;
 use errors::HyperPlonkErrors;
 // use subroutines::{pcs::prelude::PolynomialCommitmentScheme, poly_iop::prelude::PermutationCheck};
 use crate::{
-    // hyperplonk::poly_iop::prelude::PermutationCheck, 
-    read_write::DenseMLPolyStream};
+    // hyperplonk::poly_iop::prelude::PermutationCheck,
+    read_write::DenseMLPolyStream,
+};
 
 use super::{pcs::PolynomialCommitmentScheme, poly_iop::prelude::SumCheck};
 
@@ -36,8 +37,10 @@ mod witness;
 //     E: Pairing,
 //     PCS: PolynomialCommitmentScheme<E>,
 pub trait HyperPlonkSNARK<E, PCS>: SumCheck<E::ScalarField>
-where E: Pairing,
-      PCS: PolynomialCommitmentScheme<E>{
+where
+    E: Pairing,
+    PCS: PolynomialCommitmentScheme<E>,
+{
     type Index;
     type ProvingKey;
     type VerifyingKey;

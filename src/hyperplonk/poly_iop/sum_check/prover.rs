@@ -141,8 +141,13 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
 
         // let mut total_read_time = std::time::Duration::new(0, 0);
 
-        let mut polynomials = self.poly.flattened_ml_extensions.iter().map(|x| x.lock().unwrap()).collect::<Vec<_>>();
-        
+        let mut polynomials = self
+            .poly
+            .flattened_ml_extensions
+            .iter()
+            .map(|x| x.lock().unwrap())
+            .collect::<Vec<_>>();
+
         let mut stream_values: std::collections::HashMap<usize, (F, F)> =
             std::collections::HashMap::new();
 
@@ -183,9 +188,9 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
 
                     // print read position
                     // println!("read position: {}", locked_stream.read_pointer.stream_position().unwrap());
-                    
+
                     // let read_start = Instant::now();
-                    
+
                     let eval = stream.read_next().unwrap(); // Read once for eval
                     let step = stream.read_next().unwrap() - eval; // Read once for step
 
@@ -217,7 +222,9 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
             }
 
             // restart all streams
-            polynomials.iter_mut().for_each(|stream| stream.read_restart());
+            polynomials
+                .iter_mut()
+                .for_each(|stream| stream.read_restart());
 
             // Multiplying sum by coefficient
             for s in &mut sum {

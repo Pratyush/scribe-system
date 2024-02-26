@@ -1,14 +1,5 @@
-// Copyright (c) 2023 Espresso Systems (espressosys.com)
-// This file is part of the HyperPlonk library.
-
-// You should have received a copy of the MIT License
-// along with the HyperPlonk library. If not, see <https://mit-license.org/>.
-
-//! This module defines our main mathematical object `VirtualPolynomial`; and
-//! various functions associated with it.
-
 use crate::{
-    hyperplonk::{arithmetic::errors::ArithErrors, full_snark::prelude::WitnessColumn},
+    hyperplonk::arithmetic::errors::ArithErrors,
     read_write::{DenseMLPolyStream, ReadWriteStream},
 };
 use ark_ff::PrimeField;
@@ -19,13 +10,11 @@ use ark_std::{
     rand::{Rng, RngCore},
     start_timer,
 };
-use core::num;
 use rayon::iter::IntoParallelRefMutIterator;
 use rayon::prelude::*;
 use std::{
     cmp::max,
     collections::HashMap,
-    io::Seek,
     marker::PhantomData,
     sync::{Arc, Mutex},
 };
@@ -82,7 +71,6 @@ pub struct VPAuxInfo<F: PrimeField> {
     pub phantom: PhantomData<F>,
 }
 
-
 // TODO: convert this into a trait
 impl<F: PrimeField> VirtualPolynomial<F> {
     /// Creates an empty virtual polynomial with `num_variables`.
@@ -103,7 +91,7 @@ impl<F: PrimeField> VirtualPolynomial<F> {
     pub fn new_from_mle(mle: &Arc<Mutex<DenseMLPolyStream<F>>>, coefficient: F) -> Self {
         let mle_locked = mle.lock().expect("Failed to lock mutex");
         let num_vars = mle_locked.num_vars;
-        drop(mle_locked); // Release the lock
+        drop(mle_locked);
 
         let mle_ptr: *const Mutex<DenseMLPolyStream<F>> = Arc::as_ptr(mle);
         let mut hm = HashMap::new();
@@ -148,8 +136,8 @@ impl<F: PrimeField> VirtualPolynomial<F> {
         for mle in mle_list {
             let mle_locked = mle.lock().expect("Failed to lock mutex");
 
-            // // print num_vars
-            // println!("add_mle_list num_vars: {}", mle_locked.num_vars);
+            #[cfg(debug_assertions)]
+            println!("add_mle_list num_vars: {}", mle_locked.num_vars);
 
             if mle_locked.num_vars != self.aux_info.num_variables {
                 return Err(ArithErrors::InvalidParameters(format!(
@@ -161,16 +149,23 @@ impl<F: PrimeField> VirtualPolynomial<F> {
             let mle_ptr: *const Mutex<DenseMLPolyStream<F>> = Arc::as_ptr(&mle);
             if let Some(index) = self.raw_pointers_lookup_table.get(&mle_ptr) {
                 indexed_product.push(*index);
-                // println!("mle_ptr existing: {:p}", mle_ptr);
+
+                #[cfg(debug_assertions)]
+                println!("mle_ptr existing: {:p}", mle_ptr);
             } else {
                 let curr_index = self.flattened_ml_extensions.len();
                 self.flattened_ml_extensions.push(mle.clone());
-                // println!("mle_ptr: {:p}, curr_index: {}", mle_ptr, curr_index);
+
+                #[cfg(debug_assertions)]
+                println!("mle_ptr: {:p}, curr_index: {}", mle_ptr, curr_index);
+
                 self.raw_pointers_lookup_table.insert(mle_ptr, curr_index);
                 indexed_product.push(curr_index);
             }
         }
-        // println!("self.products: {:?}", &indexed_product);
+        #[cfg(debug_assertions)]
+        println!("self.products: {:?}", &indexed_product);
+
         self.products.push((coefficient, indexed_product));
         Ok(())
     }
@@ -195,7 +190,7 @@ impl<F: PrimeField> VirtualPolynomial<F> {
             )));
         }
 
-        drop(mle_locked); // Release the lock
+        drop(mle_locked);
 
         let mle_ptr: *const Mutex<DenseMLPolyStream<F>> = Arc::as_ptr(&mle);
 
@@ -229,31 +224,27 @@ impl<F: PrimeField> VirtualPolynomial<F> {
     pub fn evaluate(&self, point: &[F]) -> Result<F, ArithErrors> {
         let start = start_timer!(|| "evaluation");
 
-        // if self.aux_info.num_variables != point.len() {
-        //     return Err(ArithErrors::InvalidParameters(format!(
-        //         "wrong number of variables {} vs {}",
-        //         self.aux_info.num_variables,
-        //         point.len()
-        //     )));
-        // }
-
-        // print point len and self.aux_info.num_variables
-        // println!("virtual poly `evaluate()`: point len: {}, self.aux_info.num_variables: {}", point.len(), self.aux_info.num_variables);
+        #[cfg(debug_assertions)]
+        println!(
+            "virtual poly `evaluate()`: point len: {}, self.aux_info.num_variables: {}",
+            point.len(),
+            self.aux_info.num_variables
+        );
 
         let evals: Vec<F> = self
             .flattened_ml_extensions
             .iter()
             .map(|x| {
-                // print num_vars
-                // let num_vars = x.lock().unwrap().num_vars;
-                // println!("virtual poly `evaluate()`: num_vars: {}", num_vars);
+                #[cfg(debug_assertions)]
+                println!(
+                    "virtual poly `evaluate()`: num_vars: {}",
+                    x.lock().unwrap().num_vars
+                );
 
                 x.lock()
                     .expect("Failed to lock mutex")
                     .evaluate(point)
-                    .unwrap() // safe unwrap here since we have
-                              // already checked that num_var
-                              // matches
+                    .unwrap()
             })
             .collect();
 
@@ -273,24 +264,16 @@ impl<F: PrimeField> VirtualPolynomial<F> {
     pub fn evaluate_single_field_streams(&self) -> Result<F, ArithErrors> {
         let start = start_timer!(|| "evaluation");
 
-        // if self.aux_info.num_variables != point.len() {
-        //     return Err(ArithErrors::InvalidParameters(format!(
-        //         "wrong number of variables {} vs {}",
-        //         self.aux_info.num_variables,
-        //         point.len()
-        //     )));
-        // }
-
-        // print point len and self.aux_info.num_variables
-        // println!("virtual poly `evaluate()`: point len: {}, self.aux_info.num_variables: {}", point.len(), self.aux_info.num_variables);
-
         let evals: Vec<F> = self
             .flattened_ml_extensions
             .iter()
             .map(|x| {
-                // print num_vars
-                // let num_vars = x.lock().unwrap().num_vars;
-                // println!("virtual poly `evaluate()`: num_vars: {}", num_vars);
+                #[cfg(debug_assertions)]
+                println!(
+                    "virtual poly `evaluate()`: num_vars: {}",
+                    x.lock().unwrap().num_vars
+                );
+
                 let mut locked_stream = x.lock().expect("Lock failed");
                 let field = locked_stream.read_next().unwrap();
                 locked_stream.read_restart();
@@ -352,10 +335,10 @@ impl<F: PrimeField> VirtualPolynomial<F> {
             poly.add_mle_list(product.into_iter(), coefficient)?;
         }
 
-        // print products of self.products
-        // poly.products.iter().for_each(|(_, p)| {
-        //     println!("rand_zero product: {:?}", p);
-        // });
+        #[cfg(debug_assertions)]
+        poly.products.iter().for_each(|(_, p)| {
+            println!("rand_zero product: {:?}", p);
+        });
 
         Ok(poly)
     }
@@ -379,32 +362,18 @@ impl<F: PrimeField> VirtualPolynomial<F> {
 
         let eq_x_r = build_eq_x_r(r)?;
 
-        // print read pointer of eq_x_r
-        // let read_pos = eq_x_r.lock().unwrap().read_pointer.stream_position().unwrap();
-        // println!("build_f_hat eq_x_r read pointer: {}", read_pos);
-
         let mut res = self.clone();
         res.mul_by_mle(eq_x_r, F::one())?;
-
 
         end_timer!(start);
         Ok(res)
     }
 
-    //     /// Print out the evaluation map for testing. Panic if the num_vars > 5.
-    //     pub fn print_evals(&self) {
-    //         if self.aux_info.num_variables > 5 {
-    //             panic!("this function is used for testing only. cannot print more than 5 num_vars")
-    //         }
-    //         for i in 0..1 << self.aux_info.num_variables {
-    //             let point = bit_decompose(i, self.aux_info.num_variables);
-    //             let point_fr: Vec<F> = point.iter().map(|&x| F::from(x)).collect();
-    //             println!("{} {}", i, self.evaluate(point_fr.as_ref()).unwrap())
-    //         }
-    //         println!()
-    //     }
-    // }
-
+    // conduct a batch zero check on t_1 and t_2
+    // t_1 = h_p * (p + alpha * pi + gamma) - 1
+    // t_2 = h_q * (q + alpha * index + gamma) - 1
+    // poly = t_1 + batch_factor * t_2 = h_p * (p + alpha * pi + gamma) - 1 + batch_factor * (h_q * (q + alpha * index + gamma) - 1)
+    // = -1-batch_factor + h_p*p + h_p*alpha*pi + batch_factor*h_q*q + batch_factor*h_q*alpha*index + gamma*h_p + gamma*batch_factor*h_q
     pub fn build_perm_check_poly(
         h_p: Arc<Mutex<DenseMLPolyStream<F>>>,
         h_q: Arc<Mutex<DenseMLPolyStream<F>>>,
@@ -416,9 +385,6 @@ impl<F: PrimeField> VirtualPolynomial<F> {
         batch_factor: F,
         gamma: F,
     ) -> Result<VirtualPolynomial<F>, ArithErrors> {
-        // conduct a batch zero check on t_1 and t_2
-        // poly = t_1 + batch_factor * t_2 = h_p * (p + alpha * pi + gamma) - 1 + batch_factor * (h_q * (q + alpha * index + gamma) - 1)
-        // = -1-batch_factor + h_p*p + h_p*alpha*pi + batch_factor*h_q*q + batch_factor*h_q*alpha*index + gamma*h_p + gamma*batch_factor*h_q
         let num_vars = h_p.lock().unwrap().num_vars;
 
         let mut poly = VirtualPolynomial::new_from_mle(
@@ -437,6 +403,8 @@ impl<F: PrimeField> VirtualPolynomial<F> {
         Ok(poly)
     }
 
+    // conduct a batch zero check on t_1, t_2, ..., t_n where n is the number of witnesses
+    // note that there's no p and q but only p, as witness is checked against a permutation of itself
     pub fn build_perm_check_poly_plonk(
         h_p: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
         h_q: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
@@ -447,27 +415,27 @@ impl<F: PrimeField> VirtualPolynomial<F> {
         batch_factor: F,
         gamma: F,
     ) -> Result<VirtualPolynomial<F>, ArithErrors> {
-        // conduct a batch zero check on t_1 and t_2
-        // poly = t_1 + batch_factor * t_2 = h_p * (p + alpha * pi) - 1 + batch_factor * (h_q * (q + alpha * index) - 1)
-        // = -1-batch_factor + h_p*p + h_p*alpha*pi + batch_factor*h_q*q + batch_factor*h_q*alpha*index
         let num_vars = h_p[0].lock().unwrap().num_vars;
 
-        // // print num_vars
-        // println!("p num_vars: {}", num_vars);
-        // // print each element of h_p
-        // let mut h_p_lock = h_p.lock().unwrap();
-        // while let Some(val) = h_p_lock.read_next() {
-        //     println!("h_p val: {}", val);
-        // }
-        // drop(h_p_lock);
-        // // print each element of pi
-        // let mut pi_lock = pi.lock().unwrap();
-        // while let Some(val) = pi_lock.read_next() {
-        //     println!("pi val: {}", val);
-        // }
-        // // print pi num_vars
-        // println!("pi num_vars: {}", pi_lock.num_vars);
-        // drop(pi_lock);
+        #[cfg(debug_assertions)]
+        {
+            // print num_vars
+            println!("p num_vars: {}", num_vars);
+            // print each element of h_p[0]
+            let mut h_p_lock = h_p[0].lock().unwrap();
+            while let Some(val) = h_p_lock.read_next() {
+                println!("h_p val: {}", val);
+            }
+            drop(h_p_lock);
+            // print each element of pi[0]
+            let mut pi_lock = pi[0].lock().unwrap();
+            while let Some(val) = pi_lock.read_next() {
+                println!("pi val: {}", val);
+            }
+            // print pi num_vars
+            println!("pi num_vars: {}", pi_lock.num_vars);
+            drop(pi_lock);
+        }
 
         // create constant = - 1 - batch_factor - batch_factor ^ 2 - ... - batch_factor ^ (num_vars - 1)
         let mut constant = F::one();
@@ -488,14 +456,26 @@ impl<F: PrimeField> VirtualPolynomial<F> {
         for i in 0..h_p.len() {
             poly.add_mle_list(vec![h_p[i].clone(), p[i].clone()], batch_factor_lower_power)
                 .unwrap();
-            poly.add_mle_list(vec![h_p[i].clone(), pi[i].clone()], batch_factor_lower_power * alpha)
+            poly.add_mle_list(
+                vec![h_p[i].clone(), pi[i].clone()],
+                batch_factor_lower_power * alpha,
+            )
+            .unwrap();
+            poly.add_mle_list(
+                vec![h_q[i].clone(), p[i].clone()],
+                batch_factor_higher_power,
+            )
+            .unwrap();
+            poly.add_mle_list(
+                vec![h_q[i].clone(), index[i].clone()],
+                batch_factor_higher_power * alpha,
+            )
+            .unwrap();
+            poly.add_mle_list(vec![h_p[i].clone()], batch_factor_lower_power * gamma)
                 .unwrap();
-            poly.add_mle_list(vec![h_q[i].clone(), p[i].clone()], batch_factor_higher_power).unwrap();
-            poly.add_mle_list(vec![h_q[i].clone(), index[i].clone()], batch_factor_higher_power * alpha)
+            poly.add_mle_list(vec![h_q[i].clone()], batch_factor_higher_power * gamma)
                 .unwrap();
-            poly.add_mle_list(vec![h_p[i].clone()], batch_factor_lower_power * gamma);
-            poly.add_mle_list(vec![h_q[i].clone()], batch_factor_higher_power * gamma).unwrap();
-            
+
             batch_factor_lower_power = batch_factor_lower_power * batch_factor * batch_factor;
             batch_factor_higher_power = batch_factor_higher_power * batch_factor * batch_factor;
         }
@@ -504,8 +484,7 @@ impl<F: PrimeField> VirtualPolynomial<F> {
     }
 
     // same as build_perm_check_poly_plonk except that it adds to an existing virtual poly
-    // just to sketch up the prover quickly for benchmark, should be removed
-    // and replaced with a proper adding two virtual polynomials function
+    // TODO: replace this with a proper adding two virtual polynomials function
     pub fn add_build_perm_check_poly_plonk(
         self: &mut VirtualPolynomial<F>,
         h_p: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
@@ -516,30 +495,30 @@ impl<F: PrimeField> VirtualPolynomial<F> {
         alpha: F,
         batch_factor: F,
         gamma: F,
-    ) -> Result<Arc<Mutex<DenseMLPolyStream<F>>>, ArithErrors> { // return smart pointer to const mle
-
+    ) -> Result<Arc<Mutex<DenseMLPolyStream<F>>>, ArithErrors> {
+        // return smart pointer to const mle
         let start = start_timer!(|| "build perm check batch zero check polynomial");
-        // conduct a batch zero check on t_1 and t_2
-        // poly = t_1 + batch_factor * t_2 = h_p * (p + alpha * pi) - 1 + batch_factor * (h_q * (q + alpha * index) - 1)
-        // = -1-batch_factor + h_p*p + h_p*alpha*pi + batch_factor*h_q*q + batch_factor*h_q*alpha*index
         let num_vars = h_p[0].lock().unwrap().num_vars;
 
-        // // print num_vars
-        // println!("p num_vars: {}", num_vars);
-        // // print each element of h_p
-        // let mut h_p_lock = h_p.lock().unwrap();
-        // while let Some(val) = h_p_lock.read_next() {
-        //     println!("h_p val: {}", val);
-        // }
-        // drop(h_p_lock);
-        // // print each element of pi
-        // let mut pi_lock = pi.lock().unwrap();
-        // while let Some(val) = pi_lock.read_next() {
-        //     println!("pi val: {}", val);
-        // }
-        // // print pi num_vars
-        // println!("pi num_vars: {}", pi_lock.num_vars);
-        // drop(pi_lock);
+        #[cfg(debug_assertions)]
+        {
+            // print num_vars
+            println!("p num_vars: {}", num_vars);
+            // print each element of h_p[0]
+            let mut h_p_lock = h_p[0].lock().unwrap();
+            while let Some(val) = h_p_lock.read_next() {
+                println!("h_p val: {}", val);
+            }
+            drop(h_p_lock);
+            // print each element of pi[0]
+            let mut pi_lock = pi[0].lock().unwrap();
+            while let Some(val) = pi_lock.read_next() {
+                println!("pi val: {}", val);
+            }
+            // print pi num_vars
+            println!("pi num_vars: {}", pi_lock.num_vars);
+            drop(pi_lock);
+        }
 
         // create constant = - batch_factor - batch_factor ^ 2 - ... - batch_factor ^ (h_p.len() * 2)
         let mut constant = -batch_factor;
@@ -549,10 +528,10 @@ impl<F: PrimeField> VirtualPolynomial<F> {
             batch_factor_power *= batch_factor;
         }
 
-        let mut constant_mle = 
-            DenseMLPolyStream::const_mle(constant, num_vars, None, None);
+        let constant_mle = DenseMLPolyStream::const_mle(constant, num_vars, None, None);
 
-        self.add_mle_list(vec![constant_mle.clone()], F::one()).unwrap();
+        self.add_mle_list(vec![constant_mle.clone()], F::one())
+            .unwrap();
 
         let mut batch_factor_lower_power = batch_factor;
         let mut batch_factor_higher_power = batch_factor * batch_factor;
@@ -560,14 +539,26 @@ impl<F: PrimeField> VirtualPolynomial<F> {
         for i in 0..h_p.len() {
             self.add_mle_list(vec![h_p[i].clone(), p[i].clone()], batch_factor_lower_power)
                 .unwrap();
-            self.add_mle_list(vec![h_p[i].clone(), pi[i].clone()], batch_factor_lower_power * alpha)
+            self.add_mle_list(
+                vec![h_p[i].clone(), pi[i].clone()],
+                batch_factor_lower_power * alpha,
+            )
+            .unwrap();
+            self.add_mle_list(
+                vec![h_q[i].clone(), p[i].clone()],
+                batch_factor_higher_power,
+            )
+            .unwrap();
+            self.add_mle_list(
+                vec![h_q[i].clone(), index[i].clone()],
+                batch_factor_higher_power * alpha,
+            )
+            .unwrap();
+            self.add_mle_list(vec![h_p[i].clone()], batch_factor_lower_power * gamma)
                 .unwrap();
-            self.add_mle_list(vec![h_q[i].clone(), p[i].clone()], batch_factor_higher_power).unwrap();
-            self.add_mle_list(vec![h_q[i].clone(), index[i].clone()], batch_factor_higher_power * alpha)
+            self.add_mle_list(vec![h_q[i].clone()], batch_factor_higher_power * gamma)
                 .unwrap();
-            self.add_mle_list(vec![h_p[i].clone()], batch_factor_lower_power * gamma).unwrap();
-            self.add_mle_list(vec![h_q[i].clone()], batch_factor_higher_power * gamma).unwrap();
-            
+
             batch_factor_lower_power = batch_factor_lower_power * batch_factor * batch_factor;
             batch_factor_higher_power = batch_factor_higher_power * batch_factor * batch_factor;
         }
@@ -576,38 +567,6 @@ impl<F: PrimeField> VirtualPolynomial<F> {
 
         Ok(constant_mle)
     }
-}
-
-/// merge a set of polynomials. Returns an error if the
-/// polynomials do not share a same number of nvs.
-pub fn merge_polynomials<F: PrimeField>(
-    polynomials: &[WitnessColumn<F>],
-    num_vars: usize,
-) -> Result<Arc<Mutex<DenseMLPolyStream<F>>>, ArithErrors> {
-    let vec_len = polynomials[0].0.len();
-    // assert that vec_len is 2^num_vars
-    if vec_len != (1 << num_vars) {
-        return Err(ArithErrors::InvalidParameters(
-            "merge_polynomial() input WitnessColumn length is not 2^num_vars".to_string(),
-        ));
-    }
-    // target length is the ceiling of the log of the number of polynomials
-    // we want to merge
-    let target_num_vars = ((polynomials.len() as f64).log2().ceil() as usize) + num_vars;
-    let mut scalars = vec![];
-    for poly in polynomials.iter() {
-        if vec_len != poly.0.len() {
-            return Err(ArithErrors::InvalidParameters(
-                "num_vars do not match for polynomials".to_string(),
-            ));
-        }
-        scalars.extend_from_slice(poly.0.as_slice());
-    }
-
-    scalars.extend_from_slice(vec![F::zero(); (1 << target_num_vars) - scalars.len()].as_ref());
-    Ok(Arc::new(Mutex::new(
-        DenseMLPolyStream::from_evaluations_vec(target_num_vars, scalars, None, None),
-    )))
 }
 
 /// This function build the eq(x, r) polynomial for any given r.
@@ -623,11 +582,13 @@ pub fn build_eq_x_r<F: PrimeField>(
 
     let _ = build_eq_x_r_helper(r, &mut stream);
 
-    // print all elements of the stream
-    // while let Some(val) = stream.read_next() {
-    //     println!("final eq_x_r val: {}", val);
-    // }
-    // stream.read_restart();
+    #[cfg(debug_assertions)]
+    {
+        while let Some(val) = stream.read_next() {
+            println!("final eq_x_r val: {}", val);
+        }
+        stream.read_restart();
+    }
 
     Ok(Arc::new(Mutex::new(stream)))
 }
@@ -670,18 +631,6 @@ fn build_eq_x_r_vec_helper<F: PrimeField>(r: &[F], buf: &mut Vec<F>) -> Result<(
     } else {
         build_eq_x_r_vec_helper(&r[1..], buf)?;
 
-        // suppose at the previous step we received [b_1, ..., b_k]
-        // for the current step we will need
-        // if x_0 = 0:   (1-r0) * [b_1, ..., b_k]
-        // if x_0 = 1:   r0 * [b_1, ..., b_k]
-        // let mut res = vec![];
-        // for &b_i in buf.iter() {
-        //     let tmp = r[0] * b_i;
-        //     res.push(b_i - tmp);
-        //     res.push(tmp);
-        // }
-        // *buf = res;
-
         let mut res = vec![F::zero(); buf.len() << 1];
         res.par_iter_mut().enumerate().for_each(|(i, val)| {
             let bi = buf[i >> 1];
@@ -698,10 +647,7 @@ fn build_eq_x_r_vec_helper<F: PrimeField>(r: &[F], buf: &mut Vec<F>) -> Result<(
     Ok(())
 }
 
-
 /// A helper function to build eq(x, r) recursively.
-/// This function takes `r.len()` steps, and for each step it requires a maximum
-/// `r.len()-1` multiplications.
 fn build_eq_x_r_helper<F: PrimeField>(
     r: &[F],
     buf: &mut DenseMLPolyStream<F>,
@@ -709,48 +655,21 @@ fn build_eq_x_r_helper<F: PrimeField>(
     if r.is_empty() {
         return Err(ArithErrors::InvalidParameters("r length is 0".to_string()));
     } else if r.len() == 1 {
-        // println!("CASE r.len == 1");
         // initializing the buffer with [1-r_0, r_0]
         buf.write_next_unchecked(F::one() - r[0]);
         buf.write_next_unchecked(r[0]);
 
         buf.swap_read_write();
-
-        // print all read elements and restart read
-        // while let Some(val) = buf.read_next() {
-        //     println!("helper eq_x_r val: {}", val);
-        // }
-        // buf.read_restart();
     } else {
-        // println!("CASE else");
         build_eq_x_r_helper(&r[1..], buf)?;
-
-        // suppose at the previous step we received [b_1, ..., b_k]
-        // for the current step we will need
-        // if x_0 = 0:   (1-r0) * [b_1, ..., b_k]
-        // if x_0 = 1:   r0 * [b_1, ..., b_k]
-        // let mut res = vec![];
-        // for &b_i in buf.iter() {
-        //     let tmp = r[0] * b_i;
-        //     res.push(b_i - tmp);
-        //     res.push(tmp);
-        // }
-        // *buf = res;
 
         // using read_next_unchecked, because we write two elements for each element read
         while let Some(elem) = buf.read_next_unchecked() {
-            // print elem
-            // println!("helper eq_x_r elem: {}", elem);
             let tmp = r[0] * elem;
             buf.write_next_unchecked(elem - tmp);
             buf.write_next_unchecked(tmp);
         }
         buf.swap_read_write();
-
-        // print all read elements and restart read
-        // while let Some(val) = buf.read_next() {
-        //     println!("helper eq_x_r val: {}", val);
-        // }
         buf.read_restart();
     }
 
@@ -794,96 +713,12 @@ pub fn identity_permutation<F: PrimeField>(num_vars: usize, num_chunks: usize) -
 mod test {
     use super::VirtualPolynomial;
     use super::*;
+    use ark_bls12_381::Fr;
     use ark_ff::Field;
     use ark_ff::UniformRand;
     use ark_std::test_rng;
-    use ark_bls12_381::Fr;
 
-    #[test]
-    fn test_merge_polynomials_success() {
-        let polynomials = vec![
-            WitnessColumn(vec![Fr::from(1), Fr::from(2), Fr::from(3), Fr::from(4)]),
-            WitnessColumn(vec![Fr::from(4), Fr::from(5), Fr::from(6), Fr::from(7)]),
-        ];
-        let stream = merge_polynomials(&polynomials, 2).unwrap();
-
-        // Fetch the stream's values for comparison using stream.lock().unwrap().read_next()
-        let mut result_values = vec![];
-        {
-            let mut stream = stream.lock().unwrap();
-            stream.read_restart(); // Ensure we start reading from the beginning
-            while let Some(val) = stream.read_next() {
-                result_values.push(val);
-            }
-        }
-        // assert that result values are correct
-        assert_eq!(
-            result_values,
-            vec![
-                Fr::from(1),
-                Fr::from(2),
-                Fr::from(3),
-                Fr::from(4),
-                Fr::from(4),
-                Fr::from(5),
-                Fr::from(6),
-                Fr::from(7)
-            ]
-        );
-    }
-
-    #[test]
-    fn test_merge_polynomials_failure_due_to_different_nvs() {
-        let polynomials = vec![
-            WitnessColumn(vec![Fr::from(1), Fr::from(2), Fr::from(3)]),
-            WitnessColumn(vec![Fr::from(4), Fr::from(5)]), // Different number of elements
-        ];
-        let result = merge_polynomials(&polynomials, 2);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_merge_polynomials_odd_number() {
-        let polynomials = vec![
-            WitnessColumn(vec![Fr::from(1), Fr::from(2), Fr::from(3), Fr::from(4)]),
-            WitnessColumn(vec![Fr::from(4), Fr::from(5), Fr::from(6), Fr::from(7)]),
-            WitnessColumn(vec![Fr::from(4), Fr::from(5), Fr::from(6), Fr::from(7)]),
-        ];
-        let stream = merge_polynomials(&polynomials, 2).unwrap();
-
-        // Fetch the stream's values for comparison using stream.lock().unwrap().read_next()
-        let mut result_values = vec![];
-        {
-            let mut stream = stream.lock().unwrap();
-            stream.read_restart(); // Ensure we start reading from the beginning
-            while let Some(val) = stream.read_next() {
-                result_values.push(val);
-            }
-        }
-        // assert that result values are correct
-        assert_eq!(
-            result_values,
-            vec![
-                Fr::from(1),
-                Fr::from(2),
-                Fr::from(3),
-                Fr::from(4),
-                Fr::from(4),
-                Fr::from(5),
-                Fr::from(6),
-                Fr::from(7),
-                Fr::from(4),
-                Fr::from(5),
-                Fr::from(6),
-                Fr::from(7),
-                Fr::from(0),
-                Fr::from(0),
-                Fr::from(0),
-                Fr::from(0)
-            ]
-        );
-    }
-
+    // TODO: this is failing now, need to fix it
     #[test]
     fn test_build_perm_check_poly() {
         // Setup sample values for alpha and r
@@ -1010,7 +845,6 @@ mod test {
             }
         }
 
-        // Assertion
         assert_eq!(
             expected_stream.len(),
             result_values.len(),

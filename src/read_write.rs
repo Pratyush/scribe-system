@@ -180,8 +180,6 @@ impl<F: Field> DenseMLPolyStream<F> {
         }
     }
 
-  
-
     pub fn from_evaluations_vec(
         num_vars: usize,
         evaluations: Vec<F>,
@@ -406,7 +404,6 @@ impl<F: Field> DenseMLPolyStream<F> {
         stream.swap_read_write();
         Arc::new(Mutex::new(stream))
     }
-
 }
 
 pub fn copy_mle<F: PrimeField>(
@@ -438,9 +435,7 @@ pub fn identity_permutation_mles<F: PrimeField>(
             stream.write_next_unchecked(F::from(i as u64));
         });
         stream.swap_read_write();
-        res.push(Arc::new(Mutex::new(
-            stream,
-        )));
+        res.push(Arc::new(Mutex::new(stream)));
     }
     res
 }
@@ -565,10 +560,13 @@ pub trait DenseMLPoly<F: Field>: ReadWriteStream<Item = F> {
 
     // TODO: clear the read stream after writing to self
     // NOTE that this function modifies the self stream, and doesn't create a new stream
-    fn add_assign(mut self, f: F, mut other: Self) where Self: Sized{
+    fn add_assign(mut self, f: F, mut other: Self)
+    where
+        Self: Sized,
+    {
         // Create a new stream for the result.
         // let mut result_stream = Self::new(self.num_vars(), read_path, write_path);
-        
+
         // Restart both input streams to ensure they are read from the beginning
         self.read_restart();
         other.read_restart();
@@ -578,7 +576,6 @@ pub trait DenseMLPoly<F: Field>: ReadWriteStream<Item = F> {
             self.write_next_unchecked(a + f * b);
         }
 
-        
         self.new_read_stream(); // replaces the read pointer but the old read pointer temp file isn't deleted
 
         self.swap_read_write();
@@ -777,10 +774,10 @@ impl<F: Field> DenseMLPoly<F> for DenseMLPolyStream<F> {}
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ark_bls12_381::Fr;
     use ark_std::rand::distributions::{Distribution, Standard};
     use ark_std::rand::rngs::StdRng; // Using StdRng for the example
     use ark_std::rand::SeedableRng;
-    use ark_bls12_381::Fr;
     use std::time::Instant;
 
     // Helper to create a stream from a list of Fr values.

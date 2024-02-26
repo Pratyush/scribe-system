@@ -181,8 +181,7 @@ pub(crate) fn prover_sanity_check<F: PrimeField>(
         .map(|i| {
             println!("public input number {}", i);
             pub_stream.read_next().unwrap()
-
-    })
+        })
         .collect();
     pub_stream.read_restart();
     drop(pub_stream);
@@ -209,7 +208,7 @@ pub(crate) fn build_f<F: PrimeField>(
     witness_mles: &[Arc<Mutex<DenseMLPolyStream<F>>>],
 ) -> Result<VirtualPolynomial<F>, HyperPlonkErrors> {
     let start = start_timer!(|| "build gate identity polynomial");
-    
+
     // TODO: check that selector and witness lengths match what is in
     // the gate definition
 

@@ -11,13 +11,13 @@ mod structs;
 
 pub mod prelude;
 
+use crate::hyperplonk::transcript::IOPTranscript;
 use ark_ec::pairing::Pairing;
 use ark_ff::Field;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::rand::Rng;
 use errors::PCSError;
 use std::{borrow::Borrow, fmt::Debug, hash::Hash};
-use crate::hyperplonk::transcript::IOPTranscript;
 
 /// This trait defines APIs for polynomial commitment schemes.
 /// Note that for our usage of PCS, we do not require the hiding property.

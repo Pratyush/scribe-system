@@ -127,8 +127,8 @@ mod test {
     use crate::hyperplonk::arithmetic::virtual_polynomial::VirtualPolynomial;
     use crate::hyperplonk::poly_iop::{errors::PolyIOPErrors, PolyIOP};
     // use ark_bls12_381::Fr;
-    use ark_std::test_rng;
     use ark_bls12_381::Fr;
+    use ark_std::test_rng;
 
     fn test_zerocheck(
         nv: usize,

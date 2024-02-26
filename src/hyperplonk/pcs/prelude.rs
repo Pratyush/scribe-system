@@ -10,12 +10,14 @@ pub use crate::hyperplonk::pcs::{
     multilinear_kzg::{
         // batching::BatchProof,
         srs::{MultilinearProverParam, MultilinearUniversalParams, MultilinearVerifierParam},
-        MultilinearKzgPCS, MultilinearKzgProof,
+        MultilinearKzgPCS,
+        MultilinearKzgProof,
     },
     structs::Commitment,
     // univariate_kzg::{
     //     srs::{UnivariateProverParam, UnivariateUniversalParams, UnivariateVerifierParam},
     //     UnivariateKzgBatchProof, UnivariateKzgPCS, UnivariateKzgProof,
     // },
-    PolynomialCommitmentScheme, StructuredReferenceString,
+    PolynomialCommitmentScheme,
+    StructuredReferenceString,
 };

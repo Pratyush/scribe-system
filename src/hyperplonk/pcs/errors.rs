@@ -7,10 +7,10 @@
 //! Error module.
 
 use crate::hyperplonk::arithmetic::errors::ArithErrors;
+use crate::hyperplonk::transcript::TranscriptError;
 use ark_serialize::SerializationError;
 use ark_std::string::String;
 use displaydoc::Display;
-use crate::hyperplonk::transcript::TranscriptError;
 
 /// A `enum` specifying the possible failure modes of the PCS.
 #[derive(Display, Debug)]

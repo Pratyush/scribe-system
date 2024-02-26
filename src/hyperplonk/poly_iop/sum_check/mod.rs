@@ -181,12 +181,18 @@ impl<F: PrimeField> SumCheck<F> for PolyIOP<F> {
             for mle in poly.flattened_ml_extensions.iter() {
                 // read next on mle and print each element
                 let mut mle_stream = mle.lock().unwrap();
-                println!("starting read pointer position of `prove` argument poly: {}", mle_stream.read_pointer.stream_position().unwrap());
+                println!(
+                    "starting read pointer position of `prove` argument poly: {}",
+                    mle_stream.read_pointer.stream_position().unwrap()
+                );
             }
             for mle in prover_state.poly.flattened_ml_extensions.iter() {
                 // read next on mle and print each element
                 let mut mle_stream = mle.lock().unwrap();
-                println!("starting read pointer position of prover_state poly: {}", mle_stream.read_pointer.stream_position().unwrap());
+                println!(
+                    "starting read pointer position of prover_state poly: {}",
+                    mle_stream.read_pointer.stream_position().unwrap()
+                );
             }
             println!("round={}, prover challenge: {:?}", i, challenge);
             transcript.append_serializable_element(b"prover msg", &prover_msg)?;
@@ -251,13 +257,13 @@ mod test {
     use super::*;
     // use ark_bls12_381::Fr;
     use crate::read_write::ReadWriteStream;
+    use ark_bls12_381::Fr;
     use ark_ff::UniformRand;
     use ark_poly::{DenseMultilinearExtension, MultilinearExtension};
     use ark_std::{
         rand::{rngs::StdRng, SeedableRng},
         test_rng,
     };
-    use ark_bls12_381::Fr;
     use std::io::Seek;
     use std::str::FromStr;
     use std::sync::{Arc, Mutex};

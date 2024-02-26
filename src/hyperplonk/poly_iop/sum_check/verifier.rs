@@ -207,8 +207,7 @@ impl<F: PrimeField> SumCheckVerifier<F> for IOPVerifierState<F> {
                     expected,
                     evaluations[0] + evaluations[1]
                 )));
-            }
-            else {
+            } else {
                 println!("sum check verifier Prover message is consistent with the claim.");
                 println!("sum check verifier expected: {}", expected);
                 println!(
@@ -374,9 +373,9 @@ mod test {
     use super::interpolate_uni_poly;
     use crate::hyperplonk::poly_iop::errors::PolyIOPErrors;
     // use ark_bls12_381::Fr;
+    use ark_bls12_381::Fr;
     use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial, Polynomial};
     use ark_std::{vec::Vec, UniformRand};
-    use ark_bls12_381::Fr;
 
     #[test]
     fn test_interpolation() -> Result<(), PolyIOPErrors> {

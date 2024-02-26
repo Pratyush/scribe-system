@@ -1,4 +1,3 @@
-use ark_ff::PrimeField;
 use ark_std::log2;
 
 /// Return the number of variables that one need for an MLE to

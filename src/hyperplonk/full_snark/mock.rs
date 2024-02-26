@@ -8,12 +8,16 @@ use std::sync::{Arc, Mutex};
 
 use crate::{
     hyperplonk::arithmetic::virtual_polynomial::identity_permutation,
-    read_write::{identity_permutation_mles, identity_permutation_mle, DenseMLPolyStream, ReadWriteStream},
+    read_write::{
+        identity_permutation_mle, identity_permutation_mles, DenseMLPolyStream, ReadWriteStream,
+    },
 };
 use ark_ff::Field;
 use ark_ff::PrimeField;
 use ark_std::{
-    end_timer, log2, rand::{rngs::StdRng, SeedableRng}, start_timer, test_rng
+    end_timer, log2,
+    rand::{rngs::StdRng, SeedableRng},
+    start_timer, test_rng,
 };
 
 use crate::hyperplonk::full_snark::{
@@ -66,7 +70,7 @@ impl<F: PrimeField> MockCircuit<F> {
         // create a Vec<Arc<Mutex<DenseMLPolyStream<F>>>> for selectors and witnesses
         let mut selectors: Vec<Arc<Mutex<DenseMLPolyStream<F>>>> = (0..num_selectors)
             .map(|_| Arc::new(Mutex::new(DenseMLPolyStream::new(nv, None, None))))
-            .collect(); 
+            .collect();
 
         let mut witnesses: Vec<Arc<Mutex<DenseMLPolyStream<F>>>> = (0..num_witnesses)
             .map(|_| Arc::new(Mutex::new(DenseMLPolyStream::new(nv, None, None))))
@@ -168,7 +172,7 @@ impl<F: PrimeField> MockCircuit<F> {
             permutation_index,
             selectors,
         };
-        
+
         end_timer!(start);
         Self {
             public_inputs,
@@ -240,7 +244,6 @@ mod test {
     use crate::hyperplonk::pcs::multilinear_kzg::MultilinearKzgPCS;
     use crate::hyperplonk::pcs::PolynomialCommitmentScheme;
     // use ark_test_curves::{Bls12_381, Fr};
-    use ark_bls12_381::Bls12_381;
     use crate::hyperplonk::{
         // pcs::{
         //     prelude::{MultilinearKzgPCS, MultilinearUniversalParams},
@@ -248,6 +251,7 @@ mod test {
         // },
         poly_iop::PolyIOP,
     };
+    use ark_bls12_381::Bls12_381;
     use ark_bls12_381::Fr;
     use std::str::FromStr;
 
@@ -332,20 +336,24 @@ mod test {
 
         let index = circuit.index;
         // generate pk and vks
-        let (pk, vk) = <PolyIOP<Fr> as HyperPlonkSNARK<Bls12_381, MultilinearKzgPCS<Bls12_381>>>::preprocess(
-            &index, pcs_srs,
-        )?;
+        let (pk, vk) =
+            <PolyIOP<Fr> as HyperPlonkSNARK<Bls12_381, MultilinearKzgPCS<Bls12_381>>>::preprocess(
+                &index, pcs_srs,
+            )?;
         // generate a proof and verify
-        let proof = 
-        <PolyIOP<Fr> as HyperPlonkSNARK<Bls12_381, MultilinearKzgPCS<Bls12_381>>>::prove(
-            &pk,
-            &circuit.public_inputs,
-            circuit.witnesses.clone(),
-        )?;
+        let proof =
+            <PolyIOP<Fr> as HyperPlonkSNARK<Bls12_381, MultilinearKzgPCS<Bls12_381>>>::prove(
+                &pk,
+                &circuit.public_inputs,
+                circuit.witnesses.clone(),
+            )?;
 
         let verify =
-        <PolyIOP<Fr> as HyperPlonkSNARK<Bls12_381, MultilinearKzgPCS<Bls12_381>>>::verify(
-                &vk, &circuit.public_inputs, &proof)?;
+            <PolyIOP<Fr> as HyperPlonkSNARK<Bls12_381, MultilinearKzgPCS<Bls12_381>>>::verify(
+                &vk,
+                &circuit.public_inputs,
+                &proof,
+            )?;
         assert!(verify);
         Ok(())
     }
@@ -364,13 +372,13 @@ mod test {
         }
         // for nv in MIN_NUM_VARS..MAX_NUM_VARS {
         //     let tubro_gate = CustomizedGates::jellyfish_turbo_plonk_gate();
-        //     test_mock_circuit_zkp_helper(nv, &tubro_gate)?;
+        //     test_mock_circuit_zkp_helper(nv, &tubro_gate, &pcs_srs)?;
         // }
         // let nv = 5;
         // for num_witness in 2..10 {
         //     for degree in CUSTOM_DEGREE {
         //         let mock_gate = CustomizedGates::mock_gate(num_witness, degree);
-        //         test_mock_circuit_zkp_helper(nv, &mock_gate)?;
+        //         test_mock_circuit_zkp_helper(nv, &mock_gate, &pcs_srs)?;
         //     }
         // }
 
