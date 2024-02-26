@@ -75,11 +75,11 @@ where
         // assert!(poly_num_vars == point.len());
         // assert!(poly_num_vars == self.num_var);
 
-        let eval = poly.lock().unwrap().evaluate(std::slice::from_ref(
-            point.last().unwrap()), // last field element of the point
-        ).unwrap();
+        // let eval = poly.lock().unwrap().evaluate(std::slice::from_ref(
+        //     point.last().unwrap()), // last field element of the point
+        // ).unwrap();
 
-        self.evals.push(eval);
+        // self.evals.push(eval);
         self.polynomials.push(poly.clone());
         self.points.push(point.clone());
         self.commitments.push(*commit);
@@ -176,8 +176,13 @@ pub(crate) fn prover_sanity_check<F: PrimeField>(
     }
     // check public input matches witness[0]'s first 2^ell elements
     let mut pub_stream = witnesses[0].lock().unwrap();
+    println!("public input len: {}", pub_input.len());
     let pub_stream_result: Vec<F> = (0..pub_input.len())
-        .map(|_| pub_stream.read_next().unwrap())
+        .map(|i| {
+            println!("public input number {}", i);
+            pub_stream.read_next().unwrap()
+
+    })
         .collect();
     pub_stream.read_restart();
     drop(pub_stream);

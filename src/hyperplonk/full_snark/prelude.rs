@@ -5,6 +5,7 @@
 // along with the HyperPlonk library. If not, see <https://mit-license.org/>.
 
 pub use crate::hyperplonk::full_snark::{
-    custom_gate::CustomizedGates, errors::HyperPlonkErrors, mock::MockCircuit,
+    custom_gate::CustomizedGates, errors::HyperPlonkErrors, 
+    // mock::MockCircuit,
     selectors::SelectorColumn, witness::WitnessColumn, HyperPlonkSNARK,
 };

@@ -419,6 +419,7 @@ pub fn copy_mle<F: PrimeField>(
     while let Some(e) = stream.read_next() {
         new_stream.write_next_unchecked(e).expect("Failed to write");
     }
+    stream.read_restart();
     new_stream.swap_read_write();
     Arc::new(Mutex::new(new_stream))
 }

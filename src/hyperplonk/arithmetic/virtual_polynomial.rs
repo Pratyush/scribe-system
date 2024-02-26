@@ -219,6 +219,7 @@ impl<F: PrimeField> VirtualPolynomial<F> {
 
         // increase the max degree by one as the MLE has degree 1.
         self.aux_info.max_degree += 1;
+
         end_timer!(start);
         Ok(())
     }
@@ -385,6 +386,7 @@ impl<F: PrimeField> VirtualPolynomial<F> {
         let mut res = self.clone();
         res.mul_by_mle(eq_x_r, F::one())?;
 
+
         end_timer!(start);
         Ok(res)
     }
@@ -514,7 +516,7 @@ impl<F: PrimeField> VirtualPolynomial<F> {
         alpha: F,
         batch_factor: F,
         gamma: F,
-    ) -> Result<(), ArithErrors> {
+    ) -> Result<Arc<Mutex<DenseMLPolyStream<F>>>, ArithErrors> { // return smart pointer to const mle
 
         let start = start_timer!(|| "build perm check batch zero check polynomial");
         // conduct a batch zero check on t_1 and t_2
@@ -550,7 +552,7 @@ impl<F: PrimeField> VirtualPolynomial<F> {
         let mut constant_mle = 
             DenseMLPolyStream::const_mle(constant, num_vars, None, None);
 
-        self.add_mle_list(vec![constant_mle], F::one()).unwrap();
+        self.add_mle_list(vec![constant_mle.clone()], F::one()).unwrap();
 
         let mut batch_factor_lower_power = batch_factor;
         let mut batch_factor_higher_power = batch_factor * batch_factor;
@@ -563,7 +565,7 @@ impl<F: PrimeField> VirtualPolynomial<F> {
             self.add_mle_list(vec![h_q[i].clone(), p[i].clone()], batch_factor_higher_power).unwrap();
             self.add_mle_list(vec![h_q[i].clone(), index[i].clone()], batch_factor_higher_power * alpha)
                 .unwrap();
-            self.add_mle_list(vec![h_p[i].clone()], batch_factor_lower_power * gamma);
+            self.add_mle_list(vec![h_p[i].clone()], batch_factor_lower_power * gamma).unwrap();
             self.add_mle_list(vec![h_q[i].clone()], batch_factor_higher_power * gamma).unwrap();
             
             batch_factor_lower_power = batch_factor_lower_power * batch_factor * batch_factor;
@@ -572,7 +574,7 @@ impl<F: PrimeField> VirtualPolynomial<F> {
 
         end_timer!(start);
 
-        Ok(())
+        Ok(constant_mle)
     }
 }
 

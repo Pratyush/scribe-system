@@ -59,6 +59,7 @@ where
     pub h_prime_comm: Vec<PCS::Commitment>,
     // pub eq_x_r: Arc<Mutex<DenseMLPolyStream<F>>>,
     // pub witness_polys_merge: Arc<Mutex<DenseMLPolyStream<F>>>,
+    pub batch_sum_check: VirtualPolynomial<E::ScalarField>,
 }
 
 /// The HyperPlonk instance parameters, consists of the following:
