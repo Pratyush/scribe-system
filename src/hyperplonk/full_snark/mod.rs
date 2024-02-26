@@ -16,14 +16,12 @@ use errors::HyperPlonkErrors;
 use crate::{
     // hyperplonk::poly_iop::prelude::PermutationCheck, 
     read_write::DenseMLPolyStream};
-// use crate::hyperplonk::poly_iop::perm_check::PermutationCheck;
-use witness::WitnessColumn;
 
 use super::{pcs::PolynomialCommitmentScheme, poly_iop::prelude::SumCheck};
 
 mod custom_gate;
 mod errors;
-// mod mock;
+mod mock;
 pub mod prelude;
 mod selectors;
 mod snark;

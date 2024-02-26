@@ -457,6 +457,10 @@ fn verify_internal<E: Pairing>(
 
     let res = E::multi_pairing(ps, hs) == ark_ec::pairing::PairingOutput(E::TargetField::one());
 
+    if res {
+        println!("pairing verify success");
+    }
+
     end_timer!(pairing_product_timer);
     end_timer!(verify_timer);
     Ok(res)

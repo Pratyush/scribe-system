@@ -898,6 +898,8 @@ mod tests {
             let _verify =
                 <PolyIOP<E::ScalarField> as HyperPlonkSNARK<E, MultilinearKzgPCS<E>>>::verify(
                 &vk, &pi, &proof)?;
+
+            assert!(_verify);
         }
 
         // {
