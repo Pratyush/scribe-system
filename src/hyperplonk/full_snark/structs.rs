@@ -1,14 +1,13 @@
+use crate::hyperplonk::pcs::multilinear_kzg::batching::BatchProofSinglePoint;
 use crate::{
     hyperplonk::{
-        full_snark::custom_gate::CustomizedGates,
-        pcs::PolynomialCommitmentScheme,
+        full_snark::custom_gate::CustomizedGates, pcs::PolynomialCommitmentScheme,
         poly_iop::prelude::SumCheck,
     },
     read_write::DenseMLPolyStream,
 };
 use ark_ec::pairing::Pairing;
 use ark_ff::PrimeField;
-use crate::hyperplonk::pcs::multilinear_kzg::batching::BatchProofSinglePoint;
 use ark_std::log2;
 use std::sync::{Arc, Mutex};
 

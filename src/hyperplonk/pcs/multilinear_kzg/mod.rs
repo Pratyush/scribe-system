@@ -4,8 +4,8 @@ pub(crate) mod util;
 use crate::hyperplonk::pcs::StructuredReferenceString;
 
 use crate::hyperplonk::pcs::{prelude::Commitment, PCSError, PolynomialCommitmentScheme};
-use crate::read_write::DenseMLPolyStream;
 use crate::hyperplonk::transcript::IOPTranscript;
+use crate::read_write::DenseMLPolyStream;
 use crate::read_write::ReadWriteStream;
 use ark_ec::{
     pairing::Pairing,
@@ -320,7 +320,7 @@ fn open_internal<E: Pairing>(
 
         end_timer!(ith_round);
     }
-    
+
     assert_eq!(poly_lock.num_vars, 0);
 
     let eval = poly_lock.read_next().unwrap();

@@ -4,13 +4,13 @@ use crate::hyperplonk::full_snark::{
 };
 use crate::hyperplonk::pcs::prelude::{Commitment, PCSError};
 use crate::hyperplonk::pcs::PolynomialCommitmentScheme;
+use crate::hyperplonk::transcript::IOPTranscript;
 use crate::read_write::{DenseMLPolyStream, ReadWriteStream};
 use ark_ec::pairing::Pairing;
 use ark_ff::PrimeField;
 use ark_std::{end_timer, start_timer};
 use std::sync::Mutex;
 use std::{borrow::Borrow, sync::Arc};
-use crate::hyperplonk::transcript::IOPTranscript;
 
 /// An accumulator structure that holds a polynomial and
 /// its opening points
@@ -253,11 +253,11 @@ pub fn memory_traces() {
 
 #[cfg(test)]
 mod test {
-    use std::sync::Mutex;
-    use crate::read_write::{copy_mle, DenseMLPolyStream};
     use super::*;
+    use crate::read_write::{copy_mle, DenseMLPolyStream};
     use ark_bls12_381::Fr;
     use ark_ff::PrimeField;
+    use std::sync::Mutex;
 
     // TODO: this is currently failing, fix this
     #[test]
@@ -274,7 +274,9 @@ mod test {
         // 1, 0 |-> 0
         // 1, 1 |-> 5
         let ql_eval = vec![F::zero(), F::from(2u64), F::zero(), F::from(5u64)];
-        let ql = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(2, ql_eval, None, None)));
+        let ql = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(
+            2, ql_eval, None, None,
+        )));
 
         // W1 = x1x2 + x1 whose evaluations are
         // 0, 0 |-> 0
@@ -282,7 +284,9 @@ mod test {
         // 1, 0 |-> 1
         // 1, 1 |-> 2
         let w_eval = vec![F::zero(), F::zero(), F::from(1u64), F::from(2u64)];
-        let w1 = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(2, w_eval, None, None)));
+        let w1 = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(
+            2, w_eval, None, None,
+        )));
 
         // W2 = x1 + x2 whose evaluations are
         // 0, 0 |-> 0
@@ -290,7 +294,9 @@ mod test {
         // 1, 0 |-> 1
         // 1, 1 |-> 2
         let w_eval = vec![F::zero(), F::one(), F::from(1u64), F::from(2u64)];
-        let w2 = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(2, w_eval, None, None)));
+        let w2 = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(
+            2, w_eval, None, None,
+        )));
 
         // Example:
         //     q_L(X) * W_1(X)^5 - W_2(X)

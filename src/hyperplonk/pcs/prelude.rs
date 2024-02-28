@@ -2,10 +2,8 @@ pub use crate::hyperplonk::pcs::{
     errors::PCSError,
     multilinear_kzg::{
         srs::{MultilinearProverParam, MultilinearUniversalParams, MultilinearVerifierParam},
-        MultilinearKzgPCS,
-        MultilinearKzgProof,
+        MultilinearKzgPCS, MultilinearKzgProof,
     },
     structs::Commitment,
-    PolynomialCommitmentScheme,
-    StructuredReferenceString,
+    PolynomialCommitmentScheme, StructuredReferenceString,
 };
