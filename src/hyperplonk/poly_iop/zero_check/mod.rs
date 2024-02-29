@@ -1,11 +1,3 @@
-// Copyright (c) 2023 Espresso Systems (espressosys.com)
-// This file is part of the HyperPlonk library.
-
-// You should have received a copy of the MIT License
-// along with the HyperPlonk library. If not, see <https://mit-license.org/>.
-
-//! Main module for the ZeroCheck protocol.
-
 use std::fmt::Debug;
 
 use crate::hyperplonk::arithmetic::virtual_polynomial::eq_eval;
@@ -126,7 +118,6 @@ mod test {
     use super::ZeroCheck;
     use crate::hyperplonk::arithmetic::virtual_polynomial::VirtualPolynomial;
     use crate::hyperplonk::poly_iop::{errors::PolyIOPErrors, PolyIOP};
-    // use ark_bls12_381::Fr;
     use ark_bls12_381::Fr;
     use ark_std::test_rng;
 
@@ -144,10 +135,12 @@ mod test {
 
             let mut transcript = <PolyIOP<Fr> as ZeroCheck<Fr>>::init_transcript();
             transcript.append_message(b"testing", b"initializing transcript for testing")?;
-            // print products of poly
-            // poly.products.iter().for_each(|p| {
-            //     println!("test_zero_check before prove product: {:?}", p);
-            // });
+
+            #[cfg(debug_assertions)]
+            poly.products.iter().for_each(|p| {
+                println!("test_zero_check before prove product: {:?}", p);
+            });
+
             let proof = <PolyIOP<Fr> as ZeroCheck<Fr>>::prove(&poly, &mut transcript)?;
 
             let poly_info = poly.aux_info.clone();
