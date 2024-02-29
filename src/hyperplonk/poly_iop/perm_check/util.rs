@@ -1,29 +1,11 @@
 use crate::{
-    hyperplonk::{
-        arithmetic::virtual_polynomial::{VPAuxInfo, VirtualPolynomial},
-        poly_iop::{
-            errors::PolyIOPErrors,
-            structs::{IOPProof, IOPProverState, IOPVerifierState},
-            PolyIOP,
-        },
-        transcript::IOPTranscript,
-    },
-    read_write::{DenseMLPoly, DenseMLPolyStream, ReadWriteStream},
+    hyperplonk::poly_iop::errors::PolyIOPErrors,
+    read_write::{DenseMLPolyStream, ReadWriteStream},
 };
-// use arithmetic::{VPAuxInfo, VirtualPolynomial};
 use ark_ff::fields::batch_inversion;
 use ark_ff::PrimeField;
-// use ark_poly::DenseMultilinearExtension;
-use ark_std::{end_timer, start_timer, Zero};
-use std::{
-    fmt::Debug,
-    io::Seek,
-    ops::Mul,
-    sync::{Arc, Mutex},
-};
-
-use crate::hyperplonk::poly_iop::zero_check::ZeroCheck;
-// use transcript::IOPTranscript;
+use ark_std::{end_timer, start_timer};
+use std::sync::{Arc, Mutex};
 
 pub fn compute_frac_poly<F: PrimeField>(
     p: &Arc<Mutex<DenseMLPolyStream<F>>>,
@@ -106,24 +88,32 @@ pub fn compute_frac_poly_plonk<F: PrimeField>(
     ),
     PolyIOPErrors,
 > {
-    // // print all values of p, pi and index
-    // let mut p_lock = p.lock().unwrap();
-    // let mut pi_lock = pi.lock().unwrap();
-    // let mut index_lock = index.lock().unwrap();
-    // // use read_next
-    // while let (Some(p_val), Some(pi_val), Some(idx_val)) =
-    //     (p_lock.read_next(), pi_lock.read_next(), index_lock.read_next())
-    // {
-    //     // print the values
-    //     println!("p_val: {}", p_val);
-    //     println!("alpha: {}", alpha);
-    //     println!("pi_val: {}", pi_val);
-    //     println!("idx_val: {}", idx_val);
-    // }
-    // // drop all the locks
-    // drop(p_lock);
-    // drop(pi_lock);
-    // drop(index_lock);
+    #[cfg(debug_assertions)]
+    {
+        // print the first element of each vector of polynomials
+        let mut p_lock = ps[0].lock().unwrap();
+        let mut pi_lock = pis[0].lock().unwrap();
+        let mut index_lock = indices[0].lock().unwrap();
+
+        while let (Some(p_val), Some(pi_val), Some(idx_val)) = (
+            p_lock.read_next(),
+            pi_lock.read_next(),
+            index_lock.read_next(),
+        ) {
+            println!("p_val: {}", p_val);
+            println!("alpha: {}", alpha);
+            println!("pi_val: {}", pi_val);
+            println!("idx_val: {}", idx_val);
+        }
+
+        p_lock.read_restart();
+        pi_lock.read_restart();
+        index_lock.read_restart();
+
+        drop(p_lock);
+        drop(pi_lock);
+        drop(index_lock);
+    }
 
     let start = start_timer!(|| "compute h_p h_q ");
 
@@ -192,9 +182,6 @@ pub fn compute_frac_poly_plonk<F: PrimeField>(
 
         hp.swap_read_write();
         hq.swap_read_write();
-
-        drop(p);
-        drop(pi);
 
         drop(hp);
         drop(hq);
