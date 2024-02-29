@@ -106,7 +106,6 @@ mod tests {
     use ark_std::rand::rngs::StdRng; // Using StdRng for reproducibility
     use ark_std::rand::SeedableRng;
     use std::time::Instant;
-    use tempfile::tempfile;
 
     #[test]
     fn benchmark_proof_creation() {
@@ -151,8 +150,11 @@ mod tests {
             let duration = start.elapsed().as_secs_f64();
             log_proof_times.push(duration.ln());
 
-            // println!("message: {:?}", proof.messages);
-            // println!("challenge: {:?}", proof.challenges);
+            #[cfg(debug_assertions)]
+            {
+                println!("message: {:?}", proof.messages);
+                println!("challenge: {:?}", proof.challenges);
+            }
 
             // Measure verification time
             let mut transcript_verifier = Transcript::new(label);
@@ -162,10 +164,13 @@ mod tests {
             let verification_duration = start.elapsed().as_secs_f64();
             log_verification_times.push(verification_duration.ln());
 
-            // println!(
-            //     "n = {}: Proof Creation Time: {:?}, Verification Time: {:?}",
-            //     n, duration, verification_duration
-            // );
+            #[cfg(debug_assertions)]
+            {
+                println!(
+                    "n = {}: Proof Creation Time: {:?}, Verification Time: {:?}",
+                    n, duration, verification_duration
+                );
+            }
 
             // Assert that the verification was successful
             assert!(verification_result.is_ok(), "Verification failed");

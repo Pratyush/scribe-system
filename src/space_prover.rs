@@ -44,11 +44,9 @@ impl<F: Field> Prover<F> for SpaceProver<F> {
         let mut a_i0 = F::zero();
         let mut a_i1 = F::zero();
 
-        // println!("CASE 3");
         while let (Some(a_even_0), Some(a_odd_0)) =
             (self.stream.read_next(), self.stream.read_next())
         {
-            // println!("CASE 1");
             if let (Some(a_even_1), Some(a_odd_1)) =
                 (self.stream.read_next(), self.stream.read_next())
             {
@@ -78,7 +76,6 @@ impl<F: Field> Prover<F> for SpaceProver<F> {
                     a_i0 += a_even_0 + a_odd_0;
                 }
             }
-            // println!("CASE 2");
         }
 
         self.stream.swap_read_write();
