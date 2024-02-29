@@ -1,13 +1,9 @@
-use ark_ff::BigInteger;
 use ark_ff::Field;
 use ark_ff::PrimeField;
-use ark_serialize::Read;
 use ark_std::end_timer;
 use ark_std::rand::RngCore;
 use ark_std::start_timer;
 use core::marker::PhantomData;
-use core::num;
-use std::fs::read;
 use std::io::Seek;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -218,42 +214,8 @@ impl<F: Field> DenseMLPolyStream<F> {
             "invalid size of partial point"
         );
 
-        // println!("fix_variables challenge: {:?}", partial_point);
-        // let mut poly = self.evaluations.to_vec();
-        // let nv = dbg!(self.num_vars);
-        // let dim = dbg!(partial_point.len());
-        // let one = F::one();
-
-        // let mut return_stream = Self::new_from_tempfile(self.num_vars - partial_point.len());
-
-        // evaluate single variable of partial point from left to right
-        // for i in 1..dim + 1 {
-        //     let r = partial_point[i - 1];
-        //     let one = F::one();
-
-        //     if i == dim {
-        //         while let (Some(even), Some(odd)) = (self.read_next(), self.read_next()) {
-        //             return_stream.write_next(even * (one - r) + odd * r);
-        //         }
-        //     } else {
-        //         while let (Some(even), Some(odd)) = (self.read_next(), self.read_next()) {
-        //             self.write_next(even * (one - r) + odd * r);
-        //         }
-        //         self.swap_read_write();
-        //     }
-        // }
-
-        // return_stream
-
-        // evaluate single variable of partial point from left to right
-        // self.read_restart();
         for &r in partial_point {
-            // if self.read_next().is_none() {
-            //     println!("Failed to read");
-            // }
             while let (Some(even), Some(odd)) = (self.read_next(), self.read_next()) {
-                // println!("fix_variables even: {}", even);
-                // println!("fix_variables odd: {}", odd);
                 self.write_next(even + r * (odd - even));
             }
             self.decrement_num_vars();
@@ -264,25 +226,7 @@ impl<F: Field> DenseMLPolyStream<F> {
     // Evaluate at a specific point to one field element
     pub fn evaluate(&mut self, point: &[F]) -> Option<F> {
         if point.len() == self.num_vars {
-            // println!("evaluate RUN");
-            // println!("point len: {}", point.len());
-            // println!("num_vars: {}", self.num_vars);
-            // dbg!(self.read_pointer.stream_position().unwrap());
             self.fix_variables(point);
-
-            // println!("===post evaluation===");
-            // // print all elements of read stream and write stream
-            // self.read_restart();
-            // self.write_restart();
-            // while let Some(read) = self.read_next() {
-            //     println!("read: {}", read);
-            // }
-            // self.swap_read_write();
-            // while let Some(write) = self.read_next() {
-            //     println!("write: {}", write);
-            // }
-            // println!("===post evaluation===");
-            // self.swap_read_write();
 
             let result = self.read_next().expect("Failed to read");
 
@@ -290,9 +234,6 @@ impl<F: Field> DenseMLPolyStream<F> {
 
             Some(result)
         } else {
-            // println!("evaluate NOT RUN");
-            // println!("point len: {}", point.len());
-            // println!("num_vars: {}", self.num_vars);
             None
         }
     }
@@ -339,10 +280,6 @@ impl<F: Field> DenseMLPolyStream<F> {
             }
             sum += product;
         }
-
-        // println!("length of multiplicands: {:?}", multiplicands.len());
-
-        // println!("length of stream: {:?}", multiplicands[0].len());
 
         let list = multiplicands
             .into_iter()
@@ -776,7 +713,7 @@ mod tests {
     use super::*;
     use ark_bls12_381::Fr;
     use ark_std::rand::distributions::{Distribution, Standard};
-    use ark_std::rand::rngs::StdRng; // Using StdRng for the example
+    use ark_std::rand::rngs::StdRng;
     use ark_std::rand::SeedableRng;
     use std::time::Instant;
 
@@ -887,7 +824,9 @@ mod tests {
         let mut stream = DenseMLPolyStream::new_from_tempfile(0);
         // Write all fields to the stream
         for value in &written_values {
-            stream.write_next(*value).expect("Failed to write");
+            stream
+                .write_next_unchecked(*value)
+                .expect("Failed to write");
         }
         stream.swap_read_write();
 
@@ -928,7 +867,9 @@ mod tests {
             // Measure write time
             let start_write = Instant::now();
             for value in &written_values {
-                stream.write_next(*value).expect("Failed to write");
+                stream
+                    .write_next_unchecked(*value)
+                    .expect("Failed to write");
             }
             let duration_write = start_write.elapsed().as_secs_f64();
             log_write_times.push(duration_write.ln());
