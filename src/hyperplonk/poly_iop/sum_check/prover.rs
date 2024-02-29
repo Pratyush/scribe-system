@@ -1,14 +1,5 @@
-// Copyright (c) 2023 Espresso Systems (espressosys.com)
-// This file is part of the HyperPlonk library.
-
-// You should have received a copy of the MIT License
-// along with the HyperPlonk library. If not, see <https://mit-license.org/>.
-
-//! Prover subroutines for a SumCheck protocol.
-
 use super::SumCheckProver;
 use crate::hyperplonk::arithmetic::virtual_polynomial::VirtualPolynomial;
-use crate::read_write::DenseMLPolyStream;
 use crate::{
     hyperplonk::poly_iop::{
         errors::PolyIOPErrors,
@@ -17,13 +8,9 @@ use crate::{
     read_write::ReadWriteStream,
 };
 use ark_ff::{batch_inversion, PrimeField};
-// use ark_poly::DenseMultilinearExtension;
-use ark_std::{cfg_into_iter, end_timer, start_timer, vec::Vec};
-use rayon::prelude::{IntoParallelIterator, IntoParallelRefIterator};
+use ark_std::{end_timer, start_timer, vec::Vec};
 use std::collections::HashSet;
 use std::io::Seek;
-use std::sync::Arc;
-use std::time::Instant;
 
 #[cfg(feature = "parallel")]
 use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
@@ -95,6 +82,7 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
         //     .collect();
 
         if let Some(chal) = challenge {
+            #[cfg(debug_assertions)]
             println!("sum check ROUND CHALLENGE: {}", chal);
             // challenge is None for the first round
             if self.round == 0 {
@@ -105,6 +93,7 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
             self.challenges.push(*chal);
 
             let r = self.challenges[self.round - 1];
+            #[cfg(debug_assertions)]
             println!("sum check prover challenge: {}", r);
             #[cfg(feature = "parallel")]
             self.poly
@@ -130,7 +119,7 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
         let generate_prover_message = start_timer!(|| "generate prover message");
         self.round += 1;
 
-        // print products_list
+        #[cfg(debug_assertions)]
         println!("sum check products_list: {:?}", self.poly.products);
 
         let products_list = self.poly.products.clone();
@@ -152,50 +141,39 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
             std::collections::HashMap::new();
 
         for (coefficient, products) in &products_list {
-            println!("sum check product coefficient: {}", coefficient);
-            println!("sum check product products: {:?}", products);
-            println!("sum check product round: {}", self.round);
+            #[cfg(debug_assertions)]
+            {
+                println!("sum check product coefficient: {}", coefficient);
+                println!("sum check product products: {:?}", products);
+                println!("sum check product round: {}", self.round);
+            }
 
             let mut sum = vec![F::zero(); products.len() + 1];
-
-            // a = {0, 1, 2, 3}
-            // b = {4, 5, 6, 7}
-            // c = {8, 9, 10, 11}
-
-            // polynomial = a * b + c ^ 2
-
-            // 0 * 4 + 8 ^ 2
-            // 0 * 5 + 9 ^ 2
-            // 0 * 6 + 10 ^ 2
-            // 0 * 7 + 11 ^ 2
 
             let unique_products: HashSet<usize> = products.iter().cloned().collect();
 
             for b in 0..1 << (self.poly.aux_info.num_variables - self.round) {
-                println!("sum check product b: {}", b);
-                println!("sum check product round: {}", self.round);
-                println!(
-                    "sum check product num_variables: {}",
-                    self.poly.aux_info.num_variables
-                );
+                #[cfg(debug_assertions)]
+                {
+                    println!("sum check product b: {}", b);
+                    println!("sum check product round: {}", self.round);
+                    println!(
+                        "sum check product num_variables: {}",
+                        self.poly.aux_info.num_variables
+                    );
+                }
 
                 stream_values.clear();
 
                 // Read and store values only for unique streams
                 for &f in unique_products.iter() {
+                    #[cfg(debug_assertions)]
                     println!("sum check product: {}", f);
+
                     let stream = &mut polynomials[f];
-
-                    // print read position
-                    // println!("read position: {}", locked_stream.read_pointer.stream_position().unwrap());
-
-                    // let read_start = Instant::now();
 
                     let eval = stream.read_next().unwrap(); // Read once for eval
                     let step = stream.read_next().unwrap() - eval; // Read once for step
-
-                    // let read_elapsed = read_start.elapsed();
-                    // total_read_time += read_elapsed;
 
                     stream_values.insert(f, (eval, step));
                 }
@@ -209,13 +187,17 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
                 }
 
                 // Updating sum
-                println!("sum check product buf length: {}", buf.len());
-                println!("sum check product first eval: {}", buf[0].0);
+                #[cfg(debug_assertions)]
+                {
+                    println!("sum check product buf length: {}", buf.len());
+                    println!("sum check product first eval: {}", buf[0].0);
+                }
                 sum[0] += buf.iter().map(|(eval, _)| *eval).product::<F>();
                 for acc in sum.iter_mut().skip(1) {
                     for (eval, step) in buf.iter_mut() {
                         *eval += *step; // aL; aR; 2aR - aL; 3aR - 2aL; ...
                     }
+                    #[cfg(debug_assertions)]
                     println!("subsequent eval: {}", buf[0].0);
                     *acc += buf.iter().map(|(eval, _)| *eval).product::<F>();
                 }
@@ -229,7 +211,11 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
             // Multiplying sum by coefficient
             for s in &mut sum {
                 *s *= *coefficient;
-                println!("sum chesck product sum: {}", s)
+
+                #[cfg(debug_assertions)]
+                {
+                    println!("sum chesck product sum: {}", s)
+                }
             }
 
             // Extrapolation
@@ -251,18 +237,13 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
 
         end_timer!(generate_prover_message);
 
-        // update prover's state to the partial evaluated polynomial
-        // self.poly.flattened_ml_extensions = flattened_ml_extensions
-        //     .par_iter()
-        //     .map(|x| Arc::new(x.clone()))
-        //     .collect();
-
-        println!("sum check prover message 0: {}", products_sum[0]);
-        println!("sum check prover message 1: {}", products_sum[1]);
+        #[cfg(debug_assertions)]
+        {
+            println!("sum check prover message 0: {}", products_sum[0]);
+            println!("sum check prover message 1: {}", products_sum[1]);
+        }
 
         end_timer!(start);
-
-        // println!("sum check prover total read time for round {} is {:?}", self.round - 1, total_read_time);
 
         Ok(IOPProverMessage {
             evaluations: products_sum,
