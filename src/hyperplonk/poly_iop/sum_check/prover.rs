@@ -101,8 +101,10 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
             // get stream indices that are not perm_inv_streams or perm_prod_streams for folding
             let mut do_not_fold_streams: Vec<usize> = self.poly.perm_inv_streams.0.clone();
             do_not_fold_streams.extend(self.poly.perm_inv_streams.1.clone());
-            do_not_fold_streams.push(self.poly.perm_prod_streams.0);
-            do_not_fold_streams.push(self.poly.perm_prod_streams.1);
+            if let (Some(prod_0), Some(prod_1)) = (self.poly.perm_prod_streams.0, self.poly.perm_prod_streams.1) {
+                do_not_fold_streams.push(prod_0);
+                do_not_fold_streams.push(prod_1);
+            }
 
             #[cfg(feature = "parallel")]
             self.poly
@@ -156,7 +158,7 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
         }
 
         // create perm_prod_streams from perm_streams
-        if !self.poly.perm_streams.0.is_empty() && self.poly.perm_prod_streams.0 != 0 {
+        if !self.poly.perm_streams.0.is_empty() && self.poly.perm_prod_streams.0.is_some() {
             let from = self
                 .poly
                 .perm_streams
@@ -166,7 +168,7 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
                 .collect::<Vec<Arc<Mutex<DenseMLPolyStream<F>>>>>();
             prod_multi_from_to(
                 &from,
-                &self.poly.flattened_ml_extensions[self.poly.perm_prod_streams.0],
+                &self.poly.flattened_ml_extensions[self.poly.perm_prod_streams.0.unwrap()],
             );
 
             let from = self
@@ -178,7 +180,7 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
                 .collect::<Vec<Arc<Mutex<DenseMLPolyStream<F>>>>>();
             prod_multi_from_to(
                 &from,
-                &self.poly.flattened_ml_extensions[self.poly.perm_prod_streams.1],
+                &self.poly.flattened_ml_extensions[self.poly.perm_prod_streams.1.unwrap()],
             );
         }
 

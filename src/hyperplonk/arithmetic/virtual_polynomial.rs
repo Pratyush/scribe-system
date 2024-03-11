@@ -62,7 +62,7 @@ pub struct VirtualPolynomial<F: PrimeField> {
     // (l^-1 r^-1 o^-1, l'^-1 r'^-1 o'^-1), must be batch inverted from perm_streams each round
     pub perm_inv_streams: (Vec<usize>, Vec<usize>),
     // prod of lro and prod of l'r'o' used to aid calculation, must be multiplied using perm_streams each round
-    pub perm_prod_streams: (usize, usize)
+    pub perm_prod_streams: (Option<usize>, Option<usize>)
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, CanonicalSerialize)]
@@ -92,7 +92,7 @@ impl<F: PrimeField> VirtualPolynomial<F> {
             raw_pointers_lookup_table: HashMap::new(),
             perm_streams: (Vec::new(), Vec::new()),
             perm_inv_streams: (Vec::new(), Vec::new()),
-            perm_prod_streams: (0, 0),
+            perm_prod_streams: (None, None),
         }
     }
 
@@ -119,7 +119,7 @@ impl<F: PrimeField> VirtualPolynomial<F> {
             raw_pointers_lookup_table: hm,
             perm_streams: (Vec::new(), Vec::new()),
             perm_inv_streams: (Vec::new(), Vec::new()),
-            perm_prod_streams: (0, 0),
+            perm_prod_streams: (None, None),
         }
     }
 
