@@ -57,6 +57,12 @@ pub struct VirtualPolynomial<F: PrimeField> {
     pub flattened_ml_extensions: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
     /// Pointers to the above poly extensions
     raw_pointers_lookup_table: HashMap<*const Mutex<DenseMLPolyStream<F>>, usize>,
+    // (lro, l'r'o'), can be directly folded
+    pub perm_streams: (Vec<usize>, Vec<usize>), 
+    // (l^-1 r^-1 o^-1, l'^-1 r'^-1 o'^-1), must be batch inverted from perm_streams each round
+    pub perm_inv_streams: (Vec<usize>, Vec<usize>),
+    // prod of lro and prod of l'r'o' used to aid calculation, must be multiplied using perm_streams each round
+    pub perm_prod_streams: (usize, usize)
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, CanonicalSerialize)]
@@ -84,6 +90,9 @@ impl<F: PrimeField> VirtualPolynomial<F> {
             products: Vec::new(),
             flattened_ml_extensions: Vec::new(),
             raw_pointers_lookup_table: HashMap::new(),
+            perm_streams: (Vec::new(), Vec::new()),
+            perm_inv_streams: (Vec::new(), Vec::new()),
+            perm_prod_streams: (0, 0),
         }
     }
 
@@ -108,6 +117,9 @@ impl<F: PrimeField> VirtualPolynomial<F> {
             products: vec![(coefficient, vec![0])],
             flattened_ml_extensions: vec![mle.clone()],
             raw_pointers_lookup_table: hm,
+            perm_streams: (Vec::new(), Vec::new()),
+            perm_inv_streams: (Vec::new(), Vec::new()),
+            perm_prod_streams: (0, 0),
         }
     }
 

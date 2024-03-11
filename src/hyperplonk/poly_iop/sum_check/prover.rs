@@ -1,5 +1,6 @@
 use super::SumCheckProver;
 use crate::hyperplonk::arithmetic::virtual_polynomial::VirtualPolynomial;
+use crate::read_write::{batch_inversion_from_to, prod_multi_from_to, DenseMLPolyStream};
 use crate::{
     hyperplonk::poly_iop::{
         errors::PolyIOPErrors,
@@ -11,9 +12,10 @@ use ark_ff::{batch_inversion, PrimeField};
 use ark_std::{end_timer, start_timer, vec::Vec};
 use std::collections::HashSet;
 use std::io::Seek;
+use std::sync::{Arc, Mutex};
 
 #[cfg(feature = "parallel")]
-use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
+use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
 
 impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
     type VirtualPolynomial = VirtualPolynomial<F>;
@@ -95,25 +97,91 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
             let r = self.challenges[self.round - 1];
             #[cfg(debug_assertions)]
             println!("sum check prover challenge: {}", r);
+
+            // get stream indices that are not perm_inv_streams or perm_prod_streams for folding
+            let mut do_not_fold_streams: Vec<usize> = self.poly.perm_inv_streams.0.clone();
+            do_not_fold_streams.extend(self.poly.perm_inv_streams.1.clone());
+            do_not_fold_streams.push(self.poly.perm_prod_streams.0);
+            do_not_fold_streams.push(self.poly.perm_prod_streams.1);
+
             #[cfg(feature = "parallel")]
             self.poly
                 .flattened_ml_extensions
                 .par_iter_mut()
-                .for_each(|mle| {
-                    let mut mle = mle.lock().expect("Failed to lock mutex");
-                    dbg!(mle.read_pointer.stream_position().unwrap());
-                    mle.fix_variables(&[r])
+                .enumerate()
+                .for_each(|(idx, mle)| {
+                    if !do_not_fold_streams.contains(&idx) {
+                        let mut mle = mle.lock().expect("Failed to lock mutex");
+                        dbg!(mle.read_pointer.stream_position().unwrap());
+                        mle.fix_variables(&[r]);
+                    }
                 });
             #[cfg(not(feature = "parallel"))]
             self.poly
                 .flattened_ml_extensions
                 .iter_mut()
-                .for_each(|mle| mle.fix_variables(&[r]));
+                .enumerate()
+                .for_each(|(idx, mle)| {
+                    if !do_not_fold_streams.contains(&idx) {
+                        let mut mle = mle.lock().expect("Failed to lock mutex");
+                        dbg!(mle.read_pointer.stream_position().unwrap());
+                        mle.fix_variables(&[r]);
+                    }
+                });
         } else if self.round > 0 {
             return Err(PolyIOPErrors::InvalidProver(
                 "verifier message is empty".to_string(),
             ));
         }
+
+        // create perm_inv_streams from perm_streams
+        if !self.poly.perm_streams.0.is_empty() && !self.poly.perm_inv_streams.0.is_empty() {
+            self.poly
+                .perm_streams
+                .0
+                .iter()
+                .chain(self.poly.perm_streams.1.iter())
+                .zip(
+                    self.poly
+                        .perm_inv_streams
+                        .0
+                        .iter()
+                        .chain(self.poly.perm_inv_streams.1.iter()),
+                )
+                .for_each(|(perm_idx, perm_inv_idx)| {
+                    let mut stream = self.poly.flattened_ml_extensions[*perm_idx].clone();
+                    let mut inv_stream = self.poly.flattened_ml_extensions[*perm_inv_idx].clone();
+                    batch_inversion_from_to(&mut inv_stream, &mut stream, 1 << 20);
+                });
+        }
+
+        // create perm_prod_streams from perm_streams
+        if !self.poly.perm_streams.0.is_empty() && self.poly.perm_prod_streams.0 != 0 {
+            let from = self
+                .poly
+                .perm_streams
+                .0
+                .iter()
+                .map(|perm_idx| self.poly.flattened_ml_extensions[*perm_idx].clone())
+                .collect::<Vec<Arc<Mutex<DenseMLPolyStream<F>>>>>();
+            prod_multi_from_to(
+                &from,
+                &self.poly.flattened_ml_extensions[self.poly.perm_prod_streams.0],
+            );
+
+            let from = self
+                .poly
+                .perm_streams
+                .1
+                .iter()
+                .map(|perm_idx| self.poly.flattened_ml_extensions[*perm_idx].clone())
+                .collect::<Vec<Arc<Mutex<DenseMLPolyStream<F>>>>>();
+            prod_multi_from_to(
+                &from,
+                &self.poly.flattened_ml_extensions[self.poly.perm_prod_streams.1],
+            );
+        }
+
         end_timer!(fix_argument);
 
         let generate_prover_message = start_timer!(|| "generate prover message");
