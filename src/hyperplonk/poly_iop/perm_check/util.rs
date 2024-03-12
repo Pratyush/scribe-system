@@ -329,8 +329,10 @@ pub fn compute_frac_poly_fewer_commit<F: PrimeField>(
             batch_inversion(&mut perm_inv_p_vals);
             batch_inversion(&mut perm_inv_q_vals);
 
-            for ((perm_inv_p_val, perm_inv_q_val), (perm_p_val, perm_q_val)) in
-                perm_inv_p_vals.iter().zip(perm_inv_q_vals.iter()).zip(perm_p_vals.iter().zip(perm_q_vals.iter()))
+            for ((perm_inv_p_val, perm_inv_q_val), (perm_p_val, perm_q_val)) in perm_inv_p_vals
+                .iter()
+                .zip(perm_inv_q_vals.iter())
+                .zip(perm_p_vals.iter().zip(perm_q_vals.iter()))
             {
                 perm_inv_p
                     .write_next_unchecked(*perm_inv_p_val)

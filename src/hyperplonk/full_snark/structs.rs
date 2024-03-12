@@ -25,8 +25,8 @@ where
     pub witness_commits: Vec<PCS::Commitment>,
     pub opening: BatchProofSinglePoint<E, PCS>,
     pub sum_check_proof: SC::SumCheckProof,
-    pub h_comm: Vec<PCS::Commitment>,
-    pub h_prime_comm: Vec<PCS::Commitment>,
+    pub h_comm: PCS::Commitment,
+    pub h_prime_comm: PCS::Commitment,
 }
 
 /// The HyperPlonk instance parameters, consists of the following:

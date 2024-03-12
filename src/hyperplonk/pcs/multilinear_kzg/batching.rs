@@ -13,6 +13,6 @@ where
     pub perm_index_evals: Vec<E::ScalarField>,
     pub selector_evals: Vec<E::ScalarField>,
     pub witness_evals: Vec<E::ScalarField>,
-    pub hp_evals: Vec<E::ScalarField>,
-    pub hq_evals: Vec<E::ScalarField>,
+    pub hp_eval: E::ScalarField,
+    pub hq_eval: E::ScalarField,
 }

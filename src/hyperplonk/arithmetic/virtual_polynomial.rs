@@ -57,11 +57,11 @@ pub struct VirtualPolynomial<F: PrimeField> {
     pub flattened_ml_extensions: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
     /// Pointers to the above poly extensions
     raw_pointers_lookup_table: HashMap<*const Mutex<DenseMLPolyStream<F>>, usize>,
-    // (lro, l'r'o'), can be directly folded
+    // (LRO, L'R'O'), can be directly folded
     pub perm_streams: (Vec<usize>, Vec<usize>), 
-    // (l^-1 r^-1 o^-1, l'^-1 r'^-1 o'^-1), must be batch inverted from perm_streams each round
+    // (L^-1 R^-1 O^-1, L'^-1 R'^-1 O'^-1), must be batch inverted from perm_streams each round
     pub perm_inv_streams: (Vec<usize>, Vec<usize>),
-    // prod of lro and prod of l'r'o' used to aid calculation, must be multiplied using perm_streams each round
+    // prod of LRO and prod of L'R'O' used to aid calculation, must be multiplied using perm_streams each round
     pub perm_prod_streams: (Option<usize>, Option<usize>)
 }
 
@@ -133,7 +133,7 @@ impl<F: PrimeField> VirtualPolynomial<F> {
         &mut self,
         mle_list: impl IntoIterator<Item = Arc<Mutex<DenseMLPolyStream<F>>>>,
         coefficient: F,
-    ) -> Result<(), ArithErrors> {
+    ) -> Result<Vec<usize>, ArithErrors> {
         let mle_list: Vec<Arc<Mutex<DenseMLPolyStream<F>>>> = mle_list.into_iter().collect();
         let mut indexed_product = Vec::with_capacity(mle_list.len());
 
@@ -178,8 +178,60 @@ impl<F: PrimeField> VirtualPolynomial<F> {
         #[cfg(debug_assertions)]
         println!("self.products: {:?}", &indexed_product);
 
-        self.products.push((coefficient, indexed_product));
-        Ok(())
+        self.products.push((coefficient, indexed_product.clone()));
+        Ok(indexed_product)
+    }
+
+    pub fn add_folding_only_mles(
+        &mut self,
+        mle_list: impl IntoIterator<Item = Arc<Mutex<DenseMLPolyStream<F>>>>,
+    ) -> Result<Vec<usize>, ArithErrors> {
+        let mle_list: Vec<Arc<Mutex<DenseMLPolyStream<F>>>> = mle_list.into_iter().collect();
+        let mut indexed_product = Vec::with_capacity(mle_list.len());
+
+        if mle_list.is_empty() {
+            return Err(ArithErrors::InvalidParameters(
+                "input mle_list is empty".to_string(),
+            ));
+        }
+
+        // self.aux_info.max_degree = max(self.aux_info.max_degree, mle_list.len());
+
+        for mle in mle_list {
+            let mle_locked = mle.lock().expect("Failed to lock mutex");
+
+            #[cfg(debug_assertions)]
+            println!("add_mle_list num_vars: {}", mle_locked.num_vars);
+
+            if mle_locked.num_vars != self.aux_info.num_variables {
+                return Err(ArithErrors::InvalidParameters(format!(
+                    "product has a multiplicand with wrong number of variables {} vs {}",
+                    mle_locked.num_vars, self.aux_info.num_variables
+                )));
+            }
+
+            let mle_ptr: *const Mutex<DenseMLPolyStream<F>> = Arc::as_ptr(&mle);
+            if let Some(index) = self.raw_pointers_lookup_table.get(&mle_ptr) {
+                indexed_product.push(*index);
+
+                #[cfg(debug_assertions)]
+                println!("mle_ptr existing: {:p}", mle_ptr);
+            } else {
+                let curr_index = self.flattened_ml_extensions.len();
+                self.flattened_ml_extensions.push(mle.clone());
+
+                #[cfg(debug_assertions)]
+                println!("mle_ptr: {:p}, curr_index: {}", mle_ptr, curr_index);
+
+                self.raw_pointers_lookup_table.insert(mle_ptr, curr_index);
+                indexed_product.push(curr_index);
+            }
+        }
+        #[cfg(debug_assertions)]
+        println!("self.products: {:?}", &indexed_product);
+
+        // self.products.push((coefficient, indexed_product));
+        Ok(indexed_product)
     }
 
     /// Multiple the current VirtualPolynomial by an MLE:
@@ -579,6 +631,60 @@ impl<F: PrimeField> VirtualPolynomial<F> {
 
         Ok(())
     }
+
+    // same as build_perm_check_poly_plonk except that it adds to an existing virtual poly
+    // TODO: replace this with a proper adding two virtual polynomials function
+    pub fn add_build_perm_check_poly_fewer_commit(
+        self: &mut VirtualPolynomial<F>,
+        hp: Arc<Mutex<DenseMLPolyStream<F>>>,
+        hq: Arc<Mutex<DenseMLPolyStream<F>>>,
+        batch_factor: F,
+        perm_prod_p: Arc<Mutex<DenseMLPolyStream<F>>>,
+        perm_prod_q: Arc<Mutex<DenseMLPolyStream<F>>>,
+        perm_inv_ps: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
+        perm_inv_qs: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
+    ) -> Result<(), ArithErrors> {
+        // TODO: get index from add_mle_list for perm_streams, perm_inv_streams, perm_prod_streams
+
+
+        // return smart pointer to const mle
+        let start = start_timer!(|| "build perm check batch zero check polynomial");
+        let num_vars = hp.lock().unwrap().num_vars;
+
+        // ZC1: h * (LRO)  - (LRO) * (L^-1) - (LRO) * (R^-1) - (LRO) * (O^-1)
+        // h * (LRO)
+        let indices = self.add_mle_list(vec![hp.clone(), perm_prod_p.clone()], batch_factor)
+            .unwrap();
+        // add perm_prod_streams index to virtual poly
+        self.perm_prod_streams.0 = Some(indices[1]);
+        // - (LRO) * (L^-1) - (LRO) * (R^-1) - (LRO) * (O^-1)
+        perm_inv_ps.iter().for_each(|perm_inv_p| {
+            let indices = self.add_mle_list(vec![perm_prod_p.clone(), perm_inv_p.clone()], -batch_factor)
+                .unwrap();
+            // add perm_inv_streams index to virtual poly
+            self.perm_inv_streams.0.push(indices[1]);
+        });
+
+        // ZC2: h * (L'R'O')  - (L'R'O') * (L'^-1) - (L'R'O') * (R'^-1) - (L'R'O') * (O'^-1)
+        // h * (L'R'O')
+        let batch_factor_squared = batch_factor * batch_factor;
+        let indices = self.add_mle_list(vec![hq.clone(), perm_prod_q.clone()], batch_factor_squared)
+            .unwrap();
+        // add perm_prod_streams index to virtual poly
+        self.perm_prod_streams.1 = Some(indices[1]);
+        // - (L'R'O') * (L'^-1) - (L'R'O') * (R'^-1) - (L'R'O') * (O'^-1)
+        perm_inv_qs.iter().for_each(|perm_inv_q| {
+            let indices = self.add_mle_list(vec![perm_prod_q.clone(), perm_inv_q.clone()], -batch_factor_squared)
+                .unwrap();
+            // add perm_inv_streams index to virtual poly
+            self.perm_inv_streams.1.push(indices[1]);
+        });
+
+        end_timer!(start);
+
+        Ok(())
+    }
+
 }
 
 /// This function build the eq(x, r) polynomial for any given r.

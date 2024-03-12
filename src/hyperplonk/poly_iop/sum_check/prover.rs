@@ -101,7 +101,9 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
             // get stream indices that are not perm_inv_streams or perm_prod_streams for folding
             let mut do_not_fold_streams: Vec<usize> = self.poly.perm_inv_streams.0.clone();
             do_not_fold_streams.extend(self.poly.perm_inv_streams.1.clone());
-            if let (Some(prod_0), Some(prod_1)) = (self.poly.perm_prod_streams.0, self.poly.perm_prod_streams.1) {
+            if let (Some(prod_0), Some(prod_1)) =
+                (self.poly.perm_prod_streams.0, self.poly.perm_prod_streams.1)
+            {
                 do_not_fold_streams.push(prod_0);
                 do_not_fold_streams.push(prod_1);
             }
@@ -114,7 +116,6 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
                 .for_each(|(idx, mle)| {
                     if !do_not_fold_streams.contains(&idx) {
                         let mut mle = mle.lock().expect("Failed to lock mutex");
-                        dbg!(mle.read_pointer.stream_position().unwrap());
                         mle.fix_variables(&[r]);
                     }
                 });
