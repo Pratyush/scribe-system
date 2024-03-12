@@ -53,6 +53,8 @@ where
         let num_vars = index.num_variables();
         let supported_ml_degree = num_vars;
 
+        let start = start_timer!(|| format!("hyperplonk preprocessing nv = {}", num_vars));
+
         // extract PCS prover and verifier keys from SRS
         let (pcs_prover_param, pcs_verifier_param) =
             PCS::trim(pcs_srs, None, Some(supported_ml_degree))?;
@@ -89,6 +91,8 @@ where
             .par_iter()
             .map(|poly| PCS::commit(&pcs_prover_param, poly))
             .collect::<Result<Vec<_>, _>>()?;
+
+        end_timer!(start);
 
         Ok((
             Self::ProvingKey {
@@ -246,17 +250,23 @@ where
         let r = transcript.get_and_append_challenge_vectors(b"0check r", num_vars)?;
 
         // multiply by eq_x_r for the final batch zero check, which contains gate identity zero check (coeff = 1) and perm check's batch zero checks (coeff = powers of batch_zero_check_factor)
+        #[cfg(debug_assertions)]
         println!(
             "max degree before build_f_hat: {}",
             batch_sum_check.aux_info.max_degree
         );
+
         batch_sum_check = batch_sum_check.build_f_hat(r.as_ref()).unwrap();
+        
+        #[cfg(debug_assertions)]
         println!(
             "max degree after build_f_hat: {}",
             batch_sum_check.aux_info.max_degree
         );
         let batch_sum_check_factor =
             transcript.get_and_append_challenge(b"batch_sum_check_factor")?;
+        
+        #[cfg(debug_assertions)]
         println!("prover batch_sum_check_factor: {}", batch_sum_check_factor);
 
         // add perm check's sum check (coeff = batch_sum_check_factor)

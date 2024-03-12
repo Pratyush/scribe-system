@@ -101,7 +101,6 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
                 .par_iter_mut()
                 .for_each(|mle| {
                     let mut mle = mle.lock().expect("Failed to lock mutex");
-                    dbg!(mle.read_pointer.stream_position().unwrap());
                     mle.fix_variables(&[r])
                 });
             #[cfg(not(feature = "parallel"))]

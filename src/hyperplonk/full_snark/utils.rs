@@ -122,10 +122,15 @@ pub(crate) fn prover_sanity_check<F: PrimeField>(
     }
     // check public input matches witness[0]'s first 2^ell elements
     let mut pub_stream = witnesses[0].lock().unwrap();
+    
+    #[cfg(debug_assertions)]
     println!("public input len: {}", pub_input.len());
+    
     let pub_stream_result: Vec<F> = (0..pub_input.len())
         .map(|i| {
+            #[cfg(debug_assertions)]
             println!("public input number {}", i);
+
             pub_stream.read_next().unwrap()
         })
         .collect();
