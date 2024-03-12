@@ -108,15 +108,28 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
                 do_not_fold_streams.push(prod_1);
             }
 
+            #[cfg(debug_assertions)]
+            let folding = start_timer!(|| "folding");
+
             #[cfg(feature = "parallel")]
             self.poly
                 .flattened_ml_extensions
                 .par_iter_mut()
                 .enumerate()
                 .for_each(|(idx, mle)| {
+
+                    #[cfg(debug_assertions)]
+                    println!("stream idx: {}", idx);
+                    
                     if !do_not_fold_streams.contains(&idx) {
+                        #[cfg(debug_assertions)]
+                        let fold_stream = start_timer!(|| format!("fold stream idx: {}", idx));
+                        
                         let mut mle = mle.lock().expect("Failed to lock mutex");
                         mle.fix_variables(&[r]);
+                        
+                        #[cfg(debug_assertions)]
+                        end_timer!(fold_stream);
                     }
                 });
             #[cfg(not(feature = "parallel"))]
@@ -131,58 +144,74 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
                         mle.fix_variables(&[r]);
                     }
                 });
+
+            #[cfg(debug_assertions)]
+            end_timer!(folding);
+
+            #[cfg(debug_assertions)]
+            let perm_inv_streams = start_timer!(|| "perm_inv_streams");
+
+            // create perm_inv_streams from perm_streams
+            if !self.poly.perm_streams.0.is_empty() && !self.poly.perm_inv_streams.0.is_empty() {
+                self.poly
+                    .perm_streams
+                    .0
+                    .iter()
+                    .chain(self.poly.perm_streams.1.iter())
+                    .zip(
+                        self.poly
+                            .perm_inv_streams
+                            .0
+                            .iter()
+                            .chain(self.poly.perm_inv_streams.1.iter()),
+                    )
+                    .for_each(|(perm_idx, perm_inv_idx)| {
+                        let mut stream = self.poly.flattened_ml_extensions[*perm_idx].clone();
+                        let mut inv_stream = self.poly.flattened_ml_extensions[*perm_inv_idx].clone();
+                        batch_inversion_from_to(&mut stream, &mut inv_stream, 1 << 20);
+                    });
+            }
+
+            #[cfg(debug_assertions)]
+            end_timer!(perm_inv_streams);
+
+            #[cfg(debug_assertions)]
+            let perm_prod_streams = start_timer!(|| "perm_prod_streams");
+
+            // create perm_prod_streams from perm_streams
+            if !self.poly.perm_streams.0.is_empty() && self.poly.perm_prod_streams.0.is_some() {
+                let from = self
+                    .poly
+                    .perm_streams
+                    .0
+                    .iter()
+                    .map(|perm_idx| self.poly.flattened_ml_extensions[*perm_idx].clone())
+                    .collect::<Vec<Arc<Mutex<DenseMLPolyStream<F>>>>>();
+                prod_multi_from_to(
+                    &from,
+                    &self.poly.flattened_ml_extensions[self.poly.perm_prod_streams.0.unwrap()],
+                );
+
+                let from = self
+                    .poly
+                    .perm_streams
+                    .1
+                    .iter()
+                    .map(|perm_idx| self.poly.flattened_ml_extensions[*perm_idx].clone())
+                    .collect::<Vec<Arc<Mutex<DenseMLPolyStream<F>>>>>();
+                prod_multi_from_to(
+                    &from,
+                    &self.poly.flattened_ml_extensions[self.poly.perm_prod_streams.1.unwrap()],
+                );
+            }
+
+            #[cfg(debug_assertions)]
+            end_timer!(perm_prod_streams);
+
         } else if self.round > 0 {
             return Err(PolyIOPErrors::InvalidProver(
                 "verifier message is empty".to_string(),
             ));
-        }
-
-        // create perm_inv_streams from perm_streams
-        if !self.poly.perm_streams.0.is_empty() && !self.poly.perm_inv_streams.0.is_empty() {
-            self.poly
-                .perm_streams
-                .0
-                .iter()
-                .chain(self.poly.perm_streams.1.iter())
-                .zip(
-                    self.poly
-                        .perm_inv_streams
-                        .0
-                        .iter()
-                        .chain(self.poly.perm_inv_streams.1.iter()),
-                )
-                .for_each(|(perm_idx, perm_inv_idx)| {
-                    let mut stream = self.poly.flattened_ml_extensions[*perm_idx].clone();
-                    let mut inv_stream = self.poly.flattened_ml_extensions[*perm_inv_idx].clone();
-                    batch_inversion_from_to(&mut inv_stream, &mut stream, 1 << 20);
-                });
-        }
-
-        // create perm_prod_streams from perm_streams
-        if !self.poly.perm_streams.0.is_empty() && self.poly.perm_prod_streams.0.is_some() {
-            let from = self
-                .poly
-                .perm_streams
-                .0
-                .iter()
-                .map(|perm_idx| self.poly.flattened_ml_extensions[*perm_idx].clone())
-                .collect::<Vec<Arc<Mutex<DenseMLPolyStream<F>>>>>();
-            prod_multi_from_to(
-                &from,
-                &self.poly.flattened_ml_extensions[self.poly.perm_prod_streams.0.unwrap()],
-            );
-
-            let from = self
-                .poly
-                .perm_streams
-                .1
-                .iter()
-                .map(|perm_idx| self.poly.flattened_ml_extensions[*perm_idx].clone())
-                .collect::<Vec<Arc<Mutex<DenseMLPolyStream<F>>>>>();
-            prod_multi_from_to(
-                &from,
-                &self.poly.flattened_ml_extensions[self.poly.perm_prod_streams.1.unwrap()],
-            );
         }
 
         end_timer!(fix_argument);

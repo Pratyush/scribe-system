@@ -216,6 +216,7 @@ where
                 perm_qs.clone(),
             ).unwrap(), 
         );
+
         // the max degree term is h * (LRO) or h’ * (LRO’), i.e. perm_ps.len() + 1
         batch_sum_check.aux_info.max_degree = max(batch_sum_check.aux_info.max_degree, perm_ps.len() + 1);
 

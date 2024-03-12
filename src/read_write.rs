@@ -139,6 +139,23 @@ impl<F: Field> ReadWriteStream for DenseMLPolyStream<F> {
         if cur_write_pos != 0 {
             std::mem::swap(self.read_pointer.get_mut(), self.write_pointer.get_mut());
         }
+
+        #[cfg(debug_assertions)]
+        {
+            // seek read and write pointer to end of file
+            println!("seek to end of file");
+            self.read_pointer.seek(std::io::SeekFrom::End(0)).unwrap();
+            self.write_pointer.seek(std::io::SeekFrom::End(0)).unwrap();
+    
+            // print read and write pointer positions
+            println!("Read position: {}", self.read_pointer.stream_position().unwrap());
+            println!("Write position: {}", self.write_pointer.stream_position().unwrap());
+    
+            // restart pointers
+            self.read_restart();
+            self.write_restart();
+        }
+
     }
 
     fn new_read_stream(&mut self) {
@@ -382,6 +399,13 @@ pub fn batch_inversion_from_to<F: PrimeField>(
         }
     }
 
+    // print from stream read pointer position
+    #[cfg(debug_assertions)]
+    println!(
+        "From stream read position (after batch inversion): {}",
+        from_stream.read_pointer.stream_position().unwrap()
+    );
+
     from_stream.read_restart();
     to_stream.swap_read_write(); // truncates read/write pointers to current position; also restarts both
 }
@@ -425,6 +449,13 @@ pub fn prod_multi_from_to<F: PrimeField>(
         if end_of_streams {
             // restart all from_stream
             for from_stream in &mut from_streams {
+                // print from stream read position
+                #[cfg(debug_assertions)]
+                println!(
+                    "From stream read position (after prod): {}",
+                    from_stream.read_pointer.stream_position().unwrap()
+                );
+
                 from_stream.read_restart();
             }
             break;
