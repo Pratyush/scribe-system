@@ -29,6 +29,8 @@ use std::{
     marker::PhantomData,
     sync::{Arc, Mutex},
 };
+use std::io::Seek;
+use crate::read_write::ReadWriteStream;
 
 impl<E, PCS> HyperPlonkSNARK<E, PCS> for PolyIOP<E::ScalarField>
 where
