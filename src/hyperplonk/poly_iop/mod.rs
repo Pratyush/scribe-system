@@ -7,7 +7,7 @@ pub mod prelude;
 pub mod structs;
 pub mod sum_check;
 pub mod zero_check;
-// pub mod prod_check;
+pub mod prod_check;
 
 #[derive(Clone, Debug, Default, Copy, PartialEq, Eq)]
 /// Struct for PolyIOP protocol.

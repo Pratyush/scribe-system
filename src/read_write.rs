@@ -22,6 +22,8 @@ pub trait ReadWriteStream: Send + Sync {
 
     fn new(num_vars: usize, read_path: Option<&str>, write_path: Option<&str>) -> Self;
 
+    fn new_single_stream(num_vars: usize, path: Option<&str>) -> Self;
+
     fn read_next(&mut self) -> Option<Self::Item>;
 
     fn read_next_unchecked(&mut self) -> Option<Self::Item>;
@@ -44,7 +46,7 @@ pub trait ReadWriteStream: Send + Sync {
 #[derive(Debug)]
 pub struct DenseMLPolyStream<F: Field> {
     pub read_pointer: BufReader<File>,
-    write_pointer: BufWriter<File>,
+    pub write_pointer: BufWriter<File>,
     pub num_vars: usize,
     f: PhantomData<F>,
 }
@@ -57,6 +59,14 @@ impl<F: Field> ReadWriteStream for DenseMLPolyStream<F> {
             Self::new_from_path(num_vars, read_path, write_path)
         } else {
             Self::new_from_tempfile(num_vars)
+        }
+    }
+
+    fn new_single_stream(num_vars: usize, path: Option<&str>) -> Self {
+        if let Some(path) = path {
+            Self::new_from_path_single_stream(num_vars, path)
+        } else {
+            Self::new_from_tempfile_single_stream(num_vars)
         }
     }
 
@@ -151,8 +161,20 @@ impl<F: Field> ReadWriteStream for DenseMLPolyStream<F> {
 
 impl<F: Field> DenseMLPolyStream<F> {
     pub fn new_from_path(num_vars: usize, read_path: &str, write_path: &str) -> Self {
-        let read_pointer = BufReader::with_capacity(1 << 20, File::open(read_path).unwrap());
+        let read_pointer = BufReader::with_capacity(1 << 20, File::create(read_path).unwrap());
         let write_pointer = BufWriter::with_capacity(1 << 20, File::create(write_path).unwrap());
+        Self {
+            read_pointer,
+            write_pointer,
+            num_vars,
+            f: PhantomData,
+        }
+    }
+
+    pub fn new_from_path_single_stream(num_vars: usize, path: &str) -> Self {
+        let file = File::create(path).unwrap();
+        let read_pointer = BufReader::with_capacity(1 << 20, file.try_clone().unwrap());
+        let write_pointer = BufWriter::with_capacity(1 << 20, file);
         Self {
             read_pointer,
             write_pointer,
@@ -169,6 +191,24 @@ impl<F: Field> DenseMLPolyStream<F> {
         let write_pointer = BufWriter::with_capacity(
             1 << 20,
             tempfile().expect("Failed to create a temporary file"),
+        );
+        Self {
+            read_pointer,
+            write_pointer,
+            num_vars,
+            f: PhantomData,
+        }
+    }
+
+    pub fn new_from_tempfile_single_stream(num_vars: usize) -> Self {
+        let tempfile = tempfile().expect("Failed to create a temporary file");
+        let read_pointer = BufReader::with_capacity(
+            1 << 20,
+            tempfile.try_clone().unwrap(),
+        );
+        let write_pointer = BufWriter::with_capacity(
+            1 << 20,
+            tempfile,
         );
         Self {
             read_pointer,
@@ -769,6 +809,7 @@ impl<F: Field> DenseMLPoly<F> for DenseMLPolyStream<F> {}
 mod tests {
     use super::*;
     use ark_bls12_381::Fr;
+    use ark_serialize::Write;
     use ark_std::rand::distributions::{Distribution, Standard};
     use ark_std::rand::rngs::StdRng;
     use ark_std::rand::SeedableRng;
@@ -1033,5 +1074,31 @@ mod tests {
                 Fr::from(i as u64).inverse().unwrap()
             );
         });
+    }
+
+    #[test]
+    fn test_single_stream() {
+        let mut stream = DenseMLPolyStream::new_single_stream(2, None);
+        stream.write_next_unchecked(Fr::from(1));
+        stream.write_next_unchecked(Fr::from(2));
+        println!("read pointer: {}", stream.read_pointer.stream_position().unwrap());
+        println!("write pointer: {}", stream.write_pointer.stream_position().unwrap());
+        // stream.write_pointer.flush().unwrap();
+        stream.write_restart();
+        println!("write pointer: {}", stream.write_pointer.stream_position().unwrap());
+        let elem_0 = stream.read_next();
+        println!("elem 0: {:?}", elem_0);
+        println!("read pointer: {}", stream.read_pointer.stream_position().unwrap());
+        println!("write pointer: {}", stream.write_pointer.stream_position().unwrap());
+        stream.write_next_unchecked(Fr::from(3));
+        println!("read pointer: {}", stream.read_pointer.stream_position().unwrap());
+        println!("write pointer: {}", stream.write_pointer.stream_position().unwrap());
+        stream.write_restart();
+        println!("read pointer: {}", stream.read_pointer.stream_position().unwrap());
+        println!("write pointer: {}", stream.write_pointer.stream_position().unwrap());
+        let elem_1 = stream.read_next();
+        println!("elem 1: {:?}", elem_1);
+        println!("read pointer: {}", stream.read_pointer.stream_position().unwrap());
+        println!("write pointer: {}", stream.write_pointer.stream_position().unwrap());
     }
 }

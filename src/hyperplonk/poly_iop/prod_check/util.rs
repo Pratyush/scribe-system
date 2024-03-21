@@ -1,11 +1,15 @@
 use crate::hyperplonk::poly_iop::{errors::PolyIOPErrors, structs::IOPProof, zero_check::ZeroCheck, PolyIOP};
-// use crate::hyperplonk::arithmetic::get_index;
+use crate::hyperplonk::arithmetic::util::get_index;
 use crate::hyperplonk::arithmetic::virtual_polynomial::VirtualPolynomial;
 use ark_ff::{batch_inversion, PrimeField};
-use crate::read_write::{DenseMLPolyStream, DenseMLPoly};
+use ark_serialize::Valid;
+use crate::read_write::{DenseMLPoly, DenseMLPolyStream, ReadWriteStream};
 use ark_std::{end_timer, start_timer};
+use core::num;
+use std::io::Seek;
 use std::sync::{Arc, Mutex};
 use crate::hyperplonk::transcript::IOPTranscript;
+use ark_ff::Zero;
 
 /// Compute multilinear fractional polynomial s.t. frac(x) = f1(x) * ... * fk(x)
 /// / (g1(x) * ... * gk(x)) for all x \in {0,1}^n
@@ -13,35 +17,20 @@ use crate::hyperplonk::transcript::IOPTranscript;
 /// The caller needs to sanity-check that the number of polynomials and
 /// variables match in fxs and gxs; and gi(x) has no zero entries.
 pub(super) fn compute_frac_poly<F: PrimeField>(
-    fxs: &[Arc<Mutex<DenseMLPolyStream<F>>>],
-    gxs: &[Arc<Mutex<DenseMLPolyStream<F>>>],
-) -> Result<Arc<Mutex<F>>, PolyIOPErrors> {
+    fxs: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
+    gxs: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
+) -> Result<Arc<Mutex<DenseMLPolyStream<F>>>, PolyIOPErrors> {
     let start = start_timer!(|| "compute frac(x)");
 
+    // TODO: might need to delete some of these to release disk space later
     let numerator = DenseMLPolyStream::prod_multi(fxs, None, None);
+    let denominator = DenseMLPolyStream::prod_multi(gxs, None, None);
+    let denominator_inverse = DenseMLPolyStream::batch_inversion_buffer(&denominator, 1 << 20, None, None);
 
-    let mut g_evals = vec![F::one(); 1 << gxs[0].num_vars];
-    for gx in gxs.iter() {
-        for (g_eval, gi) in g_evals.iter_mut().zip(gx.iter()) {
-            *g_eval *= gi;
-        }
-    }
-    batch_inversion(&mut g_evals[..]);
-
-    for (f_eval, g_eval) in f_evals.iter_mut().zip(g_evals.iter()) {
-        if *g_eval == F::zero() {
-            return Err(PolyIOPErrors::InvalidParameters(
-                "gxs has zero entries in the boolean hypercube".to_string(),
-            ));
-        }
-        *f_eval *= g_eval;
-    }
+    let result = DenseMLPolyStream::prod_multi(vec![numerator, denominator_inverse], None, None);
 
     end_timer!(start);
-    Ok(Arc::new(DenseMultilinearExtension::from_evaluations_vec(
-        fxs[0].num_vars,
-        f_evals,
-    )))
+    Ok(result)
 }
 
 /// Compute the product polynomial `prod(x)` such that
@@ -52,51 +41,136 @@ pub(super) fn compute_frac_poly<F: PrimeField>(
 /// The caller needs to check num_vars matches in f and g
 /// Cost: linear in N.
 pub(super) fn compute_product_poly<F: PrimeField>(
-    frac_poly: &Arc<DenseMultilinearExtension<F>>,
-) -> Result<Arc<DenseMultilinearExtension<F>>, PolyIOPErrors> {
+    frac_poly: &Arc<Mutex<DenseMLPolyStream<F>>>,
+    buffer_size: usize,
+) -> Result<Arc<Mutex<DenseMLPolyStream<F>>>, PolyIOPErrors> {
     let start = start_timer!(|| "compute evaluations of prod polynomial");
-    let num_vars = frac_poly.num_vars;
-    let frac_evals = &frac_poly.evaluations;
+    let mut frac_poly_stream = frac_poly.lock().unwrap();
+    let num_vars = frac_poly_stream.num_vars();
+    println!("frac_poly_stream read pointer: {}", frac_poly_stream.read_pointer.stream_position().unwrap());
+    println!("frac_poly_stream write pointer: {}", frac_poly_stream.write_pointer.stream_position().unwrap());
 
-    // ===================================
-    // prod(x)
-    // ===================================
-    //
-    // `prod(x)` can be computed via recursing the following formula for 2^n-1
-    // times
-    //
-    // `prod(x_1, ..., x_n) :=
-    //      [(1-x1)*frac(x2, ..., xn, 0) + x1*prod(x2, ..., xn, 0)] *
-    //      [(1-x1)*frac(x2, ..., xn, 1) + x1*prod(x2, ..., xn, 1)]`
-    //
-    // At any given step, the right hand side of the equation
-    // is available via either frac_x or the current view of prod_x
-    let mut prod_x_evals = vec![];
-    for x in 0..(1 << num_vars) - 1 {
-        // sign will decide if the evaluation should be looked up from frac_x or
-        // prod_x; x_zero_index is the index for the evaluation (x_2, ..., x_n,
-        // 0); x_one_index is the index for the evaluation (x_2, ..., x_n, 1);
-        let (x_zero_index, x_one_index, sign) = get_index(x, num_vars);
-        if !sign {
-            prod_x_evals.push(frac_evals[x_zero_index] * frac_evals[x_one_index]);
-        } else {
-            // sanity check: if we are trying to look up from the prod_x_evals table,
-            // then the target index must already exist
-            if x_zero_index >= prod_x_evals.len() || x_one_index >= prod_x_evals.len() {
-                return Err(PolyIOPErrors::ShouldNotArrive);
+    // single stream for read and write pointers
+    let mut prod_stream = DenseMLPolyStream::new_single_stream(num_vars, None);
+
+    let mut read_buffer = Vec::with_capacity(buffer_size);
+    let mut write_buffer = Vec::with_capacity(buffer_size >> 1);
+
+    // round 1
+    // read frac_poly to read_buffer till it's full
+    // note that this would fail if the frac_poly_stream has odd number of elements, but this shouldn't possibly happen
+    while let Some(val) = frac_poly_stream.read_next_unchecked() {
+        println!("val: {}", val);
+        println!("frac_poly_stream read pointer: {}", frac_poly_stream.read_pointer.stream_position().unwrap());
+        println!("frac_poly_stream write pointer: {}", frac_poly_stream.write_pointer.stream_position().unwrap());
+        read_buffer.push(val);
+
+        if read_buffer.len() >= buffer_size {
+            println!("drain");
+            (0..(buffer_size >> 1)).for_each(|i| write_buffer.push(read_buffer[2*i] * read_buffer[2*i+1]));
+
+            for val in write_buffer.drain(..) {
+                prod_stream
+                    .write_next_unchecked(val)
+                    .expect("Failed to write to prod stream");
             }
-            prod_x_evals.push(prod_x_evals[x_zero_index] * prod_x_evals[x_one_index]);
+            
+            read_buffer.clear();
         }
     }
 
-    // prod(1, 1, ..., 1) := 0
-    prod_x_evals.push(F::zero());
-    end_timer!(start);
+    if !read_buffer.is_empty() {
+        (0..(read_buffer.len() >> 1)).for_each(|i| write_buffer.push(read_buffer[2*i] * read_buffer[2*i+1]));
 
-    Ok(Arc::new(DenseMultilinearExtension::from_evaluations_vec(
-        num_vars,
-        prod_x_evals,
-    )))
+        for val in write_buffer.drain(..) {
+            prod_stream
+                .write_next_unchecked(val)
+                .expect("Failed to write to prod stream");
+        }
+
+        read_buffer.clear();
+    }
+
+    // round 2..=num_vars
+    // read from and write to the same prod_stream
+
+    // elements to read for the round is defined as 2^(n-round+1)
+    // if the elements to read for the round is less or equal to half of the read_buffer size, then we can keep reading from and writing to the write_buffer from different positions till the last round and push 0 to it before writing to the stream
+    // if the elements to read for the round is more than half of the read_buffer size, then we need to read to the read_buffer, calculate the write_buffer, write to the stream, and repeat the process
+    
+    // get log2 floor of buffer_size
+    let log2_buffer_size = (buffer_size as f64).log2().floor() as u64;
+
+    // // get round boundary up to which we read and write alternatingly up to the buffer size
+    // let round_bound = num_vars + 1 - log2_buffer_size;
+    // if round_bound >= num_vars {
+    //     panic!("Buffer size is too small for the number of variables");
+    // }
+    
+    for round in 2..=num_vars {
+        for i in 0..(1 << (num_vars - round + 1)) {
+            println!("round: {}, i: {}", round, i);
+            if let Some(val) = prod_stream.read_next_unchecked() {
+                read_buffer.push(val);
+            } else {
+                panic!("Failed to read from prod stream");
+            }
+
+            if read_buffer.len() >= buffer_size {
+                (0..(buffer_size >> 1)).for_each(|i| write_buffer.push(read_buffer[2*i] * read_buffer[2*i+1]));
+
+                for val in write_buffer.drain(..) {
+                    prod_stream
+                        .write_next_unchecked(val)
+                        .expect("Failed to write to MLE stream");
+                }
+                
+                read_buffer.clear();
+            }
+        }
+    
+        if !read_buffer.is_empty() {
+            (0..(read_buffer.len() >> 1)).for_each(|i| write_buffer.push(read_buffer[2*i] * read_buffer[2*i+1]));
+    
+            for val in write_buffer.drain(..) {
+                prod_stream
+                    .write_next_unchecked(val)
+                    .expect("Failed to write to MLE stream");
+            }
+    
+            read_buffer.clear();
+        }
+    }
+
+    prod_stream.write_next_unchecked(F::one());
+
+    prod_stream.read_restart();
+    prod_stream.write_restart();
+
+    // // once all write elements can fit into the buffer, we will only read once from the stream to the read buffer, calculate the write_buffer, and calculate all future rounds by reading from and writing to the same write_buffer
+    // for round in (round_bound+1)..=num_vars {
+    //     for i in 0..(1 << (num_vars - round + 1)) {
+    //         if let Some(val) = prod_stream.read_next() {
+    //             read_buffer.push(val);
+    //         } else {
+    //             panic!("Failed to read from prod stream");
+    //         }
+    //     }
+
+    //     (0..(read_buffer.len() >> 1)).for_each(|i| write_buffer.push(read_buffer[2*i] * read_buffer[2*i+1]));
+
+    //     for val in write_buffer.drain(..) {
+    //         prod_stream
+    //             .write_next_unchecked(val)
+    //             .expect("Failed to write to MLE stream");
+    //     }
+
+    //     read_buffer.clear();
+    // }
+
+    end_timer!(start);
+    
+    Ok(Arc::new(Mutex::new(prod_stream)))
 }
 
 /// generate the zerocheck proof for the virtual polynomial
@@ -108,36 +182,76 @@ pub(super) fn compute_product_poly<F: PrimeField>(
 ///
 /// Cost: O(N)
 pub(super) fn prove_zero_check<F: PrimeField>(
-    fxs: &[Arc<DenseMultilinearExtension<F>>],
-    gxs: &[Arc<DenseMultilinearExtension<F>>],
-    frac_poly: &Arc<DenseMultilinearExtension<F>>,
-    prod_x: &Arc<DenseMultilinearExtension<F>>,
+    fxs: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
+    gxs: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
+    frac_poly: &Arc<Mutex<DenseMLPolyStream<F>>>,
+    prod_x: &Arc<Mutex<DenseMLPolyStream<F>>>,
     alpha: &F,
     transcript: &mut IOPTranscript<F>,
+    batch_size: usize,
 ) -> Result<(IOPProof<F>, VirtualPolynomial<F>), PolyIOPErrors> {
+    // this is basically a batch zero check with alpha as the batch factor
+    // the first zero check is prod(x) - p1(x) * p2(x), 
+    // which is checking that prod is computed correctly from frac_poly in the first half
+    // and computed correctly from prod itself in the second half
+    // the second zero check is frac * g1 * ... * gk - f1 * ... * fk
+    // which is checking that frac is computed correctly from fxs and gxs
     let start = start_timer!(|| "zerocheck in product check");
-    let num_vars = frac_poly.num_vars;
+    let num_vars = frac_poly.lock().unwrap().num_vars();
+
+    let mut frac_poly_stream = frac_poly.lock().unwrap();
+    let mut prod_x_stream = prod_x.lock().unwrap();
 
     // compute p1(x) = (1-x1) * frac(x2, ..., xn, 0) + x1 * prod(x2, ..., xn, 0)
     // compute p2(x) = (1-x1) * frac(x2, ..., xn, 1) + x1 * prod(x2, ..., xn, 1)
-    let mut p1_evals = vec![F::zero(); 1 << num_vars];
-    let mut p2_evals = vec![F::zero(); 1 << num_vars];
-    for x in 0..1 << num_vars {
-        let (x0, x1, sign) = get_index(x, num_vars);
-        if !sign {
-            p1_evals[x] = frac_poly.evaluations[x0];
-            p2_evals[x] = frac_poly.evaluations[x1];
-        } else {
-            p1_evals[x] = prod_x.evaluations[x0];
-            p2_evals[x] = prod_x.evaluations[x1];
+    let mut p1_stream = DenseMLPolyStream::new(num_vars, None, None);
+    let mut p2_stream = DenseMLPolyStream::new(num_vars, None, None);
+    
+    let mut p1_vals = Vec::with_capacity(batch_size);
+    let mut p2_vals = Vec::with_capacity(batch_size);
+    
+    while let (Some(p1_val), Some(p2_val)) = (frac_poly_stream.read_next(), frac_poly_stream.read_next()) {
+        p1_vals.push(p1_val);
+        p2_vals.push(p2_val);
+
+        if p1_vals.len() >= batch_size {
+            for p1_val in p1_vals.drain(..) {
+                p1_stream
+                    .write_next_unchecked(p1_val)
+                    .expect("Failed to write to p1 stream");
+            }
+            for p2_val in p2_vals.drain(..) {
+                p2_stream
+                    .write_next_unchecked(p2_val)
+                    .expect("Failed to write to p2 stream");
+            }
         }
     }
-    let p1 = Arc::new(DenseMultilinearExtension::from_evaluations_vec(
-        num_vars, p1_evals,
-    ));
-    let p2 = Arc::new(DenseMultilinearExtension::from_evaluations_vec(
-        num_vars, p2_evals,
-    ));
+
+    while let (Some(p1_val), Some(p2_val)) = (prod_x_stream.read_next(), prod_x_stream.read_next()) {
+        p1_vals.push(p1_val);
+        p2_vals.push(p2_val);
+
+        if p1_vals.len() >= batch_size {
+            for p1_val in p1_vals.drain(..) {
+                p1_stream
+                    .write_next_unchecked(p1_val)
+                    .expect("Failed to write to p1 stream");
+            }
+            for p2_val in p2_vals.drain(..) {
+                p2_stream
+                    .write_next_unchecked(p2_val)
+                    .expect("Failed to write to p2 stream");
+            }
+        }
+    }
+
+    p1_stream.swap_read_write();
+    p2_stream.swap_read_write();
+    frac_poly_stream.read_restart();
+    prod_x_stream.read_restart();
+    drop(frac_poly_stream);
+    drop(prod_x_stream);
 
     // compute Q(x)
     // prod(x)
@@ -145,12 +259,12 @@ pub(super) fn prove_zero_check<F: PrimeField>(
 
     //   prod(x)
     // - p1(x) * p2(x)
-    q_x.add_mle_list([p1, p2], -F::one())?;
+    q_x.add_mle_list([Arc::new(Mutex::new(p1_stream)), Arc::new(Mutex::new(p2_stream))], -F::one())?;
 
     //   prod(x)
     // - p1(x) * p2(x)
     // + alpha * frac(x) * g1(x) * ... * gk(x)
-    let mut mle_list = gxs.to_vec();
+    let mut mle_list = gxs;
     mle_list.push(frac_poly.clone());
     q_x.add_mle_list(mle_list, *alpha)?;
 
@@ -158,10 +272,113 @@ pub(super) fn prove_zero_check<F: PrimeField>(
     // - p1(x) * p2(x)
     // + alpha * frac(x) * g1(x) * ... * gk(x)
     // - alpha * f1(x) * ... * fk(x)]
-    q_x.add_mle_list(fxs.to_vec(), -*alpha)?;
+    q_x.add_mle_list(fxs, -*alpha)?;
 
     let iop_proof = <PolyIOP<F> as ZeroCheck<F>>::prove(&q_x, transcript)?;
 
     end_timer!(start);
     Ok((iop_proof, q_x))
+}
+
+#[cfg(test)]
+mod test {
+    use std::io::Seek;
+    use std::sync::{Arc, Mutex};
+    use crate::read_write::{DenseMLPolyStream, ReadWriteStream};
+    use super::compute_product_poly;
+    use super::*;
+    use ark_bls12_381::Fr;
+    use ark_serialize::Write;
+    use ark_std::rand::distributions::{Distribution, Standard};
+    use ark_std::rand::rngs::StdRng;
+    use ark_std::rand::SeedableRng;
+    use std::time::Instant;
+    use std::vec::Vec;
+
+    // in memory vector version of calculating the prod_poly from frac_poly
+    fn compute_product_poly_in_memory<F: PrimeField>(
+        frac_poly: Vec<F>,
+        num_vars: usize,
+    ) -> Vec<F> {
+        assert!(frac_poly.len() == (1 << num_vars));
+        
+        let mut prod_poly = Vec::with_capacity(frac_poly.len());
+        
+        for round in 1..=num_vars {
+            if round == 1 {
+                for i in 0..1 << (num_vars - round) {
+                    prod_poly.push(frac_poly[2*i] * frac_poly[2*i+1]);
+                }
+            } else {
+                for i in 0..1 << (num_vars - round) {
+                    prod_poly.push(prod_poly[2*i] * prod_poly[2*i+1]);
+                }
+
+            }
+        }
+
+        prod_poly.push(F::from(1u64));
+        assert!(prod_poly.len() == 1 << num_vars);
+
+        prod_poly
+    }
+
+    #[test]
+    fn test_compute_product_poly_in_memory() {
+        // create a stream with values 1, 2, 3, 4
+        let frac_poly = vec![Fr::from(1u64), Fr::from(2u64), Fr::from(3u64), Fr::from(4u64)];
+        let num_vars = 2;
+        let prod_poly = compute_product_poly_in_memory(frac_poly, num_vars);
+        assert_eq!(prod_poly, vec![Fr::from(2u64), Fr::from(12u64), Fr::from(24u64), Fr::from(1)]);
+    }
+    
+    #[test]
+    fn test_compute_product_poly() {
+        let mut rng = StdRng::seed_from_u64(42); // Fixed seed for reproducibility
+
+        // create vector to populate stream
+        let num_vars = 4;
+        let mut frac_poly_vec = Vec::with_capacity(1 << num_vars);
+        for _ in 0..(1 << num_vars) {
+            frac_poly_vec.push(Standard.sample(&mut rng));
+            println!("frac_poly_vec: {}", frac_poly_vec.last().unwrap());
+        }
+
+        // Create a stream with 2^10 elements
+        let mut frac_poly_stream: DenseMLPolyStream<Fr> = DenseMLPolyStream::new_single_stream(num_vars, None);
+        for i in 0..(1 << num_vars) {
+            frac_poly_stream
+                .write_next_unchecked(frac_poly_vec[i])
+                .expect("Failed to write to MLE stream");
+        }
+        frac_poly_stream.write_pointer.flush().unwrap();
+        frac_poly_stream.write_restart();
+
+        // print read and write pointer positions
+        println!("frac_poly_stream read pointer: {}", frac_poly_stream.read_pointer.stream_position().unwrap());
+        println!("frac_poly_stream write pointer: {}", frac_poly_stream.write_pointer.stream_position().unwrap());
+
+        let frac_poly = Arc::new(Mutex::new(frac_poly_stream));
+
+        // Compute the product polynomial with buffer size 1 << 5
+        let result = compute_product_poly(&frac_poly, 1<<2).unwrap();
+
+        // Verify the result
+        let mut result_stream = result.lock().unwrap();
+        result_stream.read_restart();
+
+        // Compute expected
+        let expected = compute_product_poly_in_memory(
+            frac_poly_vec,
+            num_vars,
+        );
+
+        for i in 0..(1 << num_vars) {
+            assert_eq!(
+                result_stream.read_next().unwrap(),
+                expected[i],
+                "Product polynomial evaluation is incorrect"
+            );
+        }
+    }
 }

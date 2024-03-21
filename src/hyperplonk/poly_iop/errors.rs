@@ -4,6 +4,7 @@ use ark_std::string::String;
 use displaydoc::Display;
 // use transcript::TranscriptError;
 use crate::hyperplonk::arithmetic::errors::ArithErrors;
+use crate::hyperplonk::pcs::prelude::PCSError;
 use crate::hyperplonk::transcript::TranscriptError;
 
 /// A `enum` specifying the possible failure modes of the PolyIOP.
@@ -27,8 +28,8 @@ pub enum PolyIOPErrors {
     TranscriptErrors(TranscriptError),
     /// Arithmetic Error: {0}
     ArithmeticErrors(ArithErrors),
-    // /PCS error {0}
-    // PCSErrors(PCSError),
+    ///PCS error {0}
+    PCSErrors(PCSError),
 }
 
 impl From<ark_serialize::SerializationError> for PolyIOPErrors {
@@ -49,8 +50,8 @@ impl From<ArithErrors> for PolyIOPErrors {
     }
 }
 
-// impl From<PCSError> for PolyIOPErrors {
-//     fn from(e: PCSError) -> Self {
-//         Self::PCSErrors(e)
-//     }
-// }
+impl From<PCSError> for PolyIOPErrors {
+    fn from(e: PCSError) -> Self {
+        Self::PCSErrors(e)
+    }
+}
