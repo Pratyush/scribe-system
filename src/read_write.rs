@@ -1,8 +1,10 @@
+use ark_ff::batch_inversion;
 use ark_ff::Field;
 use ark_ff::PrimeField;
 use ark_std::end_timer;
 use ark_std::rand::RngCore;
 use ark_std::start_timer;
+use rayon::result;
 use core::marker::PhantomData;
 use std::io::Seek;
 use std::sync::Arc;
@@ -587,7 +589,7 @@ pub trait DenseMLPoly<F: Field>: ReadWriteStream<Item = F> {
         streams: Vec<Arc<Mutex<Self>>>,
         read_path: Option<&str>,
         write_path: Option<&str>,
-    ) -> Self
+    ) -> Arc<Mutex<Self>>
     where
         Self: Sized,
     {
@@ -622,7 +624,14 @@ pub trait DenseMLPoly<F: Field>: ReadWriteStream<Item = F> {
             result_stream.write_next_unchecked(prod);
         }
 
-        result_stream
+        // restart all streams
+        for stream in &streams {
+            stream.lock().expect("Failed to lock stream").read_restart();
+        }
+
+        result_stream.swap_read_write();
+
+        Arc::new(Mutex::new(result_stream))
     }
 
     fn poly(
@@ -703,8 +712,56 @@ pub trait DenseMLPoly<F: Field>: ReadWriteStream<Item = F> {
         result_stream
     }
 
+    fn batch_inversion_buffer(
+        stream: &Arc<Mutex<Self>>,
+        batch_size: usize,
+        read_path: Option<&str>,
+        write_path: Option<&str>,
+    ) -> Arc<Mutex<Self>> 
+    where 
+        Self: Sized
+    {
+        let mut stream_lock = stream.lock().unwrap();
+        stream_lock.read_restart();
+    
+        let mut result_stream = Self::new(stream_lock.num_vars(), read_path, write_path);
+    
+        let mut vals = Vec::with_capacity(batch_size);
+    
+        while let Some(val) = stream_lock.read_next() {
+            vals.push(val);
+    
+            if vals.len() >= batch_size {
+                batch_inversion(&mut vals);
+    
+                for val in vals.drain(..) {
+                    result_stream
+                        .write_next_unchecked(val)
+                        .expect("Failed to write to MLE stream");
+                }
+            }
+        }
+    
+        if !vals.is_empty() {
+            batch_inversion(&mut vals);
+    
+            for val in vals {
+                result_stream
+                    .write_next_unchecked(val)
+                    .expect("Failed to write to MLE stream");
+            }
+        }
+    
+        stream_lock.read_restart();
+        result_stream.swap_read_write(); // truncates read/write pointers to current position; also restarts both
+
+        Arc::new(Mutex::new(result_stream))
+    }
+
     // fn hadamard(self, other: impl DenseMLPoly<F>) -> impl DenseMLPoly<F>;
 }
+
+
 
 impl<F: Field> DenseMLPoly<F> for DenseMLPolyStream<F> {}
 
@@ -902,5 +959,79 @@ mod tests {
                 n, duration_write, duration_seek, duration_read
             );
         }
+    }
+
+    #[test]
+    fn test_prod_multi() {
+        // Create input streams
+        let stream1 = Arc::new(Mutex::new(DenseMLPolyStream::new(2, None, None)));
+        let stream2 = Arc::new(Mutex::new(DenseMLPolyStream::new(2, None, None)));
+        let stream3 = Arc::new(Mutex::new(DenseMLPolyStream::new(2, None, None)));
+
+        // Write values to input streams
+        stream1.lock().unwrap().write_next_unchecked(Fr::from(2));
+        stream1.lock().unwrap().write_next_unchecked(Fr::from(3));
+        stream1.lock().unwrap().write_next_unchecked(Fr::from(4));
+        stream1.lock().unwrap().swap_read_write();
+
+        stream2.lock().unwrap().write_next_unchecked(Fr::from(5));
+        stream2.lock().unwrap().write_next_unchecked(Fr::from(6));
+        stream2.lock().unwrap().write_next_unchecked(Fr::from(7));
+        stream2.lock().unwrap().swap_read_write();
+
+        stream3.lock().unwrap().write_next_unchecked(Fr::from(8));
+        stream3.lock().unwrap().write_next_unchecked(Fr::from(9));
+        stream3.lock().unwrap().write_next_unchecked(Fr::from(10));
+        stream3.lock().unwrap().swap_read_write();
+
+        // Call the `prod_multi` function
+        let result = DenseMLPolyStream::prod_multi(vec![stream1, stream2, stream3], None, None);
+        let mut result_stream = result.lock().unwrap();
+
+        // Assert the expected result
+        assert_eq!(result_stream.read_next(), Some(Fr::from(2 * 5 * 8)));
+        assert_eq!(result_stream.read_next(), Some(Fr::from(3 * 6 * 9)));
+        assert_eq!(result_stream.read_next(), Some(Fr::from(4 * 7 * 10)));
+        assert_eq!(result_stream.read_next(), None);
+    }
+
+    #[test]
+    fn test_batch_inversion_buffer() {
+        // Create the from stream with values [1, 2, 3, 4, 5, 6, 7]
+        let from_stream = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(
+            3,
+            vec![
+                Fr::from(1),
+                Fr::from(2),
+                Fr::from(3),
+                Fr::from(4),
+                Fr::from(5),
+                Fr::from(6),
+                Fr::from(7),
+            ],
+            None,
+            None,
+        )));
+
+        // Create the to stream and call the `batch_inversion_buffer` function with batch size 2
+        let to_stream =  DenseMLPolyStream::batch_inversion_buffer(&from_stream, 2, None, None);
+
+        // Verify the values in the to stream
+        let to_stream_values = {
+            let mut to_stream = to_stream.lock().unwrap();
+            let mut values = Vec::new();
+            while let Some(val) = to_stream.read_next() {
+                values.push(val);
+            }
+            values
+        };
+
+        // Expected output: [1/1, 1/2, 1/3, 1/4, 1/5, 1/6, 1/7]
+        (1..8).for_each(|i| {
+            assert_eq!(
+                to_stream_values[i - 1],
+                Fr::from(i as u64).inverse().unwrap()
+            );
+        });
     }
 }
