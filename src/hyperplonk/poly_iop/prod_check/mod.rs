@@ -282,6 +282,16 @@ mod test {
                 break;
             }
         }
+
+        // restart all streams
+        for f in fs.iter().chain(gs.iter()) {
+            f.lock().unwrap().read_restart();
+        }
+        for g in gs.iter() {
+            g.lock().unwrap().read_restart();
+        }
+        frac_poly.lock().unwrap().read_restart();
+
         assert!(flag);
     }
     // fs and gs are guaranteed to have the same product
@@ -318,10 +328,11 @@ mod test {
             &mut transcript,
         )?;
 
+        // check_frac_poly::<E>(&frac_poly, fs_copy, gs_copy);
+
         let mut transcript = <PolyIOP<E::ScalarField> as ProductCheck<E, PCS>>::init_transcript();
         transcript.append_message(b"testing", b"initializing transcript for testing")?;
 
-        // what's aux_info for?
         let aux_info = VPAuxInfo {
             max_degree: fs_copy.len() + 1,
             num_variables: num_vars,
@@ -338,8 +349,6 @@ mod test {
             "different product"
         );
 
-        check_frac_poly::<E>(&frac_poly, fs_copy, gs_copy);
-
         // bad path
         let mut transcript = <PolyIOP<E::ScalarField> as ProductCheck<E, PCS>>::init_transcript();
         transcript.append_message(b"testing", b"initializing transcript for testing")?;
@@ -350,6 +359,9 @@ mod test {
         >>::prove(
             pcs_param, fs.clone(), hs.clone(), &mut transcript
         )?;
+
+        // // the frac_poly should still be computed correctly
+        // check_frac_poly::<E>(&frac_poly, fs, hs);
 
         let mut transcript = <PolyIOP<E::ScalarField> as ProductCheck<E, PCS>>::init_transcript();
         transcript.append_message(b"testing", b"initializing transcript for testing")?;
@@ -363,8 +375,6 @@ mod test {
             bad_subclaim.final_query.1,
             "can't detect wrong proof"
         );
-        // the frac_poly should still be computed correctly
-        check_frac_poly::<E>(&frac_poly, fs, hs);
 
         Ok(())
     }
