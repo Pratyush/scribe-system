@@ -5,6 +5,7 @@ use ark_std::end_timer;
 use ark_std::rand::RngCore;
 use ark_std::start_timer;
 use rayon::result;
+use tempfile::NamedTempFile;
 use core::marker::PhantomData;
 use std::io::Seek;
 use std::sync::Arc;
@@ -172,9 +173,10 @@ impl<F: Field> DenseMLPolyStream<F> {
     }
 
     pub fn new_from_path_single_stream(num_vars: usize, path: &str) -> Self {
-        let file = File::create(path).unwrap();
-        let read_pointer = BufReader::with_capacity(1 << 20, file.try_clone().unwrap());
-        let write_pointer = BufWriter::with_capacity(1 << 20, file);
+        let file_read = File::create(path).unwrap();
+        let file_write = File::open(path).unwrap();
+        let read_pointer = BufReader::with_capacity(1 << 20, file_read);
+        let write_pointer = BufWriter::with_capacity(1 << 20, file_write);
         Self {
             read_pointer,
             write_pointer,
@@ -201,14 +203,17 @@ impl<F: Field> DenseMLPolyStream<F> {
     }
 
     pub fn new_from_tempfile_single_stream(num_vars: usize) -> Self {
-        let tempfile = tempfile().expect("Failed to create a temporary file");
+        let file = NamedTempFile::new().unwrap();
+        let file_read = file.reopen().unwrap();
+        let file_write = file.reopen().unwrap();
+        // let tempfile = tempfile().expect("Failed to create a temporary file");
         let read_pointer = BufReader::with_capacity(
             1 << 20,
-            tempfile.try_clone().unwrap(),
+            file_read,
         );
         let write_pointer = BufWriter::with_capacity(
             1 << 20,
-            tempfile,
+            file_write,
         );
         Self {
             read_pointer,
