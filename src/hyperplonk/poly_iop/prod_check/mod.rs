@@ -1,19 +1,22 @@
-use crate::{hyperplonk::{
-    pcs::PolynomialCommitmentScheme,
-    poly_iop::{
-        errors::PolyIOPErrors,
-        prod_check::util::{compute_frac_poly, compute_product_poly, prove_zero_check},
-        zero_check::ZeroCheck,
-        PolyIOP,
-    },
-}, read_write::DenseMLPolyStream};
 use crate::hyperplonk::arithmetic::virtual_polynomial::VPAuxInfo;
+use crate::hyperplonk::transcript::IOPTranscript;
+use crate::{
+    hyperplonk::{
+        pcs::PolynomialCommitmentScheme,
+        poly_iop::{
+            errors::PolyIOPErrors,
+            prod_check::util::{compute_frac_poly, compute_product_poly, prove_zero_check},
+            zero_check::ZeroCheck,
+            PolyIOP,
+        },
+    },
+    read_write::DenseMLPolyStream,
+};
 use ark_ec::pairing::Pairing;
 use ark_ff::{One, PrimeField, Zero};
 use ark_poly::DenseMultilinearExtension;
 use ark_std::{end_timer, start_timer};
 use std::sync::{Arc, Mutex};
-use crate::hyperplonk::transcript::IOPTranscript;
 
 mod util;
 
@@ -197,7 +200,7 @@ where
         {
             println!("prod_check prove_zero_check alpha: {}", alpha);
         }
-        
+
         // build the zero-check proof
         let (zero_check_proof, _) =
             prove_zero_check(fxs, gxs, &frac_poly, &prod_x, &alpha, transcript, 1 << 20)?;
@@ -255,16 +258,22 @@ where
 #[cfg(test)]
 mod test {
     use super::ProductCheck;
-    use crate::{hyperplonk::{
-        pcs::{prelude::MultilinearKzgPCS, PolynomialCommitmentScheme},
-        poly_iop::{errors::PolyIOPErrors, PolyIOP},
-    }, read_write::{copy_mle, DenseMLPolyStream, ReadWriteStream}};
     use crate::hyperplonk::arithmetic::virtual_polynomial::VPAuxInfo;
+    use crate::{
+        hyperplonk::{
+            pcs::{prelude::MultilinearKzgPCS, PolynomialCommitmentScheme},
+            poly_iop::{errors::PolyIOPErrors, PolyIOP},
+        },
+        read_write::{copy_mle, DenseMLPolyStream, ReadWriteStream},
+    };
     use ark_bls12_381::{Bls12_381, Fr};
     use ark_ec::pairing::Pairing;
     use ark_std::test_rng;
-    use std::{marker::PhantomData, sync::{Arc, Mutex}};
     use ark_std::UniformRand;
+    use std::{
+        marker::PhantomData,
+        sync::{Arc, Mutex},
+    };
 
     fn check_frac_poly<E>(
         frac_poly: &Arc<Mutex<DenseMLPolyStream<E::ScalarField>>>,
@@ -276,12 +285,12 @@ mod test {
         let mut flag = true;
         let num_vars = frac_poly.lock().unwrap().num_vars;
         while let Some(frac) = frac_poly.lock().unwrap().read_next() {
-            let nom = fs
-                .iter()
-                .fold(E::ScalarField::from(1u8), |acc, f| acc * f.lock().unwrap().read_next().unwrap());
-            let denom = gs
-                .iter()
-                .fold(E::ScalarField::from(1u8), |acc, g| acc * g.lock().unwrap().read_next().unwrap());
+            let nom = fs.iter().fold(E::ScalarField::from(1u8), |acc, f| {
+                acc * f.lock().unwrap().read_next().unwrap()
+            });
+            let denom = gs.iter().fold(E::ScalarField::from(1u8), |acc, g| {
+                acc * g.lock().unwrap().read_next().unwrap()
+            });
             if denom * frac != nom {
                 flag = false;
                 break;
@@ -318,13 +327,11 @@ mod test {
         transcript.append_message(b"testing", b"initializing transcript for testing")?;
 
         let num_vars = fs[0].lock().unwrap().num_vars;
-        let fs_copy: Vec<Arc<Mutex<DenseMLPolyStream<E::ScalarField>>>> = fs.iter().map(|f| {
-            copy_mle(f, None, None)
-        }).collect();
+        let fs_copy: Vec<Arc<Mutex<DenseMLPolyStream<E::ScalarField>>>> =
+            fs.iter().map(|f| copy_mle(f, None, None)).collect();
 
-        let gs_copy: Vec<Arc<Mutex<DenseMLPolyStream<E::ScalarField>>>> = gs.iter().map(|g| {
-            copy_mle(g, None, None)
-        }).collect();
+        let gs_copy: Vec<Arc<Mutex<DenseMLPolyStream<E::ScalarField>>>> =
+            gs.iter().map(|g| copy_mle(g, None, None)).collect();
 
         let (proof, prod_x, frac_poly) = <PolyIOP<E::ScalarField> as ProductCheck<E, PCS>>::prove(
             pcs_param,
@@ -350,7 +357,13 @@ mod test {
             &mut transcript,
         )?;
         assert_eq!(
-            prod_x.lock().unwrap().evaluate(std::slice::from_ref(&prod_subclaim.final_query.0.last().unwrap())).unwrap(),
+            prod_x
+                .lock()
+                .unwrap()
+                .evaluate(std::slice::from_ref(
+                    &prod_subclaim.final_query.0.last().unwrap()
+                ))
+                .unwrap(),
             prod_subclaim.final_query.1,
             "different product"
         );
@@ -359,12 +372,13 @@ mod test {
         let mut transcript = <PolyIOP<E::ScalarField> as ProductCheck<E, PCS>>::init_transcript();
         transcript.append_message(b"testing", b"initializing transcript for testing")?;
 
-        let (bad_proof, prod_x_bad, frac_poly) = <PolyIOP<E::ScalarField> as ProductCheck<
-            E,
-            PCS,
-        >>::prove(
-            pcs_param, fs.clone(), hs.clone(), &mut transcript
-        )?;
+        let (bad_proof, prod_x_bad, frac_poly) =
+            <PolyIOP<E::ScalarField> as ProductCheck<E, PCS>>::prove(
+                pcs_param,
+                fs.clone(),
+                hs.clone(),
+                &mut transcript,
+            )?;
 
         // the following is inactive as fs_copy and gs_copy are modified from prove()
         // // the frac_poly should still be computed correctly
@@ -394,9 +408,11 @@ mod test {
         // let rand_vals = vec![Fr::from(1u64), Fr::from(2u64), Fr::from(3u64), Fr::from(4u64)];
         let rand_vals_reverse = rand_vals.iter().rev().cloned().collect::<Vec<Fr>>();
 
-        let f1: DenseMLPolyStream<Fr> = DenseMLPolyStream::from_evaluations_vec(nv, rand_vals, None, None);
-        let g1: DenseMLPolyStream<Fr> = DenseMLPolyStream::from_evaluations_vec(nv, rand_vals_reverse, None, None);
-        
+        let f1: DenseMLPolyStream<Fr> =
+            DenseMLPolyStream::from_evaluations_vec(nv, rand_vals, None, None);
+        let g1: DenseMLPolyStream<Fr> =
+            DenseMLPolyStream::from_evaluations_vec(nv, rand_vals_reverse, None, None);
+
         // get another random vector with 1 << nv elements
         let rand_vals_2 = (0..1 << nv)
             .map(|_| Fr::rand(&mut rng))
@@ -404,17 +420,16 @@ mod test {
         // the following is only a test case for nv = 2
         // let rand_vals_2 = vec![Fr::from(5u64), Fr::from(6u64), Fr::from(7u64), Fr::from(8u64)];
         let rand_vals_2_reverse = rand_vals_2.iter().rev().cloned().collect::<Vec<Fr>>();
-        let f2: DenseMLPolyStream<Fr> = DenseMLPolyStream::from_evaluations_vec(nv, rand_vals_2, None, None);
-        let g2: DenseMLPolyStream<Fr> = DenseMLPolyStream::from_evaluations_vec(nv, rand_vals_2_reverse, None, None);
-        
+        let f2: DenseMLPolyStream<Fr> =
+            DenseMLPolyStream::from_evaluations_vec(nv, rand_vals_2, None, None);
+        let g2: DenseMLPolyStream<Fr> =
+            DenseMLPolyStream::from_evaluations_vec(nv, rand_vals_2_reverse, None, None);
+
         let fs = vec![Arc::new(Mutex::new(f1)), Arc::new(Mutex::new(f2))];
         let gs = vec![Arc::new(Mutex::new(g1)), Arc::new(Mutex::new(g2))];
         let mut hs = vec![];
         for _ in 0..fs.len() {
-            hs.push(Arc::new(Mutex::new(DenseMLPolyStream::rand(
-                nv,
-                &mut rng,
-            ))));
+            hs.push(Arc::new(Mutex::new(DenseMLPolyStream::rand(nv, &mut rng))));
         }
 
         let srs = MultilinearKzgPCS::<Bls12_381>::gen_srs_for_testing(&mut rng, nv)?;

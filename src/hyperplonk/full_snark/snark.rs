@@ -257,7 +257,7 @@ where
         );
 
         batch_sum_check = batch_sum_check.build_f_hat(r.as_ref()).unwrap();
-        
+
         #[cfg(debug_assertions)]
         println!(
             "max degree after build_f_hat: {}",
@@ -265,7 +265,7 @@ where
         );
         let batch_sum_check_factor =
             transcript.get_and_append_challenge(b"batch_sum_check_factor")?;
-        
+
         #[cfg(debug_assertions)]
         println!("prover batch_sum_check_factor: {}", batch_sum_check_factor);
 

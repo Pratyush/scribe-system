@@ -4,9 +4,8 @@ use ark_ff::PrimeField;
 use ark_std::end_timer;
 use ark_std::rand::RngCore;
 use ark_std::start_timer;
-use rayon::result;
-use tempfile::NamedTempFile;
 use core::marker::PhantomData;
+use rayon::result;
 use std::io::Seek;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -15,6 +14,7 @@ use std::{
     io::{BufReader, BufWriter},
 };
 use tempfile::tempfile;
+use tempfile::NamedTempFile;
 
 use crate::hyperplonk::arithmetic::errors::ArithErrors;
 
@@ -206,14 +206,8 @@ impl<F: Field> DenseMLPolyStream<F> {
         let file = NamedTempFile::new().expect("failed to create temp file");
         let file_read = file.reopen().unwrap();
         let file_write = file.reopen().unwrap();
-        let read_pointer = BufReader::with_capacity(
-            1 << 20,
-            file_read,
-        );
-        let write_pointer = BufWriter::with_capacity(
-            1 << 20,
-            file_write,
-        );
+        let read_pointer = BufReader::with_capacity(1 << 20, file_read);
+        let write_pointer = BufWriter::with_capacity(1 << 20, file_write);
         Self {
             read_pointer,
             write_pointer,
@@ -761,23 +755,23 @@ pub trait DenseMLPoly<F: Field>: ReadWriteStream<Item = F> {
         batch_size: usize,
         read_path: Option<&str>,
         write_path: Option<&str>,
-    ) -> Arc<Mutex<Self>> 
-    where 
-        Self: Sized
+    ) -> Arc<Mutex<Self>>
+    where
+        Self: Sized,
     {
         let mut stream_lock = stream.lock().unwrap();
         stream_lock.read_restart();
-    
+
         let mut result_stream = Self::new(stream_lock.num_vars(), read_path, write_path);
-    
+
         let mut vals = Vec::with_capacity(batch_size);
-    
+
         while let Some(val) = stream_lock.read_next() {
             vals.push(val);
-    
+
             if vals.len() >= batch_size {
                 batch_inversion(&mut vals);
-    
+
                 for val in vals.drain(..) {
                     result_stream
                         .write_next_unchecked(val)
@@ -785,17 +779,17 @@ pub trait DenseMLPoly<F: Field>: ReadWriteStream<Item = F> {
                 }
             }
         }
-    
+
         if !vals.is_empty() {
             batch_inversion(&mut vals);
-    
+
             for val in vals {
                 result_stream
                     .write_next_unchecked(val)
                     .expect("Failed to write to MLE stream");
             }
         }
-    
+
         stream_lock.read_restart();
         result_stream.swap_read_write(); // truncates read/write pointers to current position; also restarts both
 
@@ -804,8 +798,6 @@ pub trait DenseMLPoly<F: Field>: ReadWriteStream<Item = F> {
 
     // fn hadamard(self, other: impl DenseMLPoly<F>) -> impl DenseMLPoly<F>;
 }
-
-
 
 impl<F: Field> DenseMLPoly<F> for DenseMLPolyStream<F> {}
 
@@ -1059,7 +1051,7 @@ mod tests {
         )));
 
         // Create the to stream and call the `batch_inversion_buffer` function with batch size 2
-        let to_stream =  DenseMLPolyStream::batch_inversion_buffer(&from_stream, 2, None, None);
+        let to_stream = DenseMLPolyStream::batch_inversion_buffer(&from_stream, 2, None, None);
 
         // Verify the values in the to stream
         let to_stream_values = {
@@ -1113,7 +1105,7 @@ mod tests {
 
         // stream.write_pointer.stream_position().unwrap();
         stream.write_pointer.flush().unwrap();
-        
+
         let elem_0 = stream.read_next_unchecked();
         assert_eq!(elem_0, Some(Fr::from(1)));
     }

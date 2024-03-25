@@ -1,15 +1,17 @@
-use crate::hyperplonk::poly_iop::{errors::PolyIOPErrors, structs::IOPProof, zero_check::ZeroCheck, PolyIOP};
 use crate::hyperplonk::arithmetic::util::get_index;
 use crate::hyperplonk::arithmetic::virtual_polynomial::VirtualPolynomial;
+use crate::hyperplonk::poly_iop::{
+    errors::PolyIOPErrors, structs::IOPProof, zero_check::ZeroCheck, PolyIOP,
+};
+use crate::hyperplonk::transcript::IOPTranscript;
+use crate::read_write::{DenseMLPoly, DenseMLPolyStream, ReadWriteStream};
+use ark_ff::Zero;
 use ark_ff::{batch_inversion, PrimeField};
 use ark_serialize::{Valid, Write};
-use crate::read_write::{DenseMLPoly, DenseMLPolyStream, ReadWriteStream};
 use ark_std::{end_timer, start_timer};
 use core::num;
 use std::io::Seek;
 use std::sync::{Arc, Mutex};
-use crate::hyperplonk::transcript::IOPTranscript;
-use ark_ff::Zero;
 
 /// Compute multilinear fractional polynomial s.t. frac(x) = f1(x) * ... * fk(x)
 /// / (g1(x) * ... * gk(x)) for all x \in {0,1}^n
@@ -25,7 +27,8 @@ pub(super) fn compute_frac_poly<F: PrimeField>(
     // TODO: might need to delete some of these to release disk space later
     let numerator = DenseMLPolyStream::prod_multi(fxs, None, None);
     let denominator = DenseMLPolyStream::prod_multi(gxs, None, None);
-    let denominator_inverse = DenseMLPolyStream::batch_inversion_buffer(&denominator, 1 << 20, None, None);
+    let denominator_inverse =
+        DenseMLPolyStream::batch_inversion_buffer(&denominator, 1 << 20, None, None);
 
     let result = DenseMLPolyStream::prod_multi(vec![numerator, denominator_inverse], None, None);
 
@@ -50,8 +53,14 @@ pub(super) fn compute_product_poly<F: PrimeField>(
     let num_vars = frac_poly_stream.num_vars();
     #[cfg(debug_assertions)]
     {
-        println!("frac_poly_stream read pointer: {}", frac_poly_stream.read_pointer.stream_position().unwrap());
-        println!("frac_poly_stream write pointer: {}", frac_poly_stream.write_pointer.stream_position().unwrap());
+        println!(
+            "frac_poly_stream read pointer: {}",
+            frac_poly_stream.read_pointer.stream_position().unwrap()
+        );
+        println!(
+            "frac_poly_stream write pointer: {}",
+            frac_poly_stream.write_pointer.stream_position().unwrap()
+        );
     }
 
     // assert that num_vars is at least two
@@ -70,13 +79,20 @@ pub(super) fn compute_product_poly<F: PrimeField>(
         #[cfg(debug_assertions)]
         {
             println!("val: {}", val);
-            println!("frac_poly_stream read pointer: {}", frac_poly_stream.read_pointer.stream_position().unwrap());
-            println!("frac_poly_stream write pointer: {}", frac_poly_stream.write_pointer.stream_position().unwrap());
+            println!(
+                "frac_poly_stream read pointer: {}",
+                frac_poly_stream.read_pointer.stream_position().unwrap()
+            );
+            println!(
+                "frac_poly_stream write pointer: {}",
+                frac_poly_stream.write_pointer.stream_position().unwrap()
+            );
         }
         read_buffer.push(val);
 
         if read_buffer.len() >= buffer_size {
-            (0..(buffer_size >> 1)).for_each(|i| write_buffer.push(read_buffer[2*i] * read_buffer[2*i+1]));
+            (0..(buffer_size >> 1))
+                .for_each(|i| write_buffer.push(read_buffer[2 * i] * read_buffer[2 * i + 1]));
 
             for val in write_buffer.drain(..) {
                 prod_stream
@@ -93,7 +109,8 @@ pub(super) fn compute_product_poly<F: PrimeField>(
     frac_poly_stream.read_restart();
 
     if !read_buffer.is_empty() {
-        (0..(read_buffer.len() >> 1)).for_each(|i| write_buffer.push(read_buffer[2*i] * read_buffer[2*i+1]));
+        (0..(read_buffer.len() >> 1))
+            .for_each(|i| write_buffer.push(read_buffer[2 * i] * read_buffer[2 * i + 1]));
 
         for val in write_buffer.drain(..) {
             prod_stream
@@ -112,9 +129,15 @@ pub(super) fn compute_product_poly<F: PrimeField>(
             {
                 println!("round: {}, i: {}", round, i);
                 // print read pointer position
-                println!("prod_stream read pointer: {}", prod_stream.read_pointer.stream_position().unwrap());
+                println!(
+                    "prod_stream read pointer: {}",
+                    prod_stream.read_pointer.stream_position().unwrap()
+                );
                 // print write pointer position
-                println!("prod_stream write pointer: {}", prod_stream.write_pointer.stream_position().unwrap());
+                println!(
+                    "prod_stream write pointer: {}",
+                    prod_stream.write_pointer.stream_position().unwrap()
+                );
             }
 
             if let Some(val) = prod_stream.read_next_unchecked() {
@@ -124,7 +147,8 @@ pub(super) fn compute_product_poly<F: PrimeField>(
             }
 
             if read_buffer.len() >= buffer_size {
-                (0..(buffer_size >> 1)).for_each(|i| write_buffer.push(read_buffer[2*i] * read_buffer[2*i+1]));
+                (0..(buffer_size >> 1))
+                    .for_each(|i| write_buffer.push(read_buffer[2 * i] * read_buffer[2 * i + 1]));
 
                 for val in write_buffer.drain(..) {
                     prod_stream
@@ -135,10 +159,11 @@ pub(super) fn compute_product_poly<F: PrimeField>(
                 read_buffer.clear();
             }
         }
-    
+
         if !read_buffer.is_empty() {
-            (0..(read_buffer.len() >> 1)).for_each(|i| write_buffer.push(read_buffer[2*i] * read_buffer[2*i+1]));
-    
+            (0..(read_buffer.len() >> 1))
+                .for_each(|i| write_buffer.push(read_buffer[2 * i] * read_buffer[2 * i + 1]));
+
             for val in write_buffer.drain(..) {
                 prod_stream
                     .write_next_unchecked(val)
@@ -155,7 +180,7 @@ pub(super) fn compute_product_poly<F: PrimeField>(
     prod_stream.write_restart();
 
     end_timer!(start);
-    
+
     Ok(Arc::new(Mutex::new(prod_stream)))
 }
 
@@ -177,7 +202,7 @@ pub(super) fn prove_zero_check<F: PrimeField>(
     batch_size: usize,
 ) -> Result<(IOPProof<F>, VirtualPolynomial<F>), PolyIOPErrors> {
     // this is basically a batch zero check with alpha as the batch factor
-    // the first zero check is prod(x) - p1(x) * p2(x), 
+    // the first zero check is prod(x) - p1(x) * p2(x),
     // which is checking that prod is computed correctly from frac_poly in the first half
     // and computed correctly from prod itself in the second half
     // the second zero check is frac * g1 * ... * gk - f1 * ... * fk
@@ -192,11 +217,13 @@ pub(super) fn prove_zero_check<F: PrimeField>(
     // compute p2(x) = (1-x1) * frac(x2, ..., xn, 1) + x1 * prod(x2, ..., xn, 1)
     let mut p1_stream = DenseMLPolyStream::new(num_vars, None, None);
     let mut p2_stream = DenseMLPolyStream::new(num_vars, None, None);
-    
+
     let mut p1_vals = Vec::with_capacity(batch_size);
     let mut p2_vals = Vec::with_capacity(batch_size);
-    
-    while let (Some(p1_val), Some(p2_val)) = (frac_poly_stream.read_next(), frac_poly_stream.read_next()) {
+
+    while let (Some(p1_val), Some(p2_val)) =
+        (frac_poly_stream.read_next(), frac_poly_stream.read_next())
+    {
         p1_vals.push(p1_val);
         p2_vals.push(p2_val);
 
@@ -214,7 +241,8 @@ pub(super) fn prove_zero_check<F: PrimeField>(
         }
     }
 
-    while let (Some(p1_val), Some(p2_val)) = (prod_x_stream.read_next(), prod_x_stream.read_next()) {
+    while let (Some(p1_val), Some(p2_val)) = (prod_x_stream.read_next(), prod_x_stream.read_next())
+    {
         p1_vals.push(p1_val);
         p2_vals.push(p2_val);
 
@@ -258,7 +286,13 @@ pub(super) fn prove_zero_check<F: PrimeField>(
     //   prod(x)
     // - p1(x) * p2(x)
     println!("Adding MLE list for p1(x) * p2(x)");
-    q_x.add_mle_list([Arc::new(Mutex::new(p1_stream)), Arc::new(Mutex::new(p2_stream))], -F::one())?;
+    q_x.add_mle_list(
+        [
+            Arc::new(Mutex::new(p1_stream)),
+            Arc::new(Mutex::new(p2_stream)),
+        ],
+        -F::one(),
+    )?;
 
     //   prod(x)
     // - p1(x) * p2(x)
@@ -282,43 +316,39 @@ pub(super) fn prove_zero_check<F: PrimeField>(
 
 #[cfg(test)]
 mod test {
-    use std::io::Seek;
-    use std::sync::{Arc, Mutex};
+    use super::compute_product_poly;
+    use super::*;
     use crate::hyperplonk::pcs::multilinear_kzg::MultilinearKzgPCS;
     use crate::hyperplonk::pcs::PolynomialCommitmentScheme;
     use crate::read_write::{DenseMLPolyStream, ReadWriteStream};
-    use super::compute_product_poly;
-    use super::*;
     use ark_bls12_381::{Bls12_381, Fr};
     use ark_serialize::Write;
     use ark_std::rand::distributions::{Distribution, Standard};
     use ark_std::rand::rngs::StdRng;
     use ark_std::rand::SeedableRng;
+    use std::io::Seek;
+    use std::sync::{Arc, Mutex};
     use std::time::Instant;
     use std::vec::Vec;
 
     // in memory vector version of calculating the prod_poly from frac_poly
-    fn compute_product_poly_in_memory<F: PrimeField>(
-        frac_poly: Vec<F>,
-        num_vars: usize,
-    ) -> Vec<F> {
+    fn compute_product_poly_in_memory<F: PrimeField>(frac_poly: Vec<F>, num_vars: usize) -> Vec<F> {
         assert!(frac_poly.len() == (1 << num_vars));
-        
+
         let mut prod_poly = Vec::with_capacity(frac_poly.len());
-        
+
         let mut offset = 0;
 
         for round in 1..=num_vars {
             if round == 1 {
                 for i in 0..1 << (num_vars - round) {
-                    prod_poly.push(frac_poly[2*i] * frac_poly[2*i+1]);
+                    prod_poly.push(frac_poly[2 * i] * frac_poly[2 * i + 1]);
                 }
             } else {
                 for i in 0..1 << (num_vars - round) {
-                    prod_poly.push(prod_poly[offset + 2*i] * prod_poly[offset + 2*i+1]);
+                    prod_poly.push(prod_poly[offset + 2 * i] * prod_poly[offset + 2 * i + 1]);
                 }
                 offset += 1 << (num_vars - round + 1);
-
             }
         }
 
@@ -331,12 +361,25 @@ mod test {
     #[test]
     fn test_compute_product_poly_in_memory() {
         // create a stream with values 1, 2, 3, 4
-        let frac_poly = vec![Fr::from(1u64), Fr::from(2u64), Fr::from(3u64), Fr::from(4u64)];
+        let frac_poly = vec![
+            Fr::from(1u64),
+            Fr::from(2u64),
+            Fr::from(3u64),
+            Fr::from(4u64),
+        ];
         let num_vars = 2;
         let prod_poly = compute_product_poly_in_memory(frac_poly, num_vars);
-        assert_eq!(prod_poly, vec![Fr::from(2u64), Fr::from(12u64), Fr::from(24u64), Fr::from(1)]);
+        assert_eq!(
+            prod_poly,
+            vec![
+                Fr::from(2u64),
+                Fr::from(12u64),
+                Fr::from(24u64),
+                Fr::from(1)
+            ]
+        );
     }
-    
+
     #[test]
     fn test_compute_product_poly() {
         let mut rng = StdRng::seed_from_u64(42); // Fixed seed for reproducibility
@@ -349,7 +392,8 @@ mod test {
         }
 
         // Create a stream with 2^10 elements
-        let mut frac_poly_stream: DenseMLPolyStream<Fr> = DenseMLPolyStream::new_single_stream(num_vars, None);
+        let mut frac_poly_stream: DenseMLPolyStream<Fr> =
+            DenseMLPolyStream::new_single_stream(num_vars, None);
         for i in 0..(1 << num_vars) {
             frac_poly_stream
                 .write_next_unchecked(frac_poly_vec[i])
@@ -361,17 +405,14 @@ mod test {
         let frac_poly = Arc::new(Mutex::new(frac_poly_stream));
 
         // Compute the product polynomial with buffer size 1 << 5
-        let result = compute_product_poly(&frac_poly, 1<<5).unwrap();
+        let result = compute_product_poly(&frac_poly, 1 << 5).unwrap();
 
         // Verify the result
         let mut result_stream = result.lock().unwrap();
         result_stream.read_restart();
 
         // Compute expected
-        let expected = compute_product_poly_in_memory(
-            frac_poly_vec,
-            num_vars,
-        );
+        let expected = compute_product_poly_in_memory(frac_poly_vec, num_vars);
 
         for i in 0..(1 << num_vars) {
             assert_eq!(
@@ -387,7 +428,7 @@ mod test {
     //     let nv = 2;
     //     let mut rng = StdRng::seed_from_u64(42); // Fixed seed for reproducibility
     //     let mut transcript = <PolyIOP<E::ScalarField> as ProductCheck<E, PCS>>::init_transcript();
-        
+
     //     let srs = MultilinearKzgPCS::<Bls12_381>::gen_srs_for_testing(&mut rng, nv).unwrap();
     //     let (pcs_param, _) = MultilinearKzgPCS::<Bls12_381>::trim(&srs, None, Some(nv)).unwrap();
 
@@ -441,16 +482,28 @@ mod test {
         // p2_2: 31461525105075714287668644304911579502614331500316582693562195219963148710719
         // p2_3: 1
 
-        let frac_0 = Fr::from(1) * Fr::from(5) * Fr::from(4).inverse().unwrap() * Fr::from(8).inverse().unwrap();
+        let frac_0 = Fr::from(1)
+            * Fr::from(5)
+            * Fr::from(4).inverse().unwrap()
+            * Fr::from(8).inverse().unwrap();
         println!("frac_0: {}", frac_0);
 
-        let frac_1 = Fr::from(2) * Fr::from(6) * Fr::from(3).inverse().unwrap() * Fr::from(7).inverse().unwrap();
+        let frac_1 = Fr::from(2)
+            * Fr::from(6)
+            * Fr::from(3).inverse().unwrap()
+            * Fr::from(7).inverse().unwrap();
         println!("frac_1: {}", frac_1);
 
-        let frac_2 = Fr::from(3) * Fr::from(7) * Fr::from(2).inverse().unwrap() * Fr::from(6).inverse().unwrap();
+        let frac_2 = Fr::from(3)
+            * Fr::from(7)
+            * Fr::from(2).inverse().unwrap()
+            * Fr::from(6).inverse().unwrap();
         println!("frac_2: {}", frac_2);
 
-        let frac_3 = Fr::from(4) * Fr::from(8) * Fr::from(1).inverse().unwrap() * Fr::from(5).inverse().unwrap();
+        let frac_3 = Fr::from(4)
+            * Fr::from(8)
+            * Fr::from(1).inverse().unwrap()
+            * Fr::from(5).inverse().unwrap();
         println!("frac_3: {}", frac_3);
 
         let prod_0 = frac_0 * frac_1;
@@ -477,7 +530,7 @@ mod test {
         println!("p1_1: {}", p1_1);
         println!("p1_2: {}", p1_2);
         println!("p1_3: {}", p1_3);
-        
+
         let p2_0 = frac_1;
         let p2_1 = frac_3;
         let p2_2 = prod_1;

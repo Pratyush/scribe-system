@@ -7,7 +7,6 @@ pub fn get_batched_nv(num_var: usize, polynomials_len: usize) -> usize {
     num_var + log2(polynomials_len) as usize
 }
 
-
 // Input index
 // - `i := (i_0, ...i_{n-1})`,
 // - `num_vars := n`
