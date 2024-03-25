@@ -2,7 +2,7 @@ use crate::hyperplonk::poly_iop::{errors::PolyIOPErrors, structs::IOPProof, zero
 use crate::hyperplonk::arithmetic::util::get_index;
 use crate::hyperplonk::arithmetic::virtual_polynomial::VirtualPolynomial;
 use ark_ff::{batch_inversion, PrimeField};
-use ark_serialize::Valid;
+use ark_serialize::{Valid, Write};
 use crate::read_write::{DenseMLPoly, DenseMLPolyStream, ReadWriteStream};
 use ark_std::{end_timer, start_timer};
 use core::num;
@@ -83,7 +83,9 @@ pub(super) fn compute_product_poly<F: PrimeField>(
                     .write_next_unchecked(val)
                     .expect("Failed to write to prod stream");
             }
-            
+            // after draining our in-memory write buffer, still need to flush the BufWriter buffer,
+            // because they are two different buffers. Otherwise we can't read from the stream.
+            prod_stream.write_pointer.flush().unwrap();
             read_buffer.clear();
         }
     }
@@ -98,9 +100,11 @@ pub(super) fn compute_product_poly<F: PrimeField>(
                 .write_next_unchecked(val)
                 .expect("Failed to write to prod stream");
         }
-
+        prod_stream.write_pointer.flush().unwrap();
         read_buffer.clear();
     }
+
+    // prod_stream.write_pointer.flush().unwrap();
 
     for round in 2..=num_vars {
         for i in 0..(1 << (num_vars - round + 1)) {
@@ -112,10 +116,7 @@ pub(super) fn compute_product_poly<F: PrimeField>(
                 // print write pointer position
                 println!("prod_stream write pointer: {}", prod_stream.write_pointer.stream_position().unwrap());
             }
-            // TODO:
-            // the following line is required for the test to pass or it will error out "Failed to read from prod stream"
-            // indeed bizarre as printing the write pointer position shouldn't affect whether read is successful
-            prod_stream.write_pointer.stream_position().unwrap();
+
             if let Some(val) = prod_stream.read_next_unchecked() {
                 read_buffer.push(val);
             } else {
@@ -130,7 +131,7 @@ pub(super) fn compute_product_poly<F: PrimeField>(
                         .write_next_unchecked(val)
                         .expect("Failed to write to MLE stream");
                 }
-                
+                prod_stream.write_pointer.flush().unwrap();
                 read_buffer.clear();
             }
         }
@@ -143,7 +144,7 @@ pub(super) fn compute_product_poly<F: PrimeField>(
                     .write_next_unchecked(val)
                     .expect("Failed to write to MLE stream");
             }
-    
+            prod_stream.write_pointer.flush().unwrap();
             read_buffer.clear();
         }
     }

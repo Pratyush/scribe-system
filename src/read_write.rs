@@ -1111,7 +1111,8 @@ mod tests {
         stream.write_next_unchecked(Fr::from(1));
         stream.write_next_unchecked(Fr::from(2));
 
-        stream.write_pointer.stream_position().unwrap();
+        // stream.write_pointer.stream_position().unwrap();
+        stream.write_pointer.flush().unwrap();
         
         let elem_0 = stream.read_next_unchecked();
         assert_eq!(elem_0, Some(Fr::from(1)));
