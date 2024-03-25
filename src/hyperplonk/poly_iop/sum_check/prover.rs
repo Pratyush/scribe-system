@@ -171,8 +171,21 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
 
                     let stream = &mut polynomials[f];
 
+                    // print stream position
+                    #[cfg(debug_assertions)]
+                    {
+                        let pos = stream.read_pointer.stream_position().unwrap();
+                        println!("sum check product stream position: {}", pos);
+                    }
+
                     let eval = stream.read_next().unwrap(); // Read once for eval
                     let step = stream.read_next().unwrap() - eval; // Read once for step
+
+                    #[cfg(debug_assertions)]
+                    {
+                        println!("sum check product eval_even: {}", eval);
+                        println!("sum check product eval_odd: {}", step + eval);
+                    }
 
                     stream_values.insert(f, (eval, step));
                 }

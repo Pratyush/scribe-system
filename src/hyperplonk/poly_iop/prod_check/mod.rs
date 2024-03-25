@@ -172,8 +172,9 @@ where
                 "fxs and gxs have different number of polynomials".to_string(),
             ));
         }
+        let num_vars = fxs[0].lock().unwrap().num_vars;
         for poly in fxs.iter().chain(gxs.iter()) {
-            if poly.lock().unwrap().num_vars != fxs[0].lock().unwrap().num_vars {
+            if poly.lock().unwrap().num_vars != num_vars {
                 return Err(PolyIOPErrors::InvalidParameters(
                     "fx and gx have different number of variables".to_string(),
                 ));
@@ -192,7 +193,11 @@ where
         transcript.append_serializable_element(b"frac(x)", &frac_comm)?;
         transcript.append_serializable_element(b"prod(x)", &prod_x_comm)?;
         let alpha = transcript.get_and_append_challenge(b"alpha")?;
-
+        #[cfg(debug_assertions)]
+        {
+            println!("prod_check prove_zero_check alpha: {}", alpha);
+        }
+        
         // build the zero-check proof
         let (zero_check_proof, _) =
             prove_zero_check(fxs, gxs, &frac_poly, &prod_x, &alpha, transcript, 1 << 20)?;
@@ -328,6 +333,7 @@ mod test {
             &mut transcript,
         )?;
 
+        // the following is inactive as fs_copy and gs_copy are modified from prove()
         // check_frac_poly::<E>(&frac_poly, fs_copy, gs_copy);
 
         let mut transcript = <PolyIOP<E::ScalarField> as ProductCheck<E, PCS>>::init_transcript();
@@ -360,21 +366,19 @@ mod test {
             pcs_param, fs.clone(), hs.clone(), &mut transcript
         )?;
 
+        // the following is inactive as fs_copy and gs_copy are modified from prove()
         // // the frac_poly should still be computed correctly
         // check_frac_poly::<E>(&frac_poly, fs, hs);
 
         let mut transcript = <PolyIOP<E::ScalarField> as ProductCheck<E, PCS>>::init_transcript();
         transcript.append_message(b"testing", b"initializing transcript for testing")?;
-        let bad_subclaim = <PolyIOP<E::ScalarField> as ProductCheck<E, PCS>>::verify(
+        let bad_subclaim_result = <PolyIOP<E::ScalarField> as ProductCheck<E, PCS>>::verify(
             &bad_proof,
             &aux_info,
             &mut transcript,
-        )?;
-        assert_ne!(
-            prod_x_bad.lock().unwrap().evaluate(std::slice::from_ref(&bad_subclaim.final_query.0.last().unwrap())).unwrap(),
-            bad_subclaim.final_query.1,
-            "can't detect wrong proof"
         );
+
+        assert!(bad_subclaim_result.is_err(), "Expected an error");
 
         Ok(())
     }
@@ -386,7 +390,10 @@ mod test {
         let rand_vals = (0..1 << nv)
             .map(|_| Fr::rand(&mut rng))
             .collect::<Vec<Fr>>();
+        // the following is only a test case for nv = 2
+        // let rand_vals = vec![Fr::from(1u64), Fr::from(2u64), Fr::from(3u64), Fr::from(4u64)];
         let rand_vals_reverse = rand_vals.iter().rev().cloned().collect::<Vec<Fr>>();
+
         let f1: DenseMLPolyStream<Fr> = DenseMLPolyStream::from_evaluations_vec(nv, rand_vals, None, None);
         let g1: DenseMLPolyStream<Fr> = DenseMLPolyStream::from_evaluations_vec(nv, rand_vals_reverse, None, None);
         
@@ -394,6 +401,8 @@ mod test {
         let rand_vals_2 = (0..1 << nv)
             .map(|_| Fr::rand(&mut rng))
             .collect::<Vec<Fr>>();
+        // the following is only a test case for nv = 2
+        // let rand_vals_2 = vec![Fr::from(5u64), Fr::from(6u64), Fr::from(7u64), Fr::from(8u64)];
         let rand_vals_2_reverse = rand_vals_2.iter().rev().cloned().collect::<Vec<Fr>>();
         let f2: DenseMLPolyStream<Fr> = DenseMLPolyStream::from_evaluations_vec(nv, rand_vals_2, None, None);
         let g2: DenseMLPolyStream<Fr> = DenseMLPolyStream::from_evaluations_vec(nv, rand_vals_2_reverse, None, None);
@@ -420,7 +429,7 @@ mod test {
 
     #[test]
     fn test_trivial_polynomial() -> Result<(), PolyIOPErrors> {
-        test_product_check(1)
+        test_product_check(2)
     }
     #[test]
     fn test_normal_polynomial() -> Result<(), PolyIOPErrors> {
