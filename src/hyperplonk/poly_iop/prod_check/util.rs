@@ -46,9 +46,16 @@ pub(super) fn compute_product_poly<F: PrimeField>(
 ) -> Result<Arc<Mutex<DenseMLPolyStream<F>>>, PolyIOPErrors> {
     let start = start_timer!(|| "compute evaluations of prod polynomial");
     let mut frac_poly_stream = frac_poly.lock().unwrap();
+    frac_poly_stream.read_restart();
     let num_vars = frac_poly_stream.num_vars();
-    println!("frac_poly_stream read pointer: {}", frac_poly_stream.read_pointer.stream_position().unwrap());
-    println!("frac_poly_stream write pointer: {}", frac_poly_stream.write_pointer.stream_position().unwrap());
+    #[cfg(debug_assertions)]
+    {
+        println!("frac_poly_stream read pointer: {}", frac_poly_stream.read_pointer.stream_position().unwrap());
+        println!("frac_poly_stream write pointer: {}", frac_poly_stream.write_pointer.stream_position().unwrap());
+    }
+
+    // assert that num_vars is at least two
+    assert!(num_vars >= 2);
 
     // single stream for read and write pointers
     let mut prod_stream = DenseMLPolyStream::new_single_stream(num_vars, None);
@@ -60,13 +67,15 @@ pub(super) fn compute_product_poly<F: PrimeField>(
     // read frac_poly to read_buffer till it's full
     // note that this would fail if the frac_poly_stream has odd number of elements, but this shouldn't possibly happen
     while let Some(val) = frac_poly_stream.read_next_unchecked() {
-        println!("val: {}", val);
-        println!("frac_poly_stream read pointer: {}", frac_poly_stream.read_pointer.stream_position().unwrap());
-        println!("frac_poly_stream write pointer: {}", frac_poly_stream.write_pointer.stream_position().unwrap());
+        #[cfg(debug_assertions)]
+        {
+            println!("val: {}", val);
+            println!("frac_poly_stream read pointer: {}", frac_poly_stream.read_pointer.stream_position().unwrap());
+            println!("frac_poly_stream write pointer: {}", frac_poly_stream.write_pointer.stream_position().unwrap());
+        }
         read_buffer.push(val);
 
         if read_buffer.len() >= buffer_size {
-            println!("drain");
             (0..(buffer_size >> 1)).for_each(|i| write_buffer.push(read_buffer[2*i] * read_buffer[2*i+1]));
 
             for val in write_buffer.drain(..) {
@@ -78,6 +87,8 @@ pub(super) fn compute_product_poly<F: PrimeField>(
             read_buffer.clear();
         }
     }
+
+    frac_poly_stream.read_restart();
 
     if !read_buffer.is_empty() {
         (0..(read_buffer.len() >> 1)).for_each(|i| write_buffer.push(read_buffer[2*i] * read_buffer[2*i+1]));
@@ -91,25 +102,20 @@ pub(super) fn compute_product_poly<F: PrimeField>(
         read_buffer.clear();
     }
 
-    // round 2..=num_vars
-    // read from and write to the same prod_stream
-
-    // elements to read for the round is defined as 2^(n-round+1)
-    // if the elements to read for the round is less or equal to half of the read_buffer size, then we can keep reading from and writing to the write_buffer from different positions till the last round and push 0 to it before writing to the stream
-    // if the elements to read for the round is more than half of the read_buffer size, then we need to read to the read_buffer, calculate the write_buffer, write to the stream, and repeat the process
-    
-    // get log2 floor of buffer_size
-    let log2_buffer_size = (buffer_size as f64).log2().floor() as u64;
-
-    // // get round boundary up to which we read and write alternatingly up to the buffer size
-    // let round_bound = num_vars + 1 - log2_buffer_size;
-    // if round_bound >= num_vars {
-    //     panic!("Buffer size is too small for the number of variables");
-    // }
-    
     for round in 2..=num_vars {
         for i in 0..(1 << (num_vars - round + 1)) {
-            println!("round: {}, i: {}", round, i);
+            #[cfg(debug_assertions)]
+            {
+                println!("round: {}, i: {}", round, i);
+                // print read pointer position
+                println!("prod_stream read pointer: {}", prod_stream.read_pointer.stream_position().unwrap());
+                // print write pointer position
+                println!("prod_stream write pointer: {}", prod_stream.write_pointer.stream_position().unwrap());
+            }
+            // TODO:
+            // the following line is required for the test to pass or it will error out "Failed to read from prod stream"
+            // indeed bizarre as printing the write pointer position shouldn't affect whether read is successful
+            prod_stream.write_pointer.stream_position().unwrap();
             if let Some(val) = prod_stream.read_next_unchecked() {
                 read_buffer.push(val);
             } else {
@@ -146,27 +152,6 @@ pub(super) fn compute_product_poly<F: PrimeField>(
 
     prod_stream.read_restart();
     prod_stream.write_restart();
-
-    // // once all write elements can fit into the buffer, we will only read once from the stream to the read buffer, calculate the write_buffer, and calculate all future rounds by reading from and writing to the same write_buffer
-    // for round in (round_bound+1)..=num_vars {
-    //     for i in 0..(1 << (num_vars - round + 1)) {
-    //         if let Some(val) = prod_stream.read_next() {
-    //             read_buffer.push(val);
-    //         } else {
-    //             panic!("Failed to read from prod stream");
-    //         }
-    //     }
-
-    //     (0..(read_buffer.len() >> 1)).for_each(|i| write_buffer.push(read_buffer[2*i] * read_buffer[2*i+1]));
-
-    //     for val in write_buffer.drain(..) {
-    //         prod_stream
-    //             .write_next_unchecked(val)
-    //             .expect("Failed to write to MLE stream");
-    //     }
-
-    //     read_buffer.clear();
-    // }
 
     end_timer!(start);
     
@@ -304,6 +289,8 @@ mod test {
         
         let mut prod_poly = Vec::with_capacity(frac_poly.len());
         
+        let mut offset = 0;
+
         for round in 1..=num_vars {
             if round == 1 {
                 for i in 0..1 << (num_vars - round) {
@@ -311,8 +298,9 @@ mod test {
                 }
             } else {
                 for i in 0..1 << (num_vars - round) {
-                    prod_poly.push(prod_poly[2*i] * prod_poly[2*i+1]);
+                    prod_poly.push(prod_poly[offset + 2*i] * prod_poly[offset + 2*i+1]);
                 }
+                offset += 1 << (num_vars - round + 1);
 
             }
         }
@@ -337,11 +325,10 @@ mod test {
         let mut rng = StdRng::seed_from_u64(42); // Fixed seed for reproducibility
 
         // create vector to populate stream
-        let num_vars = 4;
+        let num_vars = 10;
         let mut frac_poly_vec = Vec::with_capacity(1 << num_vars);
-        for _ in 0..(1 << num_vars) {
+        for i in 0..(1 << num_vars) {
             frac_poly_vec.push(Standard.sample(&mut rng));
-            println!("frac_poly_vec: {}", frac_poly_vec.last().unwrap());
         }
 
         // Create a stream with 2^10 elements
@@ -351,17 +338,13 @@ mod test {
                 .write_next_unchecked(frac_poly_vec[i])
                 .expect("Failed to write to MLE stream");
         }
-        frac_poly_stream.write_pointer.flush().unwrap();
+        // frac_poly_stream.write_pointer.flush().unwrap();
         frac_poly_stream.write_restart();
-
-        // print read and write pointer positions
-        println!("frac_poly_stream read pointer: {}", frac_poly_stream.read_pointer.stream_position().unwrap());
-        println!("frac_poly_stream write pointer: {}", frac_poly_stream.write_pointer.stream_position().unwrap());
 
         let frac_poly = Arc::new(Mutex::new(frac_poly_stream));
 
         // Compute the product polynomial with buffer size 1 << 5
-        let result = compute_product_poly(&frac_poly, 1<<2).unwrap();
+        let result = compute_product_poly(&frac_poly, 1<<5).unwrap();
 
         // Verify the result
         let mut result_stream = result.lock().unwrap();

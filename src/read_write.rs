@@ -203,10 +203,9 @@ impl<F: Field> DenseMLPolyStream<F> {
     }
 
     pub fn new_from_tempfile_single_stream(num_vars: usize) -> Self {
-        let file = NamedTempFile::new().unwrap();
+        let file = NamedTempFile::new().expect("failed to create temp file");
         let file_read = file.reopen().unwrap();
         let file_write = file.reopen().unwrap();
-        // let tempfile = tempfile().expect("Failed to create a temporary file");
         let read_pointer = BufReader::with_capacity(
             1 << 20,
             file_read,
@@ -1086,24 +1085,35 @@ mod tests {
         let mut stream = DenseMLPolyStream::new_single_stream(2, None);
         stream.write_next_unchecked(Fr::from(1));
         stream.write_next_unchecked(Fr::from(2));
-        println!("read pointer: {}", stream.read_pointer.stream_position().unwrap());
-        println!("write pointer: {}", stream.write_pointer.stream_position().unwrap());
-        // stream.write_pointer.flush().unwrap();
+        assert_eq!(stream.read_pointer.stream_position().unwrap(), 0);
+        assert_eq!(stream.write_pointer.stream_position().unwrap(), 64);
         stream.write_restart();
-        println!("write pointer: {}", stream.write_pointer.stream_position().unwrap());
+        assert_eq!(stream.write_pointer.stream_position().unwrap(), 0);
         let elem_0 = stream.read_next();
-        println!("elem 0: {:?}", elem_0);
-        println!("read pointer: {}", stream.read_pointer.stream_position().unwrap());
-        println!("write pointer: {}", stream.write_pointer.stream_position().unwrap());
+        assert_eq!(elem_0, Some(Fr::from(1)));
+        assert_eq!(stream.read_pointer.stream_position().unwrap(), 32);
+        assert_eq!(stream.write_pointer.stream_position().unwrap(), 0);
         stream.write_next_unchecked(Fr::from(3));
-        println!("read pointer: {}", stream.read_pointer.stream_position().unwrap());
-        println!("write pointer: {}", stream.write_pointer.stream_position().unwrap());
+        assert_eq!(stream.read_pointer.stream_position().unwrap(), 32);
+        assert_eq!(stream.write_pointer.stream_position().unwrap(), 32);
         stream.write_restart();
-        println!("read pointer: {}", stream.read_pointer.stream_position().unwrap());
-        println!("write pointer: {}", stream.write_pointer.stream_position().unwrap());
+        assert_eq!(stream.read_pointer.stream_position().unwrap(), 32);
+        assert_eq!(stream.write_pointer.stream_position().unwrap(), 0);
         let elem_1 = stream.read_next();
-        println!("elem 1: {:?}", elem_1);
-        println!("read pointer: {}", stream.read_pointer.stream_position().unwrap());
-        println!("write pointer: {}", stream.write_pointer.stream_position().unwrap());
+        assert_eq!(elem_1, Some(Fr::from(2)));
+        assert_eq!(stream.read_pointer.stream_position().unwrap(), 64);
+        assert_eq!(stream.write_pointer.stream_position().unwrap(), 0);
+    }
+
+    #[test]
+    fn test_single_stream_read_2() {
+        let mut stream = DenseMLPolyStream::new_single_stream(2, None);
+        stream.write_next_unchecked(Fr::from(1));
+        stream.write_next_unchecked(Fr::from(2));
+
+        stream.write_pointer.stream_position().unwrap();
+        
+        let elem_0 = stream.read_next_unchecked();
+        assert_eq!(elem_0, Some(Fr::from(1)));
     }
 }
