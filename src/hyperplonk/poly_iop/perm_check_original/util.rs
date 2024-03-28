@@ -34,10 +34,10 @@ pub(super) fn computer_nums_and_denoms<F: PrimeField>(
     PolyIOPErrors,
 > {
     let start = start_timer!(|| "compute numerators and denominators");
-    
+
     let num_vars = fxs[0].lock().unwrap().num_vars;
     let s_ids = identity_permutation_mles::<F>(num_vars, fxs.len());
-    
+
     let batch_size = 1 << 20; // Maximum number of elements to process in a batch
 
     let mut numerators = Vec::with_capacity(fxs.len());
@@ -64,17 +64,24 @@ pub(super) fn computer_nums_and_denoms<F: PrimeField>(
         let mut numerator_stream = numerator.lock().unwrap();
         let mut denominator_stream = denominator.lock().unwrap();
 
-        while let (Some(fx_val), Some(gx_val), Some(s_id_val), Some(perm_val)) =
-            (fx.read_next(), gx.read_next(), s_id.read_next(), perm.read_next())
-        {
+        while let (Some(fx_val), Some(gx_val), Some(s_id_val), Some(perm_val)) = (
+            fx.read_next(),
+            gx.read_next(),
+            s_id.read_next(),
+            perm.read_next(),
+        ) {
             numerator_vals.push(fx_val + *beta * s_id_val + gamma);
             denominator_vals.push(gx_val + *beta * perm_val + gamma);
             // Check if we've reached the batch size
             if numerator_vals.len() >= batch_size {
-                for (numerator_val, denominator_val) in numerator_vals.drain(..).zip(denominator_vals.drain(..)) {
-                    numerator_stream.write_next_unchecked(numerator_val)
+                for (numerator_val, denominator_val) in
+                    numerator_vals.drain(..).zip(denominator_vals.drain(..))
+                {
+                    numerator_stream
+                        .write_next_unchecked(numerator_val)
                         .expect("Failed to write to hp stream");
-                    denominator_stream.write_next_unchecked(denominator_val)
+                    denominator_stream
+                        .write_next_unchecked(denominator_val)
                         .expect("Failed to write to hq stream");
                 }
             }
@@ -82,10 +89,14 @@ pub(super) fn computer_nums_and_denoms<F: PrimeField>(
 
         // Handle any remaining values that didn't fill the last batch
         if !numerator_vals.is_empty() {
-            for (numerator_val, denominator_val) in numerator_vals.drain(..).zip(denominator_vals.drain(..)) {
-                numerator_stream.write_next_unchecked(numerator_val)
+            for (numerator_val, denominator_val) in
+                numerator_vals.drain(..).zip(denominator_vals.drain(..))
+            {
+                numerator_stream
+                    .write_next_unchecked(numerator_val)
                     .expect("Failed to write remaining hp values");
-                denominator_stream.write_next_unchecked(denominator_val)
+                denominator_stream
+                    .write_next_unchecked(denominator_val)
                     .expect("Failed to write remaining hq values");
             }
         }
@@ -111,7 +122,6 @@ pub(super) fn computer_nums_and_denoms<F: PrimeField>(
     Ok((numerators, denominators))
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -131,7 +141,7 @@ mod tests {
                 vec![Fr::from(1), Fr::from(2)],
                 None,
                 None,
-            ))), 
+            ))),
             Arc::new(Mutex::new(DenseMLPolyStream::<Fr>::from_evaluations_vec(
                 1,
                 vec![Fr::from(3), Fr::from(4)],
@@ -169,7 +179,8 @@ mod tests {
         ];
 
         // Compute the fractional polynomials
-        let (numerators, denominators) = computer_nums_and_denoms(&beta, &gamma, fxs, gxs, perms).unwrap();
+        let (numerators, denominators) =
+            computer_nums_and_denoms(&beta, &gamma, fxs, gxs, perms).unwrap();
 
         // Expected results based on manual calculations or desired outcomes
         let expected_numerators = vec![

@@ -1,13 +1,13 @@
 use self::util::computer_nums_and_denoms;
+use crate::hyperplonk::transcript::IOPTranscript;
 use crate::hyperplonk::{
     pcs::PolynomialCommitmentScheme,
     poly_iop::{errors::PolyIOPErrors, prod_check::ProductCheck, PolyIOP},
 };
+use crate::read_write::{copy_mle, DenseMLPolyStream, ReadWriteStream};
 use ark_ec::pairing::Pairing;
-use crate::read_write::{DenseMLPolyStream, ReadWriteStream, copy_mle};
 use ark_std::{end_timer, start_timer};
 use std::sync::{Arc, Mutex};
-use crate::hyperplonk::transcript::IOPTranscript;
 
 /// A permutation subclaim consists of
 /// - the SubClaim from the ProductCheck
@@ -131,7 +131,9 @@ where
 
         let num_vars = fxs[0].lock().unwrap().num_vars;
         for ((fx, gx), perm) in fxs.iter().zip(gxs.iter()).zip(perms.iter()) {
-            if (fx.lock().unwrap().num_vars != num_vars) || (gx.lock().unwrap().num_vars != num_vars) || (perm.lock().unwrap().num_vars != num_vars)
+            if (fx.lock().unwrap().num_vars != num_vars)
+                || (gx.lock().unwrap().num_vars != num_vars)
+                || (perm.lock().unwrap().num_vars != num_vars)
             {
                 return Err(PolyIOPErrors::InvalidParameters(
                     "number of variables unmatched".to_string(),
@@ -145,12 +147,8 @@ where
         let (numerators, denominators) = computer_nums_and_denoms(&beta, &gamma, fxs, gxs, perms)?;
 
         // invoke product check on numerator and denominator
-        let (proof, prod_poly, frac_poly) = <Self as ProductCheck<E, PCS>>::prove(
-            pcs_param,
-            numerators,
-            denominators,
-            transcript,
-        )?;
+        let (proof, prod_poly, frac_poly) =
+            <Self as ProductCheck<E, PCS>>::prove(pcs_param, numerators, denominators, transcript)?;
 
         end_timer!(start);
         Ok((proof, prod_poly, frac_poly))
@@ -181,17 +179,22 @@ where
 #[cfg(test)]
 mod test {
     use super::PermutationCheck;
+    use crate::hyperplonk::arithmetic::virtual_polynomial::VPAuxInfo;
     use crate::hyperplonk::{
         pcs::{prelude::MultilinearKzgPCS, PolynomialCommitmentScheme},
         poly_iop::{errors::PolyIOPErrors, PolyIOP},
     };
-    use crate::read_write::{identity_permutation_mles, random_permutation_mles, DenseMLPolyStream};
-    use crate::hyperplonk::arithmetic::virtual_polynomial::VPAuxInfo;
+    use crate::read_write::copy_mle;
+    use crate::read_write::{
+        identity_permutation_mles, random_permutation_mles, DenseMLPolyStream,
+    };
     use ark_bls12_381::Bls12_381;
     use ark_ec::pairing::Pairing;
     use ark_std::test_rng;
-    use std::{marker::PhantomData, sync::{Arc, Mutex}};
-    use crate::read_write::copy_mle;
+    use std::{
+        marker::PhantomData,
+        sync::{Arc, Mutex},
+    };
 
     type Kzg = MultilinearKzgPCS<Bls12_381>;
 
@@ -240,9 +243,19 @@ mod test {
         )?;
 
         // check product subclaim
-        if prod_x.lock().unwrap().evaluate(
-            std::slice::from_ref(perm_check_sub_claim.product_check_sub_claim.final_query.0.last().unwrap()),
-        ).unwrap() != perm_check_sub_claim.product_check_sub_claim.final_query.1
+        if prod_x
+            .lock()
+            .unwrap()
+            .evaluate(std::slice::from_ref(
+                perm_check_sub_claim
+                    .product_check_sub_claim
+                    .final_query
+                    .0
+                    .last()
+                    .unwrap(),
+            ))
+            .unwrap()
+            != perm_check_sub_claim.product_check_sub_claim.final_query.1
         {
             return Err(PolyIOPErrors::InvalidVerifier("wrong subclaim".to_string()));
         };
@@ -255,7 +268,7 @@ mod test {
 
         let srs = MultilinearKzgPCS::<Bls12_381>::gen_srs_for_testing(&mut rng, nv)?;
         let (pcs_param, _) = MultilinearKzgPCS::<Bls12_381>::trim(&srs, None, Some(nv))?;
-        
+
         {
             // good path: (w1, w2) is a permutation of (w1, w2) itself under the identify
             // map
@@ -264,10 +277,7 @@ mod test {
                 Arc::new(Mutex::new(DenseMLPolyStream::rand(nv, &mut rng))),
             ];
 
-            let ws_copy = vec![
-                copy_mle(&ws[0], None, None),
-                copy_mle(&ws[1], None, None),
-            ];
+            let ws_copy = vec![copy_mle(&ws[0], None, None), copy_mle(&ws[1], None, None)];
 
             // perms is the identity map
             let id_perms = identity_permutation_mles(nv, 2);
@@ -281,10 +291,7 @@ mod test {
                 Arc::new(Mutex::new(DenseMLPolyStream::rand(nv, &mut rng))),
                 Arc::new(Mutex::new(DenseMLPolyStream::rand(nv, &mut rng))),
             ];
-            let gs = vec![
-                copy_mle(&fs[1], None, None),
-                copy_mle(&fs[0], None, None),
-            ];
+            let gs = vec![copy_mle(&fs[1], None, None), copy_mle(&fs[0], None, None)];
             // perms is the reverse identity map
             let mut perms = identity_permutation_mles(nv, 2);
             perms.reverse();
@@ -297,17 +304,14 @@ mod test {
                 Arc::new(Mutex::new(DenseMLPolyStream::rand(nv, &mut rng))),
                 Arc::new(Mutex::new(DenseMLPolyStream::rand(nv, &mut rng))),
             ];
-            let ws_copy = vec![
-                copy_mle(&ws[0], None, None),
-                copy_mle(&ws[1], None, None),
-            ];
+            let ws_copy = vec![copy_mle(&ws[0], None, None), copy_mle(&ws[1], None, None)];
             // perms is a random map
             let perms = random_permutation_mles(nv, 2, &mut rng);
 
-            assert!(
-                test_permutation_check_helper::<Bls12_381, Kzg>(&pcs_param, ws, ws_copy, perms)
-                    .is_err()
-            );
+            assert!(test_permutation_check_helper::<Bls12_381, Kzg>(
+                &pcs_param, ws, ws_copy, perms
+            )
+            .is_err());
         }
 
         {
@@ -323,10 +327,10 @@ mod test {
             // s_perm is the identity map
             let id_perms = identity_permutation_mles(nv, 2);
 
-            assert!(test_permutation_check_helper::<Bls12_381, Kzg>(
-                &pcs_param, fs, gs, id_perms
-            )
-            .is_err());
+            assert!(
+                test_permutation_check_helper::<Bls12_381, Kzg>(&pcs_param, fs, gs, id_perms)
+                    .is_err()
+            );
         }
 
         Ok(())
