@@ -399,7 +399,6 @@ pub fn copy_mle<F: PrimeField>(
 }
 
 /// A list of MLEs that represents an identity permutation
-/// loads vector from memory into stream, so is not memory efficient
 pub fn identity_permutation_mles<F: PrimeField>(
     num_vars: usize,
     num_chunks: usize,
