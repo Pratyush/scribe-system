@@ -59,30 +59,11 @@ where
         let (pcs_prover_param, pcs_verifier_param) =
             PCS::trim(pcs_srs, None, Some(supported_ml_degree))?;
 
-        // assert that index.permutation and index.permutation_index have the same length
-        // TODO: loop over all index.permutation and index.permutation_index and check that they have the same length
-        if index.permutation[0].lock().unwrap().num_vars
-            != index.permutation_index[0].lock().unwrap().num_vars
-        {
-            return Err(HyperPlonkErrors::InvalidParameters(
-                "permutation and permutation_index have different lengths".to_string(),
-            ));
-        }
-
-        // commit permutation and permutation index oracles
-        let permutation_oracles = (index.permutation.clone(), index.permutation_index.clone());
-        let permutation_commitments = (
-            permutation_oracles
-                .0
-                .par_iter()
-                .map(|poly| PCS::commit(&pcs_prover_param, poly))
-                .collect::<Result<Vec<_>, _>>()?,
-            permutation_oracles
-                .1
-                .par_iter()
-                .map(|poly| PCS::commit(&pcs_prover_param, poly))
-                .collect::<Result<Vec<_>, _>>()?,
-        );
+        // build permutation oracles
+        let mut permutation_oracles = index.permutation.clone();
+        let mut permutation_commitments = permutation_oracles.iter().map(|perm_oracle| {
+            PCS::commit(&pcs_prover_param, perm_oracle)
+        }).collect::<Result<Vec<_>, _>>()?;
 
         // commit selector oracles
         let selector_oracles = index.selectors.clone();
@@ -98,9 +79,9 @@ where
             Self::ProvingKey {
                 params: index.params.clone(),
                 permutation_oracles,
-                permutation_commitments: permutation_commitments.clone(),
                 selector_oracles,
                 selector_commitments: selector_commitments.clone(),
+                permutation_commitments: permutation_commitments.clone(),
                 pcs_param: pcs_prover_param,
             },
             Self::VerifyingKey {

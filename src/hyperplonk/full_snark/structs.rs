@@ -1,4 +1,6 @@
 use crate::hyperplonk::pcs::multilinear_kzg::batching::BatchProofSinglePoint;
+use crate::hyperplonk::poly_iop::perm_check_original::PermutationCheck;
+use crate::hyperplonk::poly_iop::prelude::ZeroCheck;
 use crate::{
     hyperplonk::{
         full_snark::custom_gate::CustomizedGates, pcs::PolynomialCommitmentScheme,
@@ -11,23 +13,34 @@ use ark_ff::PrimeField;
 use ark_std::log2;
 use std::sync::{Arc, Mutex};
 
+use super::prelude::HyperPlonkErrors;
+
+
 /// The proof for the HyperPlonk PolyIOP, consists of the following:
 ///   - the commitments to all witness MLEs
 ///   - a batch opening to all the MLEs at certain index
-///   - the batch sum check proof
-#[derive(Clone)]
-pub struct HyperPlonkProof<E, SC, PCS>
+///   - the zero-check proof for checking custom gate-satisfiability
+///   - the permutation-check proof for checking the copy constraints
+#[derive(Clone, Debug, PartialEq)]
+pub struct HyperPlonkProof<E, PC, PCS>
 where
     E: Pairing,
-    SC: SumCheck<E::ScalarField>,
+    PC: PermutationCheck<E, PCS>,
     PCS: PolynomialCommitmentScheme<E>,
 {
+    // PCS commit for witnesses
     pub witness_commits: Vec<PCS::Commitment>,
+    // pub batch_openings: PCS::BatchProof,
     pub opening: BatchProofSinglePoint<E, PCS>,
-    pub sum_check_proof: SC::SumCheckProof,
-    pub h_comm: Vec<PCS::Commitment>,
-    pub h_prime_comm: Vec<PCS::Commitment>,
+    // =======================================================================
+    // IOP proofs
+    // =======================================================================
+    // the custom gate zerocheck proof
+    pub zero_check_proof: <PC as ZeroCheck<E::ScalarField>>::ZeroCheckProof,
+    // the permutation check proof for copy constraints
+    pub perm_check_proof: PC::PermutationProof,
 }
+
 
 /// The HyperPlonk instance parameters, consists of the following:
 ///   - the number of constraints
@@ -60,6 +73,26 @@ impl HyperPlonkParams {
     pub fn num_witness_columns(&self) -> usize {
         self.gate_func.num_witness_columns()
     }
+
+    /// evaluate the identical polynomial
+    pub fn eval_id_oracle<F: PrimeField>(&self, point: &[F]) -> Result<F, HyperPlonkErrors> {
+        let len = self.num_variables() + (log2(self.num_witness_columns()) as usize);
+        if point.len() != len {
+            return Err(HyperPlonkErrors::InvalidParameters(format!(
+                "ID oracle point length = {}, expected {}",
+                point.len(),
+                len,
+            )));
+        }
+
+        let mut res = F::zero();
+        let mut base = F::one();
+        for &v in point.iter() {
+            res += base * v;
+            base += base;
+        }
+        Ok(res)
+    }
 }
 
 /// The HyperPlonk index, consists of the following:
@@ -70,7 +103,6 @@ impl HyperPlonkParams {
 pub struct HyperPlonkIndex<F: PrimeField> {
     pub params: HyperPlonkParams,
     pub permutation: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
-    pub permutation_index: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
     pub selectors: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
 }
 
@@ -101,17 +133,14 @@ impl<F: PrimeField> HyperPlonkIndex<F> {
 pub struct HyperPlonkProvingKey<E: Pairing, PCS: PolynomialCommitmentScheme<E>> {
     /// Hyperplonk instance parameters
     pub params: HyperPlonkParams,
+    /// The preprocessed permutation polynomials
+    pub permutation_oracles: Vec<Arc<Mutex<DenseMLPolyStream<E::ScalarField>>>>,
     /// The preprocessed selector polynomials
     pub selector_oracles: Vec<Arc<Mutex<DenseMLPolyStream<E::ScalarField>>>>,
-    /// The preprocessed permutation polynomials
-    pub permutation_oracles: (
-        Vec<Arc<Mutex<DenseMLPolyStream<E::ScalarField>>>>,
-        Vec<Arc<Mutex<DenseMLPolyStream<E::ScalarField>>>>,
-    ), // (perm, index)
     /// Commitments to the preprocessed selector polynomials
     pub selector_commitments: Vec<PCS::Commitment>,
     /// Commitments to the preprocessed permutation polynomials
-    pub permutation_commitments: (Vec<PCS::Commitment>, Vec<PCS::Commitment>),
+    pub permutation_commitments: Vec<PCS::Commitment>,
     /// The parameters for PCS commitment
     pub pcs_param: PCS::ProverParam,
 }
@@ -125,11 +154,11 @@ pub struct HyperPlonkProvingKey<E: Pairing, PCS: PolynomialCommitmentScheme<E>> 
 pub struct HyperPlonkVerifyingKey<E: Pairing, PCS: PolynomialCommitmentScheme<E>> {
     /// Hyperplonk instance parameters
     pub params: HyperPlonkParams,
+    /// The parameters for PCS commitment
+    pub pcs_param: PCS::VerifierParam,
     /// A commitment to the preprocessed selector polynomials
     pub selector_commitments: Vec<PCS::Commitment>,
     // pub selector: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
     /// Permutation oracles' commitments
-    pub perm_commitments: (Vec<PCS::Commitment>, Vec<PCS::Commitment>), // (perm, index)
-    /// The parameters for PCS commitment
-    pub pcs_param: PCS::VerifierParam,
+    pub perm_commitments: Vec<PCS::Commitment>,
 }
