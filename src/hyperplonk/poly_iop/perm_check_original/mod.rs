@@ -4,7 +4,7 @@ use crate::hyperplonk::{
     poly_iop::{errors::PolyIOPErrors, prod_check::ProductCheck, PolyIOP},
 };
 use ark_ec::pairing::Pairing;
-use crate::read_write::{DenseMLPolyStream, ReadWriteStream};
+use crate::read_write::{DenseMLPolyStream, ReadWriteStream, copy_mle};
 use ark_std::{end_timer, start_timer};
 use std::sync::{Arc, Mutex};
 use crate::hyperplonk::transcript::IOPTranscript;
@@ -185,30 +185,31 @@ mod test {
         pcs::{prelude::MultilinearKzgPCS, PolynomialCommitmentScheme},
         poly_iop::{errors::PolyIOPErrors, PolyIOP},
     };
-    use arithmetic::{evaluate_opt, identity_permutation_mles, random_permutation_mles, VPAuxInfo};
+    use crate::read_write::{identity_permutation_mles, random_permutation_mles, DenseMLPolyStream};
+    use crate::hyperplonk::arithmetic::virtual_polynomial::VPAuxInfo;
     use ark_bls12_381::Bls12_381;
     use ark_ec::pairing::Pairing;
-    use ark_poly::{DenseMultilinearExtension, MultilinearExtension};
     use ark_std::test_rng;
-    use std::{marker::PhantomData, sync::Arc};
+    use std::{marker::PhantomData, sync::{Arc, Mutex}};
+    use crate::read_write::copy_mle;
 
     type Kzg = MultilinearKzgPCS<Bls12_381>;
 
     fn test_permutation_check_helper<E, PCS>(
         pcs_param: &PCS::ProverParam,
-        fxs: &[Arc<DenseMultilinearExtension<E::ScalarField>>],
-        gxs: &[Arc<DenseMultilinearExtension<E::ScalarField>>],
-        perms: &[Arc<DenseMultilinearExtension<E::ScalarField>>],
+        fxs: Vec<Arc<Mutex<DenseMLPolyStream<E::ScalarField>>>>,
+        gxs: Vec<Arc<Mutex<DenseMLPolyStream<E::ScalarField>>>>,
+        perms: Vec<Arc<Mutex<DenseMLPolyStream<E::ScalarField>>>>,
     ) -> Result<(), PolyIOPErrors>
     where
         E: Pairing,
         PCS: PolynomialCommitmentScheme<
             E,
-            Polynomial = Arc<DenseMultilinearExtension<E::ScalarField>>,
+            Polynomial = Arc<Mutex<DenseMLPolyStream<E::ScalarField>>>,
         >,
     {
-        let nv = fxs[0].num_vars;
-        // what's AuxInfo used for?
+        let nv = fxs[0].lock().unwrap().num_vars;
+
         let poly_info = VPAuxInfo {
             max_degree: fxs.len() + 1,
             num_variables: nv,
@@ -239,10 +240,9 @@ mod test {
         )?;
 
         // check product subclaim
-        if evaluate_opt(
-            &prod_x,
-            &perm_check_sub_claim.product_check_sub_claim.final_query.0,
-        ) != perm_check_sub_claim.product_check_sub_claim.final_query.1
+        if prod_x.lock().unwrap().evaluate(
+            std::slice::from_ref(perm_check_sub_claim.product_check_sub_claim.final_query.0.last().unwrap()),
+        ).unwrap() != perm_check_sub_claim.product_check_sub_claim.final_query.1
         {
             return Err(PolyIOPErrors::InvalidVerifier("wrong subclaim".to_string()));
         };
@@ -255,44 +255,57 @@ mod test {
 
         let srs = MultilinearKzgPCS::<Bls12_381>::gen_srs_for_testing(&mut rng, nv)?;
         let (pcs_param, _) = MultilinearKzgPCS::<Bls12_381>::trim(&srs, None, Some(nv))?;
-        let id_perms = identity_permutation_mles(nv, 2);
-
+        
         {
             // good path: (w1, w2) is a permutation of (w1, w2) itself under the identify
             // map
             let ws = vec![
-                Arc::new(DenseMultilinearExtension::rand(nv, &mut rng)),
-                Arc::new(DenseMultilinearExtension::rand(nv, &mut rng)),
+                Arc::new(Mutex::new(DenseMLPolyStream::rand(nv, &mut rng))),
+                Arc::new(Mutex::new(DenseMLPolyStream::rand(nv, &mut rng))),
             ];
+
+            let ws_copy = vec![
+                copy_mle(&ws[0], None, None),
+                copy_mle(&ws[1], None, None),
+            ];
+
             // perms is the identity map
-            test_permutation_check_helper::<Bls12_381, Kzg>(&pcs_param, &ws, &ws, &id_perms)?;
+            let id_perms = identity_permutation_mles(nv, 2);
+
+            test_permutation_check_helper::<Bls12_381, Kzg>(&pcs_param, ws, ws_copy, id_perms)?;
         }
 
         {
             // good path: f = (w1, w2) is a permutation of g = (w2, w1) itself under a map
             let mut fs = vec![
-                Arc::new(DenseMultilinearExtension::rand(nv, &mut rng)),
-                Arc::new(DenseMultilinearExtension::rand(nv, &mut rng)),
+                Arc::new(Mutex::new(DenseMLPolyStream::rand(nv, &mut rng))),
+                Arc::new(Mutex::new(DenseMLPolyStream::rand(nv, &mut rng))),
             ];
-            let gs = fs.clone();
-            fs.reverse();
+            let gs = vec![
+                copy_mle(&fs[1], None, None),
+                copy_mle(&fs[0], None, None),
+            ];
             // perms is the reverse identity map
-            let mut perms = id_perms.clone();
+            let mut perms = identity_permutation_mles(nv, 2);
             perms.reverse();
-            test_permutation_check_helper::<Bls12_381, Kzg>(&pcs_param, &fs, &gs, &perms)?;
+            test_permutation_check_helper::<Bls12_381, Kzg>(&pcs_param, fs, gs, perms)?;
         }
 
         {
             // bad path 1: w is a not permutation of w itself under a random map
             let ws = vec![
-                Arc::new(DenseMultilinearExtension::rand(nv, &mut rng)),
-                Arc::new(DenseMultilinearExtension::rand(nv, &mut rng)),
+                Arc::new(Mutex::new(DenseMLPolyStream::rand(nv, &mut rng))),
+                Arc::new(Mutex::new(DenseMLPolyStream::rand(nv, &mut rng))),
+            ];
+            let ws_copy = vec![
+                copy_mle(&ws[0], None, None),
+                copy_mle(&ws[1], None, None),
             ];
             // perms is a random map
             let perms = random_permutation_mles(nv, 2, &mut rng);
 
             assert!(
-                test_permutation_check_helper::<Bls12_381, Kzg>(&pcs_param, &ws, &ws, &perms)
+                test_permutation_check_helper::<Bls12_381, Kzg>(&pcs_param, ws, ws_copy, perms)
                     .is_err()
             );
         }
@@ -300,17 +313,18 @@ mod test {
         {
             // bad path 2: f is a not permutation of g under a identity map
             let fs = vec![
-                Arc::new(DenseMultilinearExtension::rand(nv, &mut rng)),
-                Arc::new(DenseMultilinearExtension::rand(nv, &mut rng)),
+                Arc::new(Mutex::new(DenseMLPolyStream::rand(nv, &mut rng))),
+                Arc::new(Mutex::new(DenseMLPolyStream::rand(nv, &mut rng))),
             ];
             let gs = vec![
-                Arc::new(DenseMultilinearExtension::rand(nv, &mut rng)),
-                Arc::new(DenseMultilinearExtension::rand(nv, &mut rng)),
+                Arc::new(Mutex::new(DenseMLPolyStream::rand(nv, &mut rng))),
+                Arc::new(Mutex::new(DenseMLPolyStream::rand(nv, &mut rng))),
             ];
             // s_perm is the identity map
+            let id_perms = identity_permutation_mles(nv, 2);
 
             assert!(test_permutation_check_helper::<Bls12_381, Kzg>(
-                &pcs_param, &fs, &gs, &id_perms
+                &pcs_param, fs, gs, id_perms
             )
             .is_err());
         }
@@ -320,7 +334,7 @@ mod test {
 
     #[test]
     fn test_trivial_polynomial() -> Result<(), PolyIOPErrors> {
-        test_permutation_check(1)
+        test_permutation_check(2)
     }
     #[test]
     fn test_normal_polynomial() -> Result<(), PolyIOPErrors> {
