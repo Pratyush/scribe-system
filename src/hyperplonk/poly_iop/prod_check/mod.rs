@@ -1,5 +1,6 @@
 use crate::hyperplonk::arithmetic::virtual_polynomial::VPAuxInfo;
 use crate::hyperplonk::transcript::IOPTranscript;
+use crate::read_write::copy_mle;
 use crate::{
     hyperplonk::{
         pcs::PolynomialCommitmentScheme,
@@ -201,6 +202,10 @@ where
             println!("prod_check prove_zero_check alpha: {}", alpha);
         }
 
+        // copy prod_x and frac_poly to return, so that they are not folded by zero check
+        let prod_x_copy = copy_mle(&prod_x, None, None);
+        let frac_poly_copy = copy_mle(&frac_poly, None, None);
+
         // build the zero-check proof
         let (zero_check_proof, _) =
             prove_zero_check(fxs, gxs, &frac_poly, &prod_x, &alpha, transcript, 1 << 20)?;
@@ -213,8 +218,8 @@ where
                 prod_x_comm,
                 frac_comm,
             },
-            prod_x,
-            frac_poly,
+            prod_x_copy,
+            frac_poly_copy,
         ))
     }
 

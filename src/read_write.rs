@@ -509,6 +509,35 @@ pub fn random_permutation_mles<F: PrimeField, R: RngCore>(
     res
 }
 
+// NOTE that this function modifies the self stream, and doesn't create a new stream
+pub fn add_assign<F: PrimeField>(this: Arc<Mutex<DenseMLPolyStream<F>>>, f: F, other: Arc<Mutex<DenseMLPolyStream<F>>>)
+{
+    let mut this_stream = this.lock().unwrap();
+    let mut other_stream = other.lock().unwrap();
+
+    // check that the two streams have the same num_vars
+    assert_eq!(this_stream.num_vars(), other_stream.num_vars());
+
+    // Restart both input streams to ensure they are read from the beginning
+    this_stream.read_restart();
+    other_stream.read_restart();
+
+    while let (Some(a), Some(b)) = (this_stream.read_next(), other_stream.read_next()) {
+        // Perform addition and write the result to the new stream
+        this_stream.write_next_unchecked(a + f * b);
+    }
+    
+    // restart read pointer so that the read stream is truncated to the start (all contents deleted)
+    // when calling swap_read_write()
+    this_stream.read_restart();
+    other_stream.read_restart();
+    
+    this_stream.swap_read_write();
+
+    // result_stream
+}
+
+
 // currently not very efficient as it reads and writes one field element at a time
 // in the future we could optimize by:
 // 1. read multiple streams in parallel
@@ -534,26 +563,30 @@ pub trait DenseMLPoly<F: Field>: ReadWriteStream<Item = F> {
         result_stream
     }
 
-    // TODO: clear the read stream after writing to self
     // NOTE that this function modifies the self stream, and doesn't create a new stream
-    fn add_assign(mut self, f: F, mut other: Self)
+    fn add_assign(mut self, f: F, other: Arc<Mutex<Self>>)
     where
         Self: Sized,
     {
-        // Create a new stream for the result.
-        // let mut result_stream = Self::new(self.num_vars(), read_path, write_path);
+        let mut other_stream = other.lock().unwrap();
+
+        // check that the two streams have the same num_vars
+        assert_eq!(self.num_vars(), other_stream.num_vars());
 
         // Restart both input streams to ensure they are read from the beginning
         self.read_restart();
-        other.read_restart();
+        other_stream.read_restart();
 
-        while let (Some(a), Some(b)) = (self.read_next(), other.read_next()) {
+        while let (Some(a), Some(b)) = (self.read_next(), other_stream.read_next()) {
             // Perform addition and write the result to the new stream
             self.write_next_unchecked(a + f * b);
         }
-
-        self.new_read_stream(); // replaces the read pointer but the old read pointer temp file isn't deleted
-
+        
+        // restart read pointer so that the read stream is truncated to the start (all contents deleted)
+        // when calling swap_read_write()
+        self.read_restart();
+        other_stream.read_restart();
+        
         self.swap_read_write();
 
         // result_stream

@@ -2,7 +2,7 @@ pub(crate) mod batching;
 pub(crate) mod srs;
 pub(crate) mod util;
 use crate::hyperplonk::pcs::StructuredReferenceString;
-
+use crate::hyperplonk::pcs::multilinear_kzg::batching::multi_open_internal;
 use crate::hyperplonk::pcs::{prelude::Commitment, PCSError, PolynomialCommitmentScheme};
 use crate::hyperplonk::transcript::IOPTranscript;
 use crate::read_write::DenseMLPolyStream;
@@ -20,6 +20,8 @@ use ark_std::{
 };
 use srs::{MultilinearProverParam, MultilinearUniversalParams, MultilinearVerifierParam};
 use std::{ops::Mul, sync::Mutex};
+
+use self::batching::BatchProof;
 
 /// KZG Polynomial Commitment Scheme on multilinear polynomials.
 pub struct MultilinearKzgPCS<E: Pairing> {
@@ -46,6 +48,7 @@ impl<E: Pairing> PolynomialCommitmentScheme<E> for MultilinearKzgPCS<E> {
     // Commitments and proofs
     type Commitment = Commitment<E>;
     type Proof = MultilinearKzgProof<E>;
+    type BatchProof = BatchProof<E, Self>;
 
     /// Build SRS for testing.
     ///
@@ -216,6 +219,24 @@ impl<E: Pairing> PolynomialCommitmentScheme<E> for MultilinearKzgPCS<E> {
         poly.swap_read_write();
 
         open_internal(prover_param.borrow(), Arc::new(Mutex::new(poly)), &point)
+    }
+
+    /// Input a list of multilinear extensions, and a same number of points, and
+    /// a transcript, compute a multi-opening for all the polynomials.
+    fn multi_open(
+        prover_param: impl Borrow<Self::ProverParam>,
+        polynomials: &[Self::Polynomial],
+        points: &[Self::Point],
+        evals: &[Self::Evaluation],
+        transcript: &mut IOPTranscript<E::ScalarField>,
+    ) -> Result<BatchProof<E, Self>, PCSError> {
+        multi_open_internal(
+            prover_param.borrow(),
+            polynomials,
+            points,
+            evals,
+            transcript,
+        )
     }
 
     /// Verifies that `value` is the evaluation at `x` of the polynomial

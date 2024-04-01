@@ -147,11 +147,11 @@ where
         let (numerators, denominators) = computer_nums_and_denoms(&beta, &gamma, fxs, gxs, perms)?;
 
         // invoke product check on numerator and denominator
-        let (proof, prod_poly, frac_poly) =
+        let (proof, prod_poly_copy, frac_poly_copy) =
             <Self as ProductCheck<E, PCS>>::prove(pcs_param, numerators, denominators, transcript)?;
 
         end_timer!(start);
-        Ok((proof, prod_poly, frac_poly))
+        Ok((proof, prod_poly_copy, frac_poly_copy))
     }
 
     fn verify(
