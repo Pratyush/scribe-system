@@ -1,4 +1,4 @@
-use crate::hyperplonk::pcs::multilinear_kzg::batching::BatchProofSinglePoint;
+use crate::hyperplonk::pcs::multilinear_kzg::batching::{BatchProof, BatchProofSinglePoint};
 use crate::hyperplonk::poly_iop::perm_check_original::PermutationCheck;
 use crate::hyperplonk::poly_iop::prelude::ZeroCheck;
 use crate::{
@@ -30,8 +30,7 @@ where
 {
     // PCS commit for witnesses
     pub witness_commits: Vec<PCS::Commitment>,
-    // pub batch_openings: PCS::BatchProof,
-    pub opening: BatchProofSinglePoint<E, PCS>,
+    pub batch_openings: PCS::BatchProof,
     // =======================================================================
     // IOP proofs
     // =======================================================================
@@ -40,6 +39,7 @@ where
     // the permutation check proof for copy constraints
     pub perm_check_proof: PC::PermutationProof,
 }
+
 
 
 /// The HyperPlonk instance parameters, consists of the following:

@@ -5,7 +5,7 @@ use crate::hyperplonk::full_snark::{
 use crate::hyperplonk::pcs::prelude::{Commitment, PCSError};
 use crate::hyperplonk::pcs::PolynomialCommitmentScheme;
 use crate::hyperplonk::transcript::IOPTranscript;
-use crate::read_write::{DenseMLPolyStream, ReadWriteStream};
+use crate::read_write::{copy_mle, DenseMLPolyStream, ReadWriteStream};
 use ark_ec::pairing::Pairing;
 use ark_ff::PrimeField;
 use ark_std::{end_timer, start_timer};
@@ -52,13 +52,35 @@ where
         commit: &PCS::Commitment,
         point: &PCS::Point,
     ) {
+        // create a stream copy for evaluation
+        let poly_copy = copy_mle(poly, None, None);
         let poly_num_vars = poly.lock().unwrap().num_vars;
         assert!(poly_num_vars == point.len());
         assert!(poly_num_vars == self.num_var);
 
+        // poly_copy is reduced to just one field element
+        let eval = poly_copy.lock().unwrap().evaluate(point).unwrap();
+
+        self.evals.push(eval);
         self.polynomials.push(poly.clone());
         self.points.push(point.clone());
         self.commitments.push(*commit);
+    }
+
+    /// Batch open all the points over a merged polynomial.
+    /// A simple wrapper of PCS::multi_open
+    pub(super) fn multi_open(
+        &self,
+        prover_param: impl Borrow<PCS::ProverParam>,
+        transcript: &mut IOPTranscript<E::ScalarField>,
+    ) -> Result<PCS::BatchProof, HyperPlonkErrors> {
+        Ok(PCS::multi_open(
+            prover_param.borrow(),
+            self.polynomials.as_ref(),
+            self.points.as_ref(),
+            self.evals.as_ref(),
+            transcript,
+        )?)
     }
 
     /// Batch open all the points over a merged polynomial.

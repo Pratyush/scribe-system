@@ -1,4 +1,15 @@
+use ark_ff::PrimeField;
 use ark_std::log2;
+
+/// given the evaluation input `point` of the `index`-th polynomial,
+/// obtain the evaluation point in the merged polynomial
+pub fn gen_eval_point<F: PrimeField>(index: usize, index_len: usize, point: &[F]) -> Vec<F> {
+    let index_vec: Vec<F> = bit_decompose(index as u64, index_len)
+        .into_iter()
+        .map(|x| F::from(x))
+        .collect();
+    [point, &index_vec].concat()
+}
 
 /// Return the number of variables that one need for an MLE to
 /// batch the list of MLEs

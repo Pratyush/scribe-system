@@ -11,7 +11,7 @@ mod errors;
 // mod mock;
 pub mod prelude;
 mod selectors;
-// mod snark;
+mod snark;
 mod structs;
 pub mod utils;
 mod witness;

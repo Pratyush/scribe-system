@@ -21,7 +21,7 @@ use ark_std::{
 use srs::{MultilinearProverParam, MultilinearUniversalParams, MultilinearVerifierParam};
 use std::{ops::Mul, sync::Mutex};
 
-use self::batching::BatchProof;
+use self::batching::{batch_verify_internal, BatchProof};
 
 /// KZG Polynomial Commitment Scheme on multilinear polynomials.
 pub struct MultilinearKzgPCS<E: Pairing> {
@@ -253,6 +253,18 @@ impl<E: Pairing> PolynomialCommitmentScheme<E> for MultilinearKzgPCS<E> {
         proof: &Self::Proof,
     ) -> Result<bool, PCSError> {
         verify_internal(verifier_param, commitment, point, value, proof)
+    }
+
+    /// Verifies that `value_i` is the evaluation at `x_i` of the polynomial
+    /// `poly_i` committed inside `comm`.
+    fn batch_verify(
+        verifier_param: &Self::VerifierParam,
+        commitments: &[Self::Commitment],
+        points: &[Self::Point],
+        batch_proof: &Self::BatchProof,
+        transcript: &mut IOPTranscript<E::ScalarField>,
+    ) -> Result<bool, PCSError> {
+        batch_verify_internal(verifier_param, commitments, points, batch_proof, transcript)
     }
 }
 
