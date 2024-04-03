@@ -14,7 +14,7 @@ use crate::{
     hyperplonk::full_snark::{
         errors::HyperPlonkErrors,
         structs::{HyperPlonkIndex, HyperPlonkProof, HyperPlonkProvingKey, HyperPlonkVerifyingKey},
-        utils::{build_f, eval_f, prover_sanity_check},
+        utils::{build_f, eval_f, prover_sanity_check, eval_perm_gate},
         HyperPlonkSNARK,
     },
     read_write::DenseMLPolyStream,
@@ -63,8 +63,8 @@ where
             PCS::trim(pcs_srs, None, Some(supported_ml_degree))?;
 
         // build permutation oracles
-        let mut permutation_oracles = index.permutation.clone();
-        let mut permutation_commitments = permutation_oracles.iter().map(|perm_oracle| {
+        let permutation_oracles = index.permutation.clone();
+        let permutation_commitments = permutation_oracles.iter().map(|perm_oracle| {
             PCS::commit(&pcs_prover_param, perm_oracle)
         }).collect::<Result<Vec<_>, _>>()?;
 
@@ -241,7 +241,7 @@ where
             &pk.pcs_param,
             witnesses_fx_copy,
             witnesses_gx_copy,
-            pk.permutation_oracles,
+            pk.permutation_oracles.clone(),
             &mut transcript,
         )?;
         let perm_check_point = &perm_check_proof.zero_check_proof.point;
@@ -343,14 +343,14 @@ where
                 pcs_acc.insert_poly_and_points(poly, com, &zero_check_proof.point)
             });
 
-        // // - 4.4. public input consistency checks
-        // //   - pi_poly(r_pi) where r_pi is sampled from transcript
-        // let r_pi = transcript.get_and_append_challenge_vectors(b"r_pi", ell)?;
-        // // padded with zeros
-        // let r_pi_padded = [r_pi, vec![E::ScalarField::zero(); num_vars - ell]].concat();
-        // // Evaluate witness_poly[0] at r_pi||0s which is equal to public_input evaluated
-        // // at r_pi. Assumes that public_input is a power of 2
-        // pcs_acc.insert_poly_and_points(&witness_polys[0], &witness_commits[0], &r_pi_padded);
+        // - 4.4. public input consistency checks
+        //   - pi_poly(r_pi) where r_pi is sampled from transcript
+        let r_pi = transcript.get_and_append_challenge_vectors(b"r_pi", ell)?;
+        // padded with zeros
+        let r_pi_padded = [r_pi, vec![E::ScalarField::zero(); num_vars - ell]].concat();
+        // Evaluate witness_poly[0] at r_pi||0s which is equal to public_input evaluated
+        // at r_pi. Assumes that public_input is a power of 2
+        pcs_acc.insert_poly_and_points(&witnesses_copy[0], &witness_commits[0], &r_pi_padded);
         end_timer!(step);
 
          // =======================================================================
@@ -614,8 +614,8 @@ where
 
         // check public evaluation
         let pi_step = start_timer!(|| "check public evaluation");
-        let pi_poly = DenseMultilinearExtension::from_evaluations_slice(ell, pub_input);
-        let expect_pi_eval = evaluate_opt(&pi_poly, &r_pi[..]);
+        let mut pi_poly = DenseMLPolyStream::from_evaluations_slice(ell, pub_input, None, None);
+        let expect_pi_eval = pi_poly.evaluate(&r_pi[..]).unwrap();
         if expect_pi_eval != *pi_eval {
             return Err(HyperPlonkErrors::InvalidProver(format!(
                 "Public input eval mismatch: got {}, expect {}",
@@ -726,7 +726,6 @@ mod tests {
                     None,
                 ))),
             ];
-            let permutation_index = identity_permutation_mles(nv, num_witnesses);
             let q1 = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(
                 2,
                 vec![
@@ -741,7 +740,6 @@ mod tests {
             let index = HyperPlonkIndex {
                 params: params.clone(),
                 permutation,
-                permutation_index,
                 selectors: vec![q1],
             };
 
@@ -853,7 +851,6 @@ mod tests {
                 ))),
             ];
 
-            let permutation_index = identity_permutation_mles(nv, num_witnesses);
             let q1 = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(
                 2,
                 vec![
@@ -868,7 +865,6 @@ mod tests {
             let bad_index = HyperPlonkIndex {
                 params,
                 permutation: rand_perm,
-                permutation_index,
                 selectors: vec![q1],
             };
 
