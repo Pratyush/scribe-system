@@ -510,8 +510,11 @@ pub fn random_permutation_mles<F: PrimeField, R: RngCore>(
 }
 
 // NOTE that this function modifies the self stream, and doesn't create a new stream
-pub fn add_assign<F: PrimeField>(this: Arc<Mutex<DenseMLPolyStream<F>>>, f: F, other: Arc<Mutex<DenseMLPolyStream<F>>>)
-{
+pub fn add_assign<F: PrimeField>(
+    this: Arc<Mutex<DenseMLPolyStream<F>>>,
+    f: F,
+    other: Arc<Mutex<DenseMLPolyStream<F>>>,
+) {
     let mut this_stream = this.lock().unwrap();
     let mut other_stream = other.lock().unwrap();
 
@@ -526,17 +529,16 @@ pub fn add_assign<F: PrimeField>(this: Arc<Mutex<DenseMLPolyStream<F>>>, f: F, o
         // Perform addition and write the result to the new stream
         this_stream.write_next_unchecked(a + f * b);
     }
-    
+
     // restart read pointer so that the read stream is truncated to the start (all contents deleted)
     // when calling swap_read_write()
     this_stream.read_restart();
     other_stream.read_restart();
-    
+
     this_stream.swap_read_write();
 
     // result_stream
 }
-
 
 // currently not very efficient as it reads and writes one field element at a time
 // in the future we could optimize by:
@@ -581,12 +583,12 @@ pub trait DenseMLPoly<F: Field>: ReadWriteStream<Item = F> {
             // Perform addition and write the result to the new stream
             self.write_next_unchecked(a + f * b);
         }
-        
+
         // restart read pointer so that the read stream is truncated to the start (all contents deleted)
         // when calling swap_read_write()
         self.read_restart();
         other_stream.read_restart();
-        
+
         self.swap_read_write();
 
         // result_stream

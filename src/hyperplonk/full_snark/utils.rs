@@ -254,7 +254,6 @@ pub(crate) fn eval_f<F: PrimeField>(
     Ok(res)
 }
 
-
 // check perm check subclaim:
 // proof.witness_perm_check_eval ?= perm_check_sub_claim.expected_eval
 // Q(x) := prod(x) - p1(x) * p2(x)

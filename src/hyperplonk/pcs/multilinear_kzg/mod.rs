@@ -1,8 +1,8 @@
 pub(crate) mod batching;
 pub(crate) mod srs;
 pub(crate) mod util;
-use crate::hyperplonk::pcs::StructuredReferenceString;
 use crate::hyperplonk::pcs::multilinear_kzg::batching::multi_open_internal;
+use crate::hyperplonk::pcs::StructuredReferenceString;
 use crate::hyperplonk::pcs::{prelude::Commitment, PCSError, PolynomialCommitmentScheme};
 use crate::hyperplonk::transcript::IOPTranscript;
 use crate::read_write::DenseMLPolyStream;

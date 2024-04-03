@@ -1,7 +1,9 @@
 use crate::hyperplonk::arithmetic::util::gen_eval_point;
 use crate::hyperplonk::arithmetic::virtual_polynomial::{eq_eval, VPAuxInfo};
 use crate::hyperplonk::full_snark::utils::PcsAccumulator;
-use crate::hyperplonk::pcs::multilinear_kzg::batching::{BatchProofSinglePoint, BatchProofSinglePointAggr, BatchProof};
+use crate::hyperplonk::pcs::multilinear_kzg::batching::{
+    BatchProof, BatchProofSinglePoint, BatchProofSinglePointAggr,
+};
 use crate::hyperplonk::pcs::prelude::Commitment;
 use crate::hyperplonk::pcs::PolynomialCommitmentScheme;
 use crate::hyperplonk::poly_iop::perm_check::util::compute_frac_poly_plonk;
@@ -14,7 +16,7 @@ use crate::{
     hyperplonk::full_snark::{
         errors::HyperPlonkErrors,
         structs::{HyperPlonkIndex, HyperPlonkProof, HyperPlonkProvingKey, HyperPlonkVerifyingKey},
-        utils::{build_f, eval_f, prover_sanity_check, eval_perm_gate},
+        utils::{build_f, eval_f, eval_perm_gate, prover_sanity_check},
         HyperPlonkSNARK,
     },
     read_write::DenseMLPolyStream,
@@ -22,7 +24,7 @@ use crate::{
 use ark_ec::pairing::Pairing;
 use ark_ec::CurveGroup;
 use ark_ff::Field;
-use ark_std::{end_timer, log2, start_timer, Zero, One};
+use ark_std::{end_timer, log2, start_timer, One, Zero};
 use rayon::iter::IntoParallelRefIterator;
 #[cfg(feature = "parallel")]
 use rayon::iter::ParallelIterator;
@@ -64,9 +66,10 @@ where
 
         // build permutation oracles
         let permutation_oracles = index.permutation.clone();
-        let permutation_commitments = permutation_oracles.iter().map(|perm_oracle| {
-            PCS::commit(&pcs_prover_param, perm_oracle)
-        }).collect::<Result<Vec<_>, _>>()?;
+        let permutation_commitments = permutation_oracles
+            .iter()
+            .map(|perm_oracle| PCS::commit(&pcs_prover_param, perm_oracle))
+            .collect::<Result<Vec<_>, _>>()?;
 
         // commit selector oracles
         let selector_oracles = index.selectors.clone();
@@ -174,7 +177,7 @@ where
             .iter()
             .map(|x| copy_mle(x, None, None))
             .collect::<Vec<Arc<Mutex<DenseMLPolyStream<E::ScalarField>>>>>();
-        
+
         let start =
             start_timer!(|| format!("hyperplonk proving nv = {}", pk.params.num_variables()));
         let mut transcript = IOPTranscript::<E::ScalarField>::new(b"hyperplonk");
@@ -230,20 +233,21 @@ where
 
         let zero_check_proof = <Self as ZeroCheck<E::ScalarField>>::prove(&fx, &mut transcript)?;
         end_timer!(step);
-        
+
         // =======================================================================
         // 3. Run permutation check on `\{w_i(x)\}` and `permutation_oracle`, and
         // obtain a PermCheckSubClaim.
         // =======================================================================
         let step = start_timer!(|| "Permutation check on w_i(x)");
 
-        let (perm_check_proof, prod_x_copy, frac_poly_copy) = <Self as PermutationCheck<E, PCS>>::prove(
-            &pk.pcs_param,
-            witnesses_fx_copy,
-            witnesses_gx_copy,
-            pk.permutation_oracles.clone(),
-            &mut transcript,
-        )?;
+        let (perm_check_proof, prod_x_copy, frac_poly_copy) =
+            <Self as PermutationCheck<E, PCS>>::prove(
+                &pk.pcs_param,
+                witnesses_fx_copy,
+                witnesses_gx_copy,
+                pk.permutation_oracles.clone(),
+                &mut transcript,
+            )?;
         let perm_check_point = &perm_check_proof.zero_check_proof.point;
 
         end_timer!(step);
@@ -296,9 +300,21 @@ where
         // prod(x)'s points
         // note that the polynomial inputs aren't modified or consumed by pcs accumulator
         // copies are used because their originals are already folded in sum checks
-        pcs_acc.insert_poly_and_points(&prod_x_copy, &perm_check_proof.prod_x_comm, perm_check_point);
-        pcs_acc.insert_poly_and_points(&prod_x_copy, &perm_check_proof.prod_x_comm, &perm_check_point_0);
-        pcs_acc.insert_poly_and_points(&prod_x_copy, &perm_check_proof.prod_x_comm, &perm_check_point_1);
+        pcs_acc.insert_poly_and_points(
+            &prod_x_copy,
+            &perm_check_proof.prod_x_comm,
+            perm_check_point,
+        );
+        pcs_acc.insert_poly_and_points(
+            &prod_x_copy,
+            &perm_check_proof.prod_x_comm,
+            &perm_check_point_0,
+        );
+        pcs_acc.insert_poly_and_points(
+            &prod_x_copy,
+            &perm_check_proof.prod_x_comm,
+            &perm_check_point_1,
+        );
         pcs_acc.insert_poly_and_points(
             &prod_x_copy,
             &perm_check_proof.prod_x_comm,
@@ -306,7 +322,11 @@ where
         );
 
         // frac(x)'s points
-        pcs_acc.insert_poly_and_points(&frac_poly_copy, &perm_check_proof.frac_comm, perm_check_point);
+        pcs_acc.insert_poly_and_points(
+            &frac_poly_copy,
+            &perm_check_proof.frac_comm,
+            perm_check_point,
+        );
         pcs_acc.insert_poly_and_points(
             &frac_poly_copy,
             &perm_check_proof.frac_comm,
@@ -353,7 +373,7 @@ where
         pcs_acc.insert_poly_and_points(&witnesses_copy[0], &witness_commits[0], &r_pi_padded);
         end_timer!(step);
 
-         // =======================================================================
+        // =======================================================================
         // 5. deferred batch opening
         // =======================================================================
 
@@ -362,8 +382,7 @@ where
         // note that these opening create a rlc of the polynomials in the accumulator
         // so the original polynomials (copies) aren't folded
         // that's why we use for example witnesses rather than witnesses_copy for calculating evaluations
-        let batch_openings =
-            pcs_acc.multi_open(&pk.pcs_param, &mut transcript)?;
+        let batch_openings = pcs_acc.multi_open(&pk.pcs_param, &mut transcript)?;
         end_timer!(step);
 
         end_timer!(start);
@@ -438,7 +457,7 @@ where
                 1 << ell
             )));
         }
-        
+
         // Extract evaluations from openings
         let prod_evals = &proof.batch_openings.f_i_eval_at_point_i[0..4];
         let frac_evals = &proof.batch_openings.f_i_eval_at_point_i[4..7];

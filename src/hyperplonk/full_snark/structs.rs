@@ -15,7 +15,6 @@ use std::sync::{Arc, Mutex};
 
 use super::prelude::HyperPlonkErrors;
 
-
 /// The proof for the HyperPlonk PolyIOP, consists of the following:
 ///   - the commitments to all witness MLEs
 ///   - a batch opening to all the MLEs at certain index
@@ -39,8 +38,6 @@ where
     // the permutation check proof for copy constraints
     pub perm_check_proof: PC::PermutationProof,
 }
-
-
 
 /// The HyperPlonk instance parameters, consists of the following:
 ///   - the number of constraints

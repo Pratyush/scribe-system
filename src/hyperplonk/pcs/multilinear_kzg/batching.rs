@@ -1,15 +1,31 @@
-use crate::{hyperplonk::{arithmetic::virtual_polynomial::build_eq_x_r, pcs::{multilinear_kzg::util::eq_eval, prelude::{Commitment, PCSError}, PolynomialCommitmentScheme}}, read_write::{add_assign, copy_mle}};
-use ark_ec::pairing::Pairing;
-use crate::hyperplonk::{
-    poly_iop::{prelude::SumCheck, PolyIOP, structs::IOPProof},
+use crate::hyperplonk::arithmetic::virtual_polynomial::{
+    build_eq_x_r_vec, VPAuxInfo, VirtualPolynomial,
 };
-use crate::hyperplonk::arithmetic::virtual_polynomial::{build_eq_x_r_vec, VPAuxInfo, VirtualPolynomial};
-use crate::read_write::{DenseMLPolyStream, ReadWriteStream, DenseMLPoly};
+use crate::hyperplonk::poly_iop::{prelude::SumCheck, structs::IOPProof, PolyIOP};
+use crate::read_write::{DenseMLPoly, DenseMLPolyStream, ReadWriteStream};
+use crate::{
+    hyperplonk::{
+        arithmetic::virtual_polynomial::build_eq_x_r,
+        pcs::{
+            multilinear_kzg::util::eq_eval,
+            prelude::{Commitment, PCSError},
+            PolynomialCommitmentScheme,
+        },
+    },
+    read_write::{add_assign, copy_mle},
+};
+use ark_ec::pairing::Pairing;
 use ark_ec::{scalar_mul::variable_base::VariableBaseMSM, CurveGroup};
 
-use ark_std::{end_timer, log2, start_timer, One, Zero};
-use std::{collections::BTreeMap, iter, marker::PhantomData, ops::Deref, sync::{Arc, Mutex}};
 use crate::hyperplonk::transcript::IOPTranscript;
+use ark_std::{end_timer, log2, start_timer, One, Zero};
+use std::{
+    collections::BTreeMap,
+    iter,
+    marker::PhantomData,
+    ops::Deref,
+    sync::{Arc, Mutex},
+};
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct BatchProof<E, PCS>
@@ -83,11 +99,17 @@ where
         .zip(points.iter())
         .zip(eq_t_i_list.iter())
         .fold(
-            iter::repeat_with(|| DenseMLPolyStream::const_mle(E::ScalarField::zero(), num_var, None, None))
-                .take(point_indices.len())
-                .collect::<Vec<Arc<Mutex<DenseMLPolyStream<E::ScalarField>>>>>(),
+            iter::repeat_with(|| {
+                DenseMLPolyStream::const_mle(E::ScalarField::zero(), num_var, None, None)
+            })
+            .take(point_indices.len())
+            .collect::<Vec<Arc<Mutex<DenseMLPolyStream<E::ScalarField>>>>>(),
             |merged_tilde_gs, ((poly, point), coeff)| {
-                add_assign(merged_tilde_gs[point_indices[point]].clone(), *coeff, poly.clone());
+                add_assign(
+                    merged_tilde_gs[point_indices[point]].clone(),
+                    *coeff,
+                    poly.clone(),
+                );
                 // merged_tilde_gs is a new stream created so that the source streams (poly) aren't modified at all in foldings later
                 merged_tilde_gs
             },
@@ -121,7 +143,10 @@ where
     let step = start_timer!(|| "add mle");
     let mut sum_check_vp = VirtualPolynomial::new(num_var);
     for (merged_tilde_g, tilde_eq) in merged_tilde_gs.iter().zip(tilde_eqs.into_iter()) {
-        sum_check_vp.add_mle_list([merged_tilde_g.clone(), tilde_eq.clone()], E::ScalarField::one())?;
+        sum_check_vp.add_mle_list(
+            [merged_tilde_g.clone(), tilde_eq.clone()],
+            E::ScalarField::one(),
+        )?;
     }
     end_timer!(step);
 
@@ -135,7 +160,7 @@ where
             return Err(PCSError::InvalidProver(
                 "Sumcheck in batch proving Failed".to_string(),
             ));
-        },
+        }
     };
 
     end_timer!(timer);
@@ -169,7 +194,6 @@ where
         g_prime_proof,
     })
 }
-
 
 /// Steps:
 /// 1. get challenge point t from transcript
@@ -244,7 +268,7 @@ where
             return Err(PCSError::InvalidProver(
                 "Sumcheck in batch verification failed".to_string(),
             ));
-        },
+        }
     };
     let tilde_g_eval = subclaim.expected_evaluation;
 
@@ -287,20 +311,20 @@ where
 {
     // product final query [1, 1, ..., 1, 0]
     pub rlc_eval_prod: E::ScalarField, // rlc of f_i(point_i)
-    pub proof_prod: PCS::Proof, // proof for rlc of polynomials
+    pub proof_prod: PCS::Proof,        // proof for rlc of polynomials
     // perm query
     pub rlc_eval_perm: E::ScalarField, // rlc of f_i(point_i)
-    pub proof_perm: PCS::Proof, // proof for rlc of polynomials
+    pub proof_perm: PCS::Proof,        // proof for rlc of polynomials
     // perm 0 query
     pub rlc_eval_perm_0: E::ScalarField, // rlc of f_i(point_i)
-    pub proof_perm_0: PCS::Proof, // proof for rlc of polynomials
+    pub proof_perm_0: PCS::Proof,        // proof for rlc of polynomials
     // perm 1 query
     pub rlc_eval_perm_1: E::ScalarField, // rlc of f_i(point_i)
-    pub proof_perm_1: PCS::Proof, // proof for rlc of polynomials
+    pub proof_perm_1: PCS::Proof,        // proof for rlc of polynomials
     // zero check query
     pub rlc_eval_zero: E::ScalarField, // rlc of f_i(point_i)
-    pub proof_zero: PCS::Proof, // proof for rlc of polynomials
-    
+    pub proof_zero: PCS::Proof,        // proof for rlc of polynomials
+
     // evaluations: these are needed to ensure that the rlc's are correct
     pub perm_evals: Vec<E::ScalarField>,
     pub selector_evals: Vec<E::ScalarField>,
@@ -309,15 +333,14 @@ where
     pub frac_evals: Vec<E::ScalarField>,
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::hyperplonk::arithmetic::util::get_batched_nv;
     use crate::hyperplonk::pcs::{
         prelude::{MultilinearKzgPCS, MultilinearUniversalParams},
         StructuredReferenceString,
     };
-    use crate::hyperplonk::arithmetic::util::get_batched_nv;
     use ark_bls12_381::Bls12_381 as E;
     use ark_ec::pairing::Pairing;
     use ark_poly::{DenseMultilinearExtension, MultilinearExtension};
@@ -342,7 +365,10 @@ mod tests {
         }
 
         // create poly copies for evaluation, which changes the stream
-        let mut polys_copy = polys.iter().map(|x| copy_mle(x, None, None)).collect::<Vec<_>>();
+        let mut polys_copy = polys
+            .iter()
+            .map(|x| copy_mle(x, None, None))
+            .collect::<Vec<_>>();
 
         let evals = polys_copy
             .iter()
