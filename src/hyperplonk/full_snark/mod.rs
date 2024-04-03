@@ -8,7 +8,7 @@ use super::{pcs::PolynomialCommitmentScheme, poly_iop::prelude::SumCheck};
 
 mod custom_gate;
 mod errors;
-// mod mock;
+mod mock;
 pub mod prelude;
 mod selectors;
 mod snark;

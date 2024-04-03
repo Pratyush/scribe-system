@@ -285,7 +285,6 @@ pub(super) fn prove_zero_check<F: PrimeField>(
 
     //   prod(x)
     // - p1(x) * p2(x)
-    println!("Adding MLE list for p1(x) * p2(x)");
     q_x.add_mle_list(
         [
             Arc::new(Mutex::new(p1_stream)),
@@ -299,7 +298,6 @@ pub(super) fn prove_zero_check<F: PrimeField>(
     // + alpha * frac(x) * g1(x) * ... * gk(x)
     let mut mle_list = gxs;
     mle_list.push(frac_poly.clone());
-    println!("Adding MLE list for gxs * frac_poly");
     q_x.add_mle_list(mle_list, *alpha)?;
 
     //   prod(x)

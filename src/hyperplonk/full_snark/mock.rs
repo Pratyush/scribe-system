@@ -136,12 +136,10 @@ impl<F: PrimeField> MockCircuit<F> {
         let permutation = identity_permutation_mles(nv as usize, num_witnesses);
         end_timer!(step);
         let step = start_timer!(|| "create index streams");
-        let permutation_index = identity_permutation_mles(nv as usize, num_witnesses);
         end_timer!(step);
         let index = HyperPlonkIndex {
             params,
             permutation,
-            permutation_index,
             selectors,
         };
 
