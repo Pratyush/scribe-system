@@ -4,7 +4,7 @@ use crate::hyperplonk::{
     pcs::PolynomialCommitmentScheme,
     poly_iop::{errors::PolyIOPErrors, prod_check::ProductCheck, PolyIOP},
 };
-use crate::read_write::{copy_mle, DenseMLPolyStream, ReadWriteStream};
+use crate::read_write::{DenseMLPolyStream, ReadWriteStream};
 use ark_ec::pairing::Pairing;
 use ark_std::{end_timer, start_timer};
 use std::sync::{Arc, Mutex};
@@ -287,7 +287,7 @@ mod test {
 
         {
             // good path: f = (w1, w2) is a permutation of g = (w2, w1) itself under a map
-            let mut fs = vec![
+            let fs = vec![
                 Arc::new(Mutex::new(DenseMLPolyStream::rand(nv, &mut rng))),
                 Arc::new(Mutex::new(DenseMLPolyStream::rand(nv, &mut rng))),
             ];

@@ -1,14 +1,12 @@
 use crate::hyperplonk::arithmetic::util::gen_eval_point;
-use crate::hyperplonk::arithmetic::virtual_polynomial::{eq_eval, VPAuxInfo};
+use crate::hyperplonk::arithmetic::virtual_polynomial::VPAuxInfo;
 use crate::hyperplonk::full_snark::utils::PcsAccumulator;
-use crate::hyperplonk::pcs::multilinear_kzg::batching::{
-    BatchProof, BatchProofSinglePoint, BatchProofSinglePointAggr,
-};
+use crate::hyperplonk::pcs::multilinear_kzg::batching::BatchProof;
 use crate::hyperplonk::pcs::prelude::Commitment;
 use crate::hyperplonk::pcs::PolynomialCommitmentScheme;
-use crate::hyperplonk::poly_iop::perm_check::util::compute_frac_poly_plonk;
+
 use crate::hyperplonk::poly_iop::perm_check_original::PermutationCheck;
-use crate::hyperplonk::poly_iop::prelude::{SumCheck, ZeroCheck};
+use crate::hyperplonk::poly_iop::prelude::ZeroCheck;
 use crate::hyperplonk::poly_iop::PolyIOP;
 use crate::hyperplonk::transcript::IOPTranscript;
 use crate::read_write::copy_mle;
@@ -22,13 +20,12 @@ use crate::{
     read_write::DenseMLPolyStream,
 };
 use ark_ec::pairing::Pairing;
-use ark_ec::CurveGroup;
-use ark_ff::Field;
+
 use ark_std::{end_timer, log2, start_timer, One, Zero};
 use rayon::iter::IntoParallelRefIterator;
 #[cfg(feature = "parallel")]
 use rayon::iter::ParallelIterator;
-use std::cmp::max;
+
 use std::{
     marker::PhantomData,
     sync::{Arc, Mutex},
@@ -670,7 +667,7 @@ mod tests {
     use super::*;
     use crate::hyperplonk::full_snark::{custom_gate::CustomizedGates, structs::HyperPlonkParams};
     use crate::hyperplonk::pcs::multilinear_kzg::MultilinearKzgPCS;
-    use crate::read_write::identity_permutation_mles;
+
     use ark_bls12_381::Bls12_381;
     use ark_std::rand::rngs::StdRng;
     use ark_std::rand::SeedableRng;
@@ -711,8 +708,8 @@ mod tests {
 
             let num_constraints = 4;
             let num_pub_input = 4;
-            let nv = log2(num_constraints) as usize;
-            let num_witnesses = 2;
+            let _nv = log2(num_constraints) as usize;
+            let _num_witnesses = 2;
 
             // generate index
             let params = HyperPlonkParams {
@@ -834,8 +831,8 @@ mod tests {
 
             let num_constraints = 4;
             let num_pub_input = 4;
-            let nv = log2(num_constraints) as usize;
-            let num_witnesses = 2;
+            let _nv = log2(num_constraints) as usize;
+            let _num_witnesses = 2;
 
             // generate index
             let params = HyperPlonkParams {

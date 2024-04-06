@@ -1,8 +1,7 @@
 use crate::hyperplonk::poly_iop::errors::PolyIOPErrors;
 use crate::read_write::{identity_permutation_mles, DenseMLPolyStream, ReadWriteStream};
 use ark_ff::PrimeField;
-use ark_poly::univariate::DensePolynomial;
-use ark_poly::DenseMultilinearExtension;
+
 use ark_std::{end_timer, start_timer};
 use std::sync::{Arc, Mutex};
 
@@ -126,7 +125,7 @@ pub(super) fn computer_nums_and_denoms<F: PrimeField>(
 mod tests {
     use super::*;
     use ark_bls12_381::Fr;
-    use ark_ff::Field;
+
     use std::sync::{Arc, Mutex};
 
     #[test]

@@ -152,7 +152,7 @@ impl<F: PrimeField> MockCircuit<F> {
     }
 
     pub fn is_satisfied(&self) -> bool {
-        for current_row in 0..self.num_variables() {
+        for _current_row in 0..self.num_variables() {
             let mut cur = F::zero();
             // create selectors_val and witnesses_val vectors, with the same length as self.index.selectors and self.witnesses
             let mut selectors_val: Vec<F> = Vec::with_capacity(self.num_selector_columns());

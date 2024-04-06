@@ -2,7 +2,7 @@ use crate::hyperplonk::arithmetic::virtual_polynomial::{
     build_eq_x_r_vec, VPAuxInfo, VirtualPolynomial,
 };
 use crate::hyperplonk::poly_iop::{prelude::SumCheck, structs::IOPProof, PolyIOP};
-use crate::read_write::{DenseMLPoly, DenseMLPolyStream, ReadWriteStream};
+use crate::read_write::{DenseMLPolyStream, ReadWriteStream};
 use crate::{
     hyperplonk::{
         arithmetic::virtual_polynomial::build_eq_x_r,
@@ -23,7 +23,6 @@ use std::{
     collections::BTreeMap,
     iter,
     marker::PhantomData,
-    ops::Deref,
     sync::{Arc, Mutex},
 };
 
@@ -343,7 +342,7 @@ mod tests {
     };
     use ark_bls12_381::Bls12_381 as E;
     use ark_ec::pairing::Pairing;
-    use ark_poly::{DenseMultilinearExtension, MultilinearExtension};
+    use ark_poly::MultilinearExtension;
     use ark_std::{rand::Rng, test_rng, vec::Vec, UniformRand};
 
     type Fr = <E as Pairing>::ScalarField;
@@ -365,7 +364,7 @@ mod tests {
         }
 
         // create poly copies for evaluation, which changes the stream
-        let mut polys_copy = polys
+        let polys_copy = polys
             .iter()
             .map(|x| copy_mle(x, None, None))
             .collect::<Vec<_>>();

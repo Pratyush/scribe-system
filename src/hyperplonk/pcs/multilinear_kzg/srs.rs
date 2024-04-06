@@ -243,7 +243,7 @@ impl<E: Pairing> StructuredReferenceString<E> for MultilinearUniversalParams<E> 
                     Evaluations {
                         evals: (0..(1 << degree))
                             .map(|i| {
-                                if ((i % (1 << 10)) == 0) {
+                                if (i % (1 << 10)) == 0 {
                                     rand_g1 = E::G1::rand(rng).into_affine();
                                 }
                                 rand_g1

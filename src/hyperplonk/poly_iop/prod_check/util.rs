@@ -1,15 +1,14 @@
-use crate::hyperplonk::arithmetic::util::get_index;
 use crate::hyperplonk::arithmetic::virtual_polynomial::VirtualPolynomial;
 use crate::hyperplonk::poly_iop::{
     errors::PolyIOPErrors, structs::IOPProof, zero_check::ZeroCheck, PolyIOP,
 };
 use crate::hyperplonk::transcript::IOPTranscript;
 use crate::read_write::{DenseMLPoly, DenseMLPolyStream, ReadWriteStream};
-use ark_ff::Zero;
-use ark_ff::{batch_inversion, PrimeField};
-use ark_serialize::{Valid, Write};
+
+use ark_ff::PrimeField;
+use ark_serialize::Write;
 use ark_std::{end_timer, start_timer};
-use core::num;
+
 use std::io::Seek;
 use std::sync::{Arc, Mutex};
 
@@ -316,17 +315,16 @@ pub(super) fn prove_zero_check<F: PrimeField>(
 mod test {
     use super::compute_product_poly;
     use super::*;
-    use crate::hyperplonk::pcs::multilinear_kzg::MultilinearKzgPCS;
-    use crate::hyperplonk::pcs::PolynomialCommitmentScheme;
+
     use crate::read_write::{DenseMLPolyStream, ReadWriteStream};
-    use ark_bls12_381::{Bls12_381, Fr};
-    use ark_serialize::Write;
+    use ark_bls12_381::Fr;
+
     use ark_std::rand::distributions::{Distribution, Standard};
     use ark_std::rand::rngs::StdRng;
     use ark_std::rand::SeedableRng;
-    use std::io::Seek;
+
     use std::sync::{Arc, Mutex};
-    use std::time::Instant;
+
     use std::vec::Vec;
 
     // in memory vector version of calculating the prod_poly from frac_poly
@@ -385,7 +383,7 @@ mod test {
         // create vector to populate stream
         let num_vars = 10;
         let mut frac_poly_vec = Vec::with_capacity(1 << num_vars);
-        for i in 0..(1 << num_vars) {
+        for _i in 0..(1 << num_vars) {
             frac_poly_vec.push(Standard.sample(&mut rng));
         }
 

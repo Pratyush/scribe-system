@@ -15,7 +15,7 @@ use crate::{
 };
 use ark_ec::pairing::Pairing;
 use ark_ff::{One, PrimeField, Zero};
-use ark_poly::DenseMultilinearExtension;
+
 use ark_std::{end_timer, start_timer};
 use std::sync::{Arc, Mutex};
 
@@ -288,7 +288,7 @@ mod test {
         E: Pairing,
     {
         let mut flag = true;
-        let num_vars = frac_poly.lock().unwrap().num_vars;
+        let _num_vars = frac_poly.lock().unwrap().num_vars;
         while let Some(frac) = frac_poly.lock().unwrap().read_next() {
             let nom = fs.iter().fold(E::ScalarField::from(1u8), |acc, f| {
                 acc * f.lock().unwrap().read_next().unwrap()
@@ -338,7 +338,7 @@ mod test {
         let gs_copy: Vec<Arc<Mutex<DenseMLPolyStream<E::ScalarField>>>> =
             gs.iter().map(|g| copy_mle(g, None, None)).collect();
 
-        let (proof, prod_x, frac_poly) = <PolyIOP<E::ScalarField> as ProductCheck<E, PCS>>::prove(
+        let (proof, prod_x, _frac_poly) = <PolyIOP<E::ScalarField> as ProductCheck<E, PCS>>::prove(
             pcs_param,
             fs_copy.clone(),
             gs_copy.clone(),
@@ -377,7 +377,7 @@ mod test {
         let mut transcript = <PolyIOP<E::ScalarField> as ProductCheck<E, PCS>>::init_transcript();
         transcript.append_message(b"testing", b"initializing transcript for testing")?;
 
-        let (bad_proof, prod_x_bad, frac_poly) =
+        let (bad_proof, _prod_x_bad, _frac_poly) =
             <PolyIOP<E::ScalarField> as ProductCheck<E, PCS>>::prove(
                 pcs_param,
                 fs.clone(),

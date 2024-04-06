@@ -5,7 +5,7 @@ use ark_std::end_timer;
 use ark_std::rand::RngCore;
 use ark_std::start_timer;
 use core::marker::PhantomData;
-use rayon::result;
+
 use std::io::Seek;
 use std::sync::Arc;
 use std::sync::Mutex;

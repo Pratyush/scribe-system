@@ -1,11 +1,7 @@
-use crate::hyperplonk::pcs::multilinear_kzg::batching::{BatchProof, BatchProofSinglePoint};
 use crate::hyperplonk::poly_iop::perm_check_original::PermutationCheck;
 use crate::hyperplonk::poly_iop::prelude::ZeroCheck;
 use crate::{
-    hyperplonk::{
-        full_snark::custom_gate::CustomizedGates, pcs::PolynomialCommitmentScheme,
-        poly_iop::prelude::SumCheck,
-    },
+    hyperplonk::{full_snark::custom_gate::CustomizedGates, pcs::PolynomialCommitmentScheme},
     read_write::DenseMLPolyStream,
 };
 use ark_ec::pairing::Pairing;
