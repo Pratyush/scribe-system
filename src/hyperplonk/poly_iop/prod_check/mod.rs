@@ -1,17 +1,16 @@
 use crate::hyperplonk::arithmetic::virtual_polynomial::VPAuxInfo;
 use crate::hyperplonk::transcript::IOPTranscript;
-use crate::read_write::copy_mle;
 use crate::{
     hyperplonk::{
         pcs::PolynomialCommitmentScheme,
         poly_iop::{
-            errors::PolyIOPErrors,
+            errors::PIOPError,
             prod_check::util::{compute_frac_poly, compute_product_poly, prove_zero_check},
             zero_check::ZeroCheck,
             PolyIOP,
         },
     },
-    read_write::DenseMLPolyStream,
+    streams::DenseMLPolyStream,
 };
 use ark_ec::pairing::Pairing;
 use ark_ff::{One, PrimeField, Zero};
@@ -93,7 +92,7 @@ where
             Self::MultilinearExtension,
             Self::MultilinearExtension,
         ),
-        PolyIOPErrors,
+        PIOPError,
     >;
 
     /// Verify that for witness multilinear polynomials (f1, ..., fk, g1, ...,
@@ -104,7 +103,7 @@ where
         proof: &Self::ProductCheckProof,
         aux_info: &VPAuxInfo<E::ScalarField>,
         transcript: &mut Self::Transcript,
-    ) -> Result<Self::ProductCheckSubClaim, PolyIOPErrors>;
+    ) -> Result<Self::ProductCheckSubClaim, PIOPError>;
 }
 
 /// A product check subclaim consists of
@@ -164,22 +163,22 @@ where
             Self::MultilinearExtension,
             Self::MultilinearExtension,
         ),
-        PolyIOPErrors,
+        PIOPError,
     > {
         let start = start_timer!(|| "prod_check prove");
 
         if fxs.is_empty() {
-            return Err(PolyIOPErrors::InvalidParameters("fxs is empty".to_string()));
+            return Err(PIOPError::InvalidParameters("fxs is empty".to_string()));
         }
         if fxs.len() != gxs.len() {
-            return Err(PolyIOPErrors::InvalidParameters(
+            return Err(PIOPError::InvalidParameters(
                 "fxs and gxs have different number of polynomials".to_string(),
             ));
         }
         let num_vars = fxs[0].lock().unwrap().num_vars;
         for poly in fxs.iter().chain(gxs.iter()) {
             if poly.lock().unwrap().num_vars != num_vars {
-                return Err(PolyIOPErrors::InvalidParameters(
+                return Err(PIOPError::InvalidParameters(
                     "fx and gx have different number of variables".to_string(),
                 ));
             }
@@ -187,7 +186,7 @@ where
 
         // compute the fractional polynomial frac_p s.t.
         // frac_p(x) = f1(x) * ... * fk(x) / (g1(x) * ... * gk(x))
-        let frac_poly = compute_frac_poly(fxs.clone(), gxs.clone())?;
+        let frac_poly = compute_frac_poly(&mut fxs, &mut gxs)?;
         // compute the product polynomial
         let prod_x = compute_product_poly(&frac_poly, 1 << 20)?;
 
@@ -203,8 +202,8 @@ where
         }
 
         // copy prod_x and frac_poly to return, so that they are not folded by zero check
-        let prod_x_copy = copy_mle(&prod_x, None, None);
-        let frac_poly_copy = copy_mle(&frac_poly, None, None);
+        let prod_x_copy = prod_x.copy(None, None);
+        let frac_poly_copy = frac_poly.copy(None, None);
 
         // build the zero-check proof
         let (zero_check_proof, _) =
@@ -227,7 +226,7 @@ where
         proof: &Self::ProductCheckProof,
         aux_info: &VPAuxInfo<E::ScalarField>,
         transcript: &mut Self::Transcript,
-    ) -> Result<Self::ProductCheckSubClaim, PolyIOPErrors> {
+    ) -> Result<Self::ProductCheckSubClaim, PIOPError> {
         let start = start_timer!(|| "prod_check verify");
 
         // update transcript and generate challenge
@@ -267,9 +266,9 @@ mod test {
     use crate::{
         hyperplonk::{
             pcs::{prelude::MultilinearKzgPCS, PolynomialCommitmentScheme},
-            poly_iop::{errors::PolyIOPErrors, PolyIOP},
+            poly_iop::{errors::PIOPError, PolyIOP},
         },
-        read_write::{copy_mle, DenseMLPolyStream, ReadWriteStream},
+        streams::{DenseMLPolyStream, ReadWriteStream},
     };
     use ark_bls12_381::{Bls12_381, Fr};
     use ark_ec::pairing::Pairing;
@@ -281,20 +280,20 @@ mod test {
     };
 
     fn check_frac_poly<E>(
-        frac_poly: &Arc<Mutex<DenseMLPolyStream<E::ScalarField>>>,
-        fs: Vec<Arc<Mutex<DenseMLPolyStream<E::ScalarField>>>>,
-        gs: Vec<Arc<Mutex<DenseMLPolyStream<E::ScalarField>>>>,
+        frac_poly: &DenseMLPolyStream<E::ScalarField>,
+        fs: Vec<DenseMLPolyStream<E::ScalarField>>,
+        gs: Vec<DenseMLPolyStream<E::ScalarField>>,
     ) where
         E: Pairing,
     {
         let mut flag = true;
-        let _num_vars = frac_poly.lock().unwrap().num_vars;
+        let _num_vars = frac_poly.num_vars();
         while let Some(frac) = frac_poly.lock().unwrap().read_next() {
             let nom = fs.iter().fold(E::ScalarField::from(1u8), |acc, f| {
-                acc * f.lock().unwrap().read_next().unwrap()
+                acc * f.read_next().unwrap()
             });
             let denom = gs.iter().fold(E::ScalarField::from(1u8), |acc, g| {
-                acc * g.lock().unwrap().read_next().unwrap()
+                acc * g.read_next().unwrap()
             });
             if denom * frac != nom {
                 flag = false;
@@ -316,11 +315,11 @@ mod test {
     // fs and gs are guaranteed to have the same product
     // fs and hs doesn't have the same product
     fn test_product_check_helper<E, PCS>(
-        fs: Vec<Arc<Mutex<DenseMLPolyStream<E::ScalarField>>>>,
-        gs: Vec<Arc<Mutex<DenseMLPolyStream<E::ScalarField>>>>,
-        hs: Vec<Arc<Mutex<DenseMLPolyStream<E::ScalarField>>>>,
+        fs: Vec<DenseMLPolyStream<E::ScalarField>>,
+        gs: Vec<DenseMLPolyStream<E::ScalarField>>,
+        hs: Vec<DenseMLPolyStream<E::ScalarField>>,
         pcs_param: &PCS::ProverParam,
-    ) -> Result<(), PolyIOPErrors>
+    ) -> Result<(), PIOPError>
     where
         E: Pairing,
         PCS: PolynomialCommitmentScheme<
@@ -333,10 +332,10 @@ mod test {
 
         let num_vars = fs[0].lock().unwrap().num_vars;
         let fs_copy: Vec<Arc<Mutex<DenseMLPolyStream<E::ScalarField>>>> =
-            fs.iter().map(|f| copy_mle(f, None, None)).collect();
+            fs.iter().map(|f| f.copy(None, None)).collect();
 
         let gs_copy: Vec<Arc<Mutex<DenseMLPolyStream<E::ScalarField>>>> =
-            gs.iter().map(|g| copy_mle(g, None, None)).collect();
+            gs.iter().map(|g| g.copy(None, None)).collect();
 
         let (proof, prod_x, _frac_poly) = <PolyIOP<E::ScalarField> as ProductCheck<E, PCS>>::prove(
             pcs_param,
@@ -402,7 +401,7 @@ mod test {
         Ok(())
     }
 
-    fn test_product_check(nv: usize) -> Result<(), PolyIOPErrors> {
+    fn test_product_check(nv: usize) -> Result<(), PIOPError> {
         let mut rng = test_rng();
 
         // get a random vector with 1 << nv elements
@@ -448,11 +447,11 @@ mod test {
     }
 
     #[test]
-    fn test_trivial_polynomial() -> Result<(), PolyIOPErrors> {
+    fn test_trivial_polynomial() -> Result<(), PIOPError> {
         test_product_check(2)
     }
     #[test]
-    fn test_normal_polynomial() -> Result<(), PolyIOPErrors> {
+    fn test_normal_polynomial() -> Result<(), PIOPError> {
         test_product_check(10)
     }
 }

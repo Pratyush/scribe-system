@@ -1,4 +1,4 @@
-use crate::hyperplonk::poly_iop::errors::PolyIOPErrors;
+use crate::hyperplonk::poly_iop::errors::PIOPError;
 use crate::read_write::{identity_permutation_mles, DenseMLPolyStream, ReadWriteStream};
 use ark_ff::PrimeField;
 
@@ -30,89 +30,27 @@ pub(super) fn computer_nums_and_denoms<F: PrimeField>(
         Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
         Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
     ),
-    PolyIOPErrors,
+    PIOPError,
 > {
     let start = start_timer!(|| "compute numerators and denominators");
 
     let num_vars = fxs[0].lock().unwrap().num_vars;
     let s_ids = identity_permutation_mles::<F>(num_vars, fxs.len());
 
-    let batch_size = 1 << 20; // Maximum number of elements to process in a batch
-
     let mut numerators = Vec::with_capacity(fxs.len());
     let mut denominators = Vec::with_capacity(gxs.len());
 
     for (((fx, gx), s_id), perm) in fxs.into_iter().zip(gxs).zip(s_ids).zip(perms) {
-        let numerator = Arc::new(Mutex::new(DenseMLPolyStream::<F>::new_from_tempfile(
-            num_vars,
-        )));
-        let denominator = Arc::new(Mutex::new(DenseMLPolyStream::<F>::new_from_tempfile(
-            num_vars,
-        )));
-
-        // Prepare vectors for batch processing
-        let mut numerator_vals = Vec::with_capacity(batch_size);
-        let mut denominator_vals = Vec::with_capacity(batch_size);
-
         let mut fx = fx.lock().unwrap();
         let mut gx = gx.lock().unwrap();
         let mut s_id = s_id.lock().unwrap();
         let mut perm = perm.lock().unwrap();
+        let numerator = fx.combine_with(&mut s_id, |fx, s_id| *beta * s_id + gamma + fx).expect("failed to combine");
 
-        // Write results to output streams
-        let mut numerator_stream = numerator.lock().unwrap();
-        let mut denominator_stream = denominator.lock().unwrap();
+        let denominator = gx.combine_with(&mut perm, |gx, perm| *beta * perm + gamma + gx).expect("failed to combine");
 
-        while let (Some(fx_val), Some(gx_val), Some(s_id_val), Some(perm_val)) = (
-            fx.read_next(),
-            gx.read_next(),
-            s_id.read_next(),
-            perm.read_next(),
-        ) {
-            numerator_vals.push(fx_val + *beta * s_id_val + gamma);
-            denominator_vals.push(gx_val + *beta * perm_val + gamma);
-            // Check if we've reached the batch size
-            if numerator_vals.len() >= batch_size {
-                for (numerator_val, denominator_val) in
-                    numerator_vals.drain(..).zip(denominator_vals.drain(..))
-                {
-                    numerator_stream
-                        .write_next_unchecked(numerator_val)
-                        .expect("Failed to write to hp stream");
-                    denominator_stream
-                        .write_next_unchecked(denominator_val)
-                        .expect("Failed to write to hq stream");
-                }
-            }
-        }
-
-        // Handle any remaining values that didn't fill the last batch
-        if !numerator_vals.is_empty() {
-            for (numerator_val, denominator_val) in
-                numerator_vals.drain(..).zip(denominator_vals.drain(..))
-            {
-                numerator_stream
-                    .write_next_unchecked(numerator_val)
-                    .expect("Failed to write remaining hp values");
-                denominator_stream
-                    .write_next_unchecked(denominator_val)
-                    .expect("Failed to write remaining hq values");
-            }
-        }
-
-        fx.read_restart();
-        gx.read_restart();
-        s_id.read_restart();
-        perm.read_restart();
-
-        numerator_stream.swap_read_write();
-        denominator_stream.swap_read_write();
-
-        drop(numerator_stream);
-        drop(denominator_stream);
-
-        numerators.push(numerator);
-        denominators.push(denominator);
+        numerators.push(Arc::new(Mutex::new(numerator)));
+        denominators.push(Arc::new(Mutex::new(denominator)));
     }
 
     end_timer!(start);

@@ -3,7 +3,7 @@ use displaydoc::Display;
 
 /// A `enum` specifying the possible failure modes of the arithmetics.
 #[derive(Display, Debug)]
-pub enum ArithErrors {
+pub enum ArithError {
     /// Invalid parameters: {0}
     InvalidParameters(String),
     /// Should not arrive to this point
@@ -12,7 +12,7 @@ pub enum ArithErrors {
     SerializationErrors(ark_serialize::SerializationError),
 }
 
-impl From<ark_serialize::SerializationError> for ArithErrors {
+impl From<ark_serialize::SerializationError> for ArithError {
     fn from(e: ark_serialize::SerializationError) -> Self {
         Self::SerializationErrors(e)
     }

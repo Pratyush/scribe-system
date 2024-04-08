@@ -1,19 +1,16 @@
 use super::SumCheckProver;
 use crate::hyperplonk::arithmetic::virtual_polynomial::VirtualPolynomial;
-use crate::{
-    hyperplonk::poly_iop::{
-        errors::PolyIOPErrors,
-        structs::{IOPProverMessage, IOPProverState},
-    },
-    read_write::ReadWriteStream,
+use crate::hyperplonk::poly_iop::{
+    errors::PIOPError,
+    structs::{IOPProverMessage, IOPProverState},
 };
 use ark_ff::{batch_inversion, PrimeField};
-use ark_std::{end_timer, start_timer, vec::Vec};
+use ark_std::{cfg_iter, cfg_iter_mut, end_timer, start_timer, vec::Vec};
 use std::collections::HashSet;
 use std::io::Seek;
 
 #[cfg(feature = "parallel")]
-use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
+use rayon::prelude::*;
 
 impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
     type VirtualPolynomial = VirtualPolynomial<F>;
@@ -21,10 +18,10 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
 
     /// Initialize the prover state to argue for the sum of the input polynomial
     /// over {0,1}^`num_vars`.
-    fn prover_init(polynomial: &Self::VirtualPolynomial) -> Result<Self, PolyIOPErrors> {
+    fn prover_init(polynomial: &Self::VirtualPolynomial) -> Result<Self, PIOPError> {
         let start = start_timer!(|| "sum check prover init");
         if polynomial.aux_info.num_variables == 0 {
-            return Err(PolyIOPErrors::InvalidParameters(
+            return Err(PIOPError::InvalidParameters(
                 "Attempt to prove a constant.".to_string(),
             ));
         }
@@ -51,12 +48,12 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
     fn prove_round_and_update_state(
         &mut self,
         challenge: &Option<F>,
-    ) -> Result<Self::ProverMessage, PolyIOPErrors> {
+    ) -> Result<Self::ProverMessage, PIOPError> {
         let start =
             start_timer!(|| format!("sum check prove {}-th round and update state", self.round));
 
         if self.round >= self.poly.aux_info.num_variables {
-            return Err(PolyIOPErrors::InvalidProver(
+            return Err(PIOPError::InvalidProver(
                 "Prover is not active".to_string(),
             ));
         }
@@ -86,7 +83,7 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
             println!("sum check ROUND CHALLENGE: {}", chal);
             // challenge is None for the first round
             if self.round == 0 {
-                return Err(PolyIOPErrors::InvalidProver(
+                return Err(PIOPError::InvalidProver(
                     "first round should be prover first.".to_string(),
                 ));
             }
@@ -97,7 +94,7 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
             println!("sum check prover challenge: {}", r);
             #[cfg(feature = "parallel")]
             self.poly
-                .flattened_ml_extensions
+                .mles
                 .par_iter_mut()
                 .for_each(|mle| {
                     let mut mle = mle.lock().expect("Failed to lock mutex");
@@ -109,7 +106,7 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
                 .iter_mut()
                 .for_each(|mle| mle.fix_variables(&[r]));
         } else if self.round > 0 {
-            return Err(PolyIOPErrors::InvalidProver(
+            return Err(PIOPError::InvalidProver(
                 "verifier message is empty".to_string(),
             ));
         }
@@ -131,7 +128,7 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
 
         let mut polynomials = self
             .poly
-            .flattened_ml_extensions
+            .mles
             .iter()
             .map(|x| x.lock().unwrap())
             .collect::<Vec<_>>();
@@ -282,16 +279,15 @@ fn barycentric_weights<F: PrimeField>(points: &[F]) -> Vec<F> {
 
 fn extrapolate<F: PrimeField>(points: &[F], weights: &[F], evals: &[F], at: &F) -> F {
     let (coeffs, sum_inv) = {
-        let mut coeffs = points.iter().map(|point| *at - point).collect::<Vec<_>>();
+        let mut coeffs = cfg_iter!(points).map(|point| *at - point).collect::<Vec<_>>();
         batch_inversion(&mut coeffs);
-        coeffs.iter_mut().zip(weights).for_each(|(coeff, weight)| {
-            *coeff *= weight;
-        });
-        let sum_inv = coeffs.iter().sum::<F>().inverse().unwrap_or_default();
+        cfg_iter_mut!(coeffs)
+            .zip(weights)
+            .for_each(|(coeff, weight)| *coeff *= weight);
+        let sum_inv = cfg_iter!(coeffs).sum::<F>().inverse().unwrap_or_default();
         (coeffs, sum_inv)
     };
-    coeffs
-        .iter()
+    cfg_iter!(coeffs)
         .zip(evals)
         .map(|(coeff, eval)| *coeff * eval)
         .sum::<F>()

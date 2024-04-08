@@ -1,9 +1,10 @@
 use crate::hyperplonk::arithmetic::virtual_polynomial::VirtualPolynomial;
 use crate::hyperplonk::poly_iop::{
-    errors::PolyIOPErrors, structs::IOPProof, zero_check::ZeroCheck, PolyIOP,
+    errors::PIOPError, structs::IOPProof, zero_check::ZeroCheck, PolyIOP,
 };
 use crate::hyperplonk::transcript::IOPTranscript;
-use crate::read_write::{DenseMLPoly, DenseMLPolyStream, ReadWriteStream};
+use crate::streams::{DenseMLPolyStream, ReadWriteStream};
+use ark_poly::DenseMultilinearExtension as DenseMLPoly;
 
 use ark_ff::PrimeField;
 use ark_serialize::Write;
@@ -18,18 +19,16 @@ use std::sync::{Arc, Mutex};
 /// The caller needs to sanity-check that the number of polynomials and
 /// variables match in fxs and gxs; and gi(x) has no zero entries.
 pub(super) fn compute_frac_poly<F: PrimeField>(
-    fxs: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
-    gxs: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
-) -> Result<Arc<Mutex<DenseMLPolyStream<F>>>, PolyIOPErrors> {
+    fxs: &mut [DenseMLPolyStream<F>],
+    gxs: &mut [DenseMLPolyStream<F>],
+) -> Result<DenseMLPolyStream<F>, PIOPError> {
     let start = start_timer!(|| "compute frac(x)");
 
     // TODO: might need to delete some of these to release disk space later
-    let numerator = DenseMLPolyStream::prod_multi(fxs, None, None);
-    let denominator = DenseMLPolyStream::prod_multi(gxs, None, None);
-    let denominator_inverse =
-        DenseMLPolyStream::batch_inversion_buffer(&denominator, 1 << 20, None, None);
-
-    let result = DenseMLPolyStream::prod_multi(vec![numerator, denominator_inverse], None, None);
+    let numerator = DenseMLPolyStream::prod_multi(fxs).unwrap();
+    let mut denominator = DenseMLPolyStream::prod_multi(gxs).unwrap();
+    let denominator_inverse = denominator.batch_inversion().unwrap();
+    let result = DenseMLPolyStream::prod_multi(&mut [numerator, denominator_inverse]).unwrap();
 
     end_timer!(start);
     Ok(result)
@@ -43,13 +42,11 @@ pub(super) fn compute_frac_poly<F: PrimeField>(
 /// The caller needs to check num_vars matches in f and g
 /// Cost: linear in N.
 pub(super) fn compute_product_poly<F: PrimeField>(
-    frac_poly: &Arc<Mutex<DenseMLPolyStream<F>>>,
-    buffer_size: usize,
-) -> Result<Arc<Mutex<DenseMLPolyStream<F>>>, PolyIOPErrors> {
+    frac_poly: &DenseMLPolyStream<F>,
+) -> Result<Arc<Mutex<DenseMLPolyStream<F>>>, PIOPError> {
     let start = start_timer!(|| "compute evaluations of prod polynomial");
-    let mut frac_poly_stream = frac_poly.lock().unwrap();
-    frac_poly_stream.read_restart();
-    let num_vars = frac_poly_stream.num_vars();
+    frac_poly.read_restart();
+    /* let num_vars = frac_poly_stream.num_vars();
     #[cfg(debug_assertions)]
     {
         println!(
@@ -60,7 +57,7 @@ pub(super) fn compute_product_poly<F: PrimeField>(
             "frac_poly_stream write pointer: {}",
             frac_poly_stream.write_pointer.stream_position().unwrap()
         );
-    }
+    } */
 
     // assert that num_vars is at least two
     assert!(num_vars >= 2);
@@ -70,7 +67,11 @@ pub(super) fn compute_product_poly<F: PrimeField>(
 
     let mut read_buffer = Vec::with_capacity(buffer_size);
     let mut write_buffer = Vec::with_capacity(buffer_size >> 1);
+    
+    let mut prod_stream = frac_poly.fold_odd_even(f)
 
+
+    // let 
     // round 1
     // read frac_poly to read_buffer till it's full
     // note that this would fail if the frac_poly_stream has odd number of elements, but this shouldn't possibly happen
@@ -139,11 +140,7 @@ pub(super) fn compute_product_poly<F: PrimeField>(
                 );
             }
 
-            if let Some(val) = prod_stream.read_next_unchecked() {
-                read_buffer.push(val);
-            } else {
-                panic!("Failed to read from prod stream");
-            }
+            read_buffer.push(prod_stream.read_next_unchecked().expect("Failed to read from prod stream"));
 
             if read_buffer.len() >= buffer_size {
                 (0..(buffer_size >> 1))
@@ -199,7 +196,7 @@ pub(super) fn prove_zero_check<F: PrimeField>(
     alpha: &F,
     transcript: &mut IOPTranscript<F>,
     batch_size: usize,
-) -> Result<(IOPProof<F>, VirtualPolynomial<F>), PolyIOPErrors> {
+) -> Result<(IOPProof<F>, VirtualPolynomial<F>), PIOPError> {
     // this is basically a batch zero check with alpha as the batch factor
     // the first zero check is prod(x) - p1(x) * p2(x),
     // which is checking that prod is computed correctly from frac_poly in the first half
@@ -214,8 +211,8 @@ pub(super) fn prove_zero_check<F: PrimeField>(
 
     // compute p1(x) = (1-x1) * frac(x2, ..., xn, 0) + x1 * prod(x2, ..., xn, 0)
     // compute p2(x) = (1-x1) * frac(x2, ..., xn, 1) + x1 * prod(x2, ..., xn, 1)
-    let mut p1_stream = DenseMLPolyStream::new(num_vars, None, None);
-    let mut p2_stream = DenseMLPolyStream::new(num_vars, None, None);
+    let mut p1_stream = DenseMLPolyStream::new_from_tempfile(num_vars);
+    let mut p2_stream = DenseMLPolyStream::new_from_tempfile(num_vars);
 
     let mut p1_vals = Vec::with_capacity(batch_size);
     let mut p2_vals = Vec::with_capacity(batch_size);
@@ -316,7 +313,7 @@ mod test {
     use super::compute_product_poly;
     use super::*;
 
-    use crate::read_write::{DenseMLPolyStream, ReadWriteStream};
+    use crate::streams::{DenseMLPolyStream, ReadWriteStream};
     use ark_bls12_381::Fr;
 
     use ark_std::rand::distributions::{Distribution, Standard};

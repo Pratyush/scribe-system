@@ -2,7 +2,7 @@ use self::util::computer_nums_and_denoms;
 use crate::hyperplonk::transcript::IOPTranscript;
 use crate::hyperplonk::{
     pcs::PolynomialCommitmentScheme,
-    poly_iop::{errors::PolyIOPErrors, prod_check::ProductCheck, PolyIOP},
+    poly_iop::{errors::PIOPError, prod_check::ProductCheck, PolyIOP},
 };
 use crate::read_write::{DenseMLPolyStream, ReadWriteStream};
 use ark_ec::pairing::Pairing;
@@ -78,7 +78,7 @@ where
             Self::MultilinearExtension,
             Self::MultilinearExtension,
         ),
-        PolyIOPErrors,
+        PIOPError,
     >;
 
     /// Verify that (g1, ..., gk) is a permutation of
@@ -87,7 +87,7 @@ where
         proof: &Self::PermutationProof,
         aux_info: &Self::VPAuxInfo,
         transcript: &mut Self::Transcript,
-    ) -> Result<Self::PermutationCheckSubClaim, PolyIOPErrors>;
+    ) -> Result<Self::PermutationCheckSubClaim, PIOPError>;
 }
 
 impl<E, PCS> PermutationCheck<E, PCS> for PolyIOP<E::ScalarField>
@@ -114,14 +114,14 @@ where
             Self::MultilinearExtension,
             Self::MultilinearExtension,
         ),
-        PolyIOPErrors,
+        PIOPError,
     > {
         let start = start_timer!(|| "Permutation check prove");
         if fxs.is_empty() {
-            return Err(PolyIOPErrors::InvalidParameters("fxs is empty".to_string()));
+            return Err(PIOPError::InvalidParameters("fxs is empty".to_string()));
         }
         if (fxs.len() != gxs.len()) || (fxs.len() != perms.len()) {
-            return Err(PolyIOPErrors::InvalidProof(format!(
+            return Err(PIOPError::InvalidProof(format!(
                 "fxs.len() = {}, gxs.len() = {}, perms.len() = {}",
                 fxs.len(),
                 gxs.len(),
@@ -135,7 +135,7 @@ where
                 || (gx.lock().unwrap().num_vars != num_vars)
                 || (perm.lock().unwrap().num_vars != num_vars)
             {
-                return Err(PolyIOPErrors::InvalidParameters(
+                return Err(PIOPError::InvalidParameters(
                     "number of variables unmatched".to_string(),
                 ));
             }
@@ -158,7 +158,7 @@ where
         proof: &Self::PermutationProof,
         aux_info: &Self::VPAuxInfo,
         transcript: &mut Self::Transcript,
-    ) -> Result<Self::PermutationCheckSubClaim, PolyIOPErrors> {
+    ) -> Result<Self::PermutationCheckSubClaim, PIOPError> {
         let start = start_timer!(|| "Permutation check verify");
 
         let beta = transcript.get_and_append_challenge(b"beta")?;
@@ -182,7 +182,7 @@ mod test {
     use crate::hyperplonk::arithmetic::virtual_polynomial::VPAuxInfo;
     use crate::hyperplonk::{
         pcs::{prelude::MultilinearKzgPCS, PolynomialCommitmentScheme},
-        poly_iop::{errors::PolyIOPErrors, PolyIOP},
+        poly_iop::{errors::PIOPError, PolyIOP},
     };
     use crate::read_write::copy_mle;
     use crate::read_write::{
@@ -203,7 +203,7 @@ mod test {
         fxs: Vec<Arc<Mutex<DenseMLPolyStream<E::ScalarField>>>>,
         gxs: Vec<Arc<Mutex<DenseMLPolyStream<E::ScalarField>>>>,
         perms: Vec<Arc<Mutex<DenseMLPolyStream<E::ScalarField>>>>,
-    ) -> Result<(), PolyIOPErrors>
+    ) -> Result<(), PIOPError>
     where
         E: Pairing,
         PCS: PolynomialCommitmentScheme<
@@ -257,13 +257,13 @@ mod test {
             .unwrap()
             != perm_check_sub_claim.product_check_sub_claim.final_query.1
         {
-            return Err(PolyIOPErrors::InvalidVerifier("wrong subclaim".to_string()));
+            return Err(PIOPError::InvalidVerifier("wrong subclaim".to_string()));
         };
 
         Ok(())
     }
 
-    fn test_permutation_check(nv: usize) -> Result<(), PolyIOPErrors> {
+    fn test_permutation_check(nv: usize) -> Result<(), PIOPError> {
         let mut rng = test_rng();
 
         let srs = MultilinearKzgPCS::<Bls12_381>::gen_srs_for_testing(&mut rng, nv)?;
@@ -337,16 +337,16 @@ mod test {
     }
 
     #[test]
-    fn test_trivial_polynomial() -> Result<(), PolyIOPErrors> {
+    fn test_trivial_polynomial() -> Result<(), PIOPError> {
         test_permutation_check(2)
     }
     #[test]
-    fn test_normal_polynomial() -> Result<(), PolyIOPErrors> {
+    fn test_normal_polynomial() -> Result<(), PIOPError> {
         test_permutation_check(5)
     }
 
     #[test]
-    fn zero_polynomial_should_error() -> Result<(), PolyIOPErrors> {
+    fn zero_polynomial_should_error() -> Result<(), PIOPError> {
         assert!(test_permutation_check(0).is_err());
         Ok(())
     }

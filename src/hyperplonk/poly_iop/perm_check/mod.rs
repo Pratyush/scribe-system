@@ -1,7 +1,7 @@
 use crate::{
     hyperplonk::{
         arithmetic::virtual_polynomial::{VPAuxInfo, VirtualPolynomial},
-        poly_iop::{errors::PolyIOPErrors, PolyIOP},
+        poly_iop::{errors::PIOPError, PolyIOP},
         transcript::IOPTranscript,
     },
     read_write::ReadWriteStream,
@@ -53,7 +53,7 @@ pub trait PermutationCheck<F: PrimeField>: ZeroCheck<F> {
             Vec<Self::MultilinearExtension>,
             Self::MultilinearExtension,
         ),
-        PolyIOPErrors,
+        PIOPError,
     >;
 
     #[allow(clippy::type_complexity)]
@@ -71,14 +71,14 @@ pub trait PermutationCheck<F: PrimeField>: ZeroCheck<F> {
             Self::MultilinearExtension,
             Self::MultilinearExtension,
         ),
-        PolyIOPErrors,
+        PIOPError,
     >;
 
     fn verify(
         proof: &Self::PermutationCheckProof,
         aux_info: &VPAuxInfo<F>,
         transcript: &mut Self::Transcript,
-    ) -> Result<Self::PermutationCheckSubClaim, PolyIOPErrors>;
+    ) -> Result<Self::PermutationCheckSubClaim, PIOPError>;
 }
 
 impl<F: PrimeField> PermutationCheck<F> for PolyIOP<F>
@@ -107,7 +107,7 @@ where
             Self::MultilinearExtension, // h_q
             Self::MultilinearExtension, // eq_x_r
         ),
-        PolyIOPErrors,
+        PIOPError,
     > {
         let start = start_timer!(|| "perm_check prove");
 
@@ -170,7 +170,7 @@ where
             }
             // print each stream of final poly
             for (i, stream) in final_poly
-                .flattened_ml_extensions
+                .mles
                 .clone()
                 .iter()
                 .enumerate()
@@ -186,8 +186,8 @@ where
 
         let proof = <Self as SumCheck<F>>::prove(&final_poly, transcript)?;
 
-        let eq_x_r = final_poly.flattened_ml_extensions
-            [final_poly.flattened_ml_extensions.len() - 1]
+        let eq_x_r = final_poly.mles
+            [final_poly.mles.len() - 1]
             .clone();
 
         end_timer!(start);
@@ -207,7 +207,7 @@ where
             Vec<Self::MultilinearExtension>, // h_q
             Self::MultilinearExtension,      // eq_x_r
         ),
-        PolyIOPErrors,
+        PIOPError,
     > {
         let start = start_timer!(|| "perm check prove");
 
@@ -322,7 +322,7 @@ where
             }
             // print each stream of final poly
             for (i, stream) in final_poly
-                .flattened_ml_extensions
+                .mles
                 .clone()
                 .iter()
                 .enumerate()
@@ -338,8 +338,8 @@ where
 
         let proof = <Self as SumCheck<F>>::prove(&final_poly, transcript)?;
 
-        let eq_x_r = final_poly.flattened_ml_extensions
-            [final_poly.flattened_ml_extensions.len() - 1]
+        let eq_x_r = final_poly.mles
+            [final_poly.mles.len() - 1]
             .clone();
 
         end_timer!(start);
@@ -350,12 +350,12 @@ where
         proof: &Self::PermutationCheckProof,
         aux_info: &VPAuxInfo<F>,
         transcript: &mut Self::Transcript,
-    ) -> Result<Self::PermutationCheckSubClaim, PolyIOPErrors> {
+    ) -> Result<Self::PermutationCheckSubClaim, PIOPError> {
         let start: ark_std::perf_trace::TimerInfo = start_timer!(|| "perm_check verify");
 
         // check that the sum is zero
         if proof.proofs[0].evaluations[0] + proof.proofs[0].evaluations[1] != F::zero() {
-            return Err(PolyIOPErrors::InvalidProof(format!(
+            return Err(PIOPError::InvalidProof(format!(
                 "zero check: sum {} is not zero",
                 proof.proofs[0].evaluations[0] + proof.proofs[0].evaluations[1]
             )));

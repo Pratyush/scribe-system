@@ -1,6 +1,6 @@
 use crate::hyperplonk::arithmetic::errors::ArithErrors;
 use crate::hyperplonk::pcs::prelude::PCSError;
-use crate::hyperplonk::poly_iop::errors::PolyIOPErrors;
+use crate::hyperplonk::poly_iop::errors::PIOPError;
 use crate::hyperplonk::transcript::TranscriptError;
 use ark_serialize::SerializationError;
 use ark_std::string::String;
@@ -20,7 +20,7 @@ pub enum HyperPlonkErrors {
     /// An error during (de)serialization: {0}
     SerializationError(SerializationError),
     /// PolyIOP error {0}
-    PolyIOPErrors(PolyIOPErrors),
+    PolyIOPErrors(PIOPError),
     /// PCS error {0}
     PCSErrors(PCSError),
     /// Transcript error {0}
@@ -35,8 +35,8 @@ impl From<SerializationError> for HyperPlonkErrors {
     }
 }
 
-impl From<PolyIOPErrors> for HyperPlonkErrors {
-    fn from(e: PolyIOPErrors) -> Self {
+impl From<PIOPError> for HyperPlonkErrors {
+    fn from(e: PIOPError) -> Self {
         Self::PolyIOPErrors(e)
     }
 }

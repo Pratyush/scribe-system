@@ -1,5 +1,5 @@
 use crate::{
-    hyperplonk::poly_iop::errors::PolyIOPErrors,
+    hyperplonk::poly_iop::errors::PIOPError,
     read_write::{DenseMLPolyStream, ReadWriteStream},
 };
 use ark_ff::fields::batch_inversion;
@@ -19,7 +19,7 @@ pub fn compute_frac_poly<F: PrimeField>(
         Arc<Mutex<DenseMLPolyStream<F>>>,
         Arc<Mutex<DenseMLPolyStream<F>>>,
     ),
-    PolyIOPErrors,
+    PIOPError,
 > {
     // Initialize output streams for 1/(p + alpha * pi) and 1/(q + alpha)
     let output_hp = Arc::new(Mutex::new(DenseMLPolyStream::<F>::new_from_tempfile(
@@ -86,7 +86,7 @@ pub fn compute_frac_poly_plonk<F: PrimeField>(
         Vec<Arc<Mutex<DenseMLPolyStream<F>>>>, // h_p's
         Vec<Arc<Mutex<DenseMLPolyStream<F>>>>, // h_q's
     ),
-    PolyIOPErrors,
+    PIOPError,
 > {
     #[cfg(debug_assertions)]
     {
