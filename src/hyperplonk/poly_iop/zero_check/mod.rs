@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 
 use crate::hyperplonk::arithmetic::virtual_polynomial::eq_eval;
-use crate::hyperplonk::poly_iop::{errors::PolyIOPErrors, sum_check::SumCheck, PolyIOP};
+use crate::hyperplonk::poly_iop::{errors::PIOPError, sum_check::SumCheck, PolyIOP};
 use crate::hyperplonk::transcript::IOPTranscript;
 use ark_ff::PrimeField;
 use ark_std::{end_timer, start_timer};
@@ -40,14 +40,14 @@ pub trait ZeroCheck<F: PrimeField>: SumCheck<F> {
     fn prove(
         poly: &Self::VirtualPolynomial,
         transcript: &mut Self::Transcript,
-    ) -> Result<Self::ZeroCheckProof, PolyIOPErrors>;
+    ) -> Result<Self::ZeroCheckProof, PIOPError>;
 
     /// verify the claimed sum using the proof
     fn verify(
         proof: &Self::ZeroCheckProof,
         aux_info: &Self::VPAuxInfo,
         transcript: &mut Self::Transcript,
-    ) -> Result<Self::ZeroCheckSubClaim, PolyIOPErrors>;
+    ) -> Result<Self::ZeroCheckSubClaim, PIOPError>;
 }
 
 impl<F: PrimeField> ZeroCheck<F> for PolyIOP<F> {
@@ -61,7 +61,7 @@ impl<F: PrimeField> ZeroCheck<F> for PolyIOP<F> {
     fn prove(
         poly: &Self::VirtualPolynomial,
         transcript: &mut Self::Transcript,
-    ) -> Result<Self::ZeroCheckProof, PolyIOPErrors> {
+    ) -> Result<Self::ZeroCheckProof, PIOPError> {
         let start = start_timer!(|| "zero check prove");
 
         let length = poly.aux_info.num_variables;
@@ -77,12 +77,12 @@ impl<F: PrimeField> ZeroCheck<F> for PolyIOP<F> {
         proof: &Self::ZeroCheckProof,
         fx_aux_info: &Self::VPAuxInfo,
         transcript: &mut Self::Transcript,
-    ) -> Result<Self::ZeroCheckSubClaim, PolyIOPErrors> {
+    ) -> Result<Self::ZeroCheckSubClaim, PIOPError> {
         let start = start_timer!(|| "zero check verify");
 
         // check that the sum is zero
         if proof.proofs[0].evaluations[0] + proof.proofs[0].evaluations[1] != F::zero() {
-            return Err(PolyIOPErrors::InvalidProof(format!(
+            return Err(PIOPError::InvalidProof(format!(
                 "zero check: sum {} is not zero",
                 proof.proofs[0].evaluations[0] + proof.proofs[0].evaluations[1]
             )));
@@ -117,7 +117,7 @@ mod test {
 
     use super::ZeroCheck;
     use crate::hyperplonk::arithmetic::virtual_polynomial::VirtualPolynomial;
-    use crate::hyperplonk::poly_iop::{errors::PolyIOPErrors, PolyIOP};
+    use crate::hyperplonk::poly_iop::{errors::PIOPError, PolyIOP};
     use ark_bls12_381::Fr;
     use ark_std::test_rng;
 
@@ -125,7 +125,7 @@ mod test {
         nv: usize,
         num_multiplicands_range: (usize, usize),
         num_products: usize,
-    ) -> Result<(), PolyIOPErrors> {
+    ) -> Result<(), PIOPError> {
         let mut rng = test_rng();
 
         {
@@ -136,10 +136,10 @@ mod test {
             let mut transcript = <PolyIOP<Fr> as ZeroCheck<Fr>>::init_transcript();
             transcript.append_message(b"testing", b"initializing transcript for testing")?;
 
-            #[cfg(debug_assertions)]
-            poly.products.iter().for_each(|p| {
-                println!("test_zero_check before prove product: {:?}", p);
-            });
+            // #[cfg(debug_assertions)]
+            // poly.products.iter().for_each(|p| {
+            //     println!("test_zero_check before prove product: {:?}", p);
+            // });
 
             let proof = <PolyIOP<Fr> as ZeroCheck<Fr>>::prove(&poly, &mut transcript)?;
 
@@ -183,7 +183,7 @@ mod test {
     }
 
     #[test]
-    fn test_trivial_polynomial() -> Result<(), PolyIOPErrors> {
+    fn test_trivial_polynomial() -> Result<(), PIOPError> {
         let nv = 1;
         let num_multiplicands_range = (4, 5);
         let num_products = 1;
@@ -191,7 +191,7 @@ mod test {
         test_zerocheck(nv, num_multiplicands_range, num_products)
     }
     #[test]
-    fn test_normal_polynomial() -> Result<(), PolyIOPErrors> {
+    fn test_normal_polynomial() -> Result<(), PIOPError> {
         let nv = 5;
         let num_multiplicands_range = (4, 9);
         let num_products = 5;
@@ -200,7 +200,7 @@ mod test {
     }
 
     #[test]
-    fn zero_polynomial_should_error() -> Result<(), PolyIOPErrors> {
+    fn zero_polynomial_should_error() -> Result<(), PIOPError> {
         let nv = 0;
         let num_multiplicands_range = (4, 13);
         let num_products = 5;

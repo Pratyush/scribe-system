@@ -181,7 +181,7 @@ impl<E: Pairing> PolynomialCommitmentScheme<E> for MultilinearKzgPCS<E> {
         assert_eq!(num_vars, point.len());
 
         // create random linear combination of polynomials, a new stream in the form of poly0 + alpha * poly1 + alpha^2 * poly2 + ...
-        let mut poly = DenseMLPolyStream::<E::ScalarField>::new(num_vars, None, None);
+        let mut poly = DenseMLPolyStream::<E::ScalarField>::with_path(num_vars, None, None);
 
         // create a vector of 1, alpha, alpha^2, ..., alpha^polynomials.len()
         let alphas = (0..polynomials.len())

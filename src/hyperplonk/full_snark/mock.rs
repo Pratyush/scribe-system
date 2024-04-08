@@ -52,11 +52,11 @@ impl<F: PrimeField> MockCircuit<F> {
         let step = start_timer!(|| "create selector and witness streams");
         // create a Vec<Arc<Mutex<DenseMLPolyStream<F>>>> for selectors and witnesses
         let selectors: Vec<Arc<Mutex<DenseMLPolyStream<F>>>> = (0..num_selectors)
-            .map(|_| Arc::new(Mutex::new(DenseMLPolyStream::new(nv, None, None))))
+            .map(|_| Arc::new(Mutex::new(DenseMLPolyStream::with_path(nv, None, None))))
             .collect();
 
         let witnesses: Vec<Arc<Mutex<DenseMLPolyStream<F>>>> = (0..num_witnesses)
-            .map(|_| Arc::new(Mutex::new(DenseMLPolyStream::new(nv, None, None))))
+            .map(|_| Arc::new(Mutex::new(DenseMLPolyStream::with_path(nv, None, None))))
             .collect();
 
         for _cs_counter in 0..num_constraints {

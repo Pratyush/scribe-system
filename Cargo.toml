@@ -22,6 +22,7 @@ env_logger = "0.8.3" # this is a dev dependency really
 # libc = "0.2"
 # procinfo = "0.4"
 derivative = { version = "2", features = ["use_core"] }
+bufreaderwriter = "0.2"
 
 # following required by hyperplonk and might remove later
 displaydoc = { version = "0.2.3", default-features = false }

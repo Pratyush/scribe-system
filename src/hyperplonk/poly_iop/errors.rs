@@ -9,7 +9,7 @@ use crate::hyperplonk::transcript::TranscriptError;
 
 /// A `enum` specifying the possible failure modes of the PolyIOP.
 #[derive(Display, Debug)]
-pub enum PolyIOPErrors {
+pub enum PIOPError {
     /// Invalid Prover: {0}
     InvalidProver(String),
     /// Invalid Verifier: {0}
@@ -32,25 +32,25 @@ pub enum PolyIOPErrors {
     PCSErrors(PCSError),
 }
 
-impl From<ark_serialize::SerializationError> for PolyIOPErrors {
+impl From<ark_serialize::SerializationError> for PIOPError {
     fn from(e: ark_serialize::SerializationError) -> Self {
         Self::SerializationErrors(e)
     }
 }
 
-impl From<TranscriptError> for PolyIOPErrors {
+impl From<TranscriptError> for PIOPError {
     fn from(e: TranscriptError) -> Self {
         Self::TranscriptErrors(e)
     }
 }
 
-impl From<ArithErrors> for PolyIOPErrors {
+impl From<ArithErrors> for PIOPError {
     fn from(e: ArithErrors) -> Self {
         Self::ArithmeticErrors(e)
     }
 }
 
-impl From<PCSError> for PolyIOPErrors {
+impl From<PCSError> for PIOPError {
     fn from(e: PCSError) -> Self {
         Self::PCSErrors(e)
     }

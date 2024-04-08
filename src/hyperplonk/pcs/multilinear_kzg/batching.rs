@@ -19,7 +19,7 @@ use ark_ec::{scalar_mul::variable_base::VariableBaseMSM, CurveGroup};
 
 use crate::hyperplonk::transcript::IOPTranscript;
 use ark_std::{end_timer, log2, start_timer, One, Zero};
-use std::{
+use ark_std::{
     collections::BTreeMap,
     iter,
     marker::PhantomData,
