@@ -1,5 +1,5 @@
 mod errors;
-pub mod multilinear_kzg;
+// pub mod multilinear_kzg;
 mod structs;
 
 pub mod prelude;

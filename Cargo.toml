@@ -27,6 +27,7 @@ bufreaderwriter = "0.2"
 # following required by hyperplonk and might remove later
 displaydoc = { version = "0.2.3", default-features = false }
 ark-ec = { version = "^0.4.0", default-features = false }
+smallvec = "1.6"
 
 
 [dev-dependencies]

@@ -1,13 +1,11 @@
 use super::SumCheckProver;
-use crate::hyperplonk::arithmetic::virtual_polynomial::VirtualPolynomial;
+use crate::{arithmetic::virtual_polynomial::VirtualPolynomial, streams::iterator::{multi_zip, BatchedIterator}};
 use crate::hyperplonk::poly_iop::{
     errors::PIOPError,
     structs::{IOPProverMessage, IOPProverState},
 };
 use ark_ff::{batch_inversion, PrimeField};
 use ark_std::{cfg_iter, cfg_iter_mut, end_timer, start_timer, vec::Vec};
-use std::collections::HashSet;
-use std::io::Seek;
 
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
@@ -79,8 +77,6 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
         //     .collect();
 
         if let Some(chal) = challenge {
-            #[cfg(debug_assertions)]
-            println!("sum check ROUND CHALLENGE: {}", chal);
             // challenge is None for the first round
             if self.round == 0 {
                 return Err(PIOPError::InvalidProver(
@@ -90,21 +86,20 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
             self.challenges.push(*chal);
 
             let r = self.challenges[self.round - 1];
-            #[cfg(debug_assertions)]
-            println!("sum check prover challenge: {}", r);
-            #[cfg(feature = "parallel")]
-            self.poly
-                .mles
-                .par_iter_mut()
-                .for_each(|mle| {
-                    let mut mle = mle.lock().expect("Failed to lock mutex");
-                    mle.fix_variables(&[r])
-                });
-            #[cfg(not(feature = "parallel"))]
-            self.poly
-                .flattened_ml_extensions
-                .iter_mut()
-                .for_each(|mle| mle.fix_variables(&[r]));
+            if self.round == 1 {
+                // In the first round, make a deep copy of the original MLEs when fixing
+                // the variables.
+                // This ensures that the internal `Arc` is changed to point to a fresh file.
+                self.poly
+                    .mles
+                    .iter_mut()
+                    .for_each(|mle| *mle = mle.fix_variables(&[r]));
+            } else {
+                self.poly
+                    .mles
+                    .iter_mut()
+                    .for_each(|mle| mle.fix_variables_in_place(&[r]));
+            }
         } else if self.round > 0 {
             return Err(PIOPError::InvalidProver(
                 "verifier message is empty".to_string(),
@@ -115,143 +110,48 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
         let generate_prover_message = start_timer!(|| "generate prover message");
         self.round += 1;
 
-        #[cfg(debug_assertions)]
-        println!("sum check products_list: {:?}", self.poly.products);
-
-        let products_list = self.poly.products.clone();
         let mut products_sum = vec![F::zero(); self.poly.aux_info.max_degree + 1];
 
         // Step 2: generate sum for the partial evaluated polynomial:
         // f(r_1, ... r_m,, x_{m+1}... x_n)
+        self.poly.products.iter().for_each(|(coefficient, products)| {
+            let polys_in_product = products.iter().map(|&f| self.poly.mles[f].evals()).collect::<Vec<_>>();
+            let mut sum = multi_zip(polys_in_product.iter().map(|x| x.iter().array_chunks::<2>()))
+            .fold(
+                || vec![F::zero(); products.len() + 1],
+                |mut acc, mut products| {
+                    products.iter_mut().for_each(|[even, odd]| *odd -= even);
+                    acc[0] += products.iter().map(|[eval, _]| eval).product::<F>();
+                    acc[1..].iter_mut().for_each(|acc| {
+                        products.iter_mut().for_each(|[eval, step]| *eval += step as &_);
+                        *acc += products.iter().map(|[eval, _]| eval).product::<F>();
+                    });
+                    acc
+                },
+                |mut sum, partial| {
+                    sum.iter_mut()
+                        .zip(partial.iter())
+                        .for_each(|(sum, partial)| *sum += partial);
+                    sum
+                },
+            );
 
-        // let mut total_read_time = std::time::Duration::new(0, 0);
-
-        let mut polynomials = self
-            .poly
-            .mles
-            .iter()
-            .map(|x| x.lock().unwrap())
-            .collect::<Vec<_>>();
-
-        let mut stream_values: std::collections::HashMap<usize, (F, F)> =
-            std::collections::HashMap::new();
-
-        for (coefficient, products) in &products_list {
-            #[cfg(debug_assertions)]
-            {
-                println!("sum check product coefficient: {}", coefficient);
-                println!("sum check product products: {:?}", products);
-                println!("sum check product round: {}", self.round);
-            }
-
-            let mut sum = vec![F::zero(); products.len() + 1];
-
-            let unique_products: HashSet<usize> = products.iter().cloned().collect();
-
-            for b in 0..1 << (self.poly.aux_info.num_variables - self.round) {
-                #[cfg(debug_assertions)]
-                {
-                    println!("sum check product b: {}", b);
-                    println!("sum check product round: {}", self.round);
-                    println!(
-                        "sum check product num_variables: {}",
-                        self.poly.aux_info.num_variables
-                    );
-                }
-
-                stream_values.clear();
-
-                // Read and store values only for unique streams
-                for &f in unique_products.iter() {
-                    #[cfg(debug_assertions)]
-                    println!("sum check product: {}", f);
-
-                    let stream = &mut polynomials[f];
-
-                    // print stream position
-                    #[cfg(debug_assertions)]
-                    {
-                        let pos = stream.read_pointer.stream_position().unwrap();
-                        println!("sum check product stream position: {}", pos);
-                    }
-
-                    let eval = stream.read_next().unwrap(); // Read once for eval
-                    let step = stream.read_next().unwrap() - eval; // Read once for step
-
-                    #[cfg(debug_assertions)]
-                    {
-                        println!("sum check product eval_even: {}", eval);
-                        println!("sum check product eval_odd: {}", step + eval);
-                    }
-
-                    stream_values.insert(f, (eval, step));
-                }
-
-                let mut buf = vec![(F::zero(), F::zero()); products.len()];
-
-                for (buf_item, &f) in buf.iter_mut().zip(products.iter()) {
-                    if let Some(&(eval, step)) = stream_values.get(&f) {
-                        *buf_item = (eval, step);
-                    }
-                }
-
-                // Updating sum
-                #[cfg(debug_assertions)]
-                {
-                    println!("sum check product buf length: {}", buf.len());
-                    println!("sum check product first eval: {}", buf[0].0);
-                }
-                sum[0] += buf.iter().map(|(eval, _)| *eval).product::<F>();
-                for acc in sum.iter_mut().skip(1) {
-                    for (eval, step) in buf.iter_mut() {
-                        *eval += *step; // aL; aR; 2aR - aL; 3aR - 2aL; ...
-                    }
-                    #[cfg(debug_assertions)]
-                    println!("subsequent eval: {}", buf[0].0);
-                    *acc += buf.iter().map(|(eval, _)| *eval).product::<F>();
-                }
-            }
-
-            // restart all streams
-            polynomials
+            sum.iter_mut().for_each(|sum| *sum *= coefficient);
+            let extraploation = (0..self.poly.aux_info.max_degree - products.len())
+                .into_par_iter()
+                .map(|i| {
+                    let (points, weights) = &self.extrapolation_aux[products.len() - 1];
+                    let at = F::from((products.len() + 1 + i) as u64);
+                    extrapolate(points, weights, &sum, &at)
+                })
+                .collect::<Vec<_>>();
+            products_sum
                 .iter_mut()
-                .for_each(|stream| stream.read_restart());
-
-            // Multiplying sum by coefficient
-            for s in &mut sum {
-                *s *= *coefficient;
-
-                #[cfg(debug_assertions)]
-                {
-                    println!("sum chesck product sum: {}", s)
-                }
-            }
-
-            // Extrapolation
-            let mut extrapolation = Vec::new();
-            for i in 0..self.poly.aux_info.max_degree - products.len() {
-                let (points, weights) = &self.extrapolation_aux[products.len() - 1];
-                let at = F::from((products.len() + 1 + i) as u64);
-                extrapolation.push(extrapolate(points, weights, &sum, &at));
-            }
-
-            // Updating products_sum
-            for (products_sum, s) in products_sum
-                .iter_mut()
-                .zip(sum.iter().chain(extrapolation.iter()))
-            {
-                *products_sum += *s;
-            }
-        }
+                .zip(sum.iter().chain(extraploation.iter()))
+                .for_each(|(products_sum, sum)| *products_sum += sum);
+        });
 
         end_timer!(generate_prover_message);
-
-        #[cfg(debug_assertions)]
-        {
-            println!("sum check prover message 0: {}", products_sum[0]);
-            println!("sum check prover message 1: {}", products_sum[1]);
-        }
-
         end_timer!(start);
 
         Ok(IOPProverMessage {

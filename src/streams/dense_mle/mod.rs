@@ -123,8 +123,8 @@ impl<F: Field> MLE<F> {
     
     /// Modifies self by folding the evaluations over the hypercube with the function `f`.
     /// After each fold, the number of variables is reduced by 1.
-    pub fn fold_odd_even(&mut self, f: impl Fn(&F, &F) -> F + Send + Sync) {
-        self.map_in_place(|inner| inner.fold_odd_even(f));
+    pub fn fold_odd_even_in_place(&mut self, f: impl Fn(&F, &F) -> F + Send + Sync) {
+        self.map_in_place(|inner| inner.fold_odd_even_in_place(f));
     }
     
     /// Modifies self by replacing evaluations over the hypercube with their inverse. 

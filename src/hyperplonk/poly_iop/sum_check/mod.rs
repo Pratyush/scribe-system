@@ -1,6 +1,7 @@
 use crate::{
+
+    arithmetic::virtual_polynomial::{VPAuxInfo, VirtualPolynomial},
     hyperplonk::{
-        arithmetic::virtual_polynomial::{VPAuxInfo, VirtualPolynomial},
         poly_iop::{
             errors::PIOPError,
             structs::{IOPProof, IOPProverState, IOPVerifierState},
@@ -8,14 +9,11 @@ use crate::{
         },
         transcript::IOPTranscript,
     },
-    streams::DenseMLPolyStream,
+    streams::MLE,
 };
 use ark_ff::PrimeField;
 use ark_std::{end_timer, start_timer};
-use std::{
-    fmt::Debug,
-    io::Seek,
-};
+use std::fmt::Debug;
 
 mod prover;
 mod verifier;
@@ -132,7 +130,7 @@ impl<F: PrimeField> SumCheck<F> for PolyIOP<F> {
     type SumCheckProof = IOPProof<F>;
     type VirtualPolynomial = VirtualPolynomial<F>;
     type VPAuxInfo = VPAuxInfo<F>;
-    type MultilinearExtension = DenseMLPolyStream<F>;
+    type MultilinearExtension = MLE<F>;
     type SumCheckSubClaim = SumCheckSubClaim<F>;
     type Transcript = IOPTranscript<F>;
 
@@ -164,28 +162,6 @@ impl<F: PrimeField> SumCheck<F> for PolyIOP<F> {
         for i in 0..poly.aux_info.num_variables {
             let prover_msg =
                 IOPProverState::prove_round_and_update_state(&mut prover_state, &challenge)?;
-
-            #[cfg(debug_assertions)]
-            {
-                // print the position of read pointer of each mle in poly
-                for mle in poly.mles.iter() {
-                    // read next on mle and print each element
-                    let mut mle_stream = mle.lock().unwrap();
-                    println!(
-                        "starting read pointer position of `prove` argument poly: {}",
-                        mle_stream.read_pointer.stream_position().unwrap()
-                    );
-                }
-                for mle in prover_state.poly.mles.iter() {
-                    // read next on mle and print each element
-                    let mut mle_stream = mle.lock().unwrap();
-                    println!(
-                        "starting read pointer position of prover_state poly: {}",
-                        mle_stream.read_pointer.stream_position().unwrap()
-                    );
-                }
-                println!("round={}, prover challenge: {:?}", i, challenge);
-            }
 
             transcript.append_serializable_element(b"prover msg", &prover_msg)?;
             prover_msgs.push(prover_msg);
@@ -250,14 +226,12 @@ impl<F: PrimeField> SumCheck<F> for PolyIOP<F> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::streams::ReadWriteStream;
     use ark_bls12_381::Fr;
     use ark_ff::UniformRand;
     use ark_std::{
         rand::{rngs::StdRng, SeedableRng},
         test_rng,
     };
-    use std::sync::{Arc, Mutex};
 
     fn test_sumcheck(
         nv: usize,
@@ -274,17 +248,6 @@ mod test {
         let (poly, asserted_sum) =
             VirtualPolynomial::rand(nv, num_multiplicands_range, num_products, &mut rng)?;
 
-        #[cfg(debug_assertions)]
-        {
-            for mle in poly.mles.iter() {
-                let mut mle_stream = mle.lock().unwrap();
-                println!(
-                    "starting read pointer position: {}",
-                    mle_stream.read_pointer.stream_position().unwrap()
-                );
-            }
-        }
-
         let proof = <PolyIOP<Fr> as SumCheck<Fr>>::prove(&poly, &mut transcript)?;
         let poly_info = poly.aux_info.clone();
         let mut transcript = <PolyIOP<Fr> as SumCheck<Fr>>::init_transcript();
@@ -294,49 +257,6 @@ mod test {
             &poly_info,
             &mut transcript,
         )?;
-
-        #[cfg(debug_assertions)]
-        {
-            // print read pointer position of each mle in poly
-            for mle in poly.mles.iter() {
-                // read next on mle and print each element
-                let mut mle_stream = mle.lock().unwrap();
-                println!(
-                    "ending read pointer position: {}",
-                    mle_stream.read_pointer.stream_position().unwrap()
-                );
-            }
-
-            // loop over and print all elements of all ml extensions of poly
-            for mle in poly.mles.iter() {
-                // read next on mle and print each element
-                let mut mle_stream = mle.lock().unwrap();
-                while let Some(elem) = mle_stream.read_next() {
-                    println!("evaluate elem: {}", elem);
-                }
-                mle_stream.read_restart();
-            }
-
-            // print subclaim point
-            for point in subclaim.point.iter() {
-                println!("evaluate point: {}", point);
-            }
-
-            // print read pointer position of each mle in poly
-            for mle in poly.mles.iter() {
-                // read next on mle and print each element
-                let mut mle_stream = mle.lock().unwrap();
-                println!(
-                    "ending read pointer position: {}",
-                    mle_stream.read_pointer.stream_position().unwrap()
-                );
-            }
-
-            // print all subclaim.points
-            subclaim.point.iter().enumerate().for_each(|(i, point)| {
-                println!("sum check verifier subclaim point[{}]: {}", i, point);
-            });
-        }
 
         let evaluated_point = poly
             .evaluate(std::slice::from_ref(
@@ -463,10 +383,10 @@ mod test {
     fn test_shared_reference() -> Result<(), PIOPError> {
         let mut rng = test_rng();
         let ml_extensions: Vec<_> = (0..5)
-            .map(|_| Arc::new(Mutex::new(DenseMLPolyStream::<Fr>::rand(8, &mut rng))))
+            .map(|_| MLE::<Fr>::rand(8, &mut rng))
             .collect();
         let mut poly = VirtualPolynomial::new(8);
-        poly.add_mle_list(
+        poly.add_mles(
             vec![
                 ml_extensions[2].clone(),
                 ml_extensions[3].clone(),
@@ -474,7 +394,7 @@ mod test {
             ],
             Fr::rand(&mut rng),
         )?;
-        poly.add_mle_list(
+        poly.add_mles(
             vec![
                 ml_extensions[1].clone(),
                 ml_extensions[4].clone(),
@@ -482,7 +402,7 @@ mod test {
             ],
             Fr::rand(&mut rng),
         )?;
-        poly.add_mle_list(
+        poly.add_mles(
             vec![
                 ml_extensions[3].clone(),
                 ml_extensions[2].clone(),
@@ -490,11 +410,11 @@ mod test {
             ],
             Fr::rand(&mut rng),
         )?;
-        poly.add_mle_list(
+        poly.add_mles(
             vec![ml_extensions[0].clone(), ml_extensions[0].clone()],
             Fr::rand(&mut rng),
         )?;
-        poly.add_mle_list(vec![ml_extensions[4].clone()], Fr::rand(&mut rng))?;
+        poly.add_mles(vec![ml_extensions[4].clone()], Fr::rand(&mut rng))?;
 
         assert_eq!(poly.mles.len(), 5);
 
@@ -508,7 +428,7 @@ mod test {
 
         // test memory usage for prover
         let prover = IOPProverState::<Fr>::prover_init(&poly).unwrap();
-        assert_eq!(prover.poly.flattened_ml_extensions.len(), 5);
+        assert_eq!(prover.poly.mles.len(), 5);
         drop(prover);
 
         let mut transcript = <PolyIOP<Fr> as SumCheck<Fr>>::init_transcript();

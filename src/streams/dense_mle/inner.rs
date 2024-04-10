@@ -85,7 +85,7 @@ impl<F: Field> Inner<F> {
 
         for &r in partial_point {
             // Decrements num_vars internally.
-            self.fold_odd_even(|even, odd| *even + r * (*odd - even));
+            self.fold_odd_even_in_place(|even, odd| *even + r * (*odd - even));
         }
     }
     
@@ -93,9 +93,22 @@ impl<F: Field> Inner<F> {
     /// the values in `partial_point`.
     /// The number of variables in the result is `self.num_vars() - partial_point.len()`.
     pub fn fix_variables(&self, partial_point: &[F]) -> Self {
-        let mut result = self.deep_copy();
-        result.fix_variables_in_place(partial_point);
-        result
+        assert!(
+            partial_point.len() <= self.num_vars,
+            "invalid size of partial point"
+        );
+        
+        let mut result = None;
+
+        for &r in partial_point {
+            // Decrements num_vars internally.
+            if result.is_none() {
+                result = Some(self.fold_odd_even(|even, odd| *even + r * (*odd - even)));
+            } else {
+                result.as_mut().map(|s| s.fold_odd_even_in_place(|even, odd| *even + r * (*odd - even)));
+            }
+        }
+        result.unwrap_or_else(|| self.deep_copy())
     }
 
     /// Evaluates `self` at the given point. 
@@ -115,12 +128,23 @@ impl<F: Field> Inner<F> {
     
     /// Modifies self by folding the evaluations over the hypercube with the function `f`.
     /// After each fold, the number of variables is reduced by 1.
-    pub fn fold_odd_even(&mut self, f: impl Fn(&F, &F) -> F + Sync) {
+    pub fn fold_odd_even_in_place(&mut self, f: impl Fn(&F, &F) -> F + Sync) {
         assert!((1 << self.num_vars) % 2 == 0);
         self.evals = self.evals.iter().array_chunks::<2>().map(|chunk| {
             f(&chunk[0], &chunk[1])
         }).to_file_vec();
         self.decrement_num_vars();
+    }
+    
+    /// Creates a new polynomial whose evaluations are folded versions of `self`,
+    /// folded according to the function `f`.
+    /// After each fold, the number of variables is reduced by 1.
+    pub fn fold_odd_even(&self, f: impl Fn(&F, &F) -> F + Sync) -> Self {
+        assert!((1 << self.num_vars) % 2 == 0);
+        let evals = self.evals.iter().array_chunks::<2>().map(|chunk| {
+            f(&chunk[0], &chunk[1])
+        }).to_file_vec();
+        Self { evals, num_vars: self.num_vars - 1 }
     }
     
 

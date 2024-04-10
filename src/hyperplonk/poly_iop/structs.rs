@@ -1,4 +1,4 @@
-use crate::hyperplonk::arithmetic::virtual_polynomial::VirtualPolynomial;
+use crate::arithmetic::virtual_polynomial::VirtualPolynomial;
 use ark_ff::PrimeField;
 use ark_serialize::CanonicalSerialize;
 

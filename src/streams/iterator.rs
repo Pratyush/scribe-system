@@ -1,14 +1,22 @@
 use std::iter::Sum;
-
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-use rayon::iter::IntoParallelIterator;
-
-#[cfg(feature = "parallel")]
 use rayon::prelude::*;
 
 use super::file_vec::FileVec;
 
 const BUFFER_SIZE: usize = 1 << 16;
+
+pub mod map;
+pub mod flat_map;
+pub mod array_chunks;
+pub mod zip;
+pub mod multi_zip;
+
+pub use map::Map;
+pub use flat_map::FlatMap;
+pub use array_chunks::ArrayChunks;
+pub use zip::Zip;
+pub use multi_zip::MultiZip;
 
 pub trait BatchedIterator: Sized {
     type Item: Send + Sync;
@@ -29,14 +37,7 @@ pub trait BatchedIterator: Sized {
         Zip { iter1: self, iter2: other }
     }
     
-    // fn sum(self) -> Self::Item
-    // where
-    //     Self::Item: Default + std::ops::Add<Output = Self::Item>
-    // {
-    //     let mut sum = Self::Item::default();
-    //     self.for_each(|item| sum = sum + item);
-    //     sum
-    // }
+    
     
     fn flat_map<U, F>(self, f: F) -> FlatMap<Self, U, F> 
     where
@@ -46,12 +47,26 @@ pub trait BatchedIterator: Sized {
         FlatMap { iter: self, f }
     }
     
-    fn array_chunks<const N: usize>(self) -> impl BatchedIterator<Item = [Self::Item; N]> 
-        where 
+    fn array_chunks<const N: usize>(self) -> ArrayChunks<Self, N> 
+    where 
         Self::Batch: IndexedParallelIterator,
         Self::Item: Copy
     {
         ArrayChunks::new(self)
+    }
+    
+    fn fold<T, ID, F, F2>(mut self, identity: ID, fold_op: F, reduce_op: F2) -> T
+    where
+        F: Fn(T, Self::Item) -> T + Sync + Send,
+        F2: Fn(T, T) -> T + Sync + Send,
+        ID: Fn() -> T + Sync + Send,
+        T: Send + Clone, 
+    {
+        let mut acc = identity();
+        while let Some(batch) = self.next_batch() {
+            acc = batch.fold_with(acc, |a, b| fold_op(a, b)).reduce(|| identity(), |a, b| reduce_op(a, b));
+        }
+        acc
     }
     
     fn to_file_vec(self) -> FileVec<Self::Item> 
@@ -84,99 +99,15 @@ pub trait BatchedIterator: Sized {
     }
 }
 
-pub struct Map<I: BatchedIterator, U: Send + Sync, F: Fn(I::Item) -> U + Send + Sync + Clone> {
-    iter: I,
-    f: F,
-}
 
-impl<I, U, F> BatchedIterator for Map<I, U, F> 
-where
-    I: BatchedIterator, U: Send + Sync, F: Fn(I::Item) -> U + Send + Sync + Clone
-{
-    type Item = U;
-    type Batch = rayon::iter::Map<I::Batch, F>;
-    
-    fn next_batch(&mut self) -> Option<Self::Batch> {
-            self.iter.next_batch().map(|i| i.map(self.f.clone()))
-    }
-}
-
-pub struct Zip<I1: BatchedIterator, I2: BatchedIterator> {
-    iter1: I1,
-    iter2: I2,
-}
-
-impl<I1, I2> BatchedIterator for Zip<I1, I2> 
-where
-    I1: BatchedIterator, I2: BatchedIterator,
-    I1::Batch: IndexedParallelIterator,
-    I2::Batch: IndexedParallelIterator,
-{
-    type Item = (I1::Item, I2::Item);
-    type Batch = rayon::iter::Zip<I1::Batch, I2::Batch>;
-    
-    fn next_batch(&mut self) -> Option<Self::Batch> {
-        let iter1 = self.iter1.next_batch()?;
-        let iter2 = self.iter2.next_batch()?;
-        Some(iter1.zip(iter2))
-    }
-}
-
-pub struct FlatMap<I, U, F> 
-where
-I: BatchedIterator, 
-U: IntoParallelIterator + Send + Sync, 
-F: Fn(I::Item) -> U,
-{
-    iter: I,
-    f: F,
-}
-
-impl<I, U, F> BatchedIterator for FlatMap<I, U, F> 
-where
-    I: BatchedIterator, 
-    U: IntoParallelIterator + Send + Sync, 
-    F: Fn(I::Item) -> U + Send + Sync + Clone,
-    U::Item: Send + Sync
-{
-    type Item = U::Item;
-    type Batch = rayon::iter::FlatMap<I::Batch, F>;
-    
-    fn next_batch(&mut self) -> Option<Self::Batch> {
-        let iter = self.iter.next_batch()?;
-        Some(iter.flat_map(self.f.clone()))
-    }
-}
-
-pub struct ArrayChunks<I: BatchedIterator, const N: usize> {
-    iter: I,
-}
-
-impl<I: BatchedIterator, const N: usize> ArrayChunks<I, N> {
-    pub fn new(iter: I) -> Self {
-        assert!(N > 0, "N must be greater than 0");
-        assert!(BUFFER_SIZE % N == 0, "BUFFER_SIZE must be divisible by N");
-        Self { iter }
-    }
-}
-
-impl<I, const N: usize> BatchedIterator for ArrayChunks<I, N> 
+pub fn multi_zip<I>(iters: impl IntoIterator<Item = I>) -> MultiZip<I> 
 where
     I: BatchedIterator,
-    I::Batch: IndexedParallelIterator,
-    I::Item: Copy,
+    I::Item: Clone,
 {
-    type Item = [I::Item; N];
-    type Batch = rayon::vec::IntoIter<[I::Item; N]>;
-    
-    fn next_batch(&mut self) -> Option<Self::Batch> {
-        let batch: Vec<_> = self.iter.next_batch()?.collect();
-        let batch = batch.par_chunks_exact(N).map(|chunk| {
-            <[I::Item; N]>::try_from(chunk).unwrap()
-        }).collect::<Vec<_>>();
-        Some(batch.into_par_iter())
-    }
+    MultiZip::new(iters.into_iter().collect())
 }
+
 
 pub struct BatchAdapter<I: Iterator> {
     iter: I,
