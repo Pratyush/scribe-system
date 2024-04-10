@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use crate::hyperplonk::arithmetic::virtual_polynomial::eq_eval;
+use crate::arithmetic::virtual_polynomial::eq_eval;
 use crate::hyperplonk::poly_iop::{errors::PIOPError, sum_check::SumCheck, PolyIOP};
 use crate::hyperplonk::transcript::IOPTranscript;
 use ark_ff::PrimeField;
@@ -116,7 +116,7 @@ impl<F: PrimeField> ZeroCheck<F> for PolyIOP<F> {
 mod test {
 
     use super::ZeroCheck;
-    use crate::hyperplonk::arithmetic::virtual_polynomial::VirtualPolynomial;
+    use crate::arithmetic::virtual_polynomial::VirtualPolynomial;
     use crate::hyperplonk::poly_iop::{errors::PIOPError, PolyIOP};
     use ark_bls12_381::Fr;
     use ark_std::test_rng;

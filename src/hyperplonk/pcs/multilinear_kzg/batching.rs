@@ -4,8 +4,9 @@ use crate::hyperplonk::arithmetic::virtual_polynomial::{
 use crate::hyperplonk::poly_iop::{prelude::SumCheck, structs::IOPProof, PolyIOP};
 use crate::read_write::{DenseMLPolyStream, ReadWriteStream};
 use crate::{
+
+    arithmetic::virtual_polynomial::build_eq_x_r,
     hyperplonk::{
-        arithmetic::virtual_polynomial::build_eq_x_r,
         pcs::{
             multilinear_kzg::util::eq_eval,
             prelude::{Commitment, PCSError},

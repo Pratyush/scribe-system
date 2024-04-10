@@ -1,4 +1,4 @@
-use crate::hyperplonk::arithmetic::errors::ArithErrors;
+use crate::arithmetic::errors::ArithError;
 use crate::hyperplonk::transcript::TranscriptError;
 use ark_serialize::SerializationError;
 use ark_std::string::String;
@@ -20,7 +20,7 @@ pub enum PCSError {
     /// Transcript error {0}
     TranscriptError(TranscriptError),
     /// ArithErrors error {0}
-    ArithErrors(ArithErrors),
+    ArithErrors(ArithError),
 }
 
 impl From<SerializationError> for PCSError {
@@ -35,8 +35,8 @@ impl From<TranscriptError> for PCSError {
     }
 }
 
-impl From<ArithErrors> for PCSError {
-    fn from(e: ArithErrors) -> Self {
+impl From<ArithError> for PCSError {
+    fn from(e: ArithError) -> Self {
         Self::ArithErrors(e)
     }
 }

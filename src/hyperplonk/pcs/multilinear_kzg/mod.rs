@@ -5,8 +5,7 @@ use crate::hyperplonk::pcs::multilinear_kzg::batching::multi_open_internal;
 use crate::hyperplonk::pcs::StructuredReferenceString;
 use crate::hyperplonk::pcs::{prelude::Commitment, PCSError, PolynomialCommitmentScheme};
 use crate::hyperplonk::transcript::IOPTranscript;
-use crate::read_write::DenseMLPolyStream;
-use crate::read_write::ReadWriteStream;
+use crate::streams::{MLE, Inner, iterator::BatchedIterator};
 use ark_ec::{
     pairing::Pairing,
     scalar_mul::{fixed_base::FixedBase, variable_base::VariableBaseMSM},

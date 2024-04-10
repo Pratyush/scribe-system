@@ -68,7 +68,7 @@ pub(super) fn compute_product_poly<F: PrimeField>(
     let mut read_buffer = Vec::with_capacity(buffer_size);
     let mut write_buffer = Vec::with_capacity(buffer_size >> 1);
     
-    let mut prod_stream = frac_poly.fold_odd_even(f)
+    let mut prod_stream = frac_poly.fold_odd_even(f);
 
 
     // let 
