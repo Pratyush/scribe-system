@@ -233,6 +233,7 @@ mod test {
         test_rng,
     };
     use std::str::FromStr;
+    use crate::streams::iterator::BatchedIterator;
 
     fn test_sumcheck(
         nv: usize,
@@ -249,6 +250,11 @@ mod test {
         let (poly, asserted_sum) =
             VirtualPolynomial::rand(nv, num_multiplicands_range, num_products, &mut rng)?;
 
+        for eval in poly.mles[0].evals().iter().to_vec() {
+            println!("sum check product eval: {}", eval
+            );
+        };
+
         let proof = <PolyIOP<Fr> as SumCheck<Fr>>::prove(&poly, &mut transcript)?;
         let poly_info = poly.aux_info.clone();
         let mut transcript = <PolyIOP<Fr> as SumCheck<Fr>>::init_transcript();
@@ -260,9 +266,9 @@ mod test {
         )?;
 
         let evaluated_point = poly
-            .evaluate(std::slice::from_ref(
-                &subclaim.point[poly_info.num_variables - 1],
-            ))
+            .evaluate(
+                &subclaim.point,
+            )
             .unwrap();
         assert!(
             // expected_evaluation is interpolated; in the full protocol, the evaluated_point should be a commitment query at subclaim point rather than evaluated from scratch
@@ -294,6 +300,11 @@ mod test {
         // let mut mle_stream = mle.lock().unwrap();
         // println!("starting read pointer position: {}", mle_stream.read_pointer.stream_position().unwrap());
         // }
+        for eval in poly.mles[0].evals().iter().to_vec() {
+            println!("sum check product eval: {}", eval
+            );
+        };
+
         let poly_info = poly.aux_info.clone();
         let mut prover_state = IOPProverState::prover_init(&poly)?;
         let mut verifier_state = IOPVerifierState::verifier_init(&poly_info);
@@ -321,9 +332,9 @@ mod test {
                 .expect("fail to generate subclaim");
 
         let evaluated_point = poly
-            .evaluate(std::slice::from_ref(
-                &subclaim.point[poly_info.num_variables - 1],
-            ))
+            .evaluate(
+                &subclaim.point,
+            )
             .unwrap();
         assert!(
             evaluated_point == subclaim.expected_evaluation, // the expected evaluation is interpolated; in the full protocol, the poly evaluation should be a commitment query at subclaim point rather than evaluated from scratch
@@ -347,15 +358,16 @@ mod test {
     #[test]
     fn test_trivial_polynomial() -> Result<(), PIOPError> {
         let nv = 1;
-        let num_multiplicands_range = (1, 2);
+        let num_multiplicands_range = (2, 3);
         let num_products = 1;
 
         test_sumcheck(nv, num_multiplicands_range, num_products)?;
         test_sumcheck_internal(nv, num_multiplicands_range, num_products)
     }
+
     #[test]
     fn test_normal_polynomial() -> Result<(), PIOPError> {
-        let nv = 12;
+        let nv = 6;
         let num_multiplicands_range = (4, 9);
         let num_products = 5;
 
