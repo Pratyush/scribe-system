@@ -115,12 +115,17 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
         // Step 2: generate sum for the partial evaluated polynomial:
         // f(r_1, ... r_m,, x_{m+1}... x_n)
         self.poly.products.iter().for_each(|(coefficient, products)| {
+            println!("sum check product coefficient: {}", coefficient);
             let polys_in_product = products.iter().map(|&f| self.poly.mles[f].evals()).collect::<Vec<_>>();
             let mut sum = multi_zip(polys_in_product.iter().map(|x| x.iter().array_chunks::<2>()))
             .fold(
                 || vec![F::zero(); products.len() + 1],
                 |mut acc, mut products| {
-                    products.iter_mut().for_each(|[even, odd]| *odd -= even);
+                    products.iter_mut().for_each(|[even, odd]| {
+                        println!("sum check product eval_even: {}", even);
+                        println!("sum check product eval_odd: {}", odd);
+                        *odd -= even;
+                    });
                     acc[0] += products.iter().map(|[eval, _]| eval).product::<F>();
                     acc[1..].iter_mut().for_each(|acc| {
                         products.iter_mut().for_each(|[eval, step]| *eval += step as &_);
@@ -136,7 +141,12 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
                 },
             );
 
-            sum.iter_mut().for_each(|sum| *sum *= coefficient);
+            sum.iter_mut().for_each(|sum| {
+                println!("sum check product sum before: {}", sum);
+                *sum *= coefficient;
+                println!("sum check product sum after: {}", sum);
+                println!("sum check product coefficient: {}", coefficient);
+            });
             let extraploation = (0..self.poly.aux_info.max_degree - products.len())
                 .into_par_iter()
                 .map(|i| {
