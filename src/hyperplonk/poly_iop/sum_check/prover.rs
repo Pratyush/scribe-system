@@ -112,6 +112,11 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
 
         let mut products_sum = vec![F::zero(); self.poly.aux_info.max_degree + 1];
 
+        for eval in self.poly.mles[0].evals().iter().to_vec() {
+            println!("sum check product eval: {}", eval
+            );
+        };
+
         // Step 2: generate sum for the partial evaluated polynomial:
         // f(r_1, ... r_m,, x_{m+1}... x_n)
         self.poly.products.iter().for_each(|(coefficient, products)| {
@@ -126,17 +131,29 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
                         println!("sum check product eval_odd: {}", odd);
                         *odd -= even;
                     });
-                    acc[0] += products.iter().map(|[eval, _]| eval).product::<F>();
+                    products.iter().for_each(|[even, odd]| {
+                        println!("sum check product eval_even: {}", even);
+                        println!("sum check product eval_odd: {}", odd);
+                    });
+                    acc[0] += products.iter().map(|[eval, _]| {
+                        println!("eval: {}", eval);
+                        eval
+                    }).product::<F>();
                     acc[1..].iter_mut().for_each(|acc| {
                         products.iter_mut().for_each(|[eval, step]| *eval += step as &_);
                         *acc += products.iter().map(|[eval, _]| eval).product::<F>();
                     });
+                    // println!("acc partial: {}", acc[0]);
                     acc
                 },
                 |mut sum, partial| {
                     sum.iter_mut()
                         .zip(partial.iter())
-                        .for_each(|(sum, partial)| *sum += partial);
+                        .for_each(|(sum, partial)| {
+                            // println!("sum check sum: {}", sum);
+                            // println!("sum check partial: {}", partial);
+                            *sum += partial;
+                        });
                     sum
                 },
             );

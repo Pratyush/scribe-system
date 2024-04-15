@@ -16,7 +16,7 @@ impl<I> MultiZip<I> {
     }
 }
 
-impl<I> BatchedIterator for MultiZip<I> 
+impl<I> BatchedIterator for MultiZip<I>
 where
     I: BatchedIterator,
     I::Item: Clone,
@@ -24,12 +24,17 @@ where
 {
     type Item = SVec<I::Item>;
     type Batch = rayon::vec::IntoIter<SVec<I::Item>>;
-    
     fn next_batch(&mut self) -> Option<Self::Batch> {
         let mut batched = vec![SVec::with_capacity(self.iters.len()); BUFFER_SIZE];
         for iter in &mut self.iters {
             batched.par_iter_mut().zip(iter.next_batch()?).for_each(|(zipped, b)| zipped.push(b));
         }
+        let start_of_empty = batched.par_iter().position_first(|x| x.is_empty()).unwrap_or(batched.len());
+        println!("batched length: {}", batched.len());
+        println!("start_of_empty: {}", start_of_empty);
+        batched.truncate(start_of_empty);
+        println!("batched length: {}", batched.len());
+        println!("start_of_empty: {}", start_of_empty);
         Some(batched.into_par_iter())
     }
 }
