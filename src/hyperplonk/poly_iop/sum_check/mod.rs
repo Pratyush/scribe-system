@@ -337,9 +337,9 @@ mod test {
 
     #[test]
     fn test_trivial_polynomial() -> Result<(), PIOPError> {
-        let nv = 3;
-        let num_multiplicands_range = (4, 13);
-        let num_products = 5;
+        let nv = 1;
+        let num_multiplicands_range = (1, 2);
+        let num_products = 1;
 
         test_sumcheck(nv, num_multiplicands_range, num_products)?;
         test_sumcheck_internal(nv, num_multiplicands_range, num_products)

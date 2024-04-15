@@ -184,7 +184,7 @@ impl<F: Field> Inner<F> {
 
 impl<F: Field> MulAssign<F> for Inner<F> {
     fn mul_assign(&mut self, other: F) {
-        self.evals.for_each(|e| *e *= other);
+        self.evals.for_each(|mut e| *e *= other);
     }
 }
 
