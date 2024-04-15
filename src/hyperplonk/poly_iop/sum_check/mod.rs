@@ -232,6 +232,7 @@ mod test {
         rand::{rngs::StdRng, SeedableRng},
         test_rng,
     };
+    use std::str::FromStr;
 
     fn test_sumcheck(
         nv: usize,
@@ -333,6 +334,14 @@ mod test {
             )
         );
         Ok(())
+    }
+
+    #[test]
+    fn field() {
+        let before = Fr::from_str("17248965420264336422651113153847896262521688652775706069914280664537164999777").unwrap();
+        let coef = Fr::from_str("50004516429863885752642420260299450877457892183357203719037299494103205660190").unwrap();
+        let after = before * coef;
+        println!("after: {}", after);
     }
 
     #[test]
