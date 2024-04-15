@@ -143,7 +143,7 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
 
             sum.iter_mut().for_each(|sum| {
                 println!("sum check product sum before: {}", sum);
-                *sum *= coefficient;
+                *sum *= *coefficient;
                 println!("sum check product sum after: {}", sum);
                 println!("sum check product coefficient: {}", coefficient);
             });
