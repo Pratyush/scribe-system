@@ -131,10 +131,6 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
                         println!("sum check product eval_odd: {}", odd);
                         *odd -= even;
                     });
-                    products.iter().for_each(|[even, odd]| {
-                        println!("sum check product eval_even: {}", even);
-                        println!("sum check product eval_odd: {}", odd);
-                    });
                     acc[0] += products.iter().map(|[eval, _]| {
                         println!("eval: {}", eval);
                         eval
