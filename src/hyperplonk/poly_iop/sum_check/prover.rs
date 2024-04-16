@@ -139,7 +139,8 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
                         products.iter_mut().for_each(|[eval, step]| *eval += step as &_);
                         *acc += products.iter().map(|[eval, _]| eval).product::<F>();
                     });
-                    // println!("acc partial: {}", acc[0]);
+                    println!("acc 0: {}", acc[0]);
+                    println!("acc 1: {}", acc[0]);
                     acc
                 },
                 |mut sum, partial| {
