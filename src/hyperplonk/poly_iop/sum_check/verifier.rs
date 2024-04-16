@@ -169,13 +169,14 @@ impl<F: PrimeField> SumCheckVerifier<F> for IOPVerifierState<F> {
             .collect::<Result<Vec<_>, PIOPError>>()?;
 
         // insert the asserted_sum to the first position of the expected vector
+        println!("asserted sum: {}", asserted_sum);
         expected_vec.insert(0, *asserted_sum);
 
         #[cfg(debug_assertions)]
         {
             expected_vec
                 .iter()
-                .for_each(|x| println!("sum check verifier expected_vec: {}", x));
+                .for_each(|x| println!("sum check verifier expected_vec after interpolation: {}", x));
             self.polynomials_received.iter().for_each(|x| {
                 x.iter()
                     .for_each(|y| println!("sum check verifier polynomials_received: {}", y))
