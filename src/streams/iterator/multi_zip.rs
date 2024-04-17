@@ -30,11 +30,7 @@ where
             batched.par_iter_mut().zip(iter.next_batch()?).for_each(|(zipped, b)| zipped.push(b));
         }
         let start_of_empty = batched.par_iter().position_first(|x| x.is_empty()).unwrap_or(batched.len());
-        println!("batched length: {}", batched.len());
-        println!("start_of_empty: {}", start_of_empty);
         batched.truncate(start_of_empty);
-        println!("batched length: {}", batched.len());
-        println!("start_of_empty: {}", start_of_empty);
         Some(batched.into_par_iter())
     }
 }

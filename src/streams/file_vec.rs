@@ -1,4 +1,4 @@
-use std::{fs::{File, OpenOptions}, hash::{Hash, Hasher}, io::{BufReader, BufWriter, Seek, SeekFrom}, marker::PhantomData, path::{Path, PathBuf}};
+use std::{fs::{File, OpenOptions}, hash::{Hash, Hasher}, io::{BufReader, BufWriter, Seek}, marker::PhantomData, path::{Path, PathBuf}};
 
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Write};
 use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelExtend, ParallelIterator};
@@ -60,7 +60,7 @@ impl<T: CanonicalSerialize + CanonicalDeserialize> FileVec<T> {
         drop(writer);
 
         // Reset file cursor to beginning.
-        file_vec.file.seek(SeekFrom::Start(0)).expect("failed to seek file");
+        file_vec.file.rewind().expect("failed to seek file");
         file_vec
     }
 
@@ -85,7 +85,7 @@ impl<T: CanonicalSerialize + CanonicalDeserialize> FileVec<T> {
         drop(writer);
 
         // Reset file cursor to beginning.
-        file_vec.file.seek(SeekFrom::Start(0)).expect("failed to seek file");
+        file_vec.file.rewind().expect("failed to seek file");
         file_vec
     }
     
