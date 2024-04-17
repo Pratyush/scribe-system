@@ -3,7 +3,7 @@ use std::{iter::repeat, ops::{AddAssign, MulAssign, SubAssign}, path::Path};
 use ark_ff::{batch_inversion, Field};
 use rayon::prelude::*;
 
-use crate::streams::{file_vec::FileVec, iterator::BatchedIterator};
+use crate::streams::{file_vec::FileVec, iterator::BatchedIterator, BUFFER_SIZE};
 
 #[derive(Debug, Hash, PartialEq, Eq)]
 pub struct Inner<F: Field> {
@@ -168,11 +168,31 @@ impl<F: Field> Inner<F> {
     
     /// Sample `degree` random polynomials, and returns the sum of their Hadamard product.
     pub fn rand_product_with_sum<R: ark_std::rand::RngCore>(num_vars: usize, degree: usize, rng: &mut R) -> (Vec<Self>, F) {
+        println!("rand_product_with_sum inner started");
+        println!("degree: {}", degree);
         let polys = (0..degree).map(|_| Self::rand(num_vars, rng)).collect::<Vec<_>>();
-        let product_poly = polys.iter().fold(Self::constant(F::one(), num_vars), |mut acc, p| {
-            acc.evals.zipped_for_each(p.evals.iter(), |a, b| *a *= b);
-            acc
+        // print all poly entries
+        polys.iter().for_each(|p| {
+            p.deep_copy().evals.batched_for_each(|buffer| {
+                buffer.iter().for_each(|e| println!("rand single stream generated: {}", e));
+            });
         });
+
+        let mut product_poly = polys.iter().fold(Self::constant(F::one(), num_vars), |mut acc, p| {
+            println!("fold");
+            acc.evals.zipped_for_each(p.evals.iter(), |a, b| {
+                println!("rand product a: {}, b: {}", a, b);
+                *a *= b
+            });
+            dbg!(acc)
+        });
+
+        // print all entries of product_poly
+        product_poly.evals.batched_for_each(|buffer| {
+            buffer.iter().for_each(|e| println!("rand_product val: {}", e));
+        });
+        
+
         (polys, product_poly.evals.iter().sum())
     }
     

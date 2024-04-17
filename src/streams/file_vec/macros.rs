@@ -1,6 +1,7 @@
 macro_rules! process_file {
     ($self:ident, $extra:expr) => {{
         let mut reader = BufReader::new(&mut $self.file);
+        reader.rewind().expect("failed to rewind file");
         let mut buffer = Vec::with_capacity(BUFFER_SIZE);
         let tmp = NamedTempFile::new().expect("failed to create temp file");
         let mut writer = BufWriter::new(tmp);

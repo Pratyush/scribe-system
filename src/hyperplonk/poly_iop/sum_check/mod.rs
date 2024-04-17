@@ -250,6 +250,8 @@ mod test {
         let (poly, asserted_sum) =
             VirtualPolynomial::rand(nv, num_multiplicands_range, num_products, &mut rng)?;
 
+        println!("generated asserted sum: {}", asserted_sum);
+
         for eval in poly.mles[0].evals().iter().to_vec() {
             println!("sum check product eval: {}", eval
             );
@@ -294,6 +296,9 @@ mod test {
         let mut rng = StdRng::from_seed(seed);
         let (poly, asserted_sum) =
             VirtualPolynomial::<Fr>::rand(nv, num_multiplicands_range, num_products, &mut rng)?;
+        
+        println!("generated asserted sum: {}", asserted_sum);
+        
         // print the position of read pointer of each mle in poly
         // for mle in poly.flattened_ml_extensions.iter() {
         // read next on mle and print each element
@@ -358,7 +363,7 @@ mod test {
     #[test]
     fn test_trivial_polynomial() -> Result<(), PIOPError> {
         let nv = 1;
-        let num_multiplicands_range = (2, 3);
+        let num_multiplicands_range = (3, 4);
         let num_products = 1;
 
         test_sumcheck(nv, num_multiplicands_range, num_products)?;

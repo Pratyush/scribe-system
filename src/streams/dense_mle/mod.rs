@@ -89,6 +89,7 @@ impl<F: Field> MLE<F> {
     
     /// Sample `degree` random polynomials, and returns the sum of their Hadamard product.
     pub fn rand_product_with_sum<R: ark_std::rand::RngCore>(num_vars: usize, degree: usize, rng: &mut R) -> (Vec<Self>, F) {
+        println!("rand product started");
         let (v, f) = Inner::rand_product_with_sum(num_vars, degree, rng);
         (v.into_iter().map(From::from).collect(), f)
     }
