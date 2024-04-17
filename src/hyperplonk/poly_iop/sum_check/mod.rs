@@ -353,14 +353,6 @@ mod test {
     }
 
     #[test]
-    fn field() {
-        let before = Fr::from_str("17248965420264336422651113153847896262521688652775706069914280664537164999777").unwrap();
-        let coef = Fr::from_str("50004516429863885752642420260299450877457892183357203719037299494103205660190").unwrap();
-        let after = before * coef;
-        println!("after: {}", after);
-    }
-
-    #[test]
     fn test_trivial_polynomial() -> Result<(), PIOPError> {
         let nv = 1;
         let num_multiplicands_range = (3, 4);
@@ -471,9 +463,7 @@ mod test {
         )?;
 
         let evaluated_point = poly
-            .evaluate(std::slice::from_ref(
-                &subclaim.point[poly_info.num_variables - 1],
-            ))
+            .evaluate(&subclaim.point)
             .unwrap();
         assert!(
             evaluated_point == subclaim.expected_evaluation,
