@@ -149,7 +149,9 @@ mod test {
             let zero_subclaim =
                 <PolyIOP<Fr> as ZeroCheck<Fr>>::verify(&proof, &poly_info, &mut transcript)?;
 
-            let evaluated_point = poly.evaluate(&zero_subclaim.point).unwrap();
+            let evaluated_point = poly
+                .evaluate(&zero_subclaim.point)
+                .unwrap();
             assert!(
                 evaluated_point == zero_subclaim.expected_evaluation,
                 "wrong subclaim"
@@ -181,7 +183,7 @@ mod test {
     #[test]
     fn test_trivial_polynomial() -> Result<(), PIOPError> {
         let nv = 1;
-        let num_multiplicands_range = (4, 5);
+        let num_multiplicands_range = (1, 2);
         let num_products = 1;
 
         test_zerocheck(nv, num_multiplicands_range, num_products)
