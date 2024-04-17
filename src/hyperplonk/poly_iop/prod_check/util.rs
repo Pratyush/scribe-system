@@ -1,9 +1,9 @@
-use crate::hyperplonk::arithmetic::virtual_polynomial::VirtualPolynomial;
+use crate::{hyperplonk::arithmetic::virtual_polynomial::VirtualPolynomial, streams::MLE};
 use crate::hyperplonk::poly_iop::{
     errors::PIOPError, structs::IOPProof, zero_check::ZeroCheck, PolyIOP,
 };
 use crate::hyperplonk::transcript::IOPTranscript;
-use crate::streams::{DenseMLPolyStream, ReadWriteStream};
+use crate::streams::{MLE, ReadWriteStream};
 use ark_poly::DenseMultilinearExtension as DenseMLPoly;
 
 use ark_ff::PrimeField;
@@ -11,7 +11,6 @@ use ark_serialize::Write;
 use ark_std::{end_timer, start_timer};
 
 use std::io::Seek;
-use std::sync::{Arc, Mutex};
 
 /// Compute multilinear fractional polynomial s.t. frac(x) = f1(x) * ... * fk(x)
 /// / (g1(x) * ... * gk(x)) for all x \in {0,1}^n
@@ -19,16 +18,16 @@ use std::sync::{Arc, Mutex};
 /// The caller needs to sanity-check that the number of polynomials and
 /// variables match in fxs and gxs; and gi(x) has no zero entries.
 pub(super) fn compute_frac_poly<F: PrimeField>(
-    fxs: &mut [DenseMLPolyStream<F>],
-    gxs: &mut [DenseMLPolyStream<F>],
-) -> Result<DenseMLPolyStream<F>, PIOPError> {
+    fxs: &mut [MLE<F>],
+    gxs: &mut [MLE<F>],
+) -> Result<MLE<F>, PIOPError> {
     let start = start_timer!(|| "compute frac(x)");
 
     // TODO: might need to delete some of these to release disk space later
-    let numerator = DenseMLPolyStream::prod_multi(fxs).unwrap();
-    let mut denominator = DenseMLPolyStream::prod_multi(gxs).unwrap();
+    let numerator = MLE::prod_multi(fxs).unwrap();
+    let mut denominator = MLE::prod_multi(gxs).unwrap();
     let denominator_inverse = denominator.batch_inversion().unwrap();
-    let result = DenseMLPolyStream::prod_multi(&mut [numerator, denominator_inverse]).unwrap();
+    let result = MLE::prod_multi(&mut [numerator, denominator_inverse]).unwrap();
 
     end_timer!(start);
     Ok(result)
@@ -42,8 +41,8 @@ pub(super) fn compute_frac_poly<F: PrimeField>(
 /// The caller needs to check num_vars matches in f and g
 /// Cost: linear in N.
 pub(super) fn compute_product_poly<F: PrimeField>(
-    frac_poly: &DenseMLPolyStream<F>,
-) -> Result<Arc<Mutex<DenseMLPolyStream<F>>>, PIOPError> {
+    frac_poly: &MLE<F>,
+) -> Result<MLE<F>, PIOPError> {
     let start = start_timer!(|| "compute evaluations of prod polynomial");
     frac_poly.read_restart();
     /* let num_vars = frac_poly_stream.num_vars();
@@ -63,7 +62,7 @@ pub(super) fn compute_product_poly<F: PrimeField>(
     assert!(num_vars >= 2);
 
     // single stream for read and write pointers
-    let mut prod_stream = DenseMLPolyStream::new_single_stream(num_vars, None);
+    let mut prod_stream = MLE::new_single_stream(num_vars, None);
 
     let mut read_buffer = Vec::with_capacity(buffer_size);
     let mut write_buffer = Vec::with_capacity(buffer_size >> 1);
@@ -189,10 +188,10 @@ pub(super) fn compute_product_poly<F: PrimeField>(
 ///
 /// Cost: O(N)
 pub(super) fn prove_zero_check<F: PrimeField>(
-    fxs: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
-    gxs: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
-    frac_poly: &Arc<Mutex<DenseMLPolyStream<F>>>,
-    prod_x: &Arc<Mutex<DenseMLPolyStream<F>>>,
+    fxs: Vec<Arc<Mutex<MLE<F>>>>,
+    gxs: Vec<Arc<Mutex<MLE<F>>>>,
+    frac_poly: &Arc<Mutex<MLE<F>>>,
+    prod_x: &Arc<Mutex<MLE<F>>>,
     alpha: &F,
     transcript: &mut IOPTranscript<F>,
     batch_size: usize,
@@ -211,8 +210,8 @@ pub(super) fn prove_zero_check<F: PrimeField>(
 
     // compute p1(x) = (1-x1) * frac(x2, ..., xn, 0) + x1 * prod(x2, ..., xn, 0)
     // compute p2(x) = (1-x1) * frac(x2, ..., xn, 1) + x1 * prod(x2, ..., xn, 1)
-    let mut p1_stream = DenseMLPolyStream::new_from_tempfile(num_vars);
-    let mut p2_stream = DenseMLPolyStream::new_from_tempfile(num_vars);
+    let mut p1_stream = MLE::new_from_tempfile(num_vars);
+    let mut p2_stream = MLE::new_from_tempfile(num_vars);
 
     let mut p1_vals = Vec::with_capacity(batch_size);
     let mut p2_vals = Vec::with_capacity(batch_size);
@@ -313,7 +312,7 @@ mod test {
     use super::compute_product_poly;
     use super::*;
 
-    use crate::streams::{DenseMLPolyStream, ReadWriteStream};
+    use crate::streams::{MLE, ReadWriteStream};
     use ark_bls12_381::Fr;
 
     use ark_std::rand::distributions::{Distribution, Standard};
@@ -385,8 +384,8 @@ mod test {
         }
 
         // Create a stream with 2^10 elements
-        let mut frac_poly_stream: DenseMLPolyStream<Fr> =
-            DenseMLPolyStream::new_single_stream(num_vars, None);
+        let mut frac_poly_stream: MLE<Fr> =
+            MLE::new_single_stream(num_vars, None);
         for i in 0..(1 << num_vars) {
             frac_poly_stream
                 .write_next_unchecked(frac_poly_vec[i])
@@ -428,14 +427,14 @@ mod test {
     //     // create fxs
     //     let f1 = vec![Fr::from(1u64), Fr::from(2u64), Fr::from(3u64), Fr::from(4u64)];
     //     let f2 = vec![Fr::from(5u64), Fr::from(6u64), Fr::from(7u64), Fr::from(8u64)];
-    //     let fxs = vec![Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(nv, f1, None, None))),
-    //                       Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(nv, f2, None, None)))];
+    //     let fxs = vec![Arc::new(Mutex::new(MLE::from_evaluations_vec(nv, f1, None, None))),
+    //                       Arc::new(Mutex::new(MLE::from_evaluations_vec(nv, f2, None, None)))];
 
     //     // create gxs
     //     let g1 = vec![Fr::from(1u64), Fr::from(3u64), Fr::from(5u64), Fr::from(7u64)];
     //     let g2 = vec![Fr::from(2u64), Fr::from(4u64), Fr::from(6u64), Fr::from(8u64)];
-    //     let gxs = vec![Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(nv, g1, None, None))),
-    //                       Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(nv, g2, None, None)))];
+    //     let gxs = vec![Arc::new(Mutex::new(MLE::from_evaluations_vec(nv, g1, None, None))),
+    //                       Arc::new(Mutex::new(MLE::from_evaluations_vec(nv, g2, None, None)))];
 
     //     // compute the fractional polynomial frac_p s.t.
     //     // frac_p(x) = f1(x) * ... * fk(x) / (g1(x) * ... * gk(x))

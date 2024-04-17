@@ -149,11 +149,7 @@ mod test {
             let zero_subclaim =
                 <PolyIOP<Fr> as ZeroCheck<Fr>>::verify(&proof, &poly_info, &mut transcript)?;
 
-            let evaluated_point = poly
-                .evaluate(std::slice::from_ref(
-                    &zero_subclaim.point[poly_info.num_variables - 1],
-                ))
-                .unwrap();
+            let evaluated_point = poly.evaluate(&zero_subclaim.point).unwrap();
             assert!(
                 evaluated_point == zero_subclaim.expected_evaluation,
                 "wrong subclaim"
