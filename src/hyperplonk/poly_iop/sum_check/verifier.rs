@@ -1,10 +1,10 @@
 use super::{SumCheckSubClaim, SumCheckVerifier};
-use crate::hyperplonk::transcript::IOPTranscript;
 use crate::arithmetic::virtual_polynomial::VPAuxInfo;
 use crate::hyperplonk::poly_iop::{
     errors::PIOPError,
     structs::{IOPProverMessage, IOPVerifierState},
 };
+use crate::hyperplonk::transcript::IOPTranscript;
 use ark_ff::PrimeField;
 use ark_std::{end_timer, start_timer};
 
@@ -174,9 +174,9 @@ impl<F: PrimeField> SumCheckVerifier<F> for IOPVerifierState<F> {
 
         #[cfg(debug_assertions)]
         {
-            expected_vec
-                .iter()
-                .for_each(|x| println!("sum check verifier expected_vec after interpolation: {}", x));
+            expected_vec.iter().for_each(|x| {
+                println!("sum check verifier expected_vec after interpolation: {}", x)
+            });
             self.polynomials_received.iter().for_each(|x| {
                 x.iter()
                     .for_each(|y| println!("sum check verifier polynomials_received: {}", y))

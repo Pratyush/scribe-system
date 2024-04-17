@@ -1,4 +1,8 @@
-use std::{iter::repeat, ops::{AddAssign, MulAssign, SubAssign}, path::Path};
+use std::{
+    iter::repeat,
+    ops::{AddAssign, MulAssign, SubAssign},
+    path::Path,
+};
 
 use ark_ff::{batch_inversion, Field};
 use rayon::prelude::*;
@@ -16,65 +20,68 @@ impl<F: Field> Inner<F> {
         let evals = FileVec::new();
         Self { evals, num_vars }
     }
-    
+
     pub fn with_path(num_vars: usize, path: impl AsRef<Path>) -> Self {
         let evals = FileVec::with_name(path);
         Self { evals, num_vars }
     }
-    
+
     pub fn from_evals(evals: FileVec<F>, num_vars: usize) -> Self {
         Self { evals, num_vars }
     }
-    
+
     /// Construct a polynomial with coefficients specified by `evals`.
-    /// 
+    ///
     /// This should only be used for testing.
     pub fn from_evals_vec(evals: Vec<F>, num_vars: usize) -> Self {
         assert_eq!(evals.len(), 1 << num_vars);
         let evals = FileVec::from_iter(evals);
         Self { evals, num_vars }
     }
-    
+
     pub fn evals(&self) -> &FileVec<F> {
         &self.evals
     }
-    
+
+    pub fn evals_mut(&mut self) -> &mut FileVec<F> {
+        &mut self.evals
+    }
+
     pub fn to_evals(self) -> FileVec<F> {
         self.evals
     }
-    
+
     pub fn num_vars(&self) -> usize {
         self.num_vars
     }
-    
+
     /// Construct a polynomial with all coefficients equal to `coeff`
     pub fn constant(coeff: F, num_vars: usize) -> Self {
         let evals = FileVec::from_iter(repeat(coeff).take(1 << num_vars));
         Self::from_evals(evals, num_vars)
     }
-    
+
     pub fn identity_permutation(num_vars: usize) -> Self {
         let evals = FileVec::from_iter((0u64..(1 << num_vars)).map(F::from));
         Self::from_evals(evals, num_vars)
     }
-    
+
     pub fn rand<R: ark_std::rand::RngCore>(num_vars: usize, rng: &mut R) -> Self {
         let evals = FileVec::from_iter((0..(1 << num_vars)).map(|_| F::rand(rng)));
         Self::from_evals(evals, num_vars)
     }
-    
-    
+
     pub fn decrement_num_vars(&mut self) {
         if self.num_vars <= 0 {
             panic!("Cannot decrement num_vars below 0");
         }
         self.num_vars -= 1;
     }
-    
-    /// Modifies self by fixing the first `partial_point.len()` variables to 
+
+    /// Modifies self by fixing the first `partial_point.len()` variables to
     /// the values in `partial_point`.
     /// The number of variables is decremented by `partial_point.len()`.
-    /// 
+    ///
     /// # Panics
     /// Panics if `partial_point.len() > self.num_vars`.
     pub fn fix_variables_in_place(&mut self, partial_point: &[F]) {
@@ -88,7 +95,7 @@ impl<F: Field> Inner<F> {
             self.fold_odd_even_in_place(|even, odd| *even + r * (*odd - even));
         }
     }
-    
+
     /// Creates a new polynomial by fixing the first `partial_point.len()` variables to
     /// the values in `partial_point`.
     /// The number of variables in the result is `self.num_vars() - partial_point.len()`.
@@ -97,7 +104,7 @@ impl<F: Field> Inner<F> {
             partial_point.len() <= self.num_vars,
             "invalid size of partial point"
         );
-        
+
         let mut result = None;
 
         for &r in partial_point {
@@ -105,13 +112,15 @@ impl<F: Field> Inner<F> {
             if result.is_none() {
                 result = Some(self.fold_odd_even(|even, odd| *even + r * (*odd - even)));
             } else {
-                result.as_mut().map(|s| s.fold_odd_even_in_place(|even, odd| *even + r * (*odd - even)));
+                result
+                    .as_mut()
+                    .map(|s| s.fold_odd_even_in_place(|even, odd| *even + r * (*odd - even)));
             }
         }
         result.unwrap_or_else(|| self.deep_copy())
     }
 
-    /// Evaluates `self` at the given point. 
+    /// Evaluates `self` at the given point.
     /// Returns `None` if the point has the wrong length.
     pub fn evaluate(&self, point: &[F]) -> Option<F> {
         if point.len() == self.num_vars {
@@ -125,62 +134,84 @@ impl<F: Field> Inner<F> {
         }
     }
 
-    
     /// Modifies self by folding the evaluations over the hypercube with the function `f`.
     /// After each fold, the number of variables is reduced by 1.
     pub fn fold_odd_even_in_place(&mut self, f: impl Fn(&F, &F) -> F + Sync) {
         assert!((1 << self.num_vars) % 2 == 0);
-        self.evals = self.evals.iter().array_chunks::<2>().map(|chunk| {
-            f(&chunk[0], &chunk[1])
-        }).to_file_vec();
+        self.evals = self
+            .evals
+            .iter()
+            .array_chunks::<2>()
+            .map(|chunk| f(&chunk[0], &chunk[1]))
+            .to_file_vec();
         self.decrement_num_vars();
     }
-    
+
     /// Creates a new polynomial whose evaluations are folded versions of `self`,
     /// folded according to the function `f`.
     /// After each fold, the number of variables is reduced by 1.
     pub fn fold_odd_even(&self, f: impl Fn(&F, &F) -> F + Sync) -> Self {
         assert!((1 << self.num_vars) % 2 == 0);
-        let evals = self.evals.iter().array_chunks::<2>().map(|chunk| {
-            f(&chunk[0], &chunk[1])
-        }).to_file_vec();
-        Self { evals, num_vars: self.num_vars - 1 }
+        let evals = self
+            .evals
+            .iter()
+            .array_chunks::<2>()
+            .map(|chunk| f(&chunk[0], &chunk[1]))
+            .to_file_vec();
+        Self {
+            evals,
+            num_vars: self.num_vars - 1,
+        }
     }
-    
 
-    /// Modifies self by replacing evaluations over the hypercube with their inverse. 
+    /// Modifies self by replacing evaluations over the hypercube with their inverse.
     pub fn invert_in_place(&mut self) {
-        self.evals.batched_for_each(|mut chunk| batch_inversion(&mut chunk));
+        self.evals
+            .batched_for_each(|mut chunk| batch_inversion(&mut chunk));
     }
-    
-    /// Creates a new polynomial whose evaluations over the hypercube are 
+
+    /// Creates a new polynomial whose evaluations over the hypercube are
     /// the inverses of the evaluations of this polynomial.
     pub fn invert(&self) -> Self {
         let mut result = self.deep_copy();
         result.invert_in_place();
         result
     }
-    
+
     /// Creates a deep copy of the polynomial by copying the evaluations to a new stream.
     pub fn deep_copy(&self) -> Self {
         Self::from_evals(self.evals.deep_copy().into(), self.num_vars)
     }
-    
+
     /// Sample `degree` random polynomials, and returns the sum of their Hadamard product.
-    pub fn rand_product_with_sum<R: ark_std::rand::RngCore>(num_vars: usize, degree: usize, rng: &mut R) -> (Vec<Self>, F) {
-        let polys = (0..degree).map(|_| Self::rand(num_vars, rng)).collect::<Vec<_>>();
-        let product_poly = polys.iter().fold(Self::constant(F::one(), num_vars), |mut acc, p| {
-            acc.evals.zipped_for_each(p.evals.iter(), |a, b| *a *= b);
-            acc
-        });
+    pub fn rand_product_with_sum<R: ark_std::rand::RngCore>(
+        num_vars: usize,
+        degree: usize,
+        rng: &mut R,
+    ) -> (Vec<Self>, F) {
+        let polys = (0..degree)
+            .map(|_| Self::rand(num_vars, rng))
+            .collect::<Vec<_>>();
+        let product_poly = polys
+            .iter()
+            .fold(Self::constant(F::one(), num_vars), |mut acc, p| {
+                acc.evals.zipped_for_each(p.evals.iter(), |a, b| *a *= b);
+                acc
+            });
 
         (polys, product_poly.evals.iter().sum())
     }
-    
-    pub fn rand_product_summing_to_zero<R: ark_std::rand::RngCore>(num_vars: usize, degree: usize, rng: &mut R) -> Vec<Self> {
-        (0..(degree - 1)).map(|_| Self::rand(num_vars, rng)).chain([Self::constant(F::zero(), num_vars)]).collect()
-    }
 
+    pub fn rand_product_summing_to_zero<R: ark_std::rand::RngCore>(
+        num_vars: usize,
+        degree: usize,
+        rng: &mut R,
+    ) -> Vec<Self> {
+        (0..(degree - 1))
+            .map(|_| Self::rand(num_vars, rng))
+            .chain([Self::constant(F::zero(), num_vars)])
+            .collect()
+    }
 }
 
 impl<F: Field> MulAssign<F> for Inner<F> {
@@ -191,49 +222,57 @@ impl<F: Field> MulAssign<F> for Inner<F> {
 
 impl<F: Field> AddAssign<Self> for Inner<F> {
     fn add_assign(&mut self, other: Self) {
-        self.evals.zipped_for_each(other.evals.iter(), |a, b| *a += b);
+        self.evals
+            .zipped_for_each(other.evals.iter(), |a, b| *a += b);
     }
 }
 
 impl<'a, F: Field> AddAssign<&'a Self> for Inner<F> {
     fn add_assign(&mut self, other: &'a Self) {
-        self.evals.zipped_for_each(other.evals.iter(), |a, b| *a += b);
+        self.evals
+            .zipped_for_each(other.evals.iter(), |a, b| *a += b);
     }
 }
 
 impl<F: Field> SubAssign<Self> for Inner<F> {
     fn sub_assign(&mut self, other: Self) {
-        self.evals.zipped_for_each(other.evals.iter(), |a, b| *a -= b);
+        self.evals
+            .zipped_for_each(other.evals.iter(), |a, b| *a -= b);
     }
 }
 
 impl<'a, F: Field> SubAssign<&'a Self> for Inner<F> {
     fn sub_assign(&mut self, other: &'a Self) {
-        self.evals.zipped_for_each(other.evals.iter(), |a, b| *a -= b);
+        self.evals
+            .zipped_for_each(other.evals.iter(), |a, b| *a -= b);
     }
 }
 
 impl<F: Field> AddAssign<(F, Self)> for Inner<F> {
     fn add_assign(&mut self, (f, other): (F, Self)) {
-        self.evals.zipped_for_each(other.evals.iter(), |a, b| *a += f * b);
+        self.evals
+            .zipped_for_each(other.evals.iter(), |a, b| *a += f * b);
     }
 }
 
 impl<'a, F: Field> AddAssign<(F, &'a Self)> for Inner<F> {
     fn add_assign(&mut self, (f, other): (F, &'a Self)) {
-        self.evals.zipped_for_each(other.evals.iter(), |a, b| *a += f * b);
+        self.evals
+            .zipped_for_each(other.evals.iter(), |a, b| *a += f * b);
     }
 }
 
 impl<F: Field> SubAssign<(F, Self)> for Inner<F> {
     fn sub_assign(&mut self, (f, other): (F, Self)) {
-        self.evals.zipped_for_each(other.evals.iter(), |a, b| *a -= f * b);
+        self.evals
+            .zipped_for_each(other.evals.iter(), |a, b| *a -= f * b);
     }
 }
 
 impl<'a, F: Field> SubAssign<(F, &'a Self)> for Inner<F> {
     fn sub_assign(&mut self, (f, other): (F, &'a Self)) {
-        self.evals.zipped_for_each(other.evals.iter(), |a, b| *a -= f * b);
+        self.evals
+            .zipped_for_each(other.evals.iter(), |a, b| *a -= f * b);
     }
 }
 
@@ -262,7 +301,7 @@ impl<'a, F: Field> SubAssign<(F, &'a Self)> for Inner<F> {
         }
     }
 
-    
+
 
     pub fn new_from_tempfile_single_stream(num_vars: usize) -> Self {
         let file = NamedTempFile::new().expect("failed to create temp file");
@@ -434,7 +473,7 @@ impl<'a, F: Field> SubAssign<(F, &'a Self)> for Inner<F> {
         stream.swap_read_write();
         stream
     }
-    
+
     pub fn copy(
         &mut self,
         read_path: Option<&str>,
@@ -448,7 +487,7 @@ impl<'a, F: Field> SubAssign<(F, &'a Self)> for Inner<F> {
         new_stream.swap_read_write();
         new_stream
     }
-    
+
     /* /// merge a set of polynomials. Returns an error if the
     /// polynomials do not share a same number of nvs.
     pub fn merge(polynomials: &mut [Self], num_vars: usize) -> Result<Self, ArithErrors> {
@@ -489,15 +528,15 @@ impl<'a, F: Field> SubAssign<(F, &'a Self)> for Inner<F> {
 
         Ok(result)
     } */
-    
+
     fn add_assign(&mut self, (coeff, other): (F, &mut Self)) -> Option<()> {
         self.combine_in_place(other, |a, b| *a + coeff * *b)
     }
-    
+
     /* fn product(streams: &[Self]) -> Option<Self> {
         Self::combine_many_with(streams, |a, b| *a = *a * b)
     } */
-    
+
     fn batch_inversion(&mut self) -> Option<Self> {
         let mut result = Self::new_from_tempfile(self.num_vars());
         let mut buffer = Vec::with_capacity(BUFFER_SIZE);
@@ -590,7 +629,7 @@ pub fn random_permutation_mles<F: PrimeField, R: RngCore>(
 // 2. read off multiple field elements to a memory buffer
 // to implement these, we also need a memory usage threshold to upper bound the # of streams in parallel times the memory buffer size for each stream
 pub trait DenseMLPoly<F: Field>: ReadWriteStream<Item = F> {
-    
+
 
     fn poly(
         streams: Vec<Arc<Mutex<Self>>>,

@@ -1,8 +1,11 @@
 use super::SumCheckProver;
-use crate::{arithmetic::virtual_polynomial::VirtualPolynomial, streams::iterator::{multi_zip, BatchedIterator}};
 use crate::hyperplonk::poly_iop::{
     errors::PIOPError,
     structs::{IOPProverMessage, IOPProverState},
+};
+use crate::{
+    arithmetic::virtual_polynomial::VirtualPolynomial,
+    streams::iterator::{zip_many, BatchedIterator},
 };
 use ark_ff::{batch_inversion, PrimeField};
 use ark_std::{cfg_iter, cfg_iter_mut, end_timer, start_timer, vec::Vec};
@@ -51,9 +54,7 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
             start_timer!(|| format!("sum check prove {}-th round and update state", self.round));
 
         if self.round >= self.poly.aux_info.num_variables {
-            return Err(PIOPError::InvalidProver(
-                "Prover is not active".to_string(),
-            ));
+            return Err(PIOPError::InvalidProver("Prover is not active".to_string()));
         }
 
         let fix_argument = start_timer!(|| "fix argument");
@@ -113,67 +114,81 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
         let mut products_sum = vec![F::zero(); self.poly.aux_info.max_degree + 1];
 
         for eval in self.poly.mles[0].evals().iter().to_vec() {
-            println!("sum check product eval: {}", eval
-            );
-        };
+            println!("sum check product eval: {}", eval);
+        }
 
         // Step 2: generate sum for the partial evaluated polynomial:
         // f(r_1, ... r_m,, x_{m+1}... x_n)
-        self.poly.products.iter().for_each(|(coefficient, products)| {
-            println!("sum check product coefficient: {}", coefficient);
-            let polys_in_product = products.iter().map(|&f| self.poly.mles[f].evals()).collect::<Vec<_>>();
-            let mut sum = multi_zip(polys_in_product.iter().map(|x| x.iter().array_chunks::<2>()))
-            .fold(
-                || vec![F::zero(); products.len() + 1],
-                |mut acc, mut products| {
-                    products.iter_mut().for_each(|[even, odd]| {
-                        println!("sum check product eval_even: {}", even);
-                        println!("sum check product eval_odd: {}", odd);
-                        *odd -= even;
-                    });
-                    acc[0] += products.iter().map(|[eval, _]| {
-                        println!("eval: {}", eval);
-                        eval
-                    }).product::<F>();
-                    acc[1..].iter_mut().for_each(|acc| {
-                        products.iter_mut().for_each(|[eval, step]| *eval += step as &_);
-                        *acc += products.iter().map(|[eval, _]| eval).product::<F>();
-                    });
-                    println!("acc 0: {}", acc[0]);
-                    println!("acc 1: {}", acc[0]);
-                    acc
-                },
-                |mut sum, partial| {
-                    sum.iter_mut()
-                        .zip(partial.iter())
-                        .for_each(|(sum, partial)| {
-                            // println!("sum check sum: {}", sum);
-                            // println!("sum check partial: {}", partial);
-                            *sum += partial;
-                        });
-                    sum
-                },
-            );
-
-            sum.iter_mut().for_each(|sum| {
-                println!("sum check product sum before: {}", sum);
-                *sum *= *coefficient;
-                println!("sum check product sum after: {}", sum);
+        self.poly
+            .products
+            .iter()
+            .for_each(|(coefficient, products)| {
                 println!("sum check product coefficient: {}", coefficient);
+                let polys_in_product = products
+                    .iter()
+                    .map(|&f| self.poly.mles[f].evals())
+                    .collect::<Vec<_>>();
+                let mut sum = zip_many(
+                    polys_in_product
+                        .iter()
+                        .map(|x| x.iter().array_chunks::<2>()),
+                )
+                .fold(
+                    || vec![F::zero(); products.len() + 1],
+                    |mut acc, mut products| {
+                        products.iter_mut().for_each(|[even, odd]| {
+                            println!("sum check product eval_even: {}", even);
+                            println!("sum check product eval_odd: {}", odd);
+                            *odd -= even;
+                        });
+                        acc[0] += products
+                            .iter()
+                            .map(|[eval, _]| {
+                                println!("eval: {}", eval);
+                                eval
+                            })
+                            .product::<F>();
+                        acc[1..].iter_mut().for_each(|acc| {
+                            products
+                                .iter_mut()
+                                .for_each(|[eval, step]| *eval += step as &_);
+                            *acc += products.iter().map(|[eval, _]| eval).product::<F>();
+                        });
+                        println!("acc 0: {}", acc[0]);
+                        println!("acc 1: {}", acc[0]);
+                        acc
+                    },
+                    |mut sum, partial| {
+                        sum.iter_mut()
+                            .zip(partial.iter())
+                            .for_each(|(sum, partial)| {
+                                // println!("sum check sum: {}", sum);
+                                // println!("sum check partial: {}", partial);
+                                *sum += partial;
+                            });
+                        sum
+                    },
+                );
+
+                sum.iter_mut().for_each(|sum| {
+                    println!("sum check product sum before: {}", sum);
+                    *sum *= *coefficient;
+                    println!("sum check product sum after: {}", sum);
+                    println!("sum check product coefficient: {}", coefficient);
+                });
+                let extraploation = (0..self.poly.aux_info.max_degree - products.len())
+                    .into_par_iter()
+                    .map(|i| {
+                        let (points, weights) = &self.extrapolation_aux[products.len() - 1];
+                        let at = F::from((products.len() + 1 + i) as u64);
+                        extrapolate(points, weights, &sum, &at)
+                    })
+                    .collect::<Vec<_>>();
+                products_sum
+                    .iter_mut()
+                    .zip(sum.iter().chain(extraploation.iter()))
+                    .for_each(|(products_sum, sum)| *products_sum += sum);
             });
-            let extraploation = (0..self.poly.aux_info.max_degree - products.len())
-                .into_par_iter()
-                .map(|i| {
-                    let (points, weights) = &self.extrapolation_aux[products.len() - 1];
-                    let at = F::from((products.len() + 1 + i) as u64);
-                    extrapolate(points, weights, &sum, &at)
-                })
-                .collect::<Vec<_>>();
-            products_sum
-                .iter_mut()
-                .zip(sum.iter().chain(extraploation.iter()))
-                .for_each(|(products_sum, sum)| *products_sum += sum);
-        });
 
         end_timer!(generate_prover_message);
         end_timer!(start);
@@ -203,7 +218,9 @@ fn barycentric_weights<F: PrimeField>(points: &[F]) -> Vec<F> {
 
 fn extrapolate<F: PrimeField>(points: &[F], weights: &[F], evals: &[F], at: &F) -> F {
     let (coeffs, sum_inv) = {
-        let mut coeffs = cfg_iter!(points).map(|point| *at - point).collect::<Vec<_>>();
+        let mut coeffs = cfg_iter!(points)
+            .map(|point| *at - point)
+            .collect::<Vec<_>>();
         batch_inversion(&mut coeffs);
         cfg_iter_mut!(coeffs)
             .zip(weights)

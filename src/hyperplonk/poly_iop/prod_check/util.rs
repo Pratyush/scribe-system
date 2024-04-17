@@ -1,16 +1,19 @@
-use crate::{hyperplonk::arithmetic::virtual_polynomial::VirtualPolynomial, streams::MLE};
 use crate::hyperplonk::poly_iop::{
     errors::PIOPError, structs::IOPProof, zero_check::ZeroCheck, PolyIOP,
 };
 use crate::hyperplonk::transcript::IOPTranscript;
-use crate::streams::{MLE, ReadWriteStream};
-use ark_poly::DenseMultilinearExtension as DenseMLPoly;
+use crate::{
+    arithmetic::virtual_polynomial::VirtualPolynomial,
+    streams::{
+        file_vec::FileVec,
+        iterator::{chain_many, from_iter, zip_many, BatchedIterator},
+        MLE,
+    },
+};
 
 use ark_ff::PrimeField;
-use ark_serialize::Write;
 use ark_std::{end_timer, start_timer};
-
-use std::io::Seek;
+use zip_many::ZipMany;
 
 /// Compute multilinear fractional polynomial s.t. frac(x) = f1(x) * ... * fk(x)
 /// / (g1(x) * ... * gk(x)) for all x \in {0,1}^n
@@ -23,11 +26,19 @@ pub(super) fn compute_frac_poly<F: PrimeField>(
 ) -> Result<MLE<F>, PIOPError> {
     let start = start_timer!(|| "compute frac(x)");
 
-    // TODO: might need to delete some of these to release disk space later
-    let numerator = MLE::prod_multi(fxs).unwrap();
-    let mut denominator = MLE::prod_multi(gxs).unwrap();
-    let denominator_inverse = denominator.batch_inversion().unwrap();
-    let result = MLE::prod_multi(&mut [numerator, denominator_inverse]).unwrap();
+    let numerator_product =
+        zip_many(fxs.iter().map(|p| p.evals().iter())).map(|v| v.into_iter().product::<F>());
+    let denominator_evals = zip_many(gxs.iter().map(|p| p.evals().iter()))
+        .map(|v| v.into_iter().product())
+        .to_file_vec();
+    let mut denominator = MLE::from_evals(denominator_evals, gxs[0].num_vars());
+    denominator.invert_in_place();
+    denominator
+        .evals_mut()
+        .zipped_for_each(numerator_product, |den_inv, num| {
+            *den_inv *= num;
+        });
+    let result = denominator;
 
     end_timer!(start);
     Ok(result)
@@ -40,143 +51,23 @@ pub(super) fn compute_frac_poly<F: PrimeField>(
 ///
 /// The caller needs to check num_vars matches in f and g
 /// Cost: linear in N.
-pub(super) fn compute_product_poly<F: PrimeField>(
-    frac_poly: &MLE<F>,
-) -> Result<MLE<F>, PIOPError> {
+pub(super) fn compute_product_poly<F: PrimeField>(frac_poly: &MLE<F>) -> Result<MLE<F>, PIOPError> {
     let start = start_timer!(|| "compute evaluations of prod polynomial");
-    frac_poly.read_restart();
-    /* let num_vars = frac_poly_stream.num_vars();
-    #[cfg(debug_assertions)]
-    {
-        println!(
-            "frac_poly_stream read pointer: {}",
-            frac_poly_stream.read_pointer.stream_position().unwrap()
-        );
-        println!(
-            "frac_poly_stream write pointer: {}",
-            frac_poly_stream.write_pointer.stream_position().unwrap()
-        );
-    } */
-
+    let num_vars = frac_poly.num_vars();
     // assert that num_vars is at least two
-    assert!(num_vars >= 2);
 
     // single stream for read and write pointers
-    let mut prod_stream = MLE::new_single_stream(num_vars, None);
-
-    let mut read_buffer = Vec::with_capacity(buffer_size);
-    let mut write_buffer = Vec::with_capacity(buffer_size >> 1);
-    
-    let mut prod_stream = frac_poly.fold_odd_even(f);
-
-
-    // let 
-    // round 1
-    // read frac_poly to read_buffer till it's full
-    // note that this would fail if the frac_poly_stream has odd number of elements, but this shouldn't possibly happen
-    while let Some(val) = frac_poly_stream.read_next_unchecked() {
-        #[cfg(debug_assertions)]
-        {
-            println!("val: {}", val);
-            println!(
-                "frac_poly_stream read pointer: {}",
-                frac_poly_stream.read_pointer.stream_position().unwrap()
-            );
-            println!(
-                "frac_poly_stream write pointer: {}",
-                frac_poly_stream.write_pointer.stream_position().unwrap()
-            );
-        }
-        read_buffer.push(val);
-
-        if read_buffer.len() >= buffer_size {
-            (0..(buffer_size >> 1))
-                .for_each(|i| write_buffer.push(read_buffer[2 * i] * read_buffer[2 * i + 1]));
-
-            for val in write_buffer.drain(..) {
-                prod_stream
-                    .write_next_unchecked(val)
-                    .expect("Failed to write to prod stream");
-            }
-            // after draining our in-memory write buffer, still need to flush the BufWriter buffer,
-            // because they are two different buffers. Otherwise we can't read from the stream.
-            prod_stream.write_pointer.flush().unwrap();
-            read_buffer.clear();
-        }
+    let product = frac_poly.fold_odd_even(|a, b| *a * b);
+    let mut products = vec![product];
+    while products.last().unwrap().num_vars() > 1 {
+        let product = products.last().unwrap();
+        products.push(product.fold_odd_even(|a, b| *a * b));
     }
-
-    frac_poly_stream.read_restart();
-
-    if !read_buffer.is_empty() {
-        (0..(read_buffer.len() >> 1))
-            .for_each(|i| write_buffer.push(read_buffer[2 * i] * read_buffer[2 * i + 1]));
-
-        for val in write_buffer.drain(..) {
-            prod_stream
-                .write_next_unchecked(val)
-                .expect("Failed to write to prod stream");
-        }
-        prod_stream.write_pointer.flush().unwrap();
-        read_buffer.clear();
-    }
-
-    // prod_stream.write_pointer.flush().unwrap();
-
-    for round in 2..=num_vars {
-        for i in 0..(1 << (num_vars - round + 1)) {
-            #[cfg(debug_assertions)]
-            {
-                println!("round: {}, i: {}", round, i);
-                // print read pointer position
-                println!(
-                    "prod_stream read pointer: {}",
-                    prod_stream.read_pointer.stream_position().unwrap()
-                );
-                // print write pointer position
-                println!(
-                    "prod_stream write pointer: {}",
-                    prod_stream.write_pointer.stream_position().unwrap()
-                );
-            }
-
-            read_buffer.push(prod_stream.read_next_unchecked().expect("Failed to read from prod stream"));
-
-            if read_buffer.len() >= buffer_size {
-                (0..(buffer_size >> 1))
-                    .for_each(|i| write_buffer.push(read_buffer[2 * i] * read_buffer[2 * i + 1]));
-
-                for val in write_buffer.drain(..) {
-                    prod_stream
-                        .write_next_unchecked(val)
-                        .expect("Failed to write to MLE stream");
-                }
-                prod_stream.write_pointer.flush().unwrap();
-                read_buffer.clear();
-            }
-        }
-
-        if !read_buffer.is_empty() {
-            (0..(read_buffer.len() >> 1))
-                .for_each(|i| write_buffer.push(read_buffer[2 * i] * read_buffer[2 * i + 1]));
-
-            for val in write_buffer.drain(..) {
-                prod_stream
-                    .write_next_unchecked(val)
-                    .expect("Failed to write to MLE stream");
-            }
-            prod_stream.write_pointer.flush().unwrap();
-            read_buffer.clear();
-        }
-    }
-
-    prod_stream.write_next_unchecked(F::one());
-
-    prod_stream.read_restart();
-    prod_stream.write_restart();
-
+    products.push(MLE::from_evals_vec(vec![F::one()], num_vars));
+    let evals = chain_many(products.into_iter().map(|p| p.evals().iter())).to_file_vec();
+    let product = MLE::from_evals(evals, num_vars);
     end_timer!(start);
-
-    Ok(Arc::new(Mutex::new(prod_stream)))
+    Ok(product)
 }
 
 /// generate the zerocheck proof for the virtual polynomial
@@ -188,10 +79,10 @@ pub(super) fn compute_product_poly<F: PrimeField>(
 ///
 /// Cost: O(N)
 pub(super) fn prove_zero_check<F: PrimeField>(
-    fxs: Vec<Arc<Mutex<MLE<F>>>>,
-    gxs: Vec<Arc<Mutex<MLE<F>>>>,
-    frac_poly: &Arc<Mutex<MLE<F>>>,
-    prod_x: &Arc<Mutex<MLE<F>>>,
+    fxs: Vec<MLE<F>>,
+    gxs: Vec<MLE<F>>,
+    frac_poly: &MLE<F>,
+    prod_x: &MLE<F>,
     alpha: &F,
     transcript: &mut IOPTranscript<F>,
     batch_size: usize,
@@ -280,13 +171,7 @@ pub(super) fn prove_zero_check<F: PrimeField>(
 
     //   prod(x)
     // - p1(x) * p2(x)
-    q_x.add_mle_list(
-        [
-            Arc::new(Mutex::new(p1_stream)),
-            Arc::new(Mutex::new(p2_stream)),
-        ],
-        -F::one(),
-    )?;
+    q_x.add_mle_list([p1_stream, p2_stream], -F::one())?;
 
     //   prod(x)
     // - p1(x) * p2(x)
@@ -312,7 +197,7 @@ mod test {
     use super::compute_product_poly;
     use super::*;
 
-    use crate::streams::{MLE, ReadWriteStream};
+    use crate::streams::{ReadWriteStream, MLE};
     use ark_bls12_381::Fr;
 
     use ark_std::rand::distributions::{Distribution, Standard};
@@ -384,8 +269,7 @@ mod test {
         }
 
         // Create a stream with 2^10 elements
-        let mut frac_poly_stream: MLE<Fr> =
-            MLE::new_single_stream(num_vars, None);
+        let mut frac_poly_stream: MLE<Fr> = MLE::new_single_stream(num_vars, None);
         for i in 0..(1 << num_vars) {
             frac_poly_stream
                 .write_next_unchecked(frac_poly_vec[i])

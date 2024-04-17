@@ -1,5 +1,4 @@
 use crate::{
-
     arithmetic::virtual_polynomial::{VPAuxInfo, VirtualPolynomial},
     hyperplonk::{
         poly_iop::{
@@ -226,6 +225,7 @@ impl<F: PrimeField> SumCheck<F> for PolyIOP<F> {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::streams::iterator::BatchedIterator;
     use ark_bls12_381::Fr;
     use ark_ff::UniformRand;
     use ark_std::{
@@ -233,7 +233,6 @@ mod test {
         test_rng,
     };
     use std::str::FromStr;
-    use crate::streams::iterator::BatchedIterator;
 
     fn test_sumcheck(
         nv: usize,
@@ -253,9 +252,8 @@ mod test {
         println!("generated asserted sum: {}", asserted_sum);
 
         for eval in poly.mles[0].evals().iter().to_vec() {
-            println!("sum check product eval: {}", eval
-            );
-        };
+            println!("sum check product eval: {}", eval);
+        }
 
         let proof = <PolyIOP<Fr> as SumCheck<Fr>>::prove(&poly, &mut transcript)?;
         let poly_info = poly.aux_info.clone();
@@ -267,11 +265,7 @@ mod test {
             &mut transcript,
         )?;
 
-        let evaluated_point = poly
-            .evaluate(
-                &subclaim.point,
-            )
-            .unwrap();
+        let evaluated_point = poly.evaluate(&subclaim.point).unwrap();
         assert!(
             // expected_evaluation is interpolated; in the full protocol, the evaluated_point should be a commitment query at subclaim point rather than evaluated from scratch
             evaluated_point == subclaim.expected_evaluation,
@@ -296,9 +290,9 @@ mod test {
         let mut rng = StdRng::from_seed(seed);
         let (poly, asserted_sum) =
             VirtualPolynomial::<Fr>::rand(nv, num_multiplicands_range, num_products, &mut rng)?;
-        
+
         println!("generated asserted sum: {}", asserted_sum);
-        
+
         // print the position of read pointer of each mle in poly
         // for mle in poly.flattened_ml_extensions.iter() {
         // read next on mle and print each element
@@ -306,9 +300,8 @@ mod test {
         // println!("starting read pointer position: {}", mle_stream.read_pointer.stream_position().unwrap());
         // }
         for eval in poly.mles[0].evals().iter().to_vec() {
-            println!("sum check product eval: {}", eval
-            );
-        };
+            println!("sum check product eval: {}", eval);
+        }
 
         let poly_info = poly.aux_info.clone();
         let mut prover_state = IOPProverState::prover_init(&poly)?;
@@ -336,11 +329,7 @@ mod test {
             IOPVerifierState::check_and_generate_subclaim(&verifier_state, &asserted_sum)
                 .expect("fail to generate subclaim");
 
-        let evaluated_point = poly
-            .evaluate(
-                &subclaim.point,
-            )
-            .unwrap();
+        let evaluated_point = poly.evaluate(&subclaim.point).unwrap();
         assert!(
             evaluated_point == subclaim.expected_evaluation, // the expected evaluation is interpolated; in the full protocol, the poly evaluation should be a commitment query at subclaim point rather than evaluated from scratch
             "{}",
@@ -400,9 +389,7 @@ mod test {
     /// unique MLExtensions instead of total number of multiplicands.
     fn test_shared_reference() -> Result<(), PIOPError> {
         let mut rng = test_rng();
-        let ml_extensions: Vec<_> = (0..5)
-            .map(|_| MLE::<Fr>::rand(8, &mut rng))
-            .collect();
+        let ml_extensions: Vec<_> = (0..5).map(|_| MLE::<Fr>::rand(8, &mut rng)).collect();
         let mut poly = VirtualPolynomial::new(8);
         poly.add_mles(
             vec![
@@ -462,9 +449,7 @@ mod test {
             &mut transcript,
         )?;
 
-        let evaluated_point = poly
-            .evaluate(&subclaim.point)
-            .unwrap();
+        let evaluated_point = poly.evaluate(&subclaim.point).unwrap();
         assert!(
             evaluated_point == subclaim.expected_evaluation,
             "wrong subclaim"

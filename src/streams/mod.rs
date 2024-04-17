@@ -1,4 +1,4 @@
-use ark_std::{borrow::Borrow, fmt, cfg_chunks_mut, cfg_iter, cfg_iter_mut};
+use ark_std::{borrow::Borrow, cfg_chunks_mut, cfg_iter, cfg_iter_mut, fmt};
 
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
@@ -8,18 +8,22 @@ const BUFFER_SIZE: usize = 1 << 16;
 pub mod dense_mle;
 pub use dense_mle::*;
 
-pub mod iterator;
 pub mod file_vec;
+pub mod iterator;
 
 pub trait ReadWriteStream: Send + Sync + Sized {
     type Item: 'static + Send + Sync + fmt::Debug + fmt::Display;
 
-    fn with_path<'a>(num_vars: usize, read_path: impl Into<Option<&'a str>>, write_path: impl Into<Option<&'a str>>) -> Self;
+    fn with_path<'a>(
+        num_vars: usize,
+        read_path: impl Into<Option<&'a str>>,
+        write_path: impl Into<Option<&'a str>>,
+    ) -> Self;
 
     fn new_single_stream(num_vars: usize, path: Option<&str>) -> Self;
-    
+
     fn new_from_tempfile(num_vars: usize) -> Self;
-    
+
     fn read_restart(&mut self);
 
     fn write_restart(&mut self);
@@ -29,11 +33,11 @@ pub trait ReadWriteStream: Send + Sync + Sized {
     fn swap_read_write(&mut self);
 
     fn new_read_stream(&mut self);
-    
+
     fn read_next_unchecked(&mut self) -> Option<Self::Item>;
 
     fn read_next(&mut self) -> Option<Self::Item>;
-    
+
     // Assumes that `buffer` is empty.
     fn read_to_buf(&mut self, buffer: &mut Vec<Self::Item>, buffer_size: usize) -> Option<()> {
         for _ in 0..buffer_size {
@@ -59,7 +63,7 @@ pub trait ReadWriteStream: Send + Sync + Sized {
         }
         Some(())
     }
-    
+
     fn map_in_place(&mut self, f: impl Fn(&Self::Item) -> Self::Item + Sync) -> Option<()> {
         let mut buffer = Vec::with_capacity(BUFFER_SIZE);
         while self.read_to_buf(&mut buffer, BUFFER_SIZE).is_some() {
@@ -71,8 +75,11 @@ pub trait ReadWriteStream: Send + Sync + Sized {
         self.read_restart();
         Some(())
     }
-    
-    fn fold_odd_even(&mut self, f: impl Fn(&Self::Item, &Self::Item) -> Self::Item + Sync) -> Option<()> {
+
+    fn fold_odd_even(
+        &mut self,
+        f: impl Fn(&Self::Item, &Self::Item) -> Self::Item + Sync,
+    ) -> Option<()> {
         let mut buffer = Vec::with_capacity(BUFFER_SIZE);
         while self.read_to_buf(&mut buffer, BUFFER_SIZE).is_some() {
             cfg_chunks_mut!(buffer, 2).for_each(|vals| vals[0] = f(&vals[0], &vals[1]));
@@ -84,14 +91,19 @@ pub trait ReadWriteStream: Send + Sync + Sized {
         self.read_restart();
         Some(())
     }
-    
-    fn expand_odd_even(&mut self, f: impl Fn(&Self::Item) -> (Self::Item, Self::Item) + Sync) -> Option<()> {
+
+    fn expand_odd_even(
+        &mut self,
+        f: impl Fn(&Self::Item) -> (Self::Item, Self::Item) + Sync,
+    ) -> Option<()> {
         let mut buffer = Vec::with_capacity(2 * BUFFER_SIZE);
         while self.read_to_buf(&mut buffer, BUFFER_SIZE).is_some() {
-            buffer = cfg_iter!(buffer).flat_map(|val| {
-                let (f_0, f_1) = f(val);
-                [f_0, f_1]
-            }).collect();
+            buffer = cfg_iter!(buffer)
+                .flat_map(|val| {
+                    let (f_0, f_1) = f(val);
+                    [f_0, f_1]
+                })
+                .collect();
             self.write_buf(&buffer);
             buffer.clear();
         }
@@ -100,20 +112,21 @@ pub trait ReadWriteStream: Send + Sync + Sized {
         self.read_restart();
         Some(())
     }
-    
+
     fn combine_in_place(
-        &mut self, 
-        other: &mut Self, 
-        f: impl Fn(&Self::Item, &Self::Item) -> Self::Item + Sync
+        &mut self,
+        other: &mut Self,
+        f: impl Fn(&Self::Item, &Self::Item) -> Self::Item + Sync,
     ) -> Option<()> {
         assert_eq!(self.num_vars(), other.num_vars());
         let mut buffer_1 = Vec::with_capacity(BUFFER_SIZE / 2);
         let mut buffer_2 = Vec::with_capacity(BUFFER_SIZE / 2);
-        while 
-               self.read_to_buf(&mut buffer_1, BUFFER_SIZE / 2).is_some() 
-            && other.read_to_buf(&mut buffer_2, BUFFER_SIZE / 2).is_some() 
+        while self.read_to_buf(&mut buffer_1, BUFFER_SIZE / 2).is_some()
+            && other.read_to_buf(&mut buffer_2, BUFFER_SIZE / 2).is_some()
         {
-            cfg_iter_mut!(buffer_1).zip(&buffer_2).for_each(|(v1, v2)| *v1 = f(v1, v2));
+            cfg_iter_mut!(buffer_1)
+                .zip(&buffer_2)
+                .for_each(|(v1, v2)| *v1 = f(v1, v2));
             self.write_buf(&buffer_1)?;
             buffer_1.clear();
             buffer_2.clear();
@@ -123,21 +136,22 @@ pub trait ReadWriteStream: Send + Sync + Sized {
         other.read_restart();
         Some(())
     }
-    
+
     fn combine_with(
-        &mut self, 
-        other: &mut Self, 
-        f: impl Fn(&Self::Item, &Self::Item) -> Self::Item + Sync
+        &mut self,
+        other: &mut Self,
+        f: impl Fn(&Self::Item, &Self::Item) -> Self::Item + Sync,
     ) -> Option<Self> {
         assert_eq!(self.num_vars(), other.num_vars());
         let mut result = Self::new_from_tempfile(self.num_vars());
         let mut buffer_1 = Vec::with_capacity(BUFFER_SIZE / 2);
         let mut buffer_2 = Vec::with_capacity(BUFFER_SIZE / 2);
-        while 
-               self.read_to_buf(&mut buffer_1, BUFFER_SIZE / 2).is_some() 
-            && other.read_to_buf(&mut buffer_2, BUFFER_SIZE / 2).is_some() 
+        while self.read_to_buf(&mut buffer_1, BUFFER_SIZE / 2).is_some()
+            && other.read_to_buf(&mut buffer_2, BUFFER_SIZE / 2).is_some()
         {
-            cfg_iter_mut!(buffer_1).zip(&buffer_2).for_each(|(v1, v2)| *v1 = f(v1, v2));
+            cfg_iter_mut!(buffer_1)
+                .zip(&buffer_2)
+                .for_each(|(v1, v2)| *v1 = f(v1, v2));
             result.write_buf(&buffer_1)?;
             buffer_1.clear();
             buffer_2.clear();
@@ -148,9 +162,9 @@ pub trait ReadWriteStream: Send + Sync + Sized {
         other.read_restart();
         Some(result)
     }
-    
+
     /* fn combine_many_with(
-        streams: &[&mut Self], 
+        streams: &[&mut Self],
         f: impl Fn(&mut Self::Item, &Self::Item) + Sync
     ) -> Option<Self> {
         if streams.len() == 1 {

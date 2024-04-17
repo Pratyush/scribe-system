@@ -1,7 +1,4 @@
-use crate::{
-    arithmetic::errors::ArithError,
-    streams::MLE,
-};
+use crate::{arithmetic::errors::ArithError, streams::MLE};
 use ark_ff::PrimeField;
 // use ark_poly::{DenseMultilinearExtension, MultilinearExtension};
 use ark_serialize::CanonicalSerialize;
@@ -12,10 +9,7 @@ use ark_std::{
 };
 use rayon::iter::IntoParallelRefMutIterator;
 use rayon::prelude::*;
-use std::{
-    cmp::max,
-    marker::PhantomData,
-};
+use std::{cmp::max, marker::PhantomData};
 
 /// A virtual polynomial is a sum of products of multilinear polynomials;
 /// where the multilinear polynomials are stored via their multilinear
@@ -36,10 +30,10 @@ use std::{
 ///
 /// - flattened_ml_extensions stores the multilinear extension representation of
 ///   f0, f1, f2, f3 and f4
-/// - products is 
-///     \[ 
-///         (c0, \[0, 1, 2\]), 
-///         (c1, \[3, 4\]) 
+/// - products is
+///     \[
+///         (c0, \[0, 1, 2\]),
+///         (c1, \[3, 4\])
 ///     \]
 /// - raw_pointers_lookup_table maps fi to i
 ///
@@ -97,12 +91,12 @@ impl<F: PrimeField> VirtualPolynomial<F> {
             mles: vec![mle.clone()],
         }
     }
-    
+
     /// Returns the number of variables of the virtual polynomial.
     pub fn num_vars(&self) -> usize {
         self.aux_info.num_variables
     }
-    
+
     /// Returns the maximum degree of the virtual polynomial.
     pub fn individual_degree(&self) -> usize {
         self.aux_info.max_degree
@@ -123,7 +117,7 @@ impl<F: PrimeField> VirtualPolynomial<F> {
         let mut indexed_product = Vec::with_capacity(mle_list.len());
 
         if mle_list.is_empty() {
-            return Ok(())
+            return Ok(());
         }
 
         self.aux_info.max_degree = max(self.aux_info.max_degree, mle_list.len());
@@ -132,10 +126,11 @@ impl<F: PrimeField> VirtualPolynomial<F> {
             if mle.num_vars() != self.num_vars() {
                 return Err(ArithError::InvalidParameters(format!(
                     "product has a multiplicand with wrong number of variables {} vs {}",
-                    mle.num_vars(), self.aux_info.num_variables
+                    mle.num_vars(),
+                    self.aux_info.num_variables
                 )));
             }
-            
+
             let mle_index = match self.mles.iter().position(|e| e == &mle) {
                 Some(p) => p,
                 None => {
@@ -153,11 +148,7 @@ impl<F: PrimeField> VirtualPolynomial<F> {
     /// - add the MLE to the MLE list;
     /// - multiply each product by MLE and its coefficient.
     /// Returns an error if the MLE has a different `num_vars` from self.
-    pub fn mul_by_mle(
-        &mut self,
-        mle: MLE<F>,
-        coefficient: F,
-    ) -> Result<(), ArithError> {
+    pub fn mul_by_mle(&mut self, mle: MLE<F>, coefficient: F) -> Result<(), ArithError> {
         let start = start_timer!(|| "mul by mle");
         if mle.num_vars() != self.num_vars() {
             return Err(ArithError::InvalidParameters(format!(
@@ -166,7 +157,7 @@ impl<F: PrimeField> VirtualPolynomial<F> {
                 self.num_vars()
             )));
         }
-        
+
         let mle_index = match self.mles.iter().position(|e| e == &mle) {
             Some(p) => p,
             None => {
@@ -233,8 +224,7 @@ impl<F: PrimeField> VirtualPolynomial<F> {
         for _ in 0..num_products {
             let num_multiplicands =
                 rng.gen_range(num_multiplicands_range.0..num_multiplicands_range.1);
-            let (product, product_sum) =
-                MLE::rand_product_with_sum(nv, num_multiplicands, rng);
+            let (product, product_sum) = MLE::rand_product_with_sum(nv, num_multiplicands, rng);
             let coefficient = F::rand(rng);
             poly.add_mles(product.into_iter(), coefficient)?;
             sum += dbg!(product_sum) * coefficient;
@@ -350,10 +340,8 @@ impl<F: PrimeField> VirtualPolynomial<F> {
             batch_factor_power *= batch_factor;
         }
 
-        let mut poly = VirtualPolynomial::new_from_mle(
-            &MLE::constant(constant, num_vars),
-            F::one(),
-        );
+        let mut poly =
+            VirtualPolynomial::new_from_mle(&MLE::constant(constant, num_vars), F::one());
 
         let mut batch_factor_lower_power = F::one();
         let mut batch_factor_higher_power = batch_factor;
@@ -415,8 +403,7 @@ impl<F: PrimeField> VirtualPolynomial<F> {
 
         let constant_mle = MLE::constant(constant, num_vars);
 
-        self.add_mles(vec![constant_mle.clone()], F::one())
-            .unwrap();
+        self.add_mles(vec![constant_mle.clone()], F::one()).unwrap();
 
         let mut batch_factor_lower_power = batch_factor;
         let mut batch_factor_higher_power = batch_factor * batch_factor;
@@ -429,11 +416,8 @@ impl<F: PrimeField> VirtualPolynomial<F> {
                 batch_factor_lower_power * alpha,
             )
             .unwrap();
-            self.add_mles(
-                [h_q[i].clone(), p[i].clone()],
-                batch_factor_higher_power,
-            )
-            .unwrap();
+            self.add_mles([h_q[i].clone(), p[i].clone()], batch_factor_higher_power)
+                .unwrap();
             self.add_mles(
                 [h_q[i].clone(), index[i].clone()],
                 batch_factor_higher_power * alpha,
@@ -508,8 +492,6 @@ fn build_eq_x_r_vec_helper<F: PrimeField>(r: &[F], buf: &mut Vec<F>) -> Result<(
     Ok(())
 }
 
-
-
 /// Evaluate eq polynomial.
 pub fn eq_eval<F: PrimeField>(x: &[F], y: &[F]) -> Result<F, ArithError> {
     if x.len() != y.len() {
@@ -562,30 +544,12 @@ mod test {
         let r = Fr::from(12u64);
 
         // Setup sample streams for h_p, h_q, p, q, and pi
-        let h_p = MLE::from_evals_vec(
-            vec![Fr::from(1u64), Fr::from(2u64)],
-            1,
-        );
-        let h_q = MLE::from_evals_vec(
-            vec![Fr::from(3u64), Fr::from(4u64)],
-            1,
-        );
-        let p = MLE::from_evals_vec(
-            vec![Fr::from(5u64), Fr::from(6u64)],
-            1,
-        );
-        let q = MLE::from_evals_vec(
-            vec![Fr::from(7u64), Fr::from(8u64)],
-            1,
-        );
-        let pi = MLE::from_evals_vec(
-            vec![Fr::from(9u64), Fr::from(10u64)],
-            1,
-        );
-        let index = MLE::from_evals_vec(
-            vec![Fr::from(13u64), Fr::from(14u64)],
-            1,
-        );
+        let h_p = MLE::from_evals_vec(vec![Fr::from(1u64), Fr::from(2u64)], 1);
+        let h_q = MLE::from_evals_vec(vec![Fr::from(3u64), Fr::from(4u64)], 1);
+        let p = MLE::from_evals_vec(vec![Fr::from(5u64), Fr::from(6u64)], 1);
+        let q = MLE::from_evals_vec(vec![Fr::from(7u64), Fr::from(8u64)], 1);
+        let pi = MLE::from_evals_vec(vec![Fr::from(9u64), Fr::from(10u64)], 1);
+        let index = MLE::from_evals_vec(vec![Fr::from(13u64), Fr::from(14u64)], 1);
 
         // Call the function under test
         let result_poly =
@@ -661,10 +625,7 @@ mod test {
             result_values.len(),
             "Stream lengths do not match"
         );
-        assert_eq!(
-            expected_stream, result_values,
-            "Stream values do not match"
-        );
+        assert_eq!(expected_stream, result_values, "Stream values do not match");
     }
 
     #[test]

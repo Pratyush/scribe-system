@@ -1,5 +1,5 @@
-use rayon::prelude::*;
 use crate::streams::BUFFER_SIZE;
+use rayon::prelude::*;
 
 use super::BatchedIterator;
 
@@ -15,7 +15,7 @@ impl<I: BatchedIterator, const N: usize> ArrayChunks<I, N> {
     }
 }
 
-impl<I, const N: usize> BatchedIterator for ArrayChunks<I, N> 
+impl<I, const N: usize> BatchedIterator for ArrayChunks<I, N>
 where
     I: BatchedIterator,
     I::Item: Copy,
@@ -23,27 +23,28 @@ where
 {
     type Item = [I::Item; N];
     type Batch = rayon::vec::IntoIter<[I::Item; N]>;
-    
+
     fn next_batch(&mut self) -> Option<Self::Batch> {
         let batch: Vec<_> = self.iter.next_batch()?.collect();
-        let batch = batch.par_chunks_exact(N).map(|chunk| {
-            <[I::Item; N]>::try_from(chunk).unwrap()
-        }).collect::<Vec<_>>();
+        let batch = batch
+            .par_chunks_exact(N)
+            .map(|chunk| <[I::Item; N]>::try_from(chunk).unwrap())
+            .collect::<Vec<_>>();
         Some(batch.into_par_iter())
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use super::BatchedIterator;
     use crate::streams::iterator::BatchAdapter;
     use rayon::iter::IndexedParallelIterator;
-    use super::BatchedIterator;
 
     #[test]
     fn test_array_chunks_result_is_indexed_parallel_iter() {
         let mut iter = BatchAdapter::from(0..100u32).array_chunks::<2>();
         is_indexed_parallel_iter(iter.next_batch().unwrap());
     }
-    
+
     fn is_indexed_parallel_iter<T: IndexedParallelIterator>(_t: T) {}
 }

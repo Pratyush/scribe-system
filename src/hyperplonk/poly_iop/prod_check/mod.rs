@@ -1,22 +1,18 @@
-use crate::hyperplonk::arithmetic::virtual_polynomial::VPAuxInfo;
 use crate::hyperplonk::transcript::IOPTranscript;
-use crate::{
-    hyperplonk::{
-        pcs::PolynomialCommitmentScheme,
-        poly_iop::{
-            errors::PIOPError,
-            prod_check::util::{compute_frac_poly, compute_product_poly, prove_zero_check},
-            zero_check::ZeroCheck,
-            PolyIOP,
-        },
+use crate::hyperplonk::{
+    pcs::PolynomialCommitmentScheme,
+    poly_iop::{
+        errors::PIOPError,
+        prod_check::util::{compute_frac_poly, compute_product_poly, prove_zero_check},
+        zero_check::ZeroCheck,
+        PolyIOP,
     },
-    streams::DenseMLPolyStream,
 };
+use crate::{arithmetic::virtual_polynomial::VPAuxInfo, streams::MLE};
 use ark_ec::pairing::Pairing;
 use ark_ff::{One, PrimeField, Zero};
 
 use ark_std::{end_timer, start_timer};
-use std::sync::{Arc, Mutex};
 
 mod util;
 
@@ -143,7 +139,7 @@ pub struct ProductCheckProof<
 impl<E, PCS> ProductCheck<E, PCS> for PolyIOP<E::ScalarField>
 where
     E: Pairing,
-    PCS: PolynomialCommitmentScheme<E, Polynomial = Arc<Mutex<DenseMLPolyStream<E::ScalarField>>>>,
+    PCS: PolynomialCommitmentScheme<E, Polynomial = MLE<E::ScalarField>>,
 {
     type ProductCheckSubClaim = ProductCheckSubClaim<E::ScalarField, Self>;
     type ProductCheckProof = ProductCheckProof<E, PCS, Self>;
@@ -188,7 +184,7 @@ where
         // frac_p(x) = f1(x) * ... * fk(x) / (g1(x) * ... * gk(x))
         let frac_poly = compute_frac_poly(&mut fxs, &mut gxs)?;
         // compute the product polynomial
-        let prod_x = compute_product_poly(&frac_poly, 1 << 20)?;
+        let prod_x = compute_product_poly(&frac_poly)?;
 
         // generate challenge
         let frac_comm = PCS::commit(pcs_param, &frac_poly)?;

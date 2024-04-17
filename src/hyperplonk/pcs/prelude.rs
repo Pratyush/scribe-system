@@ -4,6 +4,5 @@ pub use crate::hyperplonk::pcs::{
         srs::{MultilinearProverParam, MultilinearUniversalParams, MultilinearVerifierParam},
         MultilinearKzgPCS, MultilinearKzgProof,
     }, */
-    structs::Commitment,
-    PolynomialCommitmentScheme, StructuredReferenceString,
+    structs::Commitment, PolynomialCommitmentScheme, StructuredReferenceString,
 };

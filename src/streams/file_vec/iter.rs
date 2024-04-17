@@ -1,6 +1,6 @@
-use std::{fs::File, io::BufReader, marker::PhantomData};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use rayon::iter::IntoParallelIterator;
+use std::{fs::File, io::BufReader, marker::PhantomData};
 
 use crate::streams::{iterator::BatchedIterator, BUFFER_SIZE};
 
@@ -12,14 +12,19 @@ pub struct Iter<'a, T: CanonicalSerialize + CanonicalDeserialize + 'static> {
 impl<'a, T: CanonicalSerialize + CanonicalDeserialize> Iter<'a, T> {
     pub fn new(file: File) -> Self {
         let file = BufReader::new(file);
-        Self { file, lifetime: PhantomData }
+        Self {
+            file,
+            lifetime: PhantomData,
+        }
     }
 }
 
-impl<'a, T: 'static + CanonicalSerialize + CanonicalDeserialize + Send + Sync + Copy> BatchedIterator for Iter<'a, T> {
+impl<'a, T: 'static + CanonicalSerialize + CanonicalDeserialize + Send + Sync + Copy>
+    BatchedIterator for Iter<'a, T>
+{
     type Item = T;
     type Batch = rayon::vec::IntoIter<T>;
-    
+
     fn next_batch(&mut self) -> Option<Self::Batch> {
         let mut buffer = Vec::with_capacity(BUFFER_SIZE);
         for _ in 0..BUFFER_SIZE {

@@ -22,7 +22,8 @@ macro_rules! process_file {
             }
 
             for item in &buffer {
-                item.serialize_uncompressed(&mut writer).expect("failed to write to file");
+                item.serialize_uncompressed(&mut writer)
+                    .expect("failed to write to file");
             }
         }
 
