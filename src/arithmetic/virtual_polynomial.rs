@@ -226,6 +226,8 @@ impl<F: PrimeField> VirtualPolynomial<F> {
     ) -> Result<(Self, F), ArithError> {
         let start = start_timer!(|| "sample random virtual polynomial");
 
+        println!("rand started");
+
         let mut sum = F::zero();
         let mut poly = VirtualPolynomial::new(nv);
         for _ in 0..num_products {
@@ -235,8 +237,10 @@ impl<F: PrimeField> VirtualPolynomial<F> {
                 MLE::rand_product_with_sum(nv, num_multiplicands, rng);
             let coefficient = F::rand(rng);
             poly.add_mles(product.into_iter(), coefficient)?;
-            sum += product_sum * coefficient;
+            sum += dbg!(product_sum) * coefficient;
         }
+
+        println!("final rand sum: {:?}", sum);
 
         end_timer!(start);
         Ok((poly, sum))
