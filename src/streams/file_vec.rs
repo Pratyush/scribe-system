@@ -116,6 +116,41 @@ impl<T: CanonicalSerialize + CanonicalDeserialize> FileVec<T> {
         file_vec
     }
 
+    pub fn from_batched_iter_tuple(iter: impl IntoBatchedIterator<Item = (T, T)>) -> (Self, Self)
+    where
+        T: Send + Sync,
+    {
+        let mut file_vec_1 = Self::new();
+        let mut file_vec_2 = Self::new();
+        let mut writer_1 = BufWriter::new(&mut file_vec_1.file);
+        let mut writer_2 = BufWriter::new(&mut file_vec_2.file);
+        let mut buffer = Vec::with_capacity(BUFFER_SIZE);
+        let mut iter = iter.into_batched_iter();
+
+        // Read from iterator and write to file.
+        while let Some(batch) = iter.next_batch() {
+            buffer.clear();
+            buffer.par_extend(batch);
+            for (item_1, item_2) in &buffer {
+                item_1
+                    .serialize_uncompressed(&mut writer_1)
+                    .expect("failed to write to file");
+                item_2
+                    .serialize_uncompressed(&mut writer_2)
+                    .expect("failed to write to file");
+            }
+        }
+        writer_1.flush().expect("failed to flush file");
+        writer_2.flush().expect("failed to flush file");
+        drop(writer_1);
+        drop(writer_2);
+
+        // Reset file cursor to beginning.
+        file_vec_1.file.rewind().expect("failed to seek file");
+        file_vec_2.file.rewind().expect("failed to seek file");
+        (file_vec_1, file_vec_2)
+    }
+
     pub fn for_each(&mut self, f: impl Fn(&mut T) + Send + Sync)
     where
         T: Send + Sync,

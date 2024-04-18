@@ -149,9 +149,7 @@ mod test {
             let zero_subclaim =
                 <PolyIOP<Fr> as ZeroCheck<Fr>>::verify(&proof, &poly_info, &mut transcript)?;
 
-            let evaluated_point = poly
-                .evaluate(&zero_subclaim.point)
-                .unwrap();
+            let evaluated_point = poly.evaluate(&zero_subclaim.point).unwrap();
             assert!(
                 evaluated_point == zero_subclaim.expected_evaluation,
                 "wrong subclaim"

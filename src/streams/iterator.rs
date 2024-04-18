@@ -84,6 +84,16 @@ pub trait BatchedIterator: Sized {
         FileVec::from_batched_iter(self)
     }
 
+    fn to_file_vec_tuple<T>(
+        self,
+    ) -> (FileVec<T>, FileVec<T>)
+    where
+        Self: IntoBatchedIterator<Item = (T, T)>,
+        T: CanonicalSerialize + CanonicalDeserialize + Send + Sync,
+    {
+        FileVec::from_batched_iter_tuple(self)
+    }
+
     /// Helper function to convert the iterator into a vector.
     fn to_vec(mut self) -> Vec<Self::Item>
     where

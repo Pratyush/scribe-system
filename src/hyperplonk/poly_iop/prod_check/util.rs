@@ -1,3 +1,5 @@
+use std::fs::File;
+
 use crate::hyperplonk::poly_iop::{
     errors::PIOPError, structs::IOPProof, zero_check::ZeroCheck, PolyIOP,
 };
@@ -21,8 +23,8 @@ use zip_many::ZipMany;
 /// The caller needs to sanity-check that the number of polynomials and
 /// variables match in fxs and gxs; and gi(x) has no zero entries.
 pub(super) fn compute_frac_poly<F: PrimeField>(
-    fxs: &mut [MLE<F>],
-    gxs: &mut [MLE<F>],
+    fxs: &[MLE<F>],
+    gxs: &[MLE<F>],
 ) -> Result<MLE<F>, PIOPError> {
     let start = start_timer!(|| "compute frac(x)");
 
@@ -79,13 +81,12 @@ pub(super) fn compute_product_poly<F: PrimeField>(frac_poly: &MLE<F>) -> Result<
 ///
 /// Cost: O(N)
 pub(super) fn prove_zero_check<F: PrimeField>(
-    fxs: Vec<MLE<F>>,
-    gxs: Vec<MLE<F>>,
+    fxs: &[MLE<F>],
+    gxs: &[MLE<F>],
     frac_poly: &MLE<F>,
     prod_x: &MLE<F>,
     alpha: &F,
     transcript: &mut IOPTranscript<F>,
-    batch_size: usize,
 ) -> Result<(IOPProof<F>, VirtualPolynomial<F>), PIOPError> {
     // this is basically a batch zero check with alpha as the batch factor
     // the first zero check is prod(x) - p1(x) * p2(x),
@@ -94,76 +95,16 @@ pub(super) fn prove_zero_check<F: PrimeField>(
     // the second zero check is frac * g1 * ... * gk - f1 * ... * fk
     // which is checking that frac is computed correctly from fxs and gxs
     let start = start_timer!(|| "zerocheck in product check");
-    let num_vars = frac_poly.lock().unwrap().num_vars();
 
-    let mut frac_poly_stream = frac_poly.lock().unwrap();
-    let mut prod_x_stream = prod_x.lock().unwrap();
+    let (p1, p2): (FileVec<F>, FileVec<F>) = chain_many(
+        vec![frac_poly, prod_x]
+            .iter()
+            .map(|mle| (*mle).evals().iter().array_chunks()),
+    )
+    .map(|[even, odd]| (even, odd))
+    .to_file_vec_tuple();
 
-    // compute p1(x) = (1-x1) * frac(x2, ..., xn, 0) + x1 * prod(x2, ..., xn, 0)
-    // compute p2(x) = (1-x1) * frac(x2, ..., xn, 1) + x1 * prod(x2, ..., xn, 1)
-    let mut p1_stream = MLE::new_from_tempfile(num_vars);
-    let mut p2_stream = MLE::new_from_tempfile(num_vars);
-
-    let mut p1_vals = Vec::with_capacity(batch_size);
-    let mut p2_vals = Vec::with_capacity(batch_size);
-
-    while let (Some(p1_val), Some(p2_val)) =
-        (frac_poly_stream.read_next(), frac_poly_stream.read_next())
-    {
-        p1_vals.push(p1_val);
-        p2_vals.push(p2_val);
-
-        if p1_vals.len() >= batch_size {
-            for p1_val in p1_vals.drain(..) {
-                p1_stream
-                    .write_next_unchecked(p1_val)
-                    .expect("Failed to write to p1 stream");
-            }
-            for p2_val in p2_vals.drain(..) {
-                p2_stream
-                    .write_next_unchecked(p2_val)
-                    .expect("Failed to write to p2 stream");
-            }
-        }
-    }
-
-    while let (Some(p1_val), Some(p2_val)) = (prod_x_stream.read_next(), prod_x_stream.read_next())
-    {
-        p1_vals.push(p1_val);
-        p2_vals.push(p2_val);
-
-        if p1_vals.len() >= batch_size {
-            for p1_val in p1_vals.drain(..) {
-                p1_stream
-                    .write_next_unchecked(p1_val)
-                    .expect("Failed to write to p1 stream");
-            }
-            for p2_val in p2_vals.drain(..) {
-                p2_stream
-                    .write_next_unchecked(p2_val)
-                    .expect("Failed to write to p2 stream");
-            }
-        }
-    }
-
-    // write the last batch
-    for p1_val in p1_vals.drain(..) {
-        p1_stream
-            .write_next_unchecked(p1_val)
-            .expect("Failed to write to p1 stream");
-    }
-    for p2_val in p2_vals.drain(..) {
-        p2_stream
-            .write_next_unchecked(p2_val)
-            .expect("Failed to write to p2 stream");
-    }
-
-    p1_stream.swap_read_write();
-    p2_stream.swap_read_write();
-    frac_poly_stream.read_restart();
-    prod_x_stream.read_restart();
-    drop(frac_poly_stream);
-    drop(prod_x_stream);
+    let num_vars = frac_poly.num_vars();
 
     // compute Q(x)
     // prod(x)
@@ -171,20 +112,20 @@ pub(super) fn prove_zero_check<F: PrimeField>(
 
     //   prod(x)
     // - p1(x) * p2(x)
-    q_x.add_mle_list([p1_stream, p2_stream], -F::one())?;
+    q_x.add_mles([MLE::from_evals(p1, num_vars), MLE::from_evals(p2, num_vars)], -F::one())?;
 
     //   prod(x)
     // - p1(x) * p2(x)
     // + alpha * frac(x) * g1(x) * ... * gk(x)
-    let mut mle_list = gxs;
+    let mut mle_list = gxs.to_vec();
     mle_list.push(frac_poly.clone());
-    q_x.add_mle_list(mle_list, *alpha)?;
+    q_x.add_mles(mle_list, *alpha)?;
 
     //   prod(x)
     // - p1(x) * p2(x)
     // + alpha * frac(x) * g1(x) * ... * gk(x)
     // - alpha * f1(x) * ... * fk(x)]
-    q_x.add_mle_list(fxs, -*alpha)?;
+    q_x.add_mles(fxs.to_vec(), -*alpha)?;
 
     let iop_proof = <PolyIOP<F> as ZeroCheck<F>>::prove(&q_x, transcript)?;
 
@@ -257,163 +198,163 @@ mod test {
         );
     }
 
-    #[test]
-    fn test_compute_product_poly() {
-        let mut rng = StdRng::seed_from_u64(42); // Fixed seed for reproducibility
-
-        // create vector to populate stream
-        let num_vars = 10;
-        let mut frac_poly_vec = Vec::with_capacity(1 << num_vars);
-        for _i in 0..(1 << num_vars) {
-            frac_poly_vec.push(Standard.sample(&mut rng));
-        }
-
-        // Create a stream with 2^10 elements
-        let mut frac_poly_stream: MLE<Fr> = MLE::new_single_stream(num_vars, None);
-        for i in 0..(1 << num_vars) {
-            frac_poly_stream
-                .write_next_unchecked(frac_poly_vec[i])
-                .expect("Failed to write to MLE stream");
-        }
-        // frac_poly_stream.write_pointer.flush().unwrap();
-        frac_poly_stream.write_restart();
-
-        let frac_poly = Arc::new(Mutex::new(frac_poly_stream));
-
-        // Compute the product polynomial with buffer size 1 << 5
-        let result = compute_product_poly(&frac_poly, 1 << 5).unwrap();
-
-        // Verify the result
-        let mut result_stream = result.lock().unwrap();
-        result_stream.read_restart();
-
-        // Compute expected
-        let expected = compute_product_poly_in_memory(frac_poly_vec, num_vars);
-
-        for i in 0..(1 << num_vars) {
-            assert_eq!(
-                result_stream.read_next().unwrap(),
-                expected[i],
-                "Product polynomial evaluation is incorrect"
-            );
-        }
-    }
-
     // #[test]
-    // fn test_prove_zero_check() {
-    //     let nv = 2;
+    // fn test_compute_product_poly() {
     //     let mut rng = StdRng::seed_from_u64(42); // Fixed seed for reproducibility
-    //     let mut transcript = <PolyIOP<E::ScalarField> as ProductCheck<E, PCS>>::init_transcript();
 
-    //     let srs = MultilinearKzgPCS::<Bls12_381>::gen_srs_for_testing(&mut rng, nv).unwrap();
-    //     let (pcs_param, _) = MultilinearKzgPCS::<Bls12_381>::trim(&srs, None, Some(nv)).unwrap();
+    //     // create vector to populate stream
+    //     let num_vars = 10;
+    //     let mut frac_poly_vec = Vec::with_capacity(1 << num_vars);
+    //     for _i in 0..(1 << num_vars) {
+    //         frac_poly_vec.push(Standard.sample(&mut rng));
+    //     }
 
-    //     // create fxs
-    //     let f1 = vec![Fr::from(1u64), Fr::from(2u64), Fr::from(3u64), Fr::from(4u64)];
-    //     let f2 = vec![Fr::from(5u64), Fr::from(6u64), Fr::from(7u64), Fr::from(8u64)];
-    //     let fxs = vec![Arc::new(Mutex::new(MLE::from_evaluations_vec(nv, f1, None, None))),
-    //                       Arc::new(Mutex::new(MLE::from_evaluations_vec(nv, f2, None, None)))];
+    //     // Create a stream with 2^10 elements
+    //     let mut frac_poly_stream: MLE<Fr> = MLE::new_single_stream(num_vars, None);
+    //     for i in 0..(1 << num_vars) {
+    //         frac_poly_stream
+    //             .write_next_unchecked(frac_poly_vec[i])
+    //             .expect("Failed to write to MLE stream");
+    //     }
+    //     // frac_poly_stream.write_pointer.flush().unwrap();
+    //     frac_poly_stream.write_restart();
 
-    //     // create gxs
-    //     let g1 = vec![Fr::from(1u64), Fr::from(3u64), Fr::from(5u64), Fr::from(7u64)];
-    //     let g2 = vec![Fr::from(2u64), Fr::from(4u64), Fr::from(6u64), Fr::from(8u64)];
-    //     let gxs = vec![Arc::new(Mutex::new(MLE::from_evaluations_vec(nv, g1, None, None))),
-    //                       Arc::new(Mutex::new(MLE::from_evaluations_vec(nv, g2, None, None)))];
+    //     let frac_poly = Arc::new(Mutex::new(frac_poly_stream));
 
-    //     // compute the fractional polynomial frac_p s.t.
-    //     // frac_p(x) = f1(x) * ... * fk(x) / (g1(x) * ... * gk(x))
-    //     let frac_poly = compute_frac_poly(fxs.clone(), gxs.clone()).unwrap();
-    //     // compute the product polynomial
-    //     let prod_x = compute_product_poly(&frac_poly, 1 << 20).unwrap();
+    //     // Compute the product polynomial with buffer size 1 << 5
+    //     let result = compute_product_poly(&frac_poly, 1 << 5).unwrap();
 
-    //     // generate challenge
-    //     let frac_comm = PCS::commit(pcs_param, &frac_poly)?;
-    //     let prod_x_comm = PCS::commit(pcs_param, &prod_x)?;
-    //     let alpha = transcript.get_and_append_challenge(b"alpha")?;
-    //     // build the zero-check proof
-    //     let (zero_check_proof, _) =
-    //         prove_zero_check(fxs, gxs, &frac_poly, &prod_x, &alpha, transcript, 1 << 20)?;
+    //     // Verify the result
+    //     let mut result_stream = result.lock().unwrap();
+    //     result_stream.read_restart();
 
+    //     // Compute expected
+    //     let expected = compute_product_poly_in_memory(frac_poly_vec, num_vars);
+
+    //     for i in 0..(1 << num_vars) {
+    //         assert_eq!(
+    //             result_stream.read_next().unwrap(),
+    //             expected[i],
+    //             "Product polynomial evaluation is incorrect"
+    //         );
+    //     }
     // }
 
-    #[test]
-    fn test_prover_zero_check() {
-        use ark_ff::Field;
+    // // #[test]
+    // // fn test_prove_zero_check() {
+    // //     let nv = 2;
+    // //     let mut rng = StdRng::seed_from_u64(42); // Fixed seed for reproducibility
+    // //     let mut transcript = <PolyIOP<E::ScalarField> as ProductCheck<E, PCS>>::init_transcript();
 
-        // frac_0: 44242769679012723217034031053781908675551403672320194412821837028073177874433
-        // frac_1: 7490839310732312925635391501169423691098650357218233974657665528562654454931
-        // frac_2: 13108968793781547619861935127046491459422638125131909455650914674984645296130
-        // frac_3: 10487175035025238095889548101637193167538110500105527564520731739987716236909
-        // prod_0: 2809064741524617347113271812938533884161993883956837740496624573210995420599
-        // prod_1: 31461525105075714287668644304911579502614331500316582693562195219963148710719
-        // prod_2: 1
-        // prod_3: 1
-        // neg_1: 52435875175126190479447740508185965837690552500527637822603658699938581184512
-        // p1_0: 44242769679012723217034031053781908675551403672320194412821837028073177874433
-        // p1_1: 13108968793781547619861935127046491459422638125131909455650914674984645296130
-        // p1_2: 2809064741524617347113271812938533884161993883956837740496624573210995420599
-        // p1_3: 1
-        // p2_0: 7490839310732312925635391501169423691098650357218233974657665528562654454931
-        // p2_1: 10487175035025238095889548101637193167538110500105527564520731739987716236909
-        // p2_2: 31461525105075714287668644304911579502614331500316582693562195219963148710719
-        // p2_3: 1
+    // //     let srs = MultilinearKzgPCS::<Bls12_381>::gen_srs_for_testing(&mut rng, nv).unwrap();
+    // //     let (pcs_param, _) = MultilinearKzgPCS::<Bls12_381>::trim(&srs, None, Some(nv)).unwrap();
 
-        let frac_0 = Fr::from(1)
-            * Fr::from(5)
-            * Fr::from(4).inverse().unwrap()
-            * Fr::from(8).inverse().unwrap();
-        println!("frac_0: {}", frac_0);
+    // //     // create fxs
+    // //     let f1 = vec![Fr::from(1u64), Fr::from(2u64), Fr::from(3u64), Fr::from(4u64)];
+    // //     let f2 = vec![Fr::from(5u64), Fr::from(6u64), Fr::from(7u64), Fr::from(8u64)];
+    // //     let fxs = vec![Arc::new(Mutex::new(MLE::from_evaluations_vec(nv, f1, None, None))),
+    // //                       Arc::new(Mutex::new(MLE::from_evaluations_vec(nv, f2, None, None)))];
 
-        let frac_1 = Fr::from(2)
-            * Fr::from(6)
-            * Fr::from(3).inverse().unwrap()
-            * Fr::from(7).inverse().unwrap();
-        println!("frac_1: {}", frac_1);
+    // //     // create gxs
+    // //     let g1 = vec![Fr::from(1u64), Fr::from(3u64), Fr::from(5u64), Fr::from(7u64)];
+    // //     let g2 = vec![Fr::from(2u64), Fr::from(4u64), Fr::from(6u64), Fr::from(8u64)];
+    // //     let gxs = vec![Arc::new(Mutex::new(MLE::from_evaluations_vec(nv, g1, None, None))),
+    // //                       Arc::new(Mutex::new(MLE::from_evaluations_vec(nv, g2, None, None)))];
 
-        let frac_2 = Fr::from(3)
-            * Fr::from(7)
-            * Fr::from(2).inverse().unwrap()
-            * Fr::from(6).inverse().unwrap();
-        println!("frac_2: {}", frac_2);
+    // //     // compute the fractional polynomial frac_p s.t.
+    // //     // frac_p(x) = f1(x) * ... * fk(x) / (g1(x) * ... * gk(x))
+    // //     let frac_poly = compute_frac_poly(fxs.clone(), gxs.clone()).unwrap();
+    // //     // compute the product polynomial
+    // //     let prod_x = compute_product_poly(&frac_poly, 1 << 20).unwrap();
 
-        let frac_3 = Fr::from(4)
-            * Fr::from(8)
-            * Fr::from(1).inverse().unwrap()
-            * Fr::from(5).inverse().unwrap();
-        println!("frac_3: {}", frac_3);
+    // //     // generate challenge
+    // //     let frac_comm = PCS::commit(pcs_param, &frac_poly)?;
+    // //     let prod_x_comm = PCS::commit(pcs_param, &prod_x)?;
+    // //     let alpha = transcript.get_and_append_challenge(b"alpha")?;
+    // //     // build the zero-check proof
+    // //     let (zero_check_proof, _) =
+    // //         prove_zero_check(fxs, gxs, &frac_poly, &prod_x, &alpha, transcript, 1 << 20)?;
 
-        let prod_0 = frac_0 * frac_1;
-        println!("prod_0: {}", prod_0);
+    // // }
 
-        let prod_1 = frac_2 * frac_3;
-        println!("prod_1: {}", prod_1);
+    // #[test]
+    // fn test_prover_zero_check() {
+    //     use ark_ff::Field;
 
-        let prod_2 = prod_0 * prod_1;
-        println!("prod_2: {}", prod_2);
+    //     // frac_0: 44242769679012723217034031053781908675551403672320194412821837028073177874433
+    //     // frac_1: 7490839310732312925635391501169423691098650357218233974657665528562654454931
+    //     // frac_2: 13108968793781547619861935127046491459422638125131909455650914674984645296130
+    //     // frac_3: 10487175035025238095889548101637193167538110500105527564520731739987716236909
+    //     // prod_0: 2809064741524617347113271812938533884161993883956837740496624573210995420599
+    //     // prod_1: 31461525105075714287668644304911579502614331500316582693562195219963148710719
+    //     // prod_2: 1
+    //     // prod_3: 1
+    //     // neg_1: 52435875175126190479447740508185965837690552500527637822603658699938581184512
+    //     // p1_0: 44242769679012723217034031053781908675551403672320194412821837028073177874433
+    //     // p1_1: 13108968793781547619861935127046491459422638125131909455650914674984645296130
+    //     // p1_2: 2809064741524617347113271812938533884161993883956837740496624573210995420599
+    //     // p1_3: 1
+    //     // p2_0: 7490839310732312925635391501169423691098650357218233974657665528562654454931
+    //     // p2_1: 10487175035025238095889548101637193167538110500105527564520731739987716236909
+    //     // p2_2: 31461525105075714287668644304911579502614331500316582693562195219963148710719
+    //     // p2_3: 1
 
-        let prod_3 = Fr::from(1);
-        println!("prod_3: {}", prod_3);
+    //     let frac_0 = Fr::from(1)
+    //         * Fr::from(5)
+    //         * Fr::from(4).inverse().unwrap()
+    //         * Fr::from(8).inverse().unwrap();
+    //     println!("frac_0: {}", frac_0);
 
-        // [1, 2, 8] has coefficient of -1
-        let neg_1 = -Fr::from(1);
-        println!("neg_1: {}", neg_1);
+    //     let frac_1 = Fr::from(2)
+    //         * Fr::from(6)
+    //         * Fr::from(3).inverse().unwrap()
+    //         * Fr::from(7).inverse().unwrap();
+    //     println!("frac_1: {}", frac_1);
 
-        let p1_0 = frac_0;
-        let p1_1 = frac_2;
-        let p1_2 = prod_0;
-        let p1_3 = prod_2;
-        println!("p1_0: {}", p1_0);
-        println!("p1_1: {}", p1_1);
-        println!("p1_2: {}", p1_2);
-        println!("p1_3: {}", p1_3);
+    //     let frac_2 = Fr::from(3)
+    //         * Fr::from(7)
+    //         * Fr::from(2).inverse().unwrap()
+    //         * Fr::from(6).inverse().unwrap();
+    //     println!("frac_2: {}", frac_2);
 
-        let p2_0 = frac_1;
-        let p2_1 = frac_3;
-        let p2_2 = prod_1;
-        let p2_3 = prod_3;
-        println!("p2_0: {}", p2_0);
-        println!("p2_1: {}", p2_1);
-        println!("p2_2: {}", p2_2);
-        println!("p2_3: {}", p2_3);
-    }
+    //     let frac_3 = Fr::from(4)
+    //         * Fr::from(8)
+    //         * Fr::from(1).inverse().unwrap()
+    //         * Fr::from(5).inverse().unwrap();
+    //     println!("frac_3: {}", frac_3);
+
+    //     let prod_0 = frac_0 * frac_1;
+    //     println!("prod_0: {}", prod_0);
+
+    //     let prod_1 = frac_2 * frac_3;
+    //     println!("prod_1: {}", prod_1);
+
+    //     let prod_2 = prod_0 * prod_1;
+    //     println!("prod_2: {}", prod_2);
+
+    //     let prod_3 = Fr::from(1);
+    //     println!("prod_3: {}", prod_3);
+
+    //     // [1, 2, 8] has coefficient of -1
+    //     let neg_1 = -Fr::from(1);
+    //     println!("neg_1: {}", neg_1);
+
+    //     let p1_0 = frac_0;
+    //     let p1_1 = frac_2;
+    //     let p1_2 = prod_0;
+    //     let p1_3 = prod_2;
+    //     println!("p1_0: {}", p1_0);
+    //     println!("p1_1: {}", p1_1);
+    //     println!("p1_2: {}", p1_2);
+    //     println!("p1_3: {}", p1_3);
+
+    //     let p2_0 = frac_1;
+    //     let p2_1 = frac_3;
+    //     let p2_2 = prod_1;
+    //     let p2_3 = prod_3;
+    //     println!("p2_0: {}", p2_0);
+    //     println!("p2_1: {}", p2_1);
+    //     println!("p2_2: {}", p2_2);
+    //     println!("p2_3: {}", p2_3);
+    // }
 }

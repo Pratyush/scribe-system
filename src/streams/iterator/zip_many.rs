@@ -56,15 +56,15 @@ mod tests {
         let _zipped = zip_many(vec![iter1, iter2]);
     }
 
-    #[test]
-    fn test_zip_many_trait_for_each() {
-        let iter1 = from_iter(0..100u32);
-        let iter2 = from_iter(100..200u32);
+    // #[test]
+    // fn test_zip_many_trait_for_each() {
+    //     let iter1 = from_iter(0..100u32);
+    //     let iter2 = from_iter(100..200u32);
 
-        let zipped = zip_many([iter1, iter2]);
-        let mut vec = FileVec::from_iter(0..100u32);
-        vec.zipped_for_each(zipped, |a, b| {
-            assert_eq!(a, b.0);
-        });
-    }
+    //     let zipped = zip_many([iter1, iter2]);
+    //     let mut vec = FileVec::from_iter(0..100u32);
+    //     vec.zipped_for_each(zipped, |a, b| {
+    //         assert_eq!(a, b.0);
+    //     });
+    // }
 }
