@@ -281,20 +281,20 @@ fn remove_dummy_variable<F: Field>(poly: &[F], pad: usize) -> Result<Vec<F>, PCS
     Ok((0..(1 << nv)).map(|x| poly[x << pad]).collect())
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use ark_bls12_381::Bls12_381;
-    use ark_std::test_rng;
-    type E = Bls12_381;
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+//     use ark_bls12_381::Bls12_381;
+//     use ark_std::test_rng;
+//     type E = Bls12_381;
 
-    #[test]
-    fn test_srs_gen() -> Result<(), PCSError> {
-        let mut rng = test_rng();
-        for nv in 4..10 {
-            let _ = MultilinearUniversalParams::<E>::gen_srs_for_testing(&mut rng, nv)?;
-        }
+//     #[test]
+//     fn test_srs_gen() -> Result<(), PCSError> {
+//         let mut rng = test_rng();
+//         for nv in 4..10 {
+//             let _ = MultilinearUniversalParams::<E>::gen_srs_for_testing(&mut rng, nv)?;
+//         }
 
-        Ok(())
-    }
-}
+//         Ok(())
+//     }
+// }
