@@ -38,6 +38,12 @@ pub trait BatchedIterator: Sized {
         }
     }
 
+    fn batched_for_each(mut self, f: impl Fn(Self::Batch) + Send + Sync + Clone) {
+        while let Some(batch) = self.next_batch() {
+            f(batch)
+        }
+    }
+
     fn zip<I2: BatchedIterator>(self, other: I2) -> Zip<Self, I2> {
         Zip {
             iter1: self,
@@ -74,6 +80,24 @@ pub trait BatchedIterator: Sized {
                 .fold_with(acc, |a, b| fold_op(a, b))
                 .reduce(|| identity(), |a, b| reduce_op(a, b));
         }
+        acc
+    }
+
+    fn batched_fold<T, B, ID, F, F2>(mut self, batch_op: B, identity: ID, fold_op: F, reduce_op: F2) -> T
+    where
+        B: Fn(Self::Batch) -> T + Sync + Send,
+        F: Fn(T, T) -> T + Sync + Send,
+        F2: Fn(T, T) -> T + Sync + Send,
+        ID: Fn() -> T + Sync + Send,
+        T: Send + Clone,
+    {
+        let mut processed_batches: Vec<T> = Vec::new();
+        while let Some(batch) = self.next_batch() {
+            processed_batches.push(batch_op(batch));
+        }
+        let mut acc = identity();
+        acc = processed_batches.into_par_iter().fold_with(acc, |a, b| fold_op(a, b))
+        .reduce(|| identity(), |a, b| reduce_op(a, b));
         acc
     }
 

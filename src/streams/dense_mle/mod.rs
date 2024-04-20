@@ -24,7 +24,7 @@ impl<F: Field> MLE<F> {
         f(&*self.0)
     }
 
-    fn map_in_place<T>(&mut self, f: impl FnOnce(&mut Inner<F>) -> T + Send + Sync) -> T {
+    fn map_in_place<'a, T>(&'a mut self, f: impl FnOnce(&'a mut Inner<F>) -> T + Send + Sync) -> T {
         let inner = Arc::get_mut(&mut self.0)
             .expect("failed to get mutable reference: multiple references exist");
         f(inner)

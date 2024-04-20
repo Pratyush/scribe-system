@@ -4,7 +4,7 @@ use ark_std::string::String;
 use displaydoc::Display;
 // use transcript::TranscriptError;
 use crate::arithmetic::errors::ArithError;
-use crate::hyperplonk::pcs::prelude::PCSError;
+use crate::hyperplonk::pcs::errors::PCSError;
 use crate::hyperplonk::transcript::TranscriptError;
 
 /// A `enum` specifying the possible failure modes of the PolyIOP.

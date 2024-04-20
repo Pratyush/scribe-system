@@ -1,8 +1,8 @@
-mod errors;
-// pub mod multilinear_kzg;
+pub mod errors;
+pub mod multilinear_kzg;
 mod structs;
 
-pub mod prelude;
+// pub mod prelude;
 
 use crate::hyperplonk::transcript::IOPTranscript;
 use ark_ec::pairing::Pairing;
@@ -16,11 +16,11 @@ use std::{borrow::Borrow, fmt::Debug, hash::Hash};
 /// Note that for our usage of PCS, we do not require the hiding property.
 pub trait PolynomialCommitmentScheme<E: Pairing> {
     /// Prover parameters
-    type ProverParam: Clone + Sync;
+    type ProverParam: Sync;
     /// Verifier parameters
     type VerifierParam: Clone + CanonicalSerialize + CanonicalDeserialize;
     /// Structured reference string
-    type SRS: Clone + Debug;
+    type SRS: Debug;
     /// Polynomial and its associated types
     type Polynomial: Clone + Debug;
     /// Polynomial input domain
@@ -32,7 +32,7 @@ pub trait PolynomialCommitmentScheme<E: Pairing> {
     /// Proofs
     type Proof: Clone + CanonicalSerialize + CanonicalDeserialize + Debug + PartialEq + Eq;
     /// Batch proofs
-    type BatchProof;
+    // type BatchProof;
 
     /// Build SRS for testing.
     ///
@@ -82,60 +82,60 @@ pub trait PolynomialCommitmentScheme<E: Pairing> {
         poly: &Self::Polynomial,
     ) -> Result<Self::Commitment, PCSError>;
 
-    /// On input a polynomial `p` and a point `point`, outputs a proof for the
-    /// same.
-    fn open(
-        prover_param: impl Borrow<Self::ProverParam>,
-        polynomial: &Self::Polynomial,
-        point: &Self::Point,
-    ) -> Result<(Self::Proof, Self::Evaluation), PCSError>;
+    // /// On input a polynomial `p` and a point `point`, outputs a proof for the
+    // /// same.
+    // fn open(
+    //     prover_param: impl Borrow<Self::ProverParam>,
+    //     polynomial: &Self::Polynomial,
+    //     point: &Self::Point,
+    // ) -> Result<(Self::Proof, Self::Evaluation), PCSError>;
 
-    // just a RLN of regular open
-    fn multi_open_single_point(
-        prover_param: impl Borrow<Self::ProverParam>,
-        polynomials: &[Self::Polynomial],
-        points: Self::Point,
-        transcript: &mut IOPTranscript<E::ScalarField>,
-    ) -> Result<(Self::Proof, Self::Evaluation), PCSError>;
+    // // just a RLN of regular open
+    // fn multi_open_single_point(
+    //     prover_param: impl Borrow<Self::ProverParam>,
+    //     polynomials: &[Self::Polynomial],
+    //     points: Self::Point,
+    //     transcript: &mut IOPTranscript<E::ScalarField>,
+    // ) -> Result<(Self::Proof, Self::Evaluation), PCSError>;
 
-    // this is the multi poly multi point version
-    /// Input a list of multilinear extensions, and a same number of points, and
-    /// a transcript, compute a multi-opening for all the polynomials.
-    fn multi_open(
-        _prover_param: impl Borrow<Self::ProverParam>,
-        _polynomials: &[Self::Polynomial],
-        _points: &[Self::Point],
-        _evals: &[Self::Evaluation],
-        _transcript: &mut IOPTranscript<E::ScalarField>,
-    ) -> Result<Self::BatchProof, PCSError> {
-        // the reason we use unimplemented!() is to enable developers to implement the
-        // trait without always implementing the batching APIs.
-        unimplemented!()
-    }
+    // // this is the multi poly multi point version
+    // /// Input a list of multilinear extensions, and a same number of points, and
+    // /// a transcript, compute a multi-opening for all the polynomials.
+    // fn multi_open(
+    //     _prover_param: impl Borrow<Self::ProverParam>,
+    //     _polynomials: &[Self::Polynomial],
+    //     _points: &[Self::Point],
+    //     _evals: &[Self::Evaluation],
+    //     _transcript: &mut IOPTranscript<E::ScalarField>,
+    // ) -> Result<Self::BatchProof, PCSError> {
+    //     // the reason we use unimplemented!() is to enable developers to implement the
+    //     // trait without always implementing the batching APIs.
+    //     unimplemented!()
+    // }
 
-    /// Verifies that `value` is the evaluation at `x` of the polynomial
-    /// committed inside `comm`.
-    fn verify(
-        verifier_param: &Self::VerifierParam,
-        commitment: &Self::Commitment,
-        point: &Self::Point,
-        value: &E::ScalarField,
-        proof: &Self::Proof,
-    ) -> Result<bool, PCSError>;
+    // /// Verifies that `value` is the evaluation at `x` of the polynomial
+    // /// committed inside `comm`.
+    // fn verify(
+    //     verifier_param: &Self::VerifierParam,
+    //     commitment: &Self::Commitment,
+    //     point: &Self::Point,
+    //     value: &E::ScalarField,
+    //     proof: &Self::Proof,
+    // ) -> Result<bool, PCSError>;
 
-    /// Verifies that `value_i` is the evaluation at `x_i` of the polynomial
-    /// `poly_i` committed inside `comm`.
-    fn batch_verify(
-        _verifier_param: &Self::VerifierParam,
-        _commitments: &[Self::Commitment],
-        _points: &[Self::Point],
-        _batch_proof: &Self::BatchProof,
-        _transcript: &mut IOPTranscript<E::ScalarField>,
-    ) -> Result<bool, PCSError> {
-        // the reason we use unimplemented!() is to enable developers to implement the
-        // trait without always implementing the batching APIs.
-        unimplemented!()
-    }
+    // /// Verifies that `value_i` is the evaluation at `x_i` of the polynomial
+    // /// `poly_i` committed inside `comm`.
+    // fn batch_verify(
+    //     _verifier_param: &Self::VerifierParam,
+    //     _commitments: &[Self::Commitment],
+    //     _points: &[Self::Point],
+    //     _batch_proof: &Self::BatchProof,
+    //     _transcript: &mut IOPTranscript<E::ScalarField>,
+    // ) -> Result<bool, PCSError> {
+    //     // the reason we use unimplemented!() is to enable developers to implement the
+    //     // trait without always implementing the batching APIs.
+    //     unimplemented!()
+    // }
 }
 
 /// API definitions for structured reference string
@@ -164,15 +164,15 @@ pub trait StructuredReferenceString<E: Pairing>: Sized {
         supported_size: usize,
     ) -> Result<(Self::ProverParam, Self::VerifierParam), PCSError>;
 
-    /// Build SRS for testing.
-    ///
-    /// - For univariate polynomials, `supported_size` is the maximum degree.
-    /// - For multilinear polynomials, `supported_size` is the number of
-    ///   variables.
-    ///
-    /// WARNING: THIS FUNCTION IS FOR TESTING PURPOSE ONLY.
-    /// THE OUTPUT SRS SHOULD NOT BE USED IN PRODUCTION.
-    fn gen_srs_for_testing<R: Rng>(rng: &mut R, supported_size: usize) -> Result<Self, PCSError>;
+    // /// Build SRS for testing.
+    // ///
+    // /// - For univariate polynomials, `supported_size` is the maximum degree.
+    // /// - For multilinear polynomials, `supported_size` is the number of
+    // ///   variables.
+    // ///
+    // /// WARNING: THIS FUNCTION IS FOR TESTING PURPOSE ONLY.
+    // /// THE OUTPUT SRS SHOULD NOT BE USED IN PRODUCTION.
+    // fn gen_srs_for_testing<R: Rng>(rng: &mut R, supported_size: usize) -> Result<Self, PCSError>;
 
     fn gen_fake_srs_for_testing<R: Rng>(
         rng: &mut R,

@@ -1,4 +1,4 @@
-use crate::hyperplonk::arithmetic::virtual_polynomial::{
+use crate::arithmetic::virtual_polynomial::{
     build_eq_x_r_vec, VPAuxInfo, VirtualPolynomial,
 };
 use crate::hyperplonk::poly_iop::{prelude::SumCheck, structs::IOPProof, PolyIOP};

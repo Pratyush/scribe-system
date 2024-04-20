@@ -355,9 +355,9 @@ where
 //             prod_x
 //                 .lock()
 //                 .unwrap()
-//                 .evaluate(std::slice::from_ref(
-//                     &prod_subclaim.final_query.0.last().unwrap()
-//                 ))
+//                 .evaluate(
+//                     &prod_subclaim.final_query.0
+//                 )
 //                 .unwrap(),
 //             prod_subclaim.final_query.1,
 //             "different product"

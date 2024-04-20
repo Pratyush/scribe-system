@@ -116,6 +116,7 @@ impl<T: CanonicalSerialize + CanonicalDeserialize> FileVec<T> {
         file_vec
     }
 
+    // Writes two elements of each tuple in the iterator to two separate files respectively.
     pub fn from_batched_iter_tuple(iter: impl IntoBatchedIterator<Item = (T, T)>) -> (Self, Self)
     where
         T: Send + Sync,
