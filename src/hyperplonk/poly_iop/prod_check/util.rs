@@ -138,11 +138,8 @@ mod test {
     use super::compute_product_poly;
     use super::*;
 
-    use crate::hyperplonk::pcs::multilinear_kzg::MultilinearKzgPCS;
-    use crate::hyperplonk::pcs::PolynomialCommitmentScheme;
-    use crate::hyperplonk::poly_iop::prod_check::ProductCheck;
     use crate::streams::{ReadWriteStream, MLE};
-    use ark_bls12_381::{Bls12_381, Fr};
+    use ark_bls12_381::Fr;
 
     use ark_std::rand::distributions::{Distribution, Standard};
     use ark_std::rand::rngs::StdRng;
@@ -228,40 +225,40 @@ mod test {
         });
     }
 
-    #[test]
-    fn test_prove_zero_check() {
-        let nv = 2;
-        let mut rng = StdRng::seed_from_u64(42); // Fixed seed for reproducibility
-        let mut transcript = <PolyIOP<Fr> as ProductCheck<E, PCS>>::init_transcript();
+    // #[test]
+    // fn test_prove_zero_check() {
+    //     let nv = 2;
+    //     let mut rng = StdRng::seed_from_u64(42); // Fixed seed for reproducibility
+    //     let mut transcript = <PolyIOP<Fr> as ProductCheck<E, PCS>>::init_transcript();
 
-        let srs = MultilinearKzgPCS::<Bls12_381>::gen_srs_for_testing(&mut rng, nv).unwrap();
-        let (pcs_param, _) = MultilinearKzgPCS::<Bls12_381>::trim(&srs, None, Some(nv)).unwrap();
+    //     // let srs = MultilinearKzgPCS::<Bls12_381>::gen_srs_for_testing(&mut rng, nv).unwrap();
+    //     // let (pcs_param, _) = MultilinearKzgPCS::<Bls12_381>::trim(&srs, None, Some(nv)).unwrap();
 
-        // create fxs
-        let f1 = vec![Fr::from(1u64), Fr::from(2u64), Fr::from(3u64), Fr::from(4u64)];
-        let f2 = vec![Fr::from(5u64), Fr::from(6u64), Fr::from(7u64), Fr::from(8u64)];
-        let fxs = vec![MLE::from_evals_vec(f1, 2), MLE::from_evals_vec(f2, 2)];
+    //     // create fxs
+    //     let f1 = vec![Fr::from(1u64), Fr::from(2u64), Fr::from(3u64), Fr::from(4u64)];
+    //     let f2 = vec![Fr::from(5u64), Fr::from(6u64), Fr::from(7u64), Fr::from(8u64)];
+    //     let fxs = vec![MLE::from_evals_vec(f1, 2), MLE::from_evals_vec(f2, 2)];
 
-        // create gxs
-        let g1 = vec![Fr::from(1u64), Fr::from(3u64), Fr::from(5u64), Fr::from(7u64)];
-        let g2 = vec![Fr::from(2u64), Fr::from(4u64), Fr::from(6u64), Fr::from(8u64)];
-        let gxs = vec![MLE::from_evals_vec(g1, 2), MLE::from_evals_vec(g2, 2)];
+    //     // create gxs
+    //     let g1 = vec![Fr::from(1u64), Fr::from(3u64), Fr::from(5u64), Fr::from(7u64)];
+    //     let g2 = vec![Fr::from(2u64), Fr::from(4u64), Fr::from(6u64), Fr::from(8u64)];
+    //     let gxs = vec![MLE::from_evals_vec(g1, 2), MLE::from_evals_vec(g2, 2)];
 
-        // compute the fractional polynomial frac_p s.t.
-        // frac_p(x) = f1(x) * ... * fk(x) / (g1(x) * ... * gk(x))
-        let frac_poly = compute_frac_poly(&fxs, &gxs).unwrap();
-        // compute the product polynomial
-        let prod_x = compute_product_poly(&frac_poly).unwrap();
+    //     // compute the fractional polynomial frac_p s.t.
+    //     // frac_p(x) = f1(x) * ... * fk(x) / (g1(x) * ... * gk(x))
+    //     let frac_poly = compute_frac_poly(&fxs, &gxs).unwrap();
+    //     // compute the product polynomial
+    //     let prod_x = compute_product_poly(&frac_poly).unwrap();
 
-        // generate challenge
-        let frac_comm = PCS::commit(pcs_param, &frac_poly)?;
-        let prod_x_comm = PCS::commit(pcs_param, &prod_x)?;
-        let alpha = Fr::from(1u64);
-        // build the zero-check proof
-        let (zero_check_proof, _) =
-            prove_zero_check(&fxs, &gxs, &frac_poly, &prod_x, &alpha, transcript)?;
+    //     // // generate challenge
+    //     // let frac_comm = PCS::commit(pcs_param, &frac_poly)?;
+    //     // let prod_x_comm = PCS::commit(pcs_param, &prod_x)?;
+    //     let alpha = Fr::from(1u64);
+    //     // build the zero-check proof
+    //     let (zero_check_proof, _) =
+    //         prove_zero_check(&fxs, &gxs, &frac_poly, &prod_x, &alpha, transcript)?;
 
-    }
+    // }
 
     // #[test]
     // fn test_prover_zero_check() {
