@@ -112,7 +112,10 @@ pub(super) fn prove_zero_check<F: PrimeField>(
 
     //   prod(x)
     // - p1(x) * p2(x)
-    q_x.add_mles([MLE::from_evals(p1, num_vars), MLE::from_evals(p2, num_vars)], -F::one())?;
+    q_x.add_mles(
+        [MLE::from_evals(p1, num_vars), MLE::from_evals(p2, num_vars)],
+        -F::one(),
+    )?;
 
     //   prod(x)
     // - p1(x) * p2(x)
@@ -216,13 +219,20 @@ mod test {
         let result = compute_product_poly(&mle).unwrap();
 
         // Compute expected
-        let expected = MLE::from_evals_vec(compute_product_poly_in_memory(frac_poly_vec, num_vars), num_vars);
+        let expected = MLE::from_evals_vec(
+            compute_product_poly_in_memory(frac_poly_vec, num_vars),
+            num_vars,
+        );
 
         // compare the two mles
-        result.evals().iter().zip(expected.evals().iter()).for_each(|(a, b)| {
-            println!("a: {}, b: {}", a, b);
-            // assert_eq!(a, b, "Product polynomial evaluation is incorrect");
-        });
+        result
+            .evals()
+            .iter()
+            .zip(expected.evals().iter())
+            .for_each(|(a, b)| {
+                println!("a: {}, b: {}", a, b);
+                // assert_eq!(a, b, "Product polynomial evaluation is incorrect");
+            });
     }
 
     // #[test]

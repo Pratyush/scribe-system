@@ -1,8 +1,9 @@
 use crate::hyperplonk::pcs::{
-    multilinear_kzg::util::{eq_eval, eq_extension},
     errors::PCSError,
+    multilinear_kzg::util::{eq_eval, eq_extension},
     StructuredReferenceString,
 };
+use crate::streams::file_vec::FileVec;
 use ark_ec::{pairing::Pairing, scalar_mul::fixed_base::FixedBase, AffineRepr, CurveGroup};
 use ark_ff::{Field, PrimeField, Zero};
 use ark_poly::DenseMultilinearExtension;
@@ -12,7 +13,6 @@ use ark_std::{
     UniformRand,
 };
 use core::iter::FromIterator;
-use crate::streams::file_vec::FileVec;
 
 /// Evaluations over {0,1}^n for G1 or G2
 #[derive(Debug)]
@@ -67,7 +67,12 @@ impl<E: Pairing> StructuredReferenceString<E> for MultilinearUniversalParams<E> 
         let to_reduce = self.prover_param.num_vars - supported_num_vars;
 
         Self::ProverParam {
-            powers_of_g: self.prover_param.powers_of_g[to_reduce..].iter().map(|x| Evaluations{evals: x.evals.deep_copy()}).collect(),
+            powers_of_g: self.prover_param.powers_of_g[to_reduce..]
+                .iter()
+                .map(|x| Evaluations {
+                    evals: x.evals.deep_copy(),
+                })
+                .collect(),
             g: self.prover_param.g,
             h: self.prover_param.h,
             num_vars: supported_num_vars,
@@ -102,7 +107,12 @@ impl<E: Pairing> StructuredReferenceString<E> for MultilinearUniversalParams<E> 
 
         let to_reduce = self.prover_param.num_vars - supported_num_vars;
         let ck = Self::ProverParam {
-            powers_of_g: self.prover_param.powers_of_g[to_reduce..].iter().map(|x| Evaluations{evals: x.evals.deep_copy()}).collect(),
+            powers_of_g: self.prover_param.powers_of_g[to_reduce..]
+                .iter()
+                .map(|x| Evaluations {
+                    evals: x.evals.deep_copy(),
+                })
+                .collect(),
             g: self.prover_param.g,
             h: self.prover_param.h,
             num_vars: supported_num_vars,
@@ -242,13 +252,12 @@ impl<E: Pairing> StructuredReferenceString<E> for MultilinearUniversalParams<E> 
                 .map(|degree| {
                     let mut rand_g1 = E::G1::rand(rng).into_affine();
                     Evaluations {
-                        evals: FileVec::from_iter((0..(1 << degree))
-                            .map(|i| {
-                                if (i % (1 << 10)) == 0 {
-                                    rand_g1 = E::G1::rand(rng).into_affine();
-                                }
-                                rand_g1
-                            }))
+                        evals: FileVec::from_iter((0..(1 << degree)).map(|i| {
+                            if (i % (1 << 10)) == 0 {
+                                rand_g1 = E::G1::rand(rng).into_affine();
+                            }
+                            rand_g1
+                        })),
                     }
                 })
                 .collect(),

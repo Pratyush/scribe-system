@@ -256,23 +256,23 @@ mod test {
     use crate::arithmetic::virtual_polynomial::VPAuxInfo;
     use crate::streams::file_vec::FileVec;
     use crate::streams::iterator::zip_many;
+    use crate::streams::iterator::BatchedIterator;
     use crate::{
         hyperplonk::{
             pcs::{multilinear_kzg::MultilinearKzgPCS, PolynomialCommitmentScheme},
             poly_iop::{errors::PIOPError, PolyIOP},
         },
-        streams::{MLE, ReadWriteStream},
+        streams::{ReadWriteStream, MLE},
     };
     use ark_bls12_381::{Bls12_381, Fr};
     use ark_ec::pairing::Pairing;
+    use ark_ff::Field;
     use ark_std::test_rng;
     use ark_std::UniformRand;
-    use ark_ff::Field;
     use std::{
         marker::PhantomData,
         sync::{Arc, Mutex},
     };
-    use crate::streams::iterator::BatchedIterator;
 
     fn check_frac_poly<E>(
         frac_poly: &MLE<E::ScalarField>,
@@ -281,16 +281,16 @@ mod test {
     ) where
         E: Pairing,
     {
-        let nom: FileVec<E::ScalarField> = zip_many(fs.iter().map(|f| f.evals().iter())).map(
-            |fs| fs.iter().product()
-        ).to_file_vec();
+        let nom: FileVec<E::ScalarField> = zip_many(fs.iter().map(|f| f.evals().iter()))
+            .map(|fs| fs.iter().product())
+            .to_file_vec();
 
-        let denom: FileVec<E::ScalarField> = zip_many(gs.iter().map(|g| g.evals().iter())).map(
-            |gs| gs.iter().product()
-        ).to_file_vec();
+        let denom: FileVec<E::ScalarField> = zip_many(gs.iter().map(|g| g.evals().iter()))
+            .map(|gs| gs.iter().product())
+            .to_file_vec();
 
         zip_many(vec![nom.iter(), denom.iter(), frac_poly.evals().iter()]).for_each(
-            |vals| assert!(vals[0] == vals[1] * vals[2]) // nom == denom * frac
+            |vals| assert!(vals[0] == vals[1] * vals[2]), // nom == denom * frac
         );
     }
 
@@ -298,15 +298,15 @@ mod test {
     fn test_check_frac_poly() {
         let f1 = MLE::from_evals_vec(vec![Fr::from(2), Fr::from(3)], 1);
         let f2 = MLE::from_evals_vec(vec![Fr::from(4), Fr::from(6)], 1);
-        let fs = vec![f1, f2]; 
+        let fs = vec![f1, f2];
         let g1 = MLE::from_evals_vec(vec![Fr::from(2), Fr::from(1)], 1);
         let g2 = MLE::from_evals_vec(vec![Fr::from(1), Fr::from(2)], 1);
         let gs = vec![g1, g2];
         let frac_poly = MLE::from_evals_vec(vec![Fr::from(4), Fr::from(9)], 1);
-        
+
         check_frac_poly::<Bls12_381>(&frac_poly, &fs, &gs);
     }
-    
+
     // fs and gs are guaranteed to have the same product
     // fs and hs doesn't have the same product
     fn test_product_check_helper<E, PCS>(
@@ -317,10 +317,7 @@ mod test {
     ) -> Result<(), PIOPError>
     where
         E: Pairing,
-        PCS: PolynomialCommitmentScheme<
-            E,
-            Polynomial = MLE<E::ScalarField>,
-        >,
+        PCS: PolynomialCommitmentScheme<E, Polynomial = MLE<E::ScalarField>>,
     {
         let mut transcript = <PolyIOP<E::ScalarField> as ProductCheck<E, PCS>>::init_transcript();
         transcript.append_message(b"testing", b"initializing transcript for testing")?;
@@ -381,8 +378,12 @@ mod test {
     fn test_product_check(nv: usize) -> Result<(), PIOPError> {
         let mut rng = test_rng();
 
-        let f1_evals = (0..(1 << nv)).map(|_| Fr::rand(&mut rng)).collect::<Vec<Fr>>();
-        let f2_evals = (0..(1 << nv)).map(|_| Fr::rand(&mut rng)).collect::<Vec<Fr>>();
+        let f1_evals = (0..(1 << nv))
+            .map(|_| Fr::rand(&mut rng))
+            .collect::<Vec<Fr>>();
+        let f2_evals = (0..(1 << nv))
+            .map(|_| Fr::rand(&mut rng))
+            .collect::<Vec<Fr>>();
 
         let mut g1_evals = f1_evals.clone();
         let mut g2_evals = f2_evals.clone();

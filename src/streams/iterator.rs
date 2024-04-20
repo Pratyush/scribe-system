@@ -83,7 +83,13 @@ pub trait BatchedIterator: Sized {
         acc
     }
 
-    fn batched_fold<T, B, ID, F, F2>(mut self, batch_op: B, identity: ID, fold_op: F, reduce_op: F2) -> T
+    fn batched_fold<T, B, ID, F, F2>(
+        mut self,
+        batch_op: B,
+        identity: ID,
+        fold_op: F,
+        reduce_op: F2,
+    ) -> T
     where
         B: Fn(Self::Batch) -> T + Sync + Send,
         F: Fn(T, T) -> T + Sync + Send,
@@ -96,8 +102,10 @@ pub trait BatchedIterator: Sized {
             processed_batches.push(batch_op(batch));
         }
         let mut acc = identity();
-        acc = processed_batches.into_par_iter().fold_with(acc, |a, b| fold_op(a, b))
-        .reduce(|| identity(), |a, b| reduce_op(a, b));
+        acc = processed_batches
+            .into_par_iter()
+            .fold_with(acc, |a, b| fold_op(a, b))
+            .reduce(|| identity(), |a, b| reduce_op(a, b));
         acc
     }
 
@@ -108,9 +116,7 @@ pub trait BatchedIterator: Sized {
         FileVec::from_batched_iter(self)
     }
 
-    fn to_file_vec_tuple<T>(
-        self,
-    ) -> (FileVec<T>, FileVec<T>)
+    fn to_file_vec_tuple<T>(self) -> (FileVec<T>, FileVec<T>)
     where
         Self: IntoBatchedIterator<Item = (T, T)>,
         T: CanonicalSerialize + CanonicalDeserialize + Send + Sync,

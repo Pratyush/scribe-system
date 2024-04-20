@@ -5,7 +5,7 @@ pub(crate) mod util;
 use crate::hyperplonk::pcs::StructuredReferenceString;
 use crate::hyperplonk::pcs::{structs::Commitment, PCSError, PolynomialCommitmentScheme};
 use crate::hyperplonk::transcript::IOPTranscript;
-use crate::streams::{MLE, Inner, iterator::BatchedIterator};
+use crate::streams::{iterator::BatchedIterator, Inner, MLE};
 use ark_ec::{
     pairing::Pairing,
     scalar_mul::{fixed_base::FixedBase, variable_base::VariableBaseMSM},
@@ -17,9 +17,9 @@ use ark_std::{
     borrow::Borrow, end_timer, format, marker::PhantomData, rand::Rng, start_timer,
     string::ToString, sync::Arc, vec::Vec, One, Zero,
 };
+use rayon::iter::ParallelIterator;
 use srs::{MultilinearProverParam, MultilinearUniversalParams, MultilinearVerifierParam};
 use std::{ops::Mul, sync::Mutex};
-use rayon::iter::ParallelIterator;
 
 // use self::batching::{batch_verify_internal, BatchProof};
 
@@ -113,18 +113,23 @@ impl<E: Pairing> PolynomialCommitmentScheme<E> for MultilinearKzgPCS<E> {
         }
         let ignored = prover_param.num_vars - poly_num_vars;
 
-        let commitment = poly.evals().iter()
-            .zip(prover_param.powers_of_g[ignored].evals.iter()).batched_fold(
-                |batch| { // zipped two iterators of buffers
+        let commitment = poly
+            .evals()
+            .iter()
+            .zip(prover_param.powers_of_g[ignored].evals.iter())
+            .batched_fold(
+                |batch| {
+                    // zipped two iterators of buffers
                     // Since batch is an iterator over zipped pairs, use `unzip` to split them into separate vectors
                     let (scalars, bases): (Vec<_>, Vec<_>) = batch.unzip();
                     // Apply the multi-scalar multiplication
                     E::G1::msm_unchecked(&bases, &scalars)
-                }, 
+                },
                 || E::G1::zero(),
                 |acc, x| acc + x,
                 |res, thread| res + thread,
-            ).into_affine();
+            )
+            .into_affine();
 
         end_timer!(commit_timer);
         Ok(Commitment(commitment))
