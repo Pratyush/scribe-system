@@ -6,6 +6,7 @@ use std::{
 };
 
 use ark_ff::Field;
+use ark_std::rand::RngCore;
 pub use inner::*;
 
 use crate::arithmetic::errors::ArithError;
@@ -90,12 +91,19 @@ impl<F: Field> MLE<F> {
         eq_x_r_helper(r).map(|evals| Self::from_evals(evals, r.len()))
     }
 
-    pub fn identity_permutation(num_vars: usize) -> Self {
-        Inner::identity_permutation(num_vars).into()
+    pub fn identity_permutation_mles(num_vars: usize, num_chunk: usize) -> Vec<Self> {
+        Inner::identity_permutation(num_vars, num_chunk)
+            .into_iter()
+            .map(From::from)
+            .collect()
     }
 
-    pub fn identity_permutation_mles(num_vars: usize, num_chunk: usize) -> Vec<Self> {
-        Inner::identity_permutation_mles(num_vars, num_chunk)
+    pub fn random_permutation_mles<R: RngCore>(
+        num_vars: usize,
+        num_chunk: usize,
+        rng: &mut R,
+    ) -> Vec<Self> {
+        Inner::random_permutation(num_vars, num_chunk, rng)
             .into_iter()
             .map(From::from)
             .collect()

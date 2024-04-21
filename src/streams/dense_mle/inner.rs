@@ -5,6 +5,7 @@ use std::{
 };
 
 use ark_ff::{batch_inversion, Field};
+use ark_std::rand::RngCore;
 use rayon::prelude::*;
 
 use crate::streams::{file_vec::FileVec, iterator::BatchedIterator};
@@ -61,17 +62,39 @@ impl<F: Field> Inner<F> {
         Self::from_evals(evals, num_vars)
     }
 
-    pub fn identity_permutation(num_vars: usize) -> Self {
-        let evals = FileVec::from_iter((0u64..(1 << num_vars)).map(F::from));
-        Self::from_evals(evals, num_vars)
-    }
-
-    pub fn identity_permutation_mles(num_vars: usize, num_chunks: usize) -> Vec<Self> {
+    /// Creates multiple identity permutation streams equal to the number of witness streams
+    /// Identity permutations are continuous from one to another
+    pub fn identity_permutation(num_vars: usize, num_chunks: usize) -> Vec<Self> {
         let shift = (1 << num_vars) as u64;
         (0..num_chunks as u64)
             .map(|i| {
                 Self::from_evals(
                     FileVec::from_iter((i * shift..(i + 1) * shift).map(F::from)),
+                    num_vars,
+                )
+            })
+            .collect()
+    }
+
+    /// For testing only
+    pub fn random_permutation<R: RngCore>(
+        num_vars: usize,
+        num_chunks: usize,
+        rng: &mut R,
+    ) -> Vec<Self> {
+        let len = (num_chunks as u64) * (1u64 << num_vars);
+        let mut s_id_vec: Vec<F> = (0..len).map(F::from).collect();
+        let mut s_perm_vec = vec![];
+        for _ in 0..len {
+            let index = rng.next_u64() as usize % s_id_vec.len();
+            s_perm_vec.push(s_id_vec.remove(index));
+        }
+
+        let shift = (1 << num_vars) as u64;
+        (0..num_chunks as u64)
+            .map(|i| {
+                Self::from_evals_vec(
+                    s_perm_vec[(i * shift) as usize..((i + 1) * shift) as usize].to_vec(),
                     num_vars,
                 )
             })
