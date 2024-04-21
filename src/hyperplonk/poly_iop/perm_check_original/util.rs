@@ -1,9 +1,18 @@
 use crate::hyperplonk::poly_iop::errors::PIOPError;
-use crate::read_write::{identity_permutation_mles, DenseMLPolyStream, ReadWriteStream};
+use crate::streams::iterator::zip_many;
+use crate::streams::iterator::BatchedIterator;
+use crate::streams::ReadWriteStream;
+use crate::streams::MLE;
 use ark_ff::PrimeField;
 
 use ark_std::{end_timer, start_timer};
-use std::sync::{Arc, Mutex};
+use rayon::iter::{
+    IndexedParallelIterator, IntoParallelIterator, IntoParallelRefIterator, ParallelIterator,
+};
+use std::{
+    ptr::null,
+    sync::{Arc, Mutex},
+};
 
 /// Returns the evaluations of two list of MLEs:
 /// - numerators = (a1, ..., ak)
@@ -22,40 +31,56 @@ use std::sync::{Arc, Mutex};
 pub(super) fn computer_nums_and_denoms<F: PrimeField>(
     beta: &F,
     gamma: &F,
-    fxs: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
-    gxs: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
-    perms: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
-) -> Result<
-    (
-        Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
-        Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
-    ),
-    PIOPError,
-> {
+    fxs: &[MLE<F>],
+    gxs: &[MLE<F>],
+    perms: &[MLE<F>],
+) -> Result<(Vec<MLE<F>>, Vec<MLE<F>>), PIOPError> {
     let start = start_timer!(|| "compute numerators and denominators");
 
-    let num_vars = fxs[0].lock().unwrap().num_vars;
-    let s_ids = identity_permutation_mles::<F>(num_vars, fxs.len());
+    let num_vars = fxs[0].num_vars();
 
-    let mut numerators = Vec::with_capacity(fxs.len());
-    let mut denominators = Vec::with_capacity(gxs.len());
+    // Use Arc<Mutex<Vec<_>>> for parallel access to writing results
+    let numerators = Arc::new(Mutex::new(vec![None; fxs.len()]));
+    let denominators = Arc::new(Mutex::new(vec![None; fxs.len()]));
+    let s_ids = MLE::identity_permutation_mles(num_vars, fxs.len());
 
-    for (((fx, gx), s_id), perm) in fxs.into_iter().zip(gxs).zip(s_ids).zip(perms) {
-        let mut fx = fx.lock().unwrap();
-        let mut gx = gx.lock().unwrap();
-        let mut s_id = s_id.lock().unwrap();
-        let mut perm = perm.lock().unwrap();
-        let numerator = fx.combine_with(&mut s_id, |fx, s_id| *beta * s_id + gamma + fx).expect("failed to combine");
+    fxs.par_iter().enumerate().for_each(|(l, fx)| {
+        let (numerator, denominator) = zip_many(
+            vec![
+                fx.evals().iter(),
+                gxs[l].evals().iter(),
+                s_ids[l].evals().iter(),
+                perms[l].evals().iter(),
+            ]
+            .into_iter(),
+        )
+        .map(|vals| {
+            let numerator = vals[0] + *beta * vals[2] + gamma;
+            let denominator = vals[1] + *beta * vals[3] + gamma;
+            (numerator, denominator)
+        })
+        .to_file_vec_tuple();
 
-        let denominator = gx.combine_with(&mut perm, |gx, perm| *beta * perm + gamma + gx).expect("failed to combine");
+        numerators.lock().unwrap()[l] = Some(MLE::from_evals(numerator, num_vars));
+        denominators.lock().unwrap()[l] = Some(MLE::from_evals(denominator, num_vars));
+    });
 
-        numerators.push(Arc::new(Mutex::new(numerator)));
-        denominators.push(Arc::new(Mutex::new(denominator)));
-    }
+    let numerators: Vec<_> = Arc::try_unwrap(numerators)
+        .unwrap()
+        .into_inner()
+        .unwrap()
+        .into_iter()
+        .map(|opt| opt.unwrap())
+        .collect();
+    let denominators: Vec<_> = Arc::try_unwrap(denominators)
+        .unwrap()
+        .into_inner()
+        .unwrap()
+        .into_iter()
+        .map(|opt| opt.unwrap())
+        .collect();
 
     end_timer!(start);
-
-    // Return the output streams
     Ok((numerators, denominators))
 }
 
@@ -64,8 +89,6 @@ mod tests {
     use super::*;
     use ark_bls12_381::Fr;
 
-    use std::sync::{Arc, Mutex};
-
     #[test]
     fn test_compute_nums_and_denoms() {
         let beta = Fr::from(2);
@@ -73,97 +96,71 @@ mod tests {
 
         // Initialize fx, gx, s_id, perm with test values and alpha
         let fxs = vec![
-            Arc::new(Mutex::new(DenseMLPolyStream::<Fr>::from_evaluations_vec(
-                1,
-                vec![Fr::from(1), Fr::from(2)],
-                None,
-                None,
-            ))),
-            Arc::new(Mutex::new(DenseMLPolyStream::<Fr>::from_evaluations_vec(
-                1,
-                vec![Fr::from(3), Fr::from(4)],
-                None,
-                None,
-            ))),
+            MLE::from_evals_vec(vec![Fr::from(1), Fr::from(2)], 1),
+            MLE::from_evals_vec(vec![Fr::from(3), Fr::from(4)], 1),
         ];
         let gxs = vec![
-            Arc::new(Mutex::new(DenseMLPolyStream::<Fr>::from_evaluations_vec(
-                1,
-                vec![Fr::from(5), Fr::from(6)],
-                None,
-                None,
-            ))),
-            Arc::new(Mutex::new(DenseMLPolyStream::<Fr>::from_evaluations_vec(
-                1,
-                vec![Fr::from(7), Fr::from(8)],
-                None,
-                None,
-            ))),
+            MLE::from_evals_vec(vec![Fr::from(5), Fr::from(6)], 1),
+            MLE::from_evals_vec(vec![Fr::from(7), Fr::from(8)], 1),
         ];
         let perms = vec![
-            Arc::new(Mutex::new(DenseMLPolyStream::<Fr>::from_evaluations_vec(
-                1,
-                vec![Fr::from(13), Fr::from(14)],
-                None,
-                None,
-            ))),
-            Arc::new(Mutex::new(DenseMLPolyStream::<Fr>::from_evaluations_vec(
-                1,
-                vec![Fr::from(15), Fr::from(16)],
-                None,
-                None,
-            ))),
+            MLE::from_evals_vec(vec![Fr::from(13), Fr::from(14)], 1),
+            MLE::from_evals_vec(vec![Fr::from(15), Fr::from(16)], 1),
         ];
 
         // Compute the fractional polynomials
         let (numerators, denominators) =
-            computer_nums_and_denoms(&beta, &gamma, fxs, gxs, perms).unwrap();
+            computer_nums_and_denoms(&beta, &gamma, &fxs, &gxs, &perms).unwrap();
 
         // Expected results based on manual calculations or desired outcomes
         let expected_numerators = vec![
-            vec![
-                Fr::from(1) + Fr::from(0) * Fr::from(2) + Fr::from(3),
-                Fr::from(2) + Fr::from(1) * Fr::from(2) + Fr::from(3),
-            ],
-            vec![
-                Fr::from(3) + Fr::from(2) * Fr::from(2) + Fr::from(3),
-                Fr::from(4) + Fr::from(3) * Fr::from(2) + Fr::from(3),
-            ],
+            MLE::from_evals_vec(
+                vec![
+                    Fr::from(1) + Fr::from(0) * Fr::from(2) + Fr::from(3),
+                    Fr::from(2) + Fr::from(1) * Fr::from(2) + Fr::from(3),
+                ],
+                1,
+            ),
+            MLE::from_evals_vec(
+                vec![
+                    Fr::from(3) + Fr::from(2) * Fr::from(2) + Fr::from(3),
+                    Fr::from(4) + Fr::from(3) * Fr::from(2) + Fr::from(3),
+                ],
+                1,
+            ),
         ];
 
         let expected_denominators = vec![
-            vec![
-                Fr::from(5) + Fr::from(13) * Fr::from(2) + Fr::from(3),
-                Fr::from(6) + Fr::from(14) * Fr::from(2) + Fr::from(3),
-            ],
-            vec![
-                Fr::from(7) + Fr::from(15) * Fr::from(2) + Fr::from(3),
-                Fr::from(8) + Fr::from(16) * Fr::from(2) + Fr::from(3),
-            ],
+            MLE::from_evals_vec(
+                vec![
+                    Fr::from(5) + Fr::from(13) * Fr::from(2) + Fr::from(3),
+                    Fr::from(6) + Fr::from(14) * Fr::from(2) + Fr::from(3),
+                ],
+                1,
+            ),
+            MLE::from_evals_vec(
+                vec![
+                    Fr::from(7) + Fr::from(15) * Fr::from(2) + Fr::from(3),
+                    Fr::from(8) + Fr::from(16) * Fr::from(2) + Fr::from(3),
+                ],
+                1,
+            ),
         ];
 
         // Convert output streams to vectors for easy comparison
-        let mut result_numerators = Vec::new();
-        let mut result_denominators = Vec::new();
-        for numerator in numerators {
-            let mut result_numerator = Vec::new();
-            let mut numerator_stream = numerator.lock().unwrap();
-            while let Some(numerator_elem) = numerator_stream.read_next() {
-                result_numerator.push(numerator_elem);
-            }
-            result_numerators.push(result_numerator);
-        }
-        for denominator in denominators {
-            let mut result_denominator = Vec::new();
-            let mut denominator_stream = denominator.lock().unwrap();
-            while let Some(denominator_elem) = denominator_stream.read_next() {
-                result_denominator.push(denominator_elem);
-            }
-            result_denominators.push(result_denominator);
-        }
-
-        // Assert that the computed values match the expected values
-        assert_eq!(result_numerators, expected_numerators);
-        assert_eq!(result_denominators, expected_denominators);
+        zip_many(
+            numerators
+                .iter()
+                .chain(denominators.iter())
+                .chain(expected_numerators.iter())
+                .chain(expected_denominators.iter())
+                .map(|mle| mle.evals().iter()),
+        )
+        .for_each(|vals| {
+            assert_eq!(vals[0], vals[4]);
+            assert_eq!(vals[1], vals[5]);
+            assert_eq!(vals[2], vals[6]);
+            assert_eq!(vals[3], vals[7]);
+        });
     }
 }

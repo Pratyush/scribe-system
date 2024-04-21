@@ -94,6 +94,13 @@ impl<F: Field> MLE<F> {
         Inner::identity_permutation(num_vars).into()
     }
 
+    pub fn identity_permutation_mles(num_vars: usize, num_chunk: usize) -> Vec<Self> {
+        Inner::identity_permutation_mles(num_vars, num_chunk)
+            .into_iter()
+            .map(From::from)
+            .collect()
+    }
+
     pub fn rand<R: ark_std::rand::RngCore>(num_vars: usize, rng: &mut R) -> Self {
         Inner::rand(num_vars, rng).into()
     }

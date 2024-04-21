@@ -66,6 +66,18 @@ impl<F: Field> Inner<F> {
         Self::from_evals(evals, num_vars)
     }
 
+    pub fn identity_permutation_mles(num_vars: usize, num_chunks: usize) -> Vec<Self> {
+        let shift = (1 << num_vars) as u64;
+        (0..num_chunks as u64)
+            .map(|i| {
+                Self::from_evals(
+                    FileVec::from_iter((i * shift..(i + 1) * shift).map(F::from)),
+                    num_vars,
+                )
+            })
+            .collect()
+    }
+
     pub fn rand<R: ark_std::rand::RngCore>(num_vars: usize, rng: &mut R) -> Self {
         let evals = FileVec::from_iter((0..(1 << num_vars)).map(|_| F::rand(rng)));
         Self::from_evals(evals, num_vars)
