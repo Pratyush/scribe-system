@@ -17,7 +17,7 @@ use ark_std::{
     borrow::Borrow, end_timer, format, marker::PhantomData, rand::Rng, start_timer,
     string::ToString, sync::Arc, vec::Vec, One, Zero,
 };
-use rayon::iter::ParallelIterator;
+use rayon::iter::{ParallelExtend, ParallelIterator};
 use srs::{MultilinearProverParam, MultilinearUniversalParams, MultilinearVerifierParam};
 use std::{ops::Mul, sync::Mutex};
 
@@ -103,8 +103,7 @@ impl<E: Pairing> PolynomialCommitmentScheme<E> for MultilinearKzgPCS<E> {
         let prover_param = prover_param.borrow();
         let poly_num_vars = poly.num_vars();
 
-        let commit_timer: ark_std::perf_trace::TimerInfo =
-            start_timer!(|| format!("commit poly nv = {}", poly_num_vars));
+        let commit_timer = start_timer!(|| format!("commit poly nv = {}", poly_num_vars));
         if prover_param.num_vars < poly_num_vars {
             return Err(PCSError::InvalidParameters(format!(
                 "MlE length ({}) exceeds param limit ({})",
@@ -113,23 +112,21 @@ impl<E: Pairing> PolynomialCommitmentScheme<E> for MultilinearKzgPCS<E> {
         }
         let ignored = prover_param.num_vars - poly_num_vars;
 
-        let commitment = poly
-            .evals()
-            .iter()
-            .zip(prover_param.powers_of_g[ignored].evals.iter())
-            .batched_fold(
-                |batch| {
-                    // zipped two iterators of buffers
-                    // Since batch is an iterator over zipped pairs, use `unzip` to split them into separate vectors
-                    let (scalars, bases): (Vec<_>, Vec<_>) = batch.unzip();
-                    // Apply the multi-scalar multiplication
-                    E::G1::msm_unchecked(&bases, &scalars)
-                },
-                || E::G1::zero(),
-                |acc, x| acc + x,
-                |res, thread| res + thread,
-            )
-            .into_affine();
+        let commitment = {
+            let mut poly_evals = poly.evals().iter();
+            let mut srs = prover_param.powers_of_g[ignored].evals.iter();
+            let mut f_buf = Vec::with_capacity(crate::streams::BUFFER_SIZE);
+            let mut g_buf = Vec::with_capacity(crate::streams::BUFFER_SIZE);
+            let mut commitment = E::G1::zero();
+            while let (Some(p), Some(g)) = (poly_evals.next_batch(), srs.next_batch()) {
+                f_buf.clear();
+                g_buf.clear();
+                f_buf.par_extend(p);
+                g_buf.par_extend(g);
+                commitment += E::G1::msm_unchecked(&g_buf, &f_buf);
+            }
+            commitment.into_affine()
+        };
 
         end_timer!(commit_timer);
         Ok(Commitment(commitment))

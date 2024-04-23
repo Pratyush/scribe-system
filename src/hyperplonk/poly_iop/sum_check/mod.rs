@@ -232,7 +232,6 @@ mod test {
         rand::{rngs::StdRng, SeedableRng},
         test_rng,
     };
-    use std::str::FromStr;
 
     fn test_sumcheck(
         nv: usize,

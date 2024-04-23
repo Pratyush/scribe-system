@@ -116,17 +116,38 @@ impl<T: CanonicalSerialize + CanonicalDeserialize> FileVec<T> {
         file_vec
     }
 
-    // Writes two elements of each tuple in the iterator to two separate files respectively.
-    pub fn from_batched_iter_tuple(iter: impl IntoBatchedIterator<Item = (T, T)>) -> (Self, Self)
+    pub fn for_each(&mut self, f: impl Fn(&mut T) + Send + Sync)
     where
         T: Send + Sync,
     {
-        let mut file_vec_1 = Self::new();
-        let mut file_vec_2 = Self::new();
-        let mut writer_1 = BufWriter::new(&mut file_vec_1.file);
-        let mut writer_2 = BufWriter::new(&mut file_vec_2.file);
+        process_file!(self, |buffer: &mut Vec<T>| {
+            buffer.par_iter_mut().for_each(|t| f(t));
+            Some(())
+        })
+    }
+
+    pub fn batched_for_each(&mut self, f: impl Fn(&mut Vec<T>) + Send + Sync)
+    where
+        T: Send + Sync,
+    {
+        process_file!(self, |buffer: &mut Vec<T>| {
+            f(buffer);
+            Some(())
+        })
+    }
+
+    pub(crate) fn unzip_helper<A, B>(
+        mut iter: impl BatchedIterator<Item = (A, B)>,
+    ) -> (FileVec<A>, FileVec<B>)
+    where
+        A: CanonicalSerialize + CanonicalDeserialize + Send + Sync,
+        B: CanonicalSerialize + CanonicalDeserialize + Send + Sync,
+    {
+        let mut vec_1 = FileVec::new();
+        let mut vec_2 = FileVec::new();
+        let mut writer_1 = BufWriter::new(&mut vec_1.file);
+        let mut writer_2 = BufWriter::new(&mut vec_2.file);
         let mut buffer = Vec::with_capacity(BUFFER_SIZE);
-        let mut iter = iter.into_batched_iter();
 
         // Read from iterator and write to file.
         while let Some(batch) = iter.next_batch() {
@@ -147,29 +168,9 @@ impl<T: CanonicalSerialize + CanonicalDeserialize> FileVec<T> {
         drop(writer_2);
 
         // Reset file cursor to beginning.
-        file_vec_1.file.rewind().expect("failed to seek file");
-        file_vec_2.file.rewind().expect("failed to seek file");
-        (file_vec_1, file_vec_2)
-    }
-
-    pub fn for_each(&mut self, f: impl Fn(&mut T) + Send + Sync)
-    where
-        T: Send + Sync,
-    {
-        process_file!(self, |buffer: &mut Vec<T>| {
-            buffer.par_iter_mut().for_each(|t| f(t));
-            Some(())
-        })
-    }
-
-    pub fn batched_for_each(&mut self, f: impl Fn(&mut Vec<T>) + Send + Sync)
-    where
-        T: Send + Sync,
-    {
-        process_file!(self, |buffer: &mut Vec<T>| {
-            f(buffer);
-            Some(())
-        })
+        vec_1.file.rewind().expect("failed to seek file");
+        vec_2.file.rewind().expect("failed to seek file");
+        (vec_1, vec_2)
     }
 
     /// Zips the elements of this `FileVec` with the elements of another `BatchedIterator`,

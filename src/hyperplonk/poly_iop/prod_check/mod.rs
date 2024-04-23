@@ -262,17 +262,13 @@ mod test {
             pcs::{multilinear_kzg::MultilinearKzgPCS, PolynomialCommitmentScheme},
             poly_iop::{errors::PIOPError, PolyIOP},
         },
-        streams::{ReadWriteStream, MLE},
+        streams::MLE,
     };
     use ark_bls12_381::{Bls12_381, Fr};
     use ark_ec::pairing::Pairing;
-    use ark_ff::Field;
     use ark_std::test_rng;
     use ark_std::UniformRand;
-    use std::{
-        marker::PhantomData,
-        sync::{Arc, Mutex},
-    };
+    use std::marker::PhantomData;
 
     fn check_frac_poly<E>(
         frac_poly: &MLE<E::ScalarField>,
@@ -354,7 +350,7 @@ mod test {
         let mut transcript = <PolyIOP<E::ScalarField> as ProductCheck<E, PCS>>::init_transcript();
         transcript.append_message(b"testing", b"initializing transcript for testing")?;
 
-        let (bad_proof, prod_x_bad, frac_poly) = <PolyIOP<E::ScalarField> as ProductCheck<
+        let (bad_proof, _prod_x_bad, frac_poly) = <PolyIOP<E::ScalarField> as ProductCheck<
             E,
             PCS,
         >>::prove(

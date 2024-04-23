@@ -1,18 +1,11 @@
 use crate::hyperplonk::poly_iop::errors::PIOPError;
 use crate::streams::iterator::zip_many;
 use crate::streams::iterator::BatchedIterator;
-use crate::streams::ReadWriteStream;
 use crate::streams::MLE;
 use ark_ff::PrimeField;
 
 use ark_std::{end_timer, start_timer};
-use rayon::iter::{
-    IndexedParallelIterator, IntoParallelIterator, IntoParallelRefIterator, ParallelIterator,
-};
-use std::{
-    ptr::null,
-    sync::{Arc, Mutex},
-};
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 /// Returns the evaluations of two list of MLEs:
 /// - numerators = (a1, ..., ak)
@@ -40,45 +33,30 @@ pub(super) fn computer_nums_and_denoms<F: PrimeField>(
     let num_vars = fxs[0].num_vars();
 
     // Use Arc<Mutex<Vec<_>>> for parallel access to writing results
-    let numerators = Arc::new(Mutex::new(vec![None; fxs.len()]));
-    let denominators = Arc::new(Mutex::new(vec![None; fxs.len()]));
     let s_ids = MLE::identity_permutation_mles(num_vars, fxs.len());
 
-    fxs.par_iter().enumerate().for_each(|(l, fx)| {
-        let (numerator, denominator) = zip_many(
-            vec![
+    let (numerators, denominators) = (fxs, gxs, &s_ids, perms)
+        .into_par_iter()
+        .map(|(fx, gx, s_id, perm)| {
+            let (numerator, denominator) = zip_many([
                 fx.evals().iter(),
-                gxs[l].evals().iter(),
-                s_ids[l].evals().iter(),
-                perms[l].evals().iter(),
-            ]
-            .into_iter(),
-        )
-        .map(|vals| {
-            let numerator = vals[0] + *beta * vals[2] + gamma;
-            let denominator = vals[1] + *beta * vals[3] + gamma;
-            (numerator, denominator)
+                gx.evals().iter(),
+                s_id.evals().iter(),
+                perm.evals().iter(),
+            ])
+            .map(|vals| {
+                let numerator = vals[0] + *beta * vals[2] + gamma;
+                let denominator = vals[1] + *beta * vals[3] + gamma;
+                (numerator, denominator)
+            })
+            .unzip();
+
+            (
+                MLE::from_evals(numerator, num_vars),
+                MLE::from_evals(denominator, num_vars),
+            )
         })
-        .to_file_vec_tuple();
-
-        numerators.lock().unwrap()[l] = Some(MLE::from_evals(numerator, num_vars));
-        denominators.lock().unwrap()[l] = Some(MLE::from_evals(denominator, num_vars));
-    });
-
-    let numerators: Vec<_> = Arc::try_unwrap(numerators)
-        .unwrap()
-        .into_inner()
-        .unwrap()
-        .into_iter()
-        .map(|opt| opt.unwrap())
-        .collect();
-    let denominators: Vec<_> = Arc::try_unwrap(denominators)
-        .unwrap()
-        .into_inner()
-        .unwrap()
-        .into_iter()
-        .map(|opt| opt.unwrap())
-        .collect();
+        .unzip();
 
     end_timer!(start);
     Ok((numerators, denominators))

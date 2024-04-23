@@ -1,5 +1,3 @@
-use std::fs::File;
-
 use crate::hyperplonk::poly_iop::{
     errors::PIOPError, structs::IOPProof, zero_check::ZeroCheck, PolyIOP,
 };
@@ -8,14 +6,13 @@ use crate::{
     arithmetic::virtual_polynomial::VirtualPolynomial,
     streams::{
         file_vec::FileVec,
-        iterator::{chain_many, from_iter, zip_many, BatchedIterator},
+        iterator::{chain_many, zip_many, BatchedIterator},
         MLE,
     },
 };
 
 use ark_ff::PrimeField;
 use ark_std::{end_timer, start_timer};
-use zip_many::ZipMany;
 
 /// Compute multilinear fractional polynomial s.t. frac(x) = f1(x) * ... * fk(x)
 /// / (g1(x) * ... * gk(x)) for all x \in {0,1}^n
@@ -102,7 +99,7 @@ pub(super) fn prove_zero_check<F: PrimeField>(
             .map(|mle| (*mle).evals().iter().array_chunks()),
     )
     .map(|[even, odd]| (even, odd))
-    .to_file_vec_tuple();
+    .unzip();
 
     let num_vars = frac_poly.num_vars();
 
@@ -141,14 +138,12 @@ mod test {
     use super::compute_product_poly;
     use super::*;
 
-    use crate::streams::{ReadWriteStream, MLE};
+    use crate::streams::MLE;
     use ark_bls12_381::Fr;
 
     use ark_std::rand::distributions::{Distribution, Standard};
     use ark_std::rand::rngs::StdRng;
     use ark_std::rand::SeedableRng;
-
-    use std::sync::{Arc, Mutex};
 
     use std::vec::Vec;
 

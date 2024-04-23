@@ -83,32 +83,6 @@ pub trait BatchedIterator: Sized {
         acc
     }
 
-    fn batched_fold<T, B, ID, F, F2>(
-        mut self,
-        batch_op: B,
-        identity: ID,
-        fold_op: F,
-        reduce_op: F2,
-    ) -> T
-    where
-        B: Fn(Self::Batch) -> T + Sync + Send,
-        F: Fn(T, T) -> T + Sync + Send,
-        F2: Fn(T, T) -> T + Sync + Send,
-        ID: Fn() -> T + Sync + Send,
-        T: Send + Clone,
-    {
-        let mut processed_batches: Vec<T> = Vec::new();
-        while let Some(batch) = self.next_batch() {
-            processed_batches.push(batch_op(batch));
-        }
-        let mut acc = identity();
-        acc = processed_batches
-            .into_par_iter()
-            .fold_with(acc, |a, b| fold_op(a, b))
-            .reduce(|| identity(), |a, b| reduce_op(a, b));
-        acc
-    }
-
     fn to_file_vec(self) -> FileVec<Self::Item>
     where
         Self::Item: CanonicalSerialize + CanonicalDeserialize,
@@ -116,12 +90,13 @@ pub trait BatchedIterator: Sized {
         FileVec::from_batched_iter(self)
     }
 
-    fn to_file_vec_tuple<T>(self) -> (FileVec<T>, FileVec<T>)
+    fn unzip<A, B>(self) -> (FileVec<A>, FileVec<B>)
     where
-        Self: IntoBatchedIterator<Item = (T, T)>,
-        T: CanonicalSerialize + CanonicalDeserialize + Send + Sync,
+        Self: BatchedIterator<Item = (A, B)>,
+        A: CanonicalSerialize + CanonicalDeserialize + Send + Sync,
+        B: CanonicalSerialize + CanonicalDeserialize + Send + Sync,
     {
-        FileVec::from_batched_iter_tuple(self)
+        FileVec::<(A, B)>::unzip_helper(self)
     }
 
     /// Helper function to convert the iterator into a vector.
