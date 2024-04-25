@@ -271,7 +271,8 @@ fn open_internal<E: Pairing>(
     if polynomial.num_vars() > prover_param.num_vars {
         return Err(PCSError::InvalidParameters(format!(
             "Polynomial num_vars {} exceed the limit {}",
-            polynomial.num_vars(), prover_param.num_vars
+            polynomial.num_vars(),
+            prover_param.num_vars
         )));
     }
 
@@ -300,7 +301,7 @@ fn open_internal<E: Pairing>(
         let ith_round = start_timer!(|| format!("{}-th round", i));
 
         let ith_round_eval = start_timer!(|| format!("{}-th round eval", i));
-        
+
         // TODO: confirm that FileVec in prior round's q and r are auto dropped via the Drop trait once q and r are assigned new FileVec
         (q, r) = f
             .iter()
@@ -316,7 +317,8 @@ fn open_internal<E: Pairing>(
 
         end_timer!(ith_round_eval);
 
-        let msm_timer = start_timer!(|| format!("msm of size {} at round {}", 1 << (nv - 1 - i), i));
+        let msm_timer =
+            start_timer!(|| format!("msm of size {} at round {}", 1 << (nv - 1 - i), i));
 
         // let commitment = MultilinearKzgPCS::commit(prover_param, &MLE::from_evals(q, nv - 1 - i))?;
 
@@ -326,7 +328,9 @@ fn open_internal<E: Pairing>(
             let mut scalars_buf = Vec::with_capacity(crate::streams::BUFFER_SIZE);
             let mut bases_buf = Vec::with_capacity(crate::streams::BUFFER_SIZE);
             let mut commitment = E::G1::zero();
-            while let (Some(scalar_batch), Some(base_batch)) = (scalars.next_batch(), bases.next_batch()) {
+            while let (Some(scalar_batch), Some(base_batch)) =
+                (scalars.next_batch(), bases.next_batch())
+            {
                 scalars_buf.clear();
                 bases_buf.clear();
                 scalars_buf.par_extend(scalar_batch);
@@ -425,7 +429,12 @@ mod tests {
     use super::*;
     use ark_bls12_381::Bls12_381;
     use ark_ec::pairing::Pairing;
-    use ark_std::{rand::{rngs::StdRng, SeedableRng}, test_rng, vec::Vec, UniformRand};
+    use ark_std::{
+        rand::{rngs::StdRng, SeedableRng},
+        test_rng,
+        vec::Vec,
+        UniformRand,
+    };
 
     type E = Bls12_381;
     type Fr = <E as Pairing>::ScalarField;

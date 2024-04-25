@@ -1,30 +1,21 @@
-use crate::arithmetic::virtual_polynomial::{
-    build_eq_x_r_vec, VPAuxInfo, VirtualPolynomial,
-};
+use crate::arithmetic::virtual_polynomial::{build_eq_x_r_vec, VPAuxInfo, VirtualPolynomial};
 use crate::hyperplonk::pcs::errors::PCSError;
 use crate::hyperplonk::pcs::structs::Commitment;
+use crate::hyperplonk::pcs::{multilinear_kzg::util::eq_eval, PolynomialCommitmentScheme};
 use crate::hyperplonk::poly_iop::{prelude::SumCheck, structs::IOPProof, PolyIOP};
-use crate::{
-    hyperplonk::{
-        pcs::{
-            multilinear_kzg::util::eq_eval,
-            PolynomialCommitmentScheme,
-        },
-    },
-};
 
 use crate::streams::MLE;
 use ark_ec::pairing::Pairing;
 use ark_ec::{scalar_mul::variable_base::VariableBaseMSM, CurveGroup};
 
 use crate::hyperplonk::transcript::IOPTranscript;
-use ark_std::{end_timer, log2, start_timer, One, Zero};
 use ark_std::{
     collections::BTreeMap,
     iter,
     marker::PhantomData,
     sync::{Arc, Mutex},
 };
+use ark_std::{end_timer, log2, start_timer, One, Zero};
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct BatchProof<E, PCS>
@@ -101,18 +92,16 @@ where
                 .take(point_indices.len())
                 .collect::<Vec<MLE<E::ScalarField>>>(),
             |mut merged_tilde_gs, ((poly, point), coeff)| {
-                merged_tilde_gs[point_indices[point]] +=
-                    (*coeff, poly);
+                merged_tilde_gs[point_indices[point]] += (*coeff, poly);
                 merged_tilde_gs
             },
         );
     end_timer!(timer);
 
     let timer = start_timer!(|| format!("compute tilde eq for {} points", points.len()));
-    let tilde_eqs: Vec<MLE<E::ScalarField>> = deduped_points.iter()
-        .map(|point| {
-            MLE::eq_x_r(point).unwrap()
-        })
+    let tilde_eqs: Vec<MLE<E::ScalarField>> = deduped_points
+        .iter()
+        .map(|point| MLE::eq_x_r(point).unwrap())
         .collect();
     end_timer!(timer);
 
@@ -136,7 +125,7 @@ where
             return Err(PCSError::InvalidProver(
                 "Sumcheck in batch proving Failed".to_string(),
             ));
-        },
+        }
     };
 
     end_timer!(timer);
@@ -243,7 +232,7 @@ where
             return Err(PCSError::InvalidProver(
                 "Sumcheck in batch verification failed".to_string(),
             ));
-        },
+        }
     };
     let tilde_g_eval = subclaim.expected_evaluation;
 
@@ -266,9 +255,7 @@ mod tests {
     use crate::arithmetic::util::get_batched_nv;
     use crate::hyperplonk::pcs::multilinear_kzg::srs::MultilinearUniversalParams;
     use crate::hyperplonk::pcs::multilinear_kzg::MultilinearKzgPCS;
-    use crate::hyperplonk::pcs::{
-        StructuredReferenceString,
-    };
+    use crate::hyperplonk::pcs::StructuredReferenceString;
     use ark_bls12_381::Bls12_381 as E;
     use ark_ec::pairing::Pairing;
     use ark_poly::MultilinearExtension;
@@ -335,9 +322,7 @@ mod tests {
         let ml_params = MultilinearUniversalParams::<E>::gen_srs_for_testing(&mut rng, 20)?;
         for num_poly in 5..6 {
             for nv in 15..16 {
-                let polys1: Vec<_> = (0..num_poly)
-                    .map(|_| MLE::rand(nv, &mut rng))
-                    .collect();
+                let polys1: Vec<_> = (0..num_poly).map(|_| MLE::rand(nv, &mut rng)).collect();
                 test_multi_open_helper(&ml_params, &polys1, &mut rng)?;
             }
         }
