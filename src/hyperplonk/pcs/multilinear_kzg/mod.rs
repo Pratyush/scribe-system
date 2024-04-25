@@ -5,6 +5,7 @@ pub(crate) mod util;
 use crate::hyperplonk::pcs::StructuredReferenceString;
 use crate::hyperplonk::pcs::{structs::Commitment, PCSError, PolynomialCommitmentScheme};
 use crate::hyperplonk::transcript::IOPTranscript;
+use crate::streams::file_vec::FileVec;
 use crate::streams::{iterator::BatchedIterator, Inner, MLE};
 use ark_ec::{
     pairing::Pairing,
@@ -58,8 +59,8 @@ impl<E: Pairing> PolynomialCommitmentScheme<E> for MultilinearKzgPCS<E> {
     /// WARNING: THIS FUNCTION IS FOR TESTING PURPOSE ONLY.
     /// THE OUTPUT SRS SHOULD NOT BE USED IN PRODUCTION.
     fn gen_srs_for_testing<R: Rng>(rng: &mut R, log_size: usize) -> Result<Self::SRS, PCSError> {
-        // MultilinearUniversalParams::<E>::gen_srs_for_testing(rng, log_size)
-        MultilinearUniversalParams::<E>::gen_fake_srs_for_testing(rng, log_size)
+        MultilinearUniversalParams::<E>::gen_srs_for_testing(rng, log_size)
+        // MultilinearUniversalParams::<E>::gen_fake_srs_for_testing(rng, log_size)
     }
 
     fn gen_fake_srs_for_testing<R: Rng>(
@@ -132,22 +133,22 @@ impl<E: Pairing> PolynomialCommitmentScheme<E> for MultilinearKzgPCS<E> {
         Ok(Commitment(commitment))
     }
 
-    // /// On input a polynomial `p` and a point `point`, outputs a proof for the
-    // /// same. This function does not need to take the evaluation value as an
-    // /// input.
-    // ///
-    // /// This function takes 2^{num_var +1} number of scalar multiplications over
-    // /// G1:
-    // /// - it prodceeds with `num_var` number of rounds,
-    // /// - at round i, we compute an MSM for `2^{num_var - i + 1}` number of G2
-    // ///   elements.
-    // fn open(
-    //     prover_param: impl Borrow<Self::ProverParam>,
-    //     polynomial: &Self::Polynomial,
-    //     point: &Self::Point,
-    // ) -> Result<(Self::Proof, Self::Evaluation), PCSError> {
-    //     open_internal(prover_param.borrow(), polynomial.clone(), point)
-    // }
+    /// On input a polynomial `p` and a point `point`, outputs a proof for the
+    /// same. This function does not need to take the evaluation value as an
+    /// input.
+    ///
+    /// This function takes 2^{num_var +1} number of scalar multiplications over
+    /// G1:
+    /// - it prodceeds with `num_var` number of rounds,
+    /// - at round i, we compute an MSM for `2^{num_var - i + 1}` number of G2
+    ///   elements.
+    fn open(
+        prover_param: impl Borrow<Self::ProverParam>,
+        polynomial: &Self::Polynomial,
+        point: &Self::Point,
+    ) -> Result<(Self::Proof, Self::Evaluation), PCSError> {
+        open_internal(prover_param.borrow(), &polynomial, point)
+    }
 
     // // this is the multi poly single point version
     // /// Input a list of multilinear extensions, and a same number of points, and
@@ -223,21 +224,21 @@ impl<E: Pairing> PolynomialCommitmentScheme<E> for MultilinearKzgPCS<E> {
     //     )
     // }
 
-    // /// Verifies that `value` is the evaluation at `x` of the polynomial
-    // /// committed inside `comm`.
-    // ///
-    // /// This function takes
-    // /// - num_var number of pairing product.
-    // /// - num_var number of MSM
-    // fn verify(
-    //     verifier_param: &Self::VerifierParam,
-    //     commitment: &Self::Commitment,
-    //     point: &Self::Point,
-    //     value: &E::ScalarField,
-    //     proof: &Self::Proof,
-    // ) -> Result<bool, PCSError> {
-    //     verify_internal(verifier_param, commitment, point, value, proof)
-    // }
+    /// Verifies that `value` is the evaluation at `x` of the polynomial
+    /// committed inside `comm`.
+    ///
+    /// This function takes
+    /// - num_var number of pairing product.
+    /// - num_var number of MSM
+    fn verify(
+        verifier_param: &Self::VerifierParam,
+        commitment: &Self::Commitment,
+        point: &Self::Point,
+        value: &E::ScalarField,
+        proof: &Self::Proof,
+    ) -> Result<bool, PCSError> {
+        verify_internal(verifier_param, commitment, point, value, proof)
+    }
 
     // /// Verifies that `value_i` is the evaluation at `x_i` of the polynomial
     // /// `poly_i` committed inside `comm`.
@@ -252,234 +253,229 @@ impl<E: Pairing> PolynomialCommitmentScheme<E> for MultilinearKzgPCS<E> {
     // }
 }
 
-// /// On input a polynomial `p` and a point `point`, outputs a proof for the
-// /// same. This function does not need to take the evaluation value as an
-// /// input.
-// ///
-// /// This function takes 2^{num_var} number of scalar multiplications over
-// /// G1:
-// /// - it proceeds with `num_var` number of rounds,
-// /// - at round i, we compute an MSM for `2^{num_var - i}` number of G1 elements.
-// fn open_internal<E: Pairing>(
-//     prover_param: &MultilinearProverParam<E>,
-//     polynomial: Arc<Mutex<DenseMLPolyStream<E::ScalarField>>>,
-//     point: &[E::ScalarField],
-// ) -> Result<(MultilinearKzgProof<E>, E::ScalarField), PCSError> {
-//     let mut poly_lock = polynomial.lock().unwrap();
-//     let nv = poly_lock.num_vars;
-//     let open_timer = start_timer!(|| format!("open mle with {} variable", nv));
+/// On input a polynomial `p` and a point `point`, outputs a proof for the
+/// same. This function does not need to take the evaluation value as an
+/// input.
+///
+/// This function takes 2^{num_var} number of scalar multiplications over
+/// G1:
+/// - it proceeds with `num_var` number of rounds,
+/// - at round i, we compute an MSM for `2^{num_var - i}` number of G1 elements.
+fn open_internal<E: Pairing>(
+    prover_param: &MultilinearProverParam<E>,
+    polynomial: &MLE<E::ScalarField>,
+    point: &[E::ScalarField],
+) -> Result<(MultilinearKzgProof<E>, E::ScalarField), PCSError> {
+    let open_timer = start_timer!(|| format!("open mle with {} variable", polynomial.num_vars()));
 
-//     if nv > prover_param.num_vars {
-//         return Err(PCSError::InvalidParameters(format!(
-//             "Polynomial num_vars {} exceed the limit {}",
-//             nv, prover_param.num_vars
-//         )));
-//     }
+    if polynomial.num_vars() > prover_param.num_vars {
+        return Err(PCSError::InvalidParameters(format!(
+            "Polynomial num_vars {} exceed the limit {}",
+            polynomial.num_vars(), prover_param.num_vars
+        )));
+    }
 
-//     if nv != point.len() {
-//         return Err(PCSError::InvalidParameters(format!(
-//             "Polynomial num_vars {} does not match point len {}",
-//             nv,
-//             point.len()
-//         )));
-//     }
+    if polynomial.num_vars() != point.len() {
+        return Err(PCSError::InvalidParameters(format!(
+            "Polynomial num_vars {} does not match point len {}",
+            polynomial.num_vars(),
+            point.len()
+        )));
+    }
 
-//     // the first `ignored` SRS vectors are unused for opening.
-//     let ignored = prover_param.num_vars - nv + 1;
-//     // let mut f = polynomial.to_evaluations();
+    let nv = polynomial.num_vars();
+    // the first `ignored` SRS vectors are unused for opening.
+    let ignored = prover_param.num_vars - nv + 1;
+    let mut f = polynomial.evals();
+    let mut r = FileVec::<E::ScalarField>::new();
+    let mut q = FileVec::<E::ScalarField>::new();
 
-//     let mut proofs = Vec::new();
+    let mut proofs = Vec::new();
 
-//     for (i, (&point_at_k, gi)) in point
-//         .iter()
-//         .zip(prover_param.powers_of_g[ignored..ignored + nv].iter())
-//         .enumerate()
-//     {
-//         let ith_round = start_timer!(|| format!("{}-th round", i));
+    for (i, (&point_at_k, gi)) in point
+        .iter()
+        .zip(prover_param.powers_of_g[ignored..ignored + nv].iter())
+        .enumerate()
+    {
+        let ith_round = start_timer!(|| format!("{}-th round", i));
 
-//         // evaluation and commit together
-//         let batch_size = 1 << 20; // Define the batch size.
-//         let mut final_commitment = E::G1::zero(); // Start with the identity element.
-//         let mut total_scalars_processed = 0usize; // Track the total number of scalars processed.
+        let ith_round_eval = start_timer!(|| format!("{}-th round eval", i));
+        
+        // TODO: confirm that FileVec in prior round's q and r are auto dropped via the Drop trait once q and r are assigned new FileVec
+        (q, r) = f
+            .iter()
+            .array_chunks::<2>()
+            .map(|chunk| {
+                let q_bit = chunk[1] - chunk[0];
+                let r_bit = chunk[0] + q_bit * point_at_k;
+                (q_bit, r_bit)
+            })
+            .unzip();
 
-//         let mut batch_scalars = Vec::with_capacity(batch_size);
-//         while let (Some(poly_even), Some(poly_odd)) = (poly_lock.read_next(), poly_lock.read_next())
-//         {
-//             let q = poly_odd - poly_even;
-//             batch_scalars.push(q);
-//             poly_lock.write_next(poly_even + (q * point_at_k));
-//             if batch_scalars.len() == batch_size {
-//                 // Process the current batch
-//                 let evals_slice =
-//                     &gi.evals[total_scalars_processed..total_scalars_processed + batch_size];
-//                 let commitment_batch = E::G1::msm_unchecked(evals_slice, &batch_scalars);
-//                 final_commitment += commitment_batch;
+        f = &r;
 
-//                 total_scalars_processed += batch_size; // Update the total number of scalars processed
-//                 batch_scalars.clear(); // Reset for next batch
-//             }
-//         }
+        end_timer!(ith_round_eval);
 
-//         // Process any remaining scalars in the last batch
-//         if !batch_scalars.is_empty() {
-//             let evals_slice =
-//                 &gi.evals[total_scalars_processed..total_scalars_processed + batch_scalars.len()];
-//             let commitment_batch = E::G1::msm_unchecked(evals_slice, &batch_scalars);
-//             final_commitment += commitment_batch;
-//         }
+        let msm_timer = start_timer!(|| format!("msm of size {} at round {}", 1 << (nv - 1 - i), i));
 
-//         let final_commitment = final_commitment.into_affine();
+        // let commitment = MultilinearKzgPCS::commit(prover_param, &MLE::from_evals(q, nv - 1 - i))?;
 
-//         proofs.push(final_commitment);
+        let commitment = {
+            let mut scalars = q.iter();
+            let mut bases = gi.evals.iter();
+            let mut scalars_buf = Vec::with_capacity(crate::streams::BUFFER_SIZE);
+            let mut bases_buf = Vec::with_capacity(crate::streams::BUFFER_SIZE);
+            let mut commitment = E::G1::zero();
+            while let (Some(scalar_batch), Some(base_batch)) = (scalars.next_batch(), bases.next_batch()) {
+                scalars_buf.clear();
+                bases_buf.clear();
+                scalars_buf.par_extend(scalar_batch);
+                bases_buf.par_extend(base_batch);
+                commitment += E::G1::msm_unchecked(&bases_buf, &scalars_buf);
+            }
+            commitment.into_affine()
+        };
 
-//         poly_lock.decrement_num_vars();
-//         poly_lock.swap_read_write();
+        println!("commitment: {}", commitment);
 
-//         end_timer!(ith_round);
-//     }
+        proofs.push(commitment);
+        end_timer!(msm_timer);
 
-//     assert_eq!(poly_lock.num_vars, 0);
+        end_timer!(ith_round);
+    }
 
-//     let eval = poly_lock.read_next().unwrap();
-//     poly_lock.read_restart();
+    // Doesn't consumer the polynomial
+    let eval = polynomial.evaluate(point).unwrap();
+    end_timer!(open_timer);
+    Ok((MultilinearKzgProof { proofs }, eval))
+}
 
-//     end_timer!(open_timer);
-//     Ok((MultilinearKzgProof { proofs }, eval))
-// }
+/// Verifies that `value` is the evaluation at `x` of the polynomial
+/// committed inside `comm`.
+///
+/// This function takes
+/// - num_var number of pairing product.
+/// - num_var number of MSM
+fn verify_internal<E: Pairing>(
+    verifier_param: &MultilinearVerifierParam<E>,
+    commitment: &Commitment<E>,
+    point: &[E::ScalarField],
+    value: &E::ScalarField,
+    proof: &MultilinearKzgProof<E>,
+) -> Result<bool, PCSError> {
+    let verify_timer = start_timer!(|| "verify");
+    let num_var = point.len();
 
-// /// Verifies that `value` is the evaluation at `x` of the polynomial
-// /// committed inside `comm`.
-// ///
-// /// This function takes
-// /// - num_var number of pairing product.
-// /// - num_var number of MSM
-// fn verify_internal<E: Pairing>(
-//     verifier_param: &MultilinearVerifierParam<E>,
-//     commitment: &Commitment<E>,
-//     point: &[E::ScalarField],
-//     value: &E::ScalarField,
-//     proof: &MultilinearKzgProof<E>,
-// ) -> Result<bool, PCSError> {
-//     let verify_timer = start_timer!(|| "verify");
-//     let num_var = point.len();
+    if num_var > verifier_param.num_vars {
+        return Err(PCSError::InvalidParameters(format!(
+            "point length ({}) exceeds param limit ({})",
+            num_var, verifier_param.num_vars
+        )));
+    }
 
-//     if num_var > verifier_param.num_vars {
-//         return Err(PCSError::InvalidParameters(format!(
-//             "point length ({}) exceeds param limit ({})",
-//             num_var, verifier_param.num_vars
-//         )));
-//     }
+    let prepare_inputs_timer = start_timer!(|| "prepare pairing inputs");
 
-//     let prepare_inputs_timer = start_timer!(|| "prepare pairing inputs");
+    let scalar_size = E::ScalarField::MODULUS_BIT_SIZE as usize;
+    let window_size = FixedBase::get_mul_window_size(num_var);
 
-//     let scalar_size = E::ScalarField::MODULUS_BIT_SIZE as usize;
-//     let window_size = FixedBase::get_mul_window_size(num_var);
+    let h_table =
+        FixedBase::get_window_table(scalar_size, window_size, verifier_param.h.into_group());
+    let h_mul: Vec<E::G2> = FixedBase::msm(scalar_size, window_size, &h_table, point);
 
-//     let h_table =
-//         FixedBase::get_window_table(scalar_size, window_size, verifier_param.h.into_group());
-//     let h_mul: Vec<E::G2> = FixedBase::msm(scalar_size, window_size, &h_table, point);
+    let ignored = verifier_param.num_vars - num_var;
+    let h_vec: Vec<_> = (0..num_var)
+        .map(|i| verifier_param.h_mask[ignored + i].into_group() - h_mul[i])
+        .collect();
+    let h_vec: Vec<E::G2Affine> = E::G2::normalize_batch(&h_vec);
+    end_timer!(prepare_inputs_timer);
 
-//     let ignored = verifier_param.num_vars - num_var;
-//     let h_vec: Vec<_> = (0..num_var)
-//         .map(|i| verifier_param.h_mask[ignored + i].into_group() - h_mul[i])
-//         .collect();
-//     let h_vec: Vec<E::G2Affine> = E::G2::normalize_batch(&h_vec);
-//     end_timer!(prepare_inputs_timer);
+    let pairing_product_timer = start_timer!(|| "pairing product");
 
-//     let pairing_product_timer = start_timer!(|| "pairing product");
+    let mut pairings: Vec<_> = proof
+        .proofs
+        .iter()
+        .map(|&x| E::G1Prepared::from(x))
+        .zip(h_vec.into_iter().take(num_var).map(E::G2Prepared::from))
+        .collect();
 
-//     let mut pairings: Vec<_> = proof
-//         .proofs
-//         .iter()
-//         .map(|&x| E::G1Prepared::from(x))
-//         .zip(h_vec.into_iter().take(num_var).map(E::G2Prepared::from))
-//         .collect();
+    pairings.push((
+        E::G1Prepared::from(
+            (verifier_param.g.mul(*value) - commitment.0.into_group()).into_affine(),
+        ),
+        E::G2Prepared::from(verifier_param.h),
+    ));
 
-//     pairings.push((
-//         E::G1Prepared::from(
-//             (verifier_param.g.mul(*value) - commitment.0.into_group()).into_affine(),
-//         ),
-//         E::G2Prepared::from(verifier_param.h),
-//     ));
+    let ps = pairings.iter().map(|(p, _)| p.clone());
+    let hs = pairings.iter().map(|(_, h)| h.clone());
 
-//     let ps = pairings.iter().map(|(p, _)| p.clone());
-//     let hs = pairings.iter().map(|(_, h)| h.clone());
+    let res = E::multi_pairing(ps, hs) == ark_ec::pairing::PairingOutput(E::TargetField::one());
 
-//     let res = E::multi_pairing(ps, hs) == ark_ec::pairing::PairingOutput(E::TargetField::one());
+    // println!("pairing result: {}", E::multi_pairing(ps, hs));
+    // println!("pairing result: {}", ark_ec::pairing::PairingOutput(E::TargetField::one()));
 
-//     #[cfg(debug_assertions)]
-//     {
-//         if res {
-//             println!("pairing verify success");
-//         }
-//     }
+    end_timer!(pairing_product_timer);
+    end_timer!(verify_timer);
+    Ok(res)
+}
 
-//     end_timer!(pairing_product_timer);
-//     end_timer!(verify_timer);
-//     Ok(res)
-// }
+#[cfg(test)]
+mod tests {
+    // use crate::hyperplonk::full_snark::utils::memory_traces;
 
-// #[cfg(test)]
-// mod tests {
-//     use crate::hyperplonk::full_snark::utils::memory_traces;
+    use super::*;
+    use ark_bls12_381::Bls12_381;
+    use ark_ec::pairing::Pairing;
+    use ark_std::{rand::{rngs::StdRng, SeedableRng}, test_rng, vec::Vec, UniformRand};
 
-//     use super::*;
-//     use ark_bls12_381::Bls12_381;
-//     use ark_ec::pairing::Pairing;
-//     use ark_std::{test_rng, vec::Vec, UniformRand};
+    type E = Bls12_381;
+    type Fr = <E as Pairing>::ScalarField;
 
-//     type E = Bls12_381;
-//     type Fr = <E as Pairing>::ScalarField;
+    fn test_single_helper<R: Rng>(
+        params: &MultilinearUniversalParams<E>,
+        poly: &MLE<Fr>,
+        rng: &mut R,
+    ) -> Result<(), PCSError> {
+        let nv = poly.num_vars();
+        assert_ne!(nv, 0);
+        let (ck, vk) = MultilinearKzgPCS::trim(params, None, Some(nv))?;
+        let point: Vec<_> = (0..nv).map(|_| Fr::rand(rng)).collect();
+        let com = MultilinearKzgPCS::commit(&ck, poly)?;
+        let (proof, value) = MultilinearKzgPCS::open(&ck, poly, &point)?;
 
-//     fn test_single_helper<R: Rng>(
-//         params: &MultilinearUniversalParams<E>,
-//         poly: &Arc<Mutex<DenseMLPolyStream<Fr>>>,
-//         rng: &mut R,
-//     ) -> Result<(), PCSError> {
-//         let nv = poly.lock().unwrap().num_vars;
-//         assert_ne!(nv, 0);
-//         let (ck, vk) = MultilinearKzgPCS::trim(params, None, Some(nv))?;
-//         let point: Vec<_> = (0..nv).map(|_| Fr::rand(rng)).collect();
+        assert!(MultilinearKzgPCS::verify(
+            &vk, &com, &point, &value, &proof
+        )?);
 
-//         let com = MultilinearKzgPCS::commit(&ck, poly)?;
-//         let (proof, value) = MultilinearKzgPCS::open(&ck, poly, &point)?;
+        let value = Fr::rand(rng);
+        assert!(!MultilinearKzgPCS::verify(
+            &vk, &com, &point, &value, &proof
+        )?);
 
-//         assert!(MultilinearKzgPCS::verify(
-//             &vk, &com, &point, &value, &proof
-//         )?);
+        Ok(())
+    }
 
-//         let value = Fr::rand(rng);
-//         assert!(!MultilinearKzgPCS::verify(
-//             &vk, &com, &point, &value, &proof
-//         )?);
+    #[test]
+    fn test_single_commit() -> Result<(), PCSError> {
+        let mut rng = test_rng();
 
-//         Ok(())
-//     }
+        let params = MultilinearKzgPCS::<E>::gen_srs_for_testing(&mut rng, 10)?;
 
-//     #[test]
-//     fn test_single_commit() -> Result<(), PCSError> {
-//         env_logger::init();
-//         memory_traces();
+        // normal polynomials
+        let poly1 = MLE::rand(8, &mut rng);
+        test_single_helper(&params, &poly1, &mut rng)?;
 
-//         let mut rng = test_rng();
+        // single-variate polynomials
+        let poly2 = MLE::rand(1, &mut rng);
+        test_single_helper(&params, &poly2, &mut rng)?;
 
-//         let SUPPORTED_DEGREE = 10;
-//         // let params = MultilinearKzgPCS::<E>::gen_fake_srs_for_testing(&mut rng, SUPPORTED_DEGREE)?;
-//         let params = MultilinearKzgPCS::<E>::gen_srs_for_testing(&mut rng, SUPPORTED_DEGREE)?;
+        Ok(())
+    }
 
-//         for i in 5..(SUPPORTED_DEGREE + 1) {
-//             let poly1 = Arc::new(Mutex::new(DenseMLPolyStream::<Fr>::rand(i, &mut rng)));
-//             test_single_helper(&params, &poly1, &mut rng)?;
-//         }
+    #[test]
+    fn setup_commit_verify_constant_polynomial() {
+        let mut rng = test_rng();
 
-//         Ok(())
-//     }
-
-//     #[test]
-//     fn setup_commit_verify_constant_polynomial() {
-//         let mut rng = test_rng();
-
-//         // normal polynomials
-//         assert!(MultilinearKzgPCS::<E>::gen_srs_for_testing(&mut rng, 0).is_err());
-//     }
-// }
+        // normal polynomials
+        assert!(MultilinearKzgPCS::<E>::gen_srs_for_testing(&mut rng, 0).is_err());
+    }
+}

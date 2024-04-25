@@ -82,13 +82,13 @@ pub trait PolynomialCommitmentScheme<E: Pairing> {
         poly: &Self::Polynomial,
     ) -> Result<Self::Commitment, PCSError>;
 
-    // /// On input a polynomial `p` and a point `point`, outputs a proof for the
-    // /// same.
-    // fn open(
-    //     prover_param: impl Borrow<Self::ProverParam>,
-    //     polynomial: &Self::Polynomial,
-    //     point: &Self::Point,
-    // ) -> Result<(Self::Proof, Self::Evaluation), PCSError>;
+    /// On input a polynomial `p` and a point `point`, outputs a proof for the
+    /// same.
+    fn open(
+        prover_param: impl Borrow<Self::ProverParam>,
+        polynomial: &Self::Polynomial,
+        point: &Self::Point,
+    ) -> Result<(Self::Proof, Self::Evaluation), PCSError>;
 
     // // just a RLN of regular open
     // fn multi_open_single_point(
@@ -113,15 +113,15 @@ pub trait PolynomialCommitmentScheme<E: Pairing> {
     //     unimplemented!()
     // }
 
-    // /// Verifies that `value` is the evaluation at `x` of the polynomial
-    // /// committed inside `comm`.
-    // fn verify(
-    //     verifier_param: &Self::VerifierParam,
-    //     commitment: &Self::Commitment,
-    //     point: &Self::Point,
-    //     value: &E::ScalarField,
-    //     proof: &Self::Proof,
-    // ) -> Result<bool, PCSError>;
+    /// Verifies that `value` is the evaluation at `x` of the polynomial
+    /// committed inside `comm`.
+    fn verify(
+        verifier_param: &Self::VerifierParam,
+        commitment: &Self::Commitment,
+        point: &Self::Point,
+        value: &E::ScalarField,
+        proof: &Self::Proof,
+    ) -> Result<bool, PCSError>;
 
     // /// Verifies that `value_i` is the evaluation at `x_i` of the polynomial
     // /// `poly_i` committed inside `comm`.
@@ -164,15 +164,15 @@ pub trait StructuredReferenceString<E: Pairing>: Sized {
         supported_size: usize,
     ) -> Result<(Self::ProverParam, Self::VerifierParam), PCSError>;
 
-    // /// Build SRS for testing.
-    // ///
-    // /// - For univariate polynomials, `supported_size` is the maximum degree.
-    // /// - For multilinear polynomials, `supported_size` is the number of
-    // ///   variables.
-    // ///
-    // /// WARNING: THIS FUNCTION IS FOR TESTING PURPOSE ONLY.
-    // /// THE OUTPUT SRS SHOULD NOT BE USED IN PRODUCTION.
-    // fn gen_srs_for_testing<R: Rng>(rng: &mut R, supported_size: usize) -> Result<Self, PCSError>;
+    /// Build SRS for testing.
+    ///
+    /// - For univariate polynomials, `supported_size` is the maximum degree.
+    /// - For multilinear polynomials, `supported_size` is the number of
+    ///   variables.
+    ///
+    /// WARNING: THIS FUNCTION IS FOR TESTING PURPOSE ONLY.
+    /// THE OUTPUT SRS SHOULD NOT BE USED IN PRODUCTION.
+    fn gen_srs_for_testing<R: Rng>(rng: &mut R, supported_size: usize) -> Result<Self, PCSError>;
 
     fn gen_fake_srs_for_testing<R: Rng>(
         rng: &mut R,
