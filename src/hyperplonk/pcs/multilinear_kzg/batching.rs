@@ -13,7 +13,6 @@ use ark_std::{
     collections::BTreeMap,
     iter,
     marker::PhantomData,
-    sync::{Arc, Mutex},
 };
 use ark_std::{end_timer, log2, start_timer, One, Zero};
 

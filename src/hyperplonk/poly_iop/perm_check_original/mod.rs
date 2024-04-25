@@ -193,7 +193,7 @@ mod test {
     };
     use ark_bls12_381::Bls12_381;
     use ark_ec::pairing::Pairing;
-    use ark_poly::{DenseMultilinearExtension, MultilinearExtension};
+    use ark_poly::{MultilinearExtension};
     use ark_std::test_rng;
     use std::{marker::PhantomData, panic};
 

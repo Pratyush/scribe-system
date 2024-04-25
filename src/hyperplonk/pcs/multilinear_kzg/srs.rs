@@ -1,11 +1,11 @@
 use crate::hyperplonk::pcs::{
     errors::PCSError,
-    multilinear_kzg::util::{eq_eval, eq_extension},
+    multilinear_kzg::util::{eq_extension},
     StructuredReferenceString,
 };
 use crate::streams::file_vec::FileVec;
 use ark_ec::{pairing::Pairing, scalar_mul::fixed_base::FixedBase, AffineRepr, CurveGroup};
-use ark_ff::{Field, PrimeField, Zero};
+use ark_ff::{Field, PrimeField};
 use ark_poly::DenseMultilinearExtension;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::{

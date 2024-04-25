@@ -6,23 +6,23 @@ use crate::hyperplonk::pcs::StructuredReferenceString;
 use crate::hyperplonk::pcs::{structs::Commitment, PCSError, PolynomialCommitmentScheme};
 use crate::hyperplonk::transcript::IOPTranscript;
 use crate::streams::file_vec::FileVec;
-use crate::streams::{iterator::BatchedIterator, Inner, MLE};
+use crate::streams::{iterator::BatchedIterator, MLE};
 use ark_ec::{
     pairing::Pairing,
     scalar_mul::{fixed_base::FixedBase, variable_base::VariableBaseMSM},
     AffineRepr, CurveGroup,
 };
-use ark_ff::{Field, PrimeField};
+use ark_ff::{PrimeField};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::{
     borrow::Borrow, end_timer, format, marker::PhantomData, rand::Rng, start_timer,
-    string::ToString, sync::Arc, vec::Vec, One, Zero,
+    string::ToString, vec::Vec, One, Zero,
 };
 use rayon::iter::{ParallelExtend, ParallelIterator};
 use srs::{MultilinearProverParam, MultilinearUniversalParams, MultilinearVerifierParam};
-use std::{ops::Mul, sync::Mutex};
+use std::{ops::Mul};
 
-use self::batching::{batch_verify_internal, BatchProof};
+use self::batching::{BatchProof};
 
 /// KZG Polynomial Commitment Scheme on multilinear polynomials.
 pub struct MultilinearKzgPCS<E: Pairing> {
@@ -430,7 +430,6 @@ mod tests {
     use ark_bls12_381::Bls12_381;
     use ark_ec::pairing::Pairing;
     use ark_std::{
-        rand::{rngs::StdRng, SeedableRng},
         test_rng,
         vec::Vec,
         UniformRand,
