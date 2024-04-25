@@ -1,20 +1,19 @@
 use crate::arithmetic::virtual_polynomial::{
     build_eq_x_r_vec, VPAuxInfo, VirtualPolynomial,
 };
+use crate::hyperplonk::pcs::errors::PCSError;
+use crate::hyperplonk::pcs::structs::Commitment;
 use crate::hyperplonk::poly_iop::{prelude::SumCheck, structs::IOPProof, PolyIOP};
-use crate::read_write::{DenseMLPolyStream, ReadWriteStream};
 use crate::{
-
-    arithmetic::virtual_polynomial::build_eq_x_r,
     hyperplonk::{
         pcs::{
             multilinear_kzg::util::eq_eval,
-            prelude::{Commitment, PCSError},
             PolynomialCommitmentScheme,
         },
     },
-    read_write::{add_assign, copy_mle},
 };
+
+use crate::streams::MLE;
 use ark_ec::pairing::Pairing;
 use ark_ec::{scalar_mul::variable_base::VariableBaseMSM, CurveGroup};
 
@@ -52,7 +51,6 @@ where
 pub(crate) fn multi_open_internal<E, PCS>(
     prover_param: &PCS::ProverParam,
     polynomials: &[PCS::Polynomial],
-    // polynomials: Vec<Arc<Mutex<DenseMLPolyStream<E::ScalarField>>>>,
     points: &[PCS::Point],
     evals: &[PCS::Evaluation],
     transcript: &mut IOPTranscript<E::ScalarField>,
@@ -61,7 +59,7 @@ where
     E: Pairing,
     PCS: PolynomialCommitmentScheme<
         E,
-        Polynomial = Arc<Mutex<DenseMLPolyStream<E::ScalarField>>>,
+        Polynomial = MLE<E::ScalarField>,
         Point = Vec<E::ScalarField>,
         Evaluation = E::ScalarField,
     >,
@@ -69,7 +67,7 @@ where
     let open_timer = start_timer!(|| format!("multi open {} points", points.len()));
 
     // TODO: sanity checks
-    let num_var = polynomials[0].lock().unwrap().num_vars;
+    let num_var = polynomials[0].num_vars();
     let k = polynomials.len();
     let ell = log2(k) as usize;
 
@@ -99,42 +97,23 @@ where
         .zip(points.iter())
         .zip(eq_t_i_list.iter())
         .fold(
-            iter::repeat_with(|| {
-                DenseMLPolyStream::const_mle(E::ScalarField::zero(), num_var, None, None)
-            })
-            .take(point_indices.len())
-            .collect::<Vec<Arc<Mutex<DenseMLPolyStream<E::ScalarField>>>>>(),
-            |merged_tilde_gs, ((poly, point), coeff)| {
-                add_assign(
-                    merged_tilde_gs[point_indices[point]].clone(),
-                    *coeff,
-                    poly.clone(),
-                );
-                // merged_tilde_gs is a new stream created so that the source streams (poly) aren't modified at all in foldings later
+            iter::repeat_with(|| MLE::constant(E::ScalarField::zero(), num_var))
+                .take(point_indices.len())
+                .collect::<Vec<MLE<E::ScalarField>>>(),
+            |mut merged_tilde_gs, ((poly, point), coeff)| {
+                merged_tilde_gs[point_indices[point]] +=
+                    (*coeff, poly);
                 merged_tilde_gs
             },
         );
     end_timer!(timer);
 
     let timer = start_timer!(|| format!("compute tilde eq for {} points", points.len()));
-    let tilde_eqs: Vec<Arc<Mutex<DenseMLPolyStream<E::ScalarField>>>> = deduped_points
-        .iter()
+    let tilde_eqs: Vec<MLE<E::ScalarField>> = deduped_points.iter()
         .map(|point| {
-            build_eq_x_r(point.as_ref()).unwrap()
-            // let eq_b_zi = build_eq_x_r_vec(point).unwrap();
-            // Arc::new(DenseMultilinearExtension::from_evaluations_vec(
-            //     num_var, eq_b_zi,
-            // ))
+            MLE::eq_x_r(point).unwrap()
         })
         .collect();
-    end_timer!(timer);
-
-    // copy merged_tilde_gs for opening (original copy used for sum check and another copy for opening)
-    start_timer!(|| "copy merged_tilde_gs for opening");
-    let merged_tilde_gs_copy = merged_tilde_gs
-        .iter()
-        .map(|x| copy_mle(x, None, None))
-        .collect::<Vec<Arc<Mutex<DenseMLPolyStream<E::ScalarField>>>>>();
     end_timer!(timer);
 
     // built the virtual polynomial for SumCheck
@@ -143,10 +122,7 @@ where
     let step = start_timer!(|| "add mle");
     let mut sum_check_vp = VirtualPolynomial::new(num_var);
     for (merged_tilde_g, tilde_eq) in merged_tilde_gs.iter().zip(tilde_eqs.into_iter()) {
-        sum_check_vp.add_mle_list(
-            [merged_tilde_g.clone(), tilde_eq.clone()],
-            E::ScalarField::one(),
-        )?;
+        sum_check_vp.add_mles([merged_tilde_g.clone(), tilde_eq], E::ScalarField::one())?;
     }
     end_timer!(step);
 
@@ -160,7 +136,7 @@ where
             return Err(PCSError::InvalidProver(
                 "Sumcheck in batch proving Failed".to_string(),
             ));
-        }
+        },
     };
 
     end_timer!(timer);
@@ -171,11 +147,10 @@ where
     // build g'(X) = \sum_i=1..k \tilde eq_i(a2) * \tilde g_i(X) where (a2) is the
     // sumcheck's point \tilde eq_i(a2) = eq(a2, point_i)
     let step = start_timer!(|| "evaluate at a2");
-    let g_prime = DenseMLPolyStream::const_mle(E::ScalarField::zero(), num_var, None, None);
-    for (merged_tilde_g, point) in merged_tilde_gs_copy.iter().zip(deduped_points.iter()) {
+    let mut g_prime = MLE::constant(E::ScalarField::zero(), num_var);
+    for (merged_tilde_g, point) in merged_tilde_gs.iter().zip(deduped_points.iter()) {
         let eq_i_a2 = eq_eval(a2, point)?;
-        add_assign(g_prime.clone(), eq_i_a2, merged_tilde_g.clone());
-        // drop(g_prime_stream); // No longer needed
+        g_prime += (eq_i_a2, merged_tilde_g);
     }
     end_timer!(step);
 
@@ -211,7 +186,7 @@ where
     E: Pairing,
     PCS: PolynomialCommitmentScheme<
         E,
-        Polynomial = Arc<Mutex<DenseMLPolyStream<E::ScalarField>>>,
+        Polynomial = MLE<E::ScalarField>,
         Point = Vec<E::ScalarField>,
         Evaluation = E::ScalarField,
         Commitment = Commitment<E>,
@@ -268,7 +243,7 @@ where
             return Err(PCSError::InvalidProver(
                 "Sumcheck in batch verification failed".to_string(),
             ));
-        }
+        },
     };
     let tilde_g_eval = subclaim.expected_evaluation;
 
@@ -285,60 +260,13 @@ where
     Ok(res)
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct BatchProofSinglePoint<E, PCS>
-where
-    E: Pairing,
-    PCS: PolynomialCommitmentScheme<E>,
-{
-    pub rlc_eval: E::ScalarField, // rlc of f_i(point_i)
-    pub(crate) proof: PCS::Proof, // proof for rlc of polynomials
-    pub perm_evals: Vec<E::ScalarField>,
-    pub perm_index_evals: Vec<E::ScalarField>,
-    pub selector_evals: Vec<E::ScalarField>,
-    pub witness_evals: Vec<E::ScalarField>,
-    pub hp_evals: Vec<E::ScalarField>,
-    pub hq_evals: Vec<E::ScalarField>,
-}
-
-// still uses batch proof single point method, but use it multiple times on different points
-// so we get multiple proofs of rlcs of polynomials opened at a single point
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct BatchProofSinglePointAggr<E, PCS>
-where
-    E: Pairing,
-    PCS: PolynomialCommitmentScheme<E>,
-{
-    // product final query [1, 1, ..., 1, 0]
-    pub rlc_eval_prod: E::ScalarField, // rlc of f_i(point_i)
-    pub proof_prod: PCS::Proof,        // proof for rlc of polynomials
-    // perm query
-    pub rlc_eval_perm: E::ScalarField, // rlc of f_i(point_i)
-    pub proof_perm: PCS::Proof,        // proof for rlc of polynomials
-    // perm 0 query
-    pub rlc_eval_perm_0: E::ScalarField, // rlc of f_i(point_i)
-    pub proof_perm_0: PCS::Proof,        // proof for rlc of polynomials
-    // perm 1 query
-    pub rlc_eval_perm_1: E::ScalarField, // rlc of f_i(point_i)
-    pub proof_perm_1: PCS::Proof,        // proof for rlc of polynomials
-    // zero check query
-    pub rlc_eval_zero: E::ScalarField, // rlc of f_i(point_i)
-    pub proof_zero: PCS::Proof,        // proof for rlc of polynomials
-
-    // evaluations: these are needed to ensure that the rlc's are correct
-    pub perm_evals: Vec<E::ScalarField>,
-    pub selector_evals: Vec<E::ScalarField>,
-    pub witness_evals: Vec<E::ScalarField>,
-    pub prod_evals: Vec<E::ScalarField>,
-    pub frac_evals: Vec<E::ScalarField>,
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::hyperplonk::arithmetic::util::get_batched_nv;
+    use crate::arithmetic::util::get_batched_nv;
+    use crate::hyperplonk::pcs::multilinear_kzg::srs::MultilinearUniversalParams;
+    use crate::hyperplonk::pcs::multilinear_kzg::MultilinearKzgPCS;
     use crate::hyperplonk::pcs::{
-        prelude::{MultilinearKzgPCS, MultilinearUniversalParams},
         StructuredReferenceString,
     };
     use ark_bls12_381::Bls12_381 as E;
@@ -350,35 +278,29 @@ mod tests {
 
     fn test_multi_open_helper<R: Rng>(
         ml_params: &MultilinearUniversalParams<E>,
-        polys: Vec<Arc<Mutex<DenseMLPolyStream<Fr>>>>,
+        polys: &[MLE<Fr>],
         rng: &mut R,
     ) -> Result<(), PCSError> {
-        let merged_nv = get_batched_nv(polys[0].lock().unwrap().num_vars(), polys.len());
+        let merged_nv = get_batched_nv(polys[0].num_vars(), polys.len());
         let (ml_ck, ml_vk) = ml_params.trim(merged_nv)?;
 
         let mut points = Vec::new();
         for poly in polys.iter() {
-            let point = (0..poly.lock().unwrap().num_vars())
+            let point = (0..poly.num_vars())
                 .map(|_| Fr::rand(rng))
                 .collect::<Vec<Fr>>();
             points.push(point);
         }
 
-        // create poly copies for evaluation, which changes the stream
-        let polys_copy = polys
-            .iter()
-            .map(|x| copy_mle(x, None, None))
-            .collect::<Vec<_>>();
-
-        let evals = polys_copy
+        let evals = polys
             .iter()
             .zip(points.iter())
-            .map(|(f, p)| f.lock().unwrap().evaluate(p).unwrap())
+            .map(|(f, p)| f.evaluate(p).unwrap())
             .collect::<Vec<_>>();
 
         let commitments = polys
             .iter()
-            .map(|poly| MultilinearKzgPCS::commit(&ml_ck.clone(), poly).unwrap())
+            .map(|poly| MultilinearKzgPCS::commit(&ml_ck, poly).unwrap())
             .collect::<Vec<_>>();
 
         let mut transcript = IOPTranscript::new("test transcript".as_ref());
@@ -386,7 +308,7 @@ mod tests {
 
         let batch_proof = multi_open_internal::<E, MultilinearKzgPCS<E>>(
             &ml_ck,
-            &polys,
+            polys,
             &points,
             &evals,
             &mut transcript,
@@ -410,13 +332,13 @@ mod tests {
     fn test_multi_open_internal() -> Result<(), PCSError> {
         let mut rng = test_rng();
 
-        let ml_params = MultilinearUniversalParams::<E>::gen_srs_for_testing(&mut rng, 15)?;
+        let ml_params = MultilinearUniversalParams::<E>::gen_srs_for_testing(&mut rng, 20)?;
         for num_poly in 5..6 {
-            for nv in 8..9 {
+            for nv in 15..16 {
                 let polys1: Vec<_> = (0..num_poly)
-                    .map(|_| Arc::new(Mutex::new(DenseMLPolyStream::rand(nv, &mut rng))))
+                    .map(|_| MLE::rand(nv, &mut rng))
                     .collect();
-                test_multi_open_helper(&ml_params, polys1, &mut rng)?;
+                test_multi_open_helper(&ml_params, &polys1, &mut rng)?;
             }
         }
 
