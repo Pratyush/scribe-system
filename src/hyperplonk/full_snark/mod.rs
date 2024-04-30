@@ -1,14 +1,15 @@
 use std::sync::{Arc, Mutex};
 
-use crate::read_write::DenseMLPolyStream;
 use ark_ec::pairing::Pairing;
 use errors::HyperPlonkErrors;
+
+use crate::streams::MLE;
 
 use super::{pcs::PolynomialCommitmentScheme, poly_iop::prelude::SumCheck};
 
 mod custom_gate;
 mod errors;
-mod mock;
+// mod mock;
 pub mod prelude;
 mod selectors;
 mod snark;
@@ -54,7 +55,7 @@ where
     fn prove(
         pk: &Self::ProvingKey,
         pub_input: &[E::ScalarField],
-        witnesses: Vec<Arc<Mutex<DenseMLPolyStream<E::ScalarField>>>>,
+        witnesses: Vec<MLE<E::ScalarField>>,
     ) -> Result<Self::Proof, HyperPlonkErrors>;
 
     /// Verify the HyperPlonk proof.

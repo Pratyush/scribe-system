@@ -1,8 +1,8 @@
 use crate::hyperplonk::poly_iop::perm_check_original::PermutationCheck;
 use crate::hyperplonk::poly_iop::prelude::ZeroCheck;
+use crate::streams::MLE;
 use crate::{
     hyperplonk::{full_snark::custom_gate::CustomizedGates, pcs::PolynomialCommitmentScheme},
-    read_write::DenseMLPolyStream,
 };
 use ark_ec::pairing::Pairing;
 use ark_ff::PrimeField;
@@ -92,11 +92,11 @@ impl HyperPlonkParams {
 ///   - HyperPlonk parameters
 ///   - the wire permutation
 ///   - the selector vectors
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct HyperPlonkIndex<F: PrimeField> {
     pub params: HyperPlonkParams,
-    pub permutation: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
-    pub selectors: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
+    pub permutation: Vec<MLE<F>>,
+    pub selectors: Vec<MLE<F>>,
 }
 
 impl<F: PrimeField> HyperPlonkIndex<F> {
@@ -121,15 +121,15 @@ impl<F: PrimeField> HyperPlonkIndex<F> {
 ///   - the preprocessed polynomials output by the indexer
 ///   - the commitment to the selectors and permutations
 ///   - the parameters for polynomial commitment
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default, PartialEq)]
 // pub struct HyperPlonkProvingKey<E: Pairing, PCS: PolynomialCommitmentScheme<E>> {
 pub struct HyperPlonkProvingKey<E: Pairing, PCS: PolynomialCommitmentScheme<E>> {
     /// Hyperplonk instance parameters
     pub params: HyperPlonkParams,
     /// The preprocessed permutation polynomials
-    pub permutation_oracles: Vec<Arc<Mutex<DenseMLPolyStream<E::ScalarField>>>>,
+    pub permutation_oracles: Vec<MLE<E::ScalarField>>,
     /// The preprocessed selector polynomials
-    pub selector_oracles: Vec<Arc<Mutex<DenseMLPolyStream<E::ScalarField>>>>,
+    pub selector_oracles: Vec<MLE<E::ScalarField>>,
     /// Commitments to the preprocessed selector polynomials
     pub selector_commitments: Vec<PCS::Commitment>,
     /// Commitments to the preprocessed permutation polynomials
@@ -142,7 +142,7 @@ pub struct HyperPlonkProvingKey<E: Pairing, PCS: PolynomialCommitmentScheme<E>> 
 ///   - the hyperplonk instance parameters
 ///   - the commitments to the preprocessed polynomials output by the indexer
 ///   - the parameters for polynomial commitment
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default, PartialEq)]
 // pub struct HyperPlonkVerifyingKey<E: Pairing, PCS: PolynomialCommitmentScheme<E>> {
 pub struct HyperPlonkVerifyingKey<E: Pairing, PCS: PolynomialCommitmentScheme<E>> {
     /// Hyperplonk instance parameters

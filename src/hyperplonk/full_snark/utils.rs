@@ -1,16 +1,17 @@
-use crate::hyperplonk::arithmetic::virtual_polynomial::VirtualPolynomial;
+use crate::arithmetic::virtual_polynomial::VirtualPolynomial;
 use crate::hyperplonk::full_snark::{
     custom_gate::CustomizedGates, errors::HyperPlonkErrors, structs::HyperPlonkParams,
 };
-use crate::hyperplonk::pcs::prelude::{Commitment, PCSError};
 use crate::hyperplonk::pcs::PolynomialCommitmentScheme;
 use crate::hyperplonk::transcript::IOPTranscript;
-use crate::read_write::{copy_mle, DenseMLPolyStream, ReadWriteStream};
+use crate::streams::file_vec::FileVec;
+use crate::streams::MLE;
 use ark_ec::pairing::Pairing;
 use ark_ff::PrimeField;
 use ark_std::{end_timer, start_timer};
 use std::sync::Mutex;
 use std::{borrow::Borrow, sync::Arc};
+use crate::hyperplonk::pcs::structs::Commitment;
 
 /// An accumulator structure that holds a polynomial and
 /// its opening points
@@ -28,7 +29,7 @@ where
     E: Pairing,
     PCS: PolynomialCommitmentScheme<
         E,
-        Polynomial = Arc<Mutex<DenseMLPolyStream<E::ScalarField>>>,
+        Polynomial = MLE<E::ScalarField>,
         Point = Vec<E::ScalarField>,
         Evaluation = E::ScalarField,
         Commitment = Commitment<E>,
@@ -52,14 +53,10 @@ where
         commit: &PCS::Commitment,
         point: &PCS::Point,
     ) {
-        // create a stream copy for evaluation
-        let poly_copy = copy_mle(poly, None, None);
-        let poly_num_vars = poly.lock().unwrap().num_vars;
-        assert!(poly_num_vars == point.len());
-        assert!(poly_num_vars == self.num_var);
+        assert!(poly.num_vars == point.len());
+        assert!(poly.num_vars == self.num_var);
 
-        // poly_copy is reduced to just one field element
-        let eval = poly_copy.lock().unwrap().evaluate(point).unwrap();
+        let eval = poly.evaluate(point).unwrap();
 
         self.evals.push(eval);
         self.polynomials.push(poly.clone());
@@ -82,30 +79,13 @@ where
             transcript,
         )?)
     }
-
-    /// Batch open all the points over a merged polynomial.
-    /// A simple wrapper of PCS::multi_open
-    pub(super) fn multi_open_single_point(
-        &self,
-        prover_param: impl Borrow<PCS::ProverParam>,
-        transcript: &mut IOPTranscript<E::ScalarField>,
-    ) -> Result<(PCS::Proof, PCS::Evaluation), PCSError> {
-        // default uses the first point and assumes that all points are the same
-        // TODO: confirm that all points are the same
-        Ok(PCS::multi_open_single_point(
-            prover_param.borrow(),
-            self.polynomials.as_ref(),
-            self.points[0].clone(),
-            transcript,
-        )?)
-    }
 }
 
 /// Sanity-check for HyperPlonk SNARK proving
 pub(crate) fn prover_sanity_check<F: PrimeField>(
     params: &HyperPlonkParams,
     pub_input: &[F],
-    witnesses: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
+    witnesses: Vec<MLE<F>>,
 ) -> Result<(), HyperPlonkErrors> {
     // public input length must be no greater than num_constraints
     if pub_input.len() > params.num_constraints {
@@ -133,40 +113,27 @@ pub(crate) fn prover_sanity_check<F: PrimeField>(
 
     // witnesses length
     for (i, w) in witnesses.iter().enumerate() {
-        if 1 << w.lock().unwrap().num_vars != params.num_constraints {
+        if 1 << w[0].num_vars() != params.num_constraints {
             return Err(HyperPlonkErrors::InvalidProver(format!(
                 "{}-th witness length is not correct: got {}, expect {}",
                 i,
-                w.lock().unwrap().num_vars,
+                1 << w[0].num_vars(),
                 params.num_constraints
             )));
         }
     }
     // check public input matches witness[0]'s first 2^ell elements
-    let mut pub_stream = witnesses[0].lock().unwrap();
-
-    #[cfg(debug_assertions)]
-    println!("public input len: {}", pub_input.len());
-
-    let pub_stream_result: Vec<F> = (0..pub_input.len())
-        .map(|i| {
-            #[cfg(debug_assertions)]
-            println!("public input number {}", i);
-
-            pub_stream.read_next().unwrap()
-        })
-        .collect();
-    pub_stream.read_restart();
-    drop(pub_stream);
-
-    for (i, (&pi, w)) in pub_input.iter().zip(pub_stream_result).enumerate() {
-        if pi != w {
-            return Err(HyperPlonkErrors::InvalidProver(format!(
-                "The {:?}-th public input {:?} does not match witness[0] {:?}",
-                i, pi, w
-            )));
-        }
-    }
+    FileVec::from_iter(pub_input).zip(witnesses[0]).for_each(
+        |(pi, w)| {
+            if pi != w {
+                return Err(HyperPlonkErrors::InvalidProver(format!(
+                    "Public input does not match witness[0]: got {:?}, expect {:?}",
+                    pi, w
+                )));
+            }
+            Ok(())
+        },
+    );
 
     Ok(())
 }
@@ -177,34 +144,28 @@ pub(crate) fn prover_sanity_check<F: PrimeField>(
 pub(crate) fn build_f<F: PrimeField>(
     gates: &CustomizedGates,
     num_vars: usize,
-    selector_mles: &[Arc<Mutex<DenseMLPolyStream<F>>>],
-    witness_mles: &[Arc<Mutex<DenseMLPolyStream<F>>>],
+    selector_mles: &[MLE<F>],
+    witness_mles: &[MLE<F>],
 ) -> Result<VirtualPolynomial<F>, HyperPlonkErrors> {
-    let start = start_timer!(|| "build gate identity polynomial");
-
     // TODO: check that selector and witness lengths match what is in
     // the gate definition
 
     for selector_mle in selector_mles.iter() {
-        let selector_mle = selector_mle.lock().expect("lock failed");
-        if selector_mle.num_vars != num_vars {
+        if selector_mle.num_vars() != num_vars {
             return Err(HyperPlonkErrors::InvalidParameters(format!(
                 "selector has different number of vars: {} vs {}",
-                selector_mle.num_vars, num_vars
+                selector_mle.num_vars(), num_vars
             )));
         }
-        drop(selector_mle)
     }
 
     for witness_mle in witness_mles.iter() {
-        let witness_mle = witness_mle.lock().expect("lock failed");
-        if witness_mle.num_vars != num_vars {
+        if witness_mle.num_vars() != num_vars {
             return Err(HyperPlonkErrors::InvalidParameters(format!(
                 "selector has different number of vars: {} vs {}",
-                witness_mle.num_vars, num_vars
+                witness_mle.num_vars(), num_vars
             )));
         }
-        drop(witness_mle)
     }
 
     let mut res = VirtualPolynomial::<F>::new(num_vars);
@@ -222,10 +183,8 @@ pub(crate) fn build_f<F: PrimeField>(
         for &witness in witnesses.iter() {
             mle_list.push(witness_mles[witness].clone())
         }
-        res.add_mle_list(mle_list, coeff_fr)?;
+        res.add_mles(mle_list, coeff_fr)?;
     }
-
-    end_timer!(start);
 
     Ok(res)
 }
@@ -320,12 +279,9 @@ pub fn memory_traces() {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::read_write::{copy_mle, DenseMLPolyStream};
     use ark_bls12_381::Fr;
     use ark_ff::PrimeField;
-    use std::sync::Mutex;
-
-    // TODO: this is currently failing, fix this
+    use ark_poly::MultilinearExtension;
     #[test]
     fn test_build_gate() -> Result<(), HyperPlonkErrors> {
         test_build_gate_helper::<Fr>()
@@ -340,9 +296,7 @@ mod test {
         // 1, 0 |-> 0
         // 1, 1 |-> 5
         let ql_eval = vec![F::zero(), F::from(2u64), F::zero(), F::from(5u64)];
-        let ql = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(
-            2, ql_eval, None, None,
-        )));
+        let ql = MLE::from_evals_vec(ql_eval, 2);
 
         // W1 = x1x2 + x1 whose evaluations are
         // 0, 0 |-> 0
@@ -350,9 +304,7 @@ mod test {
         // 1, 0 |-> 1
         // 1, 1 |-> 2
         let w_eval = vec![F::zero(), F::zero(), F::from(1u64), F::from(2u64)];
-        let w1 = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(
-            2, w_eval, None, None,
-        )));
+        let w1 = MLE::from_evaluations_vec(w_eval, 2);
 
         // W2 = x1 + x2 whose evaluations are
         // 0, 0 |-> 0
@@ -360,9 +312,7 @@ mod test {
         // 1, 0 |-> 1
         // 1, 1 |-> 2
         let w_eval = vec![F::zero(), F::one(), F::from(1u64), F::from(2u64)];
-        let w2 = Arc::new(Mutex::new(DenseMLPolyStream::from_evaluations_vec(
-            2, w_eval, None, None,
-        )));
+        let w2 = MLE::from_evaluations_vec(w_eval, 2);
 
         // Example:
         //     q_L(X) * W_1(X)^5 - W_2(X)
@@ -388,12 +338,6 @@ mod test {
 
         // test eval_f
         {
-            let ql = copy_mle(&ql, None, None);
-            let w1 = copy_mle(&w1, None, None);
-            let w2 = copy_mle(&w2, None, None);
-            let mut ql = ql.lock().unwrap();
-            let mut w1 = w1.lock().unwrap();
-            let mut w2 = w2.lock().unwrap();
             let point = [F::zero(), F::zero()];
             let selector_evals = ql.evaluate(&point).unwrap();
             let witness_evals = [w1.evaluate(&point).unwrap(), w2.evaluate(&point).unwrap()];
@@ -402,12 +346,6 @@ mod test {
             assert_eq!(eval_f, F::zero());
         }
         {
-            let ql = copy_mle(&ql, None, None);
-            let w1 = copy_mle(&w1, None, None);
-            let w2 = copy_mle(&w2, None, None);
-            let mut ql = ql.lock().unwrap();
-            let mut w1 = w1.lock().unwrap();
-            let mut w2 = w2.lock().unwrap();
             let point = [F::zero(), F::one()];
             let selector_evals = ql.evaluate(&point).unwrap();
             let witness_evals = [w1.evaluate(&point).unwrap(), w2.evaluate(&point).unwrap()];
@@ -416,12 +354,6 @@ mod test {
             assert_eq!(eval_f, -F::one());
         }
         {
-            let ql = copy_mle(&ql, None, None);
-            let w1 = copy_mle(&w1, None, None);
-            let w2 = copy_mle(&w2, None, None);
-            let mut ql = ql.lock().unwrap();
-            let mut w1 = w1.lock().unwrap();
-            let mut w2 = w2.lock().unwrap();
             let point = [F::one(), F::zero()];
             let selector_evals = ql.evaluate(&point).unwrap();
             let witness_evals = [w1.evaluate(&point).unwrap(), w2.evaluate(&point).unwrap()];
@@ -430,12 +362,6 @@ mod test {
             assert_eq!(eval_f, -F::one());
         }
         {
-            let ql = copy_mle(&ql, None, None);
-            let w1 = copy_mle(&w1, None, None);
-            let w2 = copy_mle(&w2, None, None);
-            let mut ql = ql.lock().unwrap();
-            let mut w1 = w1.lock().unwrap();
-            let mut w2 = w2.lock().unwrap();
             let point = [F::one(), F::one()];
             let selector_evals = ql.evaluate(&point).unwrap();
             let witness_evals = [w1.evaluate(&point).unwrap(), w2.evaluate(&point).unwrap()];

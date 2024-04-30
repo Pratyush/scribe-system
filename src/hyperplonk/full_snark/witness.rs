@@ -1,5 +1,4 @@
-use crate::hyperplonk::full_snark::errors::HyperPlonkErrors;
-use crate::read_write::DenseMLPolyStream;
+use crate::{hyperplonk::full_snark::errors::HyperPlonkErrors, streams::MLE};
 use ark_ff::PrimeField;
 use ark_std::log2;
 
@@ -52,9 +51,9 @@ impl<F: PrimeField> WitnessColumn<F> {
     }
 }
 
-impl<F: PrimeField> From<&WitnessColumn<F>> for DenseMLPolyStream<F> {
+impl<F: PrimeField> From<&WitnessColumn<F>> for MLE<F> {
     fn from(witness: &WitnessColumn<F>) -> Self {
         let nv = witness.get_nv();
-        Self::from_evaluations_slice(nv, witness.0.as_ref(), None, None)
+        Self::from_evals_vec(witness.0.as_ref(), nv)
     }
 }

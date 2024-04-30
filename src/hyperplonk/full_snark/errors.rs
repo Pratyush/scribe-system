@@ -1,5 +1,5 @@
-use crate::hyperplonk::arithmetic::errors::ArithErrors;
-use crate::hyperplonk::pcs::prelude::PCSError;
+use crate::arithmetic::errors::ArithError;
+use crate::hyperplonk::pcs::errors::PCSError;
 use crate::hyperplonk::poly_iop::errors::PIOPError;
 use crate::hyperplonk::transcript::TranscriptError;
 use ark_serialize::SerializationError;
@@ -26,7 +26,7 @@ pub enum HyperPlonkErrors {
     /// Transcript error {0}
     TranscriptError(TranscriptError),
     /// Arithmetic Error: {0}
-    ArithmeticErrors(ArithErrors),
+    ArithmeticErrors(ArithError),
 }
 
 impl From<SerializationError> for HyperPlonkErrors {
@@ -53,8 +53,8 @@ impl From<TranscriptError> for HyperPlonkErrors {
     }
 }
 
-impl From<ArithErrors> for HyperPlonkErrors {
-    fn from(e: ArithErrors) -> Self {
+impl From<ArithError> for HyperPlonkErrors {
+    fn from(e: ArithError) -> Self {
         Self::ArithmeticErrors(e)
     }
 }
