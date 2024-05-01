@@ -1,6 +1,6 @@
 use std::{
     iter::repeat,
-    ops::{AddAssign, Mul, MulAssign, SubAssign},
+    ops::{AddAssign, MulAssign, SubAssign},
     path::Path,
 };
 

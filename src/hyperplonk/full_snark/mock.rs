@@ -1,15 +1,8 @@
-use std::{
-    ops::{AddAssign, MulAssign},
-    sync::{Arc, Mutex},
-};
+use std::ops::{AddAssign, MulAssign};
 
 use crate::streams::{iterator::BatchedIterator, MLE};
 use ark_ff::PrimeField;
-use ark_std::{
-    end_timer, log2,
-    rand::{rngs::StdRng, SeedableRng},
-    start_timer, test_rng,
-};
+use ark_std::{log2, test_rng};
 
 use crate::hyperplonk::full_snark::{
     custom_gate::CustomizedGates,

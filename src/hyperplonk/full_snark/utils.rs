@@ -6,14 +6,13 @@ use crate::hyperplonk::pcs::structs::Commitment;
 use crate::hyperplonk::pcs::PolynomialCommitmentScheme;
 use crate::hyperplonk::transcript::IOPTranscript;
 use crate::streams::file_vec::FileVec;
-use crate::streams::iterator::{BatchedIterator, IntoBatchedIterator};
+use crate::streams::iterator::BatchedIterator;
 use crate::streams::MLE;
 use ark_ec::pairing::Pairing;
 use ark_ff::PrimeField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-use ark_std::{end_timer, start_timer};
-use std::sync::Mutex;
-use std::{borrow::Borrow, sync::Arc};
+
+use std::borrow::Borrow;
 
 /// An accumulator structure that holds a polynomial and
 /// its opening points

@@ -23,10 +23,7 @@ use rayon::iter::IntoParallelRefIterator;
 #[cfg(feature = "parallel")]
 use rayon::iter::ParallelIterator;
 
-use std::{
-    marker::PhantomData,
-    sync::{Arc, Mutex},
-};
+use std::marker::PhantomData;
 
 impl<E, PCS> HyperPlonkSNARK<E, PCS> for PolyIOP<E::ScalarField>
 where
@@ -584,7 +581,7 @@ where
 
         // check public evaluation
         let pi_step = start_timer!(|| "check public evaluation");
-        let mut pi_poly = MLE::from_evals_vec(pub_input.to_vec(), ell);
+        let pi_poly = MLE::from_evals_vec(pub_input.to_vec(), ell);
         let expect_pi_eval = pi_poly.evaluate(&r_pi[..]).unwrap();
         if expect_pi_eval != *pi_eval {
             return Err(HyperPlonkErrors::InvalidProver(format!(

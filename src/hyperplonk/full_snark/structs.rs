@@ -7,7 +7,6 @@ use crate::streams::MLE;
 use ark_ec::pairing::Pairing;
 use ark_ff::PrimeField;
 use ark_std::log2;
-use std::sync::{Arc, Mutex};
 
 use super::prelude::HyperPlonkErrors;
 
