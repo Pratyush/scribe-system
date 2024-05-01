@@ -148,7 +148,7 @@ mod test {
     use ark_std::test_rng;
 
     const SUPPORTED_SIZE: usize = 20;
-    const MIN_NUM_VARS: usize = 17;
+    const MIN_NUM_VARS: usize = 16;
     const MAX_NUM_VARS: usize = 21;
     const CUSTOM_DEGREE: [usize; 4] = [1, 2, 4, 8];
 
