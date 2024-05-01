@@ -102,12 +102,14 @@ impl<E: Pairing> PolynomialCommitmentScheme<E> for MultilinearKzgPCS<E> {
         poly: &Self::Polynomial,
     ) -> Result<Self::Commitment, PCSError> {
         let prover_param = prover_param.borrow();
+        println!("commit prover param nv = {}", prover_param.num_vars);
         let poly_num_vars = poly.num_vars();
+        println!("commit poly nv = {}", poly_num_vars);
 
         let commit_timer = start_timer!(|| format!("commit poly nv = {}", poly_num_vars));
         if prover_param.num_vars < poly_num_vars {
             return Err(PCSError::InvalidParameters(format!(
-                "MlE length ({}) exceeds param limit ({})",
+                "MLE length ({}) exceeds param limit ({})",
                 poly_num_vars, prover_param.num_vars
             )));
         }

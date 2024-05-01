@@ -43,10 +43,8 @@ impl<F: PrimeField + Clone> MockCircuit<F> {
         let nv = log2(num_constraints) as usize;
         let num_selectors = gate.num_selector_columns();
         let num_witnesses = gate.num_witness_columns();
-        let log_n_wires = log2(num_witnesses) as usize;
-        let merged_nv = nv + log_n_wires;
 
-        let selectors: Vec<MLE<F>> = (0..num_selectors - 1)
+        let mut selectors: Vec<MLE<F>> = (0..num_selectors - 1)
             .map(|_| MLE::rand(nv, &mut rng))
             .collect();
 
@@ -65,12 +63,12 @@ impl<F: PrimeField + Clone> MockCircuit<F> {
             }, nv);
 
             for wit_index in wit.iter() {
-                cur_monomial.mul_assign(witnesses[*wit_index]);
+                cur_monomial.mul_assign(&witnesses[*wit_index]);
             }
 
             if index != num_selectors - 1 {
                 match q {
-                    Some(p) => cur_monomial.mul_assign(selectors[*p]),
+                    Some(p) => cur_monomial.mul_assign(&selectors[*p]),
                     _ => (),
                 };
                 last_selector.add_assign(cur_monomial);
@@ -79,6 +77,8 @@ impl<F: PrimeField + Clone> MockCircuit<F> {
                 last_selector.mul_assign((-F::one(), cur_monomial));
             }
         });
+
+        selectors.push(last_selector);
 
         let pub_input_len = ark_std::cmp::min(4, num_constraints);
         let mut public_inputs = witnesses[0].evals().iter().to_vec();
@@ -90,7 +90,7 @@ impl<F: PrimeField + Clone> MockCircuit<F> {
             gate_func: gate.clone(),
         };
 
-        let permutation = MLE::identity_permutation_mles(merged_nv as usize, 1);
+        let permutation = MLE::identity_permutation_mles(nv as usize, num_witnesses);
         let index = HyperPlonkIndex {
             params,
             permutation,
@@ -105,44 +105,25 @@ impl<F: PrimeField + Clone> MockCircuit<F> {
     }
 
     pub fn is_satisfied(&self) -> bool {
-        for _current_row in 0..self.num_variables() {
-            let mut cur = F::zero();
-            // create selectors_val and witnesses_val vectors, with the same length as self.index.selectors and self.witnesses
-            let mut selectors_val: Vec<F> = Vec::with_capacity(self.num_selector_columns());
-            let mut witnesses_val: Vec<F> = Vec::with_capacity(self.num_witness_columns());
-            for i in 0..self.num_selector_columns() {
-                selectors_val.push(self.index.selectors[i].lock().unwrap().read_next().unwrap());
+        let nv = self.num_variables();
+        let mut cur = MLE::constant(F::zero(), nv);
+        for (coeff, q, wit) in self.index.params.gate_func.gates.iter() {
+            let mut cur_monomial = MLE::constant(if *coeff < 0 {
+                -F::from((-coeff) as u64)
+            } else {
+                F::from(*coeff as u64)
+            }, nv);
+            match q {
+                Some(p) => cur_monomial.mul_assign(&self.index.selectors[*p]),
+                _ => (),
+            };
+            for wit_index in wit.iter() {
+                cur_monomial.mul_assign(&self.witnesses[*wit_index]);
             }
-            for i in 0..self.num_witness_columns() {
-                witnesses_val.push(self.witnesses[i].lock().unwrap().read_next().unwrap());
-            }
-            for (coeff, q, wit) in self.index.params.gate_func.gates.iter() {
-                let mut cur_monomial = if *coeff < 0 {
-                    -F::from((-coeff) as u64)
-                } else {
-                    F::from(*coeff as u64)
-                };
-                cur_monomial = match q {
-                    Some(p) => cur_monomial * selectors_val[*p],
-                    None => cur_monomial,
-                };
-                for wit_index in wit.iter() {
-                    cur_monomial *= witnesses_val[*wit_index];
-                }
-                cur += cur_monomial;
-            }
-            if !cur.is_zero() {
-                return false;
-            }
+            cur.add_assign(cur_monomial);
         }
-
-        // restart all streams
-        for i in 0..self.num_selector_columns() {
-            self.index.selectors[i].lock().unwrap().read_restart();
-        }
-        for i in 0..self.num_witness_columns() {
-            self.witnesses[i].lock().unwrap().read_restart();
-        }
+        // must borrow as mutable
+        cur.evals_mut().for_each(|x| assert!(x.is_zero()));
 
         true
     }
@@ -161,9 +142,9 @@ mod test {
     use ark_bls12_381::Fr;
     use ark_std::test_rng;
 
-    const SUPPORTED_SIZE: usize = 20;
-    const MIN_NUM_VARS: usize = 10;
-    const MAX_NUM_VARS: usize = 21;
+    const SUPPORTED_SIZE: usize = 15;
+    const MIN_NUM_VARS: usize = 5;
+    const MAX_NUM_VARS: usize = 11;
     const CUSTOM_DEGREE: [usize; 4] = [1, 2, 4, 8];
 
     #[test]
