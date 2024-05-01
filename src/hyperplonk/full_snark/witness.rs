@@ -54,6 +54,6 @@ impl<F: PrimeField> WitnessColumn<F> {
 impl<F: PrimeField> From<&WitnessColumn<F>> for MLE<F> {
     fn from(witness: &WitnessColumn<F>) -> Self {
         let nv = witness.get_nv();
-        Self::from_evals_vec(witness.0.as_ref(), nv)
+        Self::from_evals_vec(witness.0.clone(), nv)
     }
 }

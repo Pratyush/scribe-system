@@ -8,10 +8,12 @@ use crate::streams::file_vec::FileVec;
 use crate::streams::MLE;
 use ark_ec::pairing::Pairing;
 use ark_ff::PrimeField;
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::{end_timer, start_timer};
 use std::sync::Mutex;
 use std::{borrow::Borrow, sync::Arc};
 use crate::hyperplonk::pcs::structs::Commitment;
+use crate::streams::iterator::{BatchedIterator, IntoBatchedIterator};
 
 /// An accumulator structure that holds a polynomial and
 /// its opening points
@@ -53,8 +55,8 @@ where
         commit: &PCS::Commitment,
         point: &PCS::Point,
     ) {
-        assert!(poly.num_vars == point.len());
-        assert!(poly.num_vars == self.num_var);
+        assert!(poly.num_vars() == point.len());
+        assert!(poly.num_vars() == self.num_var);
 
         let eval = poly.evaluate(point).unwrap();
 
@@ -82,7 +84,7 @@ where
 }
 
 /// Sanity-check for HyperPlonk SNARK proving
-pub(crate) fn prover_sanity_check<F: PrimeField>(
+pub(crate) fn prover_sanity_check<F: PrimeField + CanonicalDeserialize + CanonicalSerialize>(
     params: &HyperPlonkParams,
     pub_input: &[F],
     witnesses: Vec<MLE<F>>,
@@ -113,25 +115,24 @@ pub(crate) fn prover_sanity_check<F: PrimeField>(
 
     // witnesses length
     for (i, w) in witnesses.iter().enumerate() {
-        if 1 << w[0].num_vars() != params.num_constraints {
+        if 1 << w.num_vars() != params.num_constraints {
             return Err(HyperPlonkErrors::InvalidProver(format!(
                 "{}-th witness length is not correct: got {}, expect {}",
                 i,
-                1 << w[0].num_vars(),
+                1 << w.num_vars(),
                 params.num_constraints
             )));
         }
     }
     // check public input matches witness[0]'s first 2^ell elements
-    FileVec::from_iter(pub_input).zip(witnesses[0]).for_each(
+    FileVec::from_iter(pub_input.to_vec()).iter().zip(witnesses[0].evals().iter()).for_each(
         |(pi, w)| {
             if pi != w {
-                return Err(HyperPlonkErrors::InvalidProver(format!(
+                panic!(
                     "Public input does not match witness[0]: got {:?}, expect {:?}",
                     pi, w
-                )));
+                );
             }
-            Ok(())
         },
     );
 
@@ -304,7 +305,7 @@ mod test {
         // 1, 0 |-> 1
         // 1, 1 |-> 2
         let w_eval = vec![F::zero(), F::zero(), F::from(1u64), F::from(2u64)];
-        let w1 = MLE::from_evaluations_vec(w_eval, 2);
+        let w1 = MLE::from_evals_vec(w_eval, 2);
 
         // W2 = x1 + x2 whose evaluations are
         // 0, 0 |-> 0
@@ -312,7 +313,7 @@ mod test {
         // 1, 0 |-> 1
         // 1, 1 |-> 2
         let w_eval = vec![F::zero(), F::one(), F::from(1u64), F::from(2u64)];
-        let w2 = MLE::from_evaluations_vec(w_eval, 2);
+        let w2 = MLE::from_evals_vec(w_eval, 2);
 
         // Example:
         //     q_L(X) * W_1(X)^5 - W_2(X)

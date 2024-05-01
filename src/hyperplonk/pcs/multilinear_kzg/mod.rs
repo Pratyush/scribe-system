@@ -22,7 +22,7 @@ use rayon::iter::{ParallelExtend, ParallelIterator};
 use srs::{MultilinearProverParam, MultilinearUniversalParams, MultilinearVerifierParam};
 use std::{ops::Mul};
 
-use self::batching::{BatchProof};
+use self::batching::{batch_verify_internal, BatchProof};
 
 /// KZG Polynomial Commitment Scheme on multilinear polynomials.
 pub struct MultilinearKzgPCS<E: Pairing> {
@@ -240,17 +240,17 @@ impl<E: Pairing> PolynomialCommitmentScheme<E> for MultilinearKzgPCS<E> {
         verify_internal(verifier_param, commitment, point, value, proof)
     }
 
-    // /// Verifies that `value_i` is the evaluation at `x_i` of the polynomial
-    // /// `poly_i` committed inside `comm`.
-    // fn batch_verify(
-    //     verifier_param: &Self::VerifierParam,
-    //     commitments: &[Self::Commitment],
-    //     points: &[Self::Point],
-    //     batch_proof: &Self::BatchProof,
-    //     transcript: &mut IOPTranscript<E::ScalarField>,
-    // ) -> Result<bool, PCSError> {
-    //     batch_verify_internal(verifier_param, commitments, points, batch_proof, transcript)
-    // }
+    /// Verifies that `value_i` is the evaluation at `x_i` of the polynomial
+    /// `poly_i` committed inside `comm`.
+    fn batch_verify(
+        verifier_param: &Self::VerifierParam,
+        commitments: &[Self::Commitment],
+        points: &[Self::Point],
+        batch_proof: &Self::BatchProof,
+        transcript: &mut IOPTranscript<E::ScalarField>,
+    ) -> Result<bool, PCSError> {
+        batch_verify_internal(verifier_param, commitments, points, batch_proof, transcript)
+    }
 }
 
 /// On input a polynomial `p` and a point `point`, outputs a proof for the

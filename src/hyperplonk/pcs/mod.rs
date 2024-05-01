@@ -123,19 +123,19 @@ pub trait PolynomialCommitmentScheme<E: Pairing> {
         proof: &Self::Proof,
     ) -> Result<bool, PCSError>;
 
-    // /// Verifies that `value_i` is the evaluation at `x_i` of the polynomial
-    // /// `poly_i` committed inside `comm`.
-    // fn batch_verify(
-    //     _verifier_param: &Self::VerifierParam,
-    //     _commitments: &[Self::Commitment],
-    //     _points: &[Self::Point],
-    //     _batch_proof: &Self::BatchProof,
-    //     _transcript: &mut IOPTranscript<E::ScalarField>,
-    // ) -> Result<bool, PCSError> {
-    //     // the reason we use unimplemented!() is to enable developers to implement the
-    //     // trait without always implementing the batching APIs.
-    //     unimplemented!()
-    // }
+    /// Verifies that `value_i` is the evaluation at `x_i` of the polynomial
+    /// `poly_i` committed inside `comm`.
+    fn batch_verify(
+        _verifier_param: &Self::VerifierParam,
+        _commitments: &[Self::Commitment],
+        _points: &[Self::Point],
+        _batch_proof: &Self::BatchProof,
+        _transcript: &mut IOPTranscript<E::ScalarField>,
+    ) -> Result<bool, PCSError> {
+        // the reason we use unimplemented!() is to enable developers to implement the
+        // trait without always implementing the batching APIs.
+        unimplemented!()
+    }
 }
 
 /// API definitions for structured reference string
