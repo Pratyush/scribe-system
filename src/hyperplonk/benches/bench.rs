@@ -6,16 +6,17 @@
 
 use std::{fs::File, io, time::Instant};
 
-use ark_test_curves::{Bls12_381, Fr};
+use ark_bls12_381::Bls12_381;
+use ark_bls12_381::Fr;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Write};
 use ark_std::test_rng;
-use hyperplonk::{
-    prelude::{CustomizedGates, HyperPlonkErrors, MockCircuit},
-    HyperPlonkSNARK,
+use scribe::hyperplonk::full_snark::custom_gate::CustomizedGates;
+use scribe::hyperplonk::{
+    full_snark::{errors::HyperPlonkErrors, mock::MockCircuit, HyperPlonkSNARK},
 };
-use subroutines::{
+use scribe::hyperplonk::{
     pcs::{
-        prelude::{MultilinearKzgPCS, MultilinearUniversalParams},
+        multilinear_kzg::{MultilinearKzgPCS, srs::MultilinearUniversalParams},
         PolynomialCommitmentScheme,
     },
     poly_iop::PolyIOP,
@@ -32,39 +33,40 @@ fn main() -> Result<(), HyperPlonkErrors> {
     let thread = rayon::current_num_threads();
     println!("start benchmark with #{} threads", thread);
     let mut rng = test_rng();
-    let pcs_srs = {
-        match read_srs() {
-            Ok(p) => p,
-            Err(_e) => {
-                let srs =
-                    MultilinearKzgPCS::<Bls12_381>::gen_srs_for_testing(&mut rng, SUPPORTED_SIZE)?;
-                write_srs(&srs);
-                srs
-            },
-        }
-    };
-    bench_jellyfish_plonk(&pcs_srs, thread)?;
-    println!();
+    // let pcs_srs = {
+    //     match read_srs() {
+    //         Ok(p) => p,
+    //         Err(_e) => {
+    //             let srs =
+    //                 MultilinearKzgPCS::<Bls12_381>::gen_srs_for_testing(&mut rng, SUPPORTED_SIZE)?;
+    //             write_srs(&srs);
+    //             srs
+    //         },
+    //     }
+    // };
+    let pcs_srs = MultilinearKzgPCS::<Bls12_381>::gen_srs_for_testing(&mut rng, SUPPORTED_SIZE)?;
+    // bench_jellyfish_plonk(&pcs_srs, thread)?;
+    // println!();
     bench_vanilla_plonk(&pcs_srs, thread)?;
     println!();
-    for degree in MIN_CUSTOM_DEGREE..=MAX_CUSTOM_DEGREE {
-        bench_high_degree_plonk(&pcs_srs, degree, thread)?;
-        println!();
-    }
-    println!();
+    // for degree in MIN_CUSTOM_DEGREE..=MAX_CUSTOM_DEGREE {
+    //     bench_high_degree_plonk(&pcs_srs, degree, thread)?;
+    //     println!();
+    // }
+    // println!();
 
     Ok(())
 }
 
-fn read_srs() -> Result<MultilinearUniversalParams<Bls12_381>, io::Error> {
-    let mut f = File::open("srs.params")?;
-    Ok(MultilinearUniversalParams::<Bls12_381>::deserialize_compressed_unchecked(&mut f).unwrap())
-}
+// fn read_srs() -> Result<MultilinearUniversalParams<Bls12_381>, io::Error> {
+//     let mut f = File::open("srs.params")?;
+//     Ok(MultilinearUniversalParams::<Bls12_381>::deserialize_compressed_unchecked(&mut f).unwrap())
+// }
 
-fn write_srs(pcs_srs: &MultilinearUniversalParams<Bls12_381>) {
-    let mut f = File::create("srs.params").unwrap();
-    pcs_srs.serialize_uncompressed(&mut f).unwrap();
-}
+// fn write_srs(pcs_srs: &MultilinearUniversalParams<Bls12_381>) {
+//     let mut f = File::create("srs.params").unwrap();
+//     pcs_srs.serialize_uncompressed(&mut f).unwrap();
+// }
 
 fn bench_vanilla_plonk(
     pcs_srs: &MultilinearUniversalParams<Bls12_381>,

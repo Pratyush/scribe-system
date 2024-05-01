@@ -5,9 +5,9 @@ use crate::streams::MLE;
 
 use super::{pcs::PolynomialCommitmentScheme, poly_iop::prelude::SumCheck};
 
-mod custom_gate;
-mod errors;
-mod mock;
+pub mod custom_gate;
+pub mod errors;
+pub mod mock;
 pub mod prelude;
 mod selectors;
 mod snark;
@@ -53,7 +53,7 @@ where
     fn prove(
         pk: &Self::ProvingKey,
         pub_input: &[E::ScalarField],
-        witnesses: Vec<MLE<E::ScalarField>>,
+        witnesses: &[MLE<E::ScalarField>],
     ) -> Result<Self::Proof, HyperPlonkErrors>;
 
     /// Verify the HyperPlonk proof.

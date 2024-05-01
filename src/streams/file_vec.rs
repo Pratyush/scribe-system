@@ -30,6 +30,20 @@ pub struct FileVec<T: CanonicalSerialize + CanonicalDeserialize> {
     phantom: PhantomData<T>,
 }
 
+// impl<T: CanonicalSerialize + CanonicalDeserialize> CanonicalSerialize for FileVec<T> {
+//     fn seriali–ze_with_mode<W: Write>(
+//             &self,
+//             writer: W,
+//             compress: ark_serialize::Compress,
+//         ) -> Result<(), ark_serialize::SerializationError> {
+//             todo!()
+//     }
+
+//     fn serialized_size(&self, compress: ark_serialize::Compress) -> usize {
+//         todo!()   
+//     }
+// }
+
 impl<T: CanonicalSerialize + CanonicalDeserialize> FileVec<T> {
     pub fn with_name(path: impl AsRef<Path>) -> Self {
         let path = path.as_ref().to_path_buf();

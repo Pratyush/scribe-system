@@ -140,13 +140,13 @@ where
     fn prove(
         pk: &Self::ProvingKey,
         pub_input: &[E::ScalarField],
-        witnesses: Vec<MLE<E::ScalarField>>,
+        witnesses: &[MLE<E::ScalarField>],
     ) -> Result<Self::Proof, HyperPlonkErrors> {
         let start =
             start_timer!(|| format!("hyperplonk proving nv = {}", pk.params.num_variables()));
         let mut transcript = IOPTranscript::<E::ScalarField>::new(b"hyperplonk");
 
-        prover_sanity_check(&pk.params, pub_input, witnesses.clone())?;
+        prover_sanity_check(&pk.params, pub_input, witnesses.to_vec())?;
 
         // witness assignment of length 2^n
         let num_vars = pk.params.num_variables();
@@ -750,7 +750,7 @@ mod tests {
                 <PolyIOP<E::ScalarField> as HyperPlonkSNARK<E, MultilinearKzgPCS<E>>>::prove(
                     &pk,
                     &pi,
-                    vec![w1.clone(), w2.clone()],
+                    &[w1, w2],
                 )?;
 
             let _verify =
@@ -858,7 +858,7 @@ mod tests {
                 <PolyIOP<E::ScalarField> as HyperPlonkSNARK<E, MultilinearKzgPCS<E>>>::prove(
                     &pk,
                     &pi,
-                    vec![w1.clone(), w2.clone()],
+                    &[w1, w2],
                 )?;
 
             assert!(

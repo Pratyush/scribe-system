@@ -1,5 +1,5 @@
 pub(crate) mod batching;
-pub(crate) mod srs;
+pub mod srs;
 pub(crate) mod util;
 use crate::hyperplonk::pcs::multilinear_kzg::batching::multi_open_internal;
 use crate::hyperplonk::pcs::StructuredReferenceString;
@@ -60,7 +60,6 @@ impl<E: Pairing> PolynomialCommitmentScheme<E> for MultilinearKzgPCS<E> {
     /// THE OUTPUT SRS SHOULD NOT BE USED IN PRODUCTION.
     fn gen_srs_for_testing<R: Rng>(rng: &mut R, log_size: usize) -> Result<Self::SRS, PCSError> {
         MultilinearUniversalParams::<E>::gen_srs_for_testing(rng, log_size)
-        // MultilinearUniversalParams::<E>::gen_fake_srs_for_testing(rng, log_size)
     }
 
     fn gen_fake_srs_for_testing<R: Rng>(

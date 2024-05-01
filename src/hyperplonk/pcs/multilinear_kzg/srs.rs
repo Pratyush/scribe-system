@@ -5,7 +5,7 @@ use crate::streams::file_vec::FileVec;
 use ark_ec::{pairing::Pairing, scalar_mul::fixed_base::FixedBase, AffineRepr, CurveGroup};
 use ark_ff::{Field, PrimeField};
 use ark_poly::DenseMultilinearExtension;
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Write};
 use ark_std::{
     collections::LinkedList, end_timer, format, rand::Rng, start_timer, string::ToString, vec::Vec,
     UniformRand,
@@ -14,7 +14,7 @@ use core::iter::FromIterator;
 
 /// Evaluations over {0,1}^n for G1 or G2
 #[derive(Debug)]
-pub struct Evaluations<C: AffineRepr + CanonicalDeserialize> {
+pub struct Evaluations<C: AffineRepr> {
     /// The evaluations.
     pub evals: FileVec<C>,
 }
@@ -223,9 +223,6 @@ impl<E: Pairing> StructuredReferenceString<E> for MultilinearUniversalParams<E> 
             let h_table = FixedBase::get_window_table(scalar_bits, window_size, h);
             E::G2::normalize_batch(&FixedBase::msm(scalar_bits, window_size, &h_table, &t))
         };
-
-        // print length of h_mask
-        println!("h_mask length: {}", h_mask.len());
 
         end_timer!(vp_generation_timer);
         end_timer!(total_timer);

@@ -147,9 +147,9 @@ mod test {
     use ark_bls12_381::Fr;
     use ark_std::test_rng;
 
-    const SUPPORTED_SIZE: usize = 10;
-    const MIN_NUM_VARS: usize = 5;
-    const MAX_NUM_VARS: usize = 11;
+    const SUPPORTED_SIZE: usize = 20;
+    const MIN_NUM_VARS: usize = 17;
+    const MAX_NUM_VARS: usize = 21;
     const CUSTOM_DEGREE: [usize; 4] = [1, 2, 4, 8];
 
     #[test]
@@ -192,7 +192,7 @@ mod test {
             <PolyIOP<Fr> as HyperPlonkSNARK<Bls12_381, MultilinearKzgPCS<Bls12_381>>>::prove(
                 &pk,
                 &circuit.public_inputs,
-                circuit.witnesses.clone(),
+                &circuit.witnesses,
             )?;
 
         let verify =
