@@ -1,6 +1,6 @@
-use std::sync::{Arc, Mutex};
+use std::{ops::{AddAssign, MulAssign}, sync::{Arc, Mutex}};
 
-use crate::{streams::MLE};
+use crate::streams::{iterator::BatchedIterator, MLE};
 use ark_ff::PrimeField;
 use ark_std::{
     end_timer, log2,
@@ -36,75 +36,61 @@ impl<F: PrimeField> MockCircuit<F> {
     }
 }
 
-impl<F: PrimeField> MockCircuit<F> {
+impl<F: PrimeField + Clone> MockCircuit<F> {
     /// Generate a mock plonk circuit for the input constraint size.
     pub fn new(num_constraints: usize, gate: &CustomizedGates) -> MockCircuit<F> {
         let mut rng = test_rng();
-        let nv = log2(num_constraints);
+        let nv = log2(num_constraints) as usize;
         let num_selectors = gate.num_selector_columns();
         let num_witnesses = gate.num_witness_columns();
-        let log_n_wires = log2(num_witnesses);
+        let log_n_wires = log2(num_witnesses) as usize;
         let merged_nv = nv + log_n_wires;
 
-        let selectors: Vec<MLE<F>> = (0..num_selectors)
-            .map(|_| MLE::new(nv))
+        let selectors: Vec<MLE<F>> = (0..num_selectors - 1)
+            .map(|_| MLE::rand(nv, &mut rng))
             .collect();
 
         let witnesses: Vec<MLE<F>> = (0..num_witnesses)
-            .map(|_| MLE::new(nv))
+            .map(|_| MLE::rand(nv, &mut rng))
             .collect();
-        
-        for _cs_counter in 0..num_constraints {
-            let mut cur_selectors: Vec<F> = (0..(num_selectors - 1))
-                .map(|_| F::rand(&mut rng))
-                .collect();
-            let cur_witness: Vec<F> = (0..num_witnesses).map(|_| F::rand(&mut rng)).collect();
-            let mut last_selector = F::zero();
-            for (index, (coeff, q, wit)) in gate.gates.iter().enumerate() {
-                if index != num_selectors - 1 {
-                    let mut cur_monomial = if *coeff < 0 {
-                        -F::from((-coeff) as u64)
-                    } else {
-                        F::from(*coeff as u64)
-                    };
-                    cur_monomial = match q {
-                        Some(p) => cur_monomial * cur_selectors[*p],
-                        None => cur_monomial,
-                    };
-                    for wit_index in wit.iter() {
-                        cur_monomial *= cur_witness[*wit_index];
-                    }
-                    last_selector += cur_monomial;
-                } else {
-                    let mut cur_monomial = if *coeff < 0 {
-                        -F::from((-coeff) as u64)
-                    } else {
-                        F::from(*coeff as u64)
-                    };
-                    for wit_index in wit.iter() {
-                        cur_monomial *= cur_witness[*wit_index];
-                    }
-                    last_selector /= -cur_monomial;
-                }
+
+        // for all test cases in this repo, there's one and only one selector for each monomial
+        let mut last_selector = MLE::constant(F::zero(), nv);
+
+        gate.gates.iter().enumerate().for_each(|(index, (coeff, q, wit))| {
+            let mut cur_monomial = MLE::constant(if *coeff < 0 {
+                -F::from((-coeff) as u64)
+            } else {
+                F::from(*coeff as u64)
+            }, nv);
+
+            for wit_index in wit.iter() {
+                cur_monomial.mul_assign(witnesses[*wit_index]);
             }
-            cur_selectors.push(last_selector);
-            for i in 0..num_selectors {
-                selectors[i].append(cur_selectors[i]);
+
+            if index != num_selectors - 1 {
+                match q {
+                    Some(p) => cur_monomial.mul_assign(selectors[*p]),
+                    _ => (),
+                };
+                last_selector.add_assign(cur_monomial);
+            } else {
+                cur_monomial.invert_in_place();
+                last_selector.mul_assign((-F::one(), cur_monomial));
             }
-            for i in 0..num_witnesses {
-                witnesses[i].append(cur_witness[i]);
-            }
-        }
+        });
+
         let pub_input_len = ark_std::cmp::min(4, num_constraints);
-        let public_inputs = witnesses[0].0[0..pub_input_len].to_vec();
+        let mut public_inputs = witnesses[0].evals().iter().to_vec();
+        public_inputs.truncate(pub_input_len);
 
         let params = HyperPlonkParams {
             num_constraints,
-            num_pub_input: public_inputs.len(),
+            num_pub_input: pub_input_len,
             gate_func: gate.clone(),
         };
 
-        let permutation = identity_permutation(merged_nv as usize, 1);
+        let permutation = MLE::identity_permutation_mles(merged_nv as usize, 1);
         let index = HyperPlonkIndex {
             params,
             permutation,
@@ -117,119 +103,6 @@ impl<F: PrimeField> MockCircuit<F> {
             index,
         }
     }
-
-    // pub fn new(num_constraints: usize, gate: &CustomizedGates) -> MockCircuit<F> {
-    //     let seed = [
-    //         1, 0, 0, 0, 23, 0, 0, 0, 200, 1, 0, 0, 210, 30, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    //         0, 0, 0, 0, 0,
-    //     ];
-    //     let mut rng = StdRng::from_seed(seed);
-    //     let nv = log2(num_constraints) as usize;
-    //     let num_selectors = gate.num_selector_columns();
-    //     let num_witnesses = gate.num_witness_columns();
-
-    //     let start = start_timer!(|| "create mock circuit");
-    //     let step = start_timer!(|| "create selector and witness streams");
-    //     // create a Vec<Arc<Mutex<DenseMLPolyStream<F>>>> for selectors and witnesses
-    //     let selectors: Vec<MLE<F>> = (0..num_selectors)
-    //         .map(|_| MLE::new(nv))
-    //         .collect();
-
-    //     let witnesses: Vec<MLE<F>> = (0..num_witnesses)
-    //         .map(|_| MLE::new(nv))
-    //         .collect();
-
-    //     for _cs_counter in 0..num_constraints {
-    //         let mut cur_selectors: Vec<F> = (0..(num_selectors - 1))
-    //             .map(|_| F::rand(&mut rng))
-    //             .collect();
-    //         let cur_witness: Vec<F> = (0..num_witnesses).map(|_| F::rand(&mut rng)).collect();
-    //         let mut last_selector = F::zero();
-    //         for (index, (coeff, q, wit)) in gate.gates.iter().enumerate() {
-    //             if index != num_selectors - 1 {
-    //                 let mut cur_monomial = if *coeff < 0 {
-    //                     -F::from((-coeff) as u64)
-    //                 } else {
-    //                     F::from(*coeff as u64)
-    //                 };
-    //                 cur_monomial = match q {
-    //                     Some(p) => cur_monomial * cur_selectors[*p],
-    //                     None => cur_monomial,
-    //                 };
-    //                 for wit_index in wit.iter() {
-    //                     cur_monomial *= cur_witness[*wit_index];
-    //                 }
-    //                 last_selector += cur_monomial;
-    //             } else {
-    //                 let mut cur_monomial = if *coeff < 0 {
-    //                     -F::from((-coeff) as u64)
-    //                 } else {
-    //                     F::from(*coeff as u64)
-    //                 };
-    //                 for wit_index in wit.iter() {
-    //                     cur_monomial *= cur_witness[*wit_index];
-    //                 }
-    //                 last_selector /= -cur_monomial;
-    //             }
-    //         }
-    //         cur_selectors.push(last_selector);
-
-    //         for i in 0..num_selectors {
-    //             selectors[i]
-    //                 .lock()
-    //                 .unwrap()
-    //                 .write_next_unchecked(cur_selectors[i]);
-    //         }
-    //         for i in 0..num_witnesses {
-    //             witnesses[i]
-    //                 .lock()
-    //                 .unwrap()
-    //                 .write_next_unchecked(cur_witness[i]);
-    //         }
-    //     }
-    //     // swap read and write for each stream
-    //     for i in 0..num_selectors {
-    //         selectors[i].lock().unwrap().swap_read_write();
-    //     }
-    //     for i in 0..num_witnesses {
-    //         witnesses[i].lock().unwrap().swap_read_write();
-    //     }
-    //     end_timer!(step);
-
-    //     let pub_input_len = ark_std::cmp::min(4, num_constraints);
-
-    //     // read the stream up to pub_input_len and restart it
-    //     let mut pub_stream = witnesses[0].lock().unwrap();
-    //     let public_inputs: Vec<F> = (0..pub_input_len)
-    //         .map(|_| pub_stream.read_next_unchecked().unwrap())
-    //         .collect();
-    //     pub_stream.read_restart();
-    //     drop(pub_stream);
-
-    //     let params = HyperPlonkParams {
-    //         num_constraints,
-    //         num_pub_input: public_inputs.len(),
-    //         gate_func: gate.clone(),
-    //     };
-
-    //     let step = start_timer!(|| "create permutation streams");
-    //     let permutation = identity_permutation_mles(nv as usize, num_witnesses);
-    //     end_timer!(step);
-    //     let step = start_timer!(|| "create index streams");
-    //     end_timer!(step);
-    //     let index = HyperPlonkIndex {
-    //         params,
-    //         permutation,
-    //         selectors,
-    //     };
-
-    //     end_timer!(start);
-    //     Self {
-    //         public_inputs,
-    //         witnesses: witnesses.clone(),
-    //         index,
-    //     }
-    // }
 
     pub fn is_satisfied(&self) -> bool {
         for _current_row in 0..self.num_variables() {

@@ -1,6 +1,6 @@
 use std::{
     iter::repeat,
-    ops::{AddAssign, MulAssign, SubAssign},
+    ops::{AddAssign, Mul, MulAssign, SubAssign},
     path::Path,
 };
 
@@ -249,9 +249,17 @@ impl<F: Field> Inner<F> {
     }
 }
 
-impl<F: Field> MulAssign<F> for Inner<F> {
-    fn mul_assign(&mut self, other: F) {
-        self.evals.for_each(|e| *e *= other);
+impl<F: Field> MulAssign<Self> for Inner<F> {
+    fn mul_assign(&mut self, other: Self) {
+        self.evals
+            .zipped_for_each(other.evals.iter(), |a, b| *a *= b);
+    }
+}
+
+impl<'a, F: Field> MulAssign<&'a Self> for Inner<F> {
+    fn mul_assign(&mut self, other: &'a Self) {
+        self.evals
+            .zipped_for_each(other.evals.iter(), |a, b| *a *= b);
     }
 }
 
@@ -280,6 +288,20 @@ impl<'a, F: Field> SubAssign<&'a Self> for Inner<F> {
     fn sub_assign(&mut self, other: &'a Self) {
         self.evals
             .zipped_for_each(other.evals.iter(), |a, b| *a -= b);
+    }
+}
+
+impl<F: Field> MulAssign<(F, Self)> for Inner<F> {
+    fn mul_assign(&mut self, (f, other): (F, Self)) {
+        self.evals
+            .zipped_for_each(other.evals.iter(), |a, b| *a *= f * b);
+    }
+}
+
+impl<'a, F: Field> MulAssign<(F, &'a Self)> for Inner<F> {
+    fn mul_assign(&mut self, (f, other): (F, &'a Self)) {
+        self.evals
+            .zipped_for_each(other.evals.iter(), |a, b| *a *= f * b);
     }
 }
 

@@ -185,9 +185,27 @@ impl<F: Field> MLE<F> {
     }
 }
 
-impl<F: Field> MulAssign<F> for MLE<F> {
-    fn mul_assign(&mut self, other: F) {
-        self.map_in_place(|inner| inner.mul_assign(other));
+impl<F: Field> MulAssign<Self> for MLE<F> {
+    fn mul_assign(&mut self, other: Self) {
+        self.map_in_place_2(&other, |inner, other| inner.mul_assign(other));
+    }
+}
+
+impl<'a, F: Field> MulAssign<&'a Self> for MLE<F> {
+    fn mul_assign(&mut self, other: &'a Self) {
+        self.map_in_place_2(&other, |inner, other| inner.mul_assign(other));
+    }
+}
+
+impl<F: Field> MulAssign<(F, Self)> for MLE<F> {
+    fn mul_assign(&mut self, (f, other): (F, Self)) {
+        self.map_in_place_2(&other, |inner, other| inner.mul_assign((f, other)));
+    }
+}
+
+impl<'a, F: Field> MulAssign<(F, &'a Self)> for MLE<F> {
+    fn mul_assign(&mut self, (f, other): (F, &'a Self)) {
+        self.map_in_place_2(&other, |inner, other| inner.mul_assign((f, other)));
     }
 }
 
