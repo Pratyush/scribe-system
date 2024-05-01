@@ -1,9 +1,9 @@
 use crate::hyperplonk::poly_iop::perm_check_original::PermutationCheck;
 use crate::hyperplonk::poly_iop::prelude::ZeroCheck;
-use crate::streams::MLE;
-use crate::{
-    hyperplonk::{full_snark::custom_gate::CustomizedGates, pcs::PolynomialCommitmentScheme},
+use crate::hyperplonk::{
+    full_snark::custom_gate::CustomizedGates, pcs::PolynomialCommitmentScheme,
 };
+use crate::streams::MLE;
 use ark_ec::pairing::Pairing;
 use ark_ff::PrimeField;
 use ark_std::log2;

@@ -113,8 +113,11 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
 
         let mut products_sum = vec![F::zero(); self.poly.aux_info.max_degree + 1];
 
-        for eval in self.poly.mles[0].evals().iter().to_vec() {
-            println!("sum check product eval: {}", eval);
+        #[cfg(debug_assertions)]
+        {
+            for eval in self.poly.mles[0].evals().iter().to_vec() {
+                println!("sum check product eval: {}", eval);
+            }
         }
 
         // Step 2: generate sum for the partial evaluated polynomial:
@@ -123,6 +126,7 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
             .products
             .iter()
             .for_each(|(coefficient, products)| {
+                #[cfg(debug_assertions)]
                 println!("sum check product coefficient: {}", coefficient);
                 let polys_in_product = products
                     .iter()
@@ -137,25 +141,25 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
                     || vec![F::zero(); products.len() + 1],
                     |mut acc, mut products| {
                         products.iter_mut().for_each(|[even, odd]| {
-                            println!("sum check product eval_even: {}", even);
-                            println!("sum check product eval_odd: {}", odd);
+                            #[cfg(debug_assertions)]
+                            {
+                                println!("sum check product eval_even: {}", even);
+                                println!("sum check product eval_odd: {}", odd);
+                            }
                             *odd -= even;
                         });
-                        acc[0] += products
-                            .iter()
-                            .map(|[eval, _]| {
-                                println!("eval: {}", eval);
-                                eval
-                            })
-                            .product::<F>();
+                        acc[0] += products.iter().map(|[eval, _]| eval).product::<F>();
                         acc[1..].iter_mut().for_each(|acc| {
                             products
                                 .iter_mut()
                                 .for_each(|[eval, step]| *eval += step as &_);
                             *acc += products.iter().map(|[eval, _]| eval).product::<F>();
                         });
-                        println!("acc 0: {}", acc[0]);
-                        println!("acc 1: {}", acc[0]);
+                        #[cfg(debug_assertions)]
+                        {
+                            println!("acc 0: {}", acc[0]);
+                            println!("acc 1: {}", acc[0]);
+                        }
                         acc
                     },
                     |mut sum, partial| {
@@ -171,10 +175,14 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
                 );
 
                 sum.iter_mut().for_each(|sum| {
+                    #[cfg(debug_assertions)]
                     println!("sum check product sum before: {}", sum);
                     *sum *= *coefficient;
-                    println!("sum check product sum after: {}", sum);
-                    println!("sum check product coefficient: {}", coefficient);
+                    #[cfg(debug_assertions)]
+                    {
+                        println!("sum check product sum after: {}", sum);
+                        println!("sum check product coefficient: {}", coefficient);
+                    }
                 });
                 let extraploation = (0..self.poly.aux_info.max_degree - products.len())
                     .into_par_iter()

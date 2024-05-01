@@ -1,7 +1,5 @@
 use crate::hyperplonk::pcs::{
-    errors::PCSError,
-    multilinear_kzg::util::{eq_extension},
-    StructuredReferenceString,
+    errors::PCSError, multilinear_kzg::util::eq_extension, StructuredReferenceString,
 };
 use crate::streams::file_vec::FileVec;
 use ark_ec::{pairing::Pairing, scalar_mul::fixed_base::FixedBase, AffineRepr, CurveGroup};

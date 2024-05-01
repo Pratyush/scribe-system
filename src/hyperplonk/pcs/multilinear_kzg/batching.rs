@@ -9,11 +9,7 @@ use ark_ec::pairing::Pairing;
 use ark_ec::{scalar_mul::variable_base::VariableBaseMSM, CurveGroup};
 
 use crate::hyperplonk::transcript::IOPTranscript;
-use ark_std::{
-    collections::BTreeMap,
-    iter,
-    marker::PhantomData,
-};
+use ark_std::{collections::BTreeMap, iter, marker::PhantomData};
 use ark_std::{end_timer, log2, start_timer, One, Zero};
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]

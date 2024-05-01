@@ -250,6 +250,7 @@ mod test {
 
         println!("generated asserted sum: {}", asserted_sum);
 
+        #[cfg(debug_assertions)]
         for eval in poly.mles[0].evals().iter().to_vec() {
             println!("sum check product eval: {}", eval);
         }
@@ -289,18 +290,6 @@ mod test {
         let mut rng = StdRng::from_seed(seed);
         let (poly, asserted_sum) =
             VirtualPolynomial::<Fr>::rand(nv, num_multiplicands_range, num_products, &mut rng)?;
-
-        println!("generated asserted sum: {}", asserted_sum);
-
-        // print the position of read pointer of each mle in poly
-        // for mle in poly.flattened_ml_extensions.iter() {
-        // read next on mle and print each element
-        // let mut mle_stream = mle.lock().unwrap();
-        // println!("starting read pointer position: {}", mle_stream.read_pointer.stream_position().unwrap());
-        // }
-        for eval in poly.mles[0].evals().iter().to_vec() {
-            println!("sum check product eval: {}", eval);
-        }
 
         let poly_info = poly.aux_info.clone();
         let mut prover_state = IOPProverState::prover_init(&poly)?;

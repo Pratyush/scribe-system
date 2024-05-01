@@ -12,7 +12,7 @@ use ark_ec::{
     scalar_mul::{fixed_base::FixedBase, variable_base::VariableBaseMSM},
     AffineRepr, CurveGroup,
 };
-use ark_ff::{PrimeField};
+use ark_ff::PrimeField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::{
     borrow::Borrow, end_timer, format, marker::PhantomData, rand::Rng, start_timer,
@@ -20,7 +20,7 @@ use ark_std::{
 };
 use rayon::iter::{ParallelExtend, ParallelIterator};
 use srs::{MultilinearProverParam, MultilinearUniversalParams, MultilinearVerifierParam};
-use std::{ops::Mul};
+use std::ops::Mul;
 
 use self::batching::{batch_verify_internal, BatchProof};
 
@@ -102,9 +102,7 @@ impl<E: Pairing> PolynomialCommitmentScheme<E> for MultilinearKzgPCS<E> {
         poly: &Self::Polynomial,
     ) -> Result<Self::Commitment, PCSError> {
         let prover_param = prover_param.borrow();
-        println!("commit prover param nv = {}", prover_param.num_vars);
         let poly_num_vars = poly.num_vars();
-        println!("commit poly nv = {}", poly_num_vars);
 
         let commit_timer = start_timer!(|| format!("commit poly nv = {}", poly_num_vars));
         if prover_param.num_vars < poly_num_vars {
@@ -342,8 +340,6 @@ fn open_internal<E: Pairing>(
             commitment.into_affine()
         };
 
-        println!("commitment: {}", commitment);
-
         proofs.push(commitment);
         end_timer!(msm_timer);
 
@@ -431,11 +427,7 @@ mod tests {
     use super::*;
     use ark_bls12_381::Bls12_381;
     use ark_ec::pairing::Pairing;
-    use ark_std::{
-        test_rng,
-        vec::Vec,
-        UniformRand,
-    };
+    use ark_std::{test_rng, vec::Vec, UniformRand};
 
     type E = Bls12_381;
     type Fr = <E as Pairing>::ScalarField;

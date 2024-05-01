@@ -2,9 +2,11 @@ use crate::arithmetic::virtual_polynomial::VirtualPolynomial;
 use crate::hyperplonk::full_snark::{
     custom_gate::CustomizedGates, errors::HyperPlonkErrors, structs::HyperPlonkParams,
 };
+use crate::hyperplonk::pcs::structs::Commitment;
 use crate::hyperplonk::pcs::PolynomialCommitmentScheme;
 use crate::hyperplonk::transcript::IOPTranscript;
 use crate::streams::file_vec::FileVec;
+use crate::streams::iterator::{BatchedIterator, IntoBatchedIterator};
 use crate::streams::MLE;
 use ark_ec::pairing::Pairing;
 use ark_ff::PrimeField;
@@ -12,8 +14,6 @@ use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::{end_timer, start_timer};
 use std::sync::Mutex;
 use std::{borrow::Borrow, sync::Arc};
-use crate::hyperplonk::pcs::structs::Commitment;
-use crate::streams::iterator::{BatchedIterator, IntoBatchedIterator};
 
 /// An accumulator structure that holds a polynomial and
 /// its opening points
@@ -125,16 +125,17 @@ pub(crate) fn prover_sanity_check<F: PrimeField + CanonicalDeserialize + Canonic
         }
     }
     // check public input matches witness[0]'s first 2^ell elements
-    FileVec::from_iter(pub_input.to_vec()).iter().zip(witnesses[0].evals().iter()).for_each(
-        |(pi, w)| {
+    FileVec::from_iter(pub_input.to_vec())
+        .iter()
+        .zip(witnesses[0].evals().iter())
+        .for_each(|(pi, w)| {
             if pi != w {
                 panic!(
                     "Public input does not match witness[0]: got {:?}, expect {:?}",
                     pi, w
                 );
             }
-        },
-    );
+        });
 
     Ok(())
 }
@@ -155,7 +156,8 @@ pub(crate) fn build_f<F: PrimeField>(
         if selector_mle.num_vars() != num_vars {
             return Err(HyperPlonkErrors::InvalidParameters(format!(
                 "selector has different number of vars: {} vs {}",
-                selector_mle.num_vars(), num_vars
+                selector_mle.num_vars(),
+                num_vars
             )));
         }
     }
@@ -164,7 +166,8 @@ pub(crate) fn build_f<F: PrimeField>(
         if witness_mle.num_vars() != num_vars {
             return Err(HyperPlonkErrors::InvalidParameters(format!(
                 "selector has different number of vars: {} vs {}",
-                witness_mle.num_vars(), num_vars
+                witness_mle.num_vars(),
+                num_vars
             )));
         }
     }

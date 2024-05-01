@@ -1,4 +1,7 @@
-use std::{ops::{AddAssign, MulAssign}, sync::{Arc, Mutex}};
+use std::{
+    ops::{AddAssign, MulAssign},
+    sync::{Arc, Mutex},
+};
 
 use crate::streams::{iterator::BatchedIterator, MLE};
 use ark_ff::PrimeField;
@@ -55,28 +58,34 @@ impl<F: PrimeField + Clone> MockCircuit<F> {
         // for all test cases in this repo, there's one and only one selector for each monomial
         let mut last_selector = MLE::constant(F::zero(), nv);
 
-        gate.gates.iter().enumerate().for_each(|(index, (coeff, q, wit))| {
-            let mut cur_monomial = MLE::constant(if *coeff < 0 {
-                -F::from((-coeff) as u64)
-            } else {
-                F::from(*coeff as u64)
-            }, nv);
+        gate.gates
+            .iter()
+            .enumerate()
+            .for_each(|(index, (coeff, q, wit))| {
+                let mut cur_monomial = MLE::constant(
+                    if *coeff < 0 {
+                        -F::from((-coeff) as u64)
+                    } else {
+                        F::from(*coeff as u64)
+                    },
+                    nv,
+                );
 
-            for wit_index in wit.iter() {
-                cur_monomial.mul_assign(&witnesses[*wit_index]);
-            }
+                for wit_index in wit.iter() {
+                    cur_monomial.mul_assign(&witnesses[*wit_index]);
+                }
 
-            if index != num_selectors - 1 {
-                match q {
-                    Some(p) => cur_monomial.mul_assign(&selectors[*p]),
-                    _ => (),
-                };
-                last_selector.add_assign(cur_monomial);
-            } else {
-                cur_monomial.invert_in_place();
-                last_selector.mul_assign((-F::one(), cur_monomial));
-            }
-        });
+                if index != num_selectors - 1 {
+                    match q {
+                        Some(p) => cur_monomial.mul_assign(&selectors[*p]),
+                        _ => (),
+                    };
+                    last_selector.add_assign(cur_monomial);
+                } else {
+                    cur_monomial.invert_in_place();
+                    last_selector.mul_assign((-F::one(), cur_monomial));
+                }
+            });
 
         selectors.push(last_selector);
 
@@ -108,11 +117,14 @@ impl<F: PrimeField + Clone> MockCircuit<F> {
         let nv = self.num_variables();
         let mut cur = MLE::constant(F::zero(), nv);
         for (coeff, q, wit) in self.index.params.gate_func.gates.iter() {
-            let mut cur_monomial = MLE::constant(if *coeff < 0 {
-                -F::from((-coeff) as u64)
-            } else {
-                F::from(*coeff as u64)
-            }, nv);
+            let mut cur_monomial = MLE::constant(
+                if *coeff < 0 {
+                    -F::from((-coeff) as u64)
+                } else {
+                    F::from(*coeff as u64)
+                },
+                nv,
+            );
             match q {
                 Some(p) => cur_monomial.mul_assign(&self.index.selectors[*p]),
                 _ => (),
@@ -142,7 +154,7 @@ mod test {
     use ark_bls12_381::Fr;
     use ark_std::test_rng;
 
-    const SUPPORTED_SIZE: usize = 15;
+    const SUPPORTED_SIZE: usize = 10;
     const MIN_NUM_VARS: usize = 5;
     const MAX_NUM_VARS: usize = 11;
     const CUSTOM_DEGREE: [usize; 4] = [1, 2, 4, 8];

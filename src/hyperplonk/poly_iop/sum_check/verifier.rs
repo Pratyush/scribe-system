@@ -169,6 +169,7 @@ impl<F: PrimeField> SumCheckVerifier<F> for IOPVerifierState<F> {
             .collect::<Result<Vec<_>, PIOPError>>()?;
 
         // insert the asserted_sum to the first position of the expected vector
+        #[cfg(debug_assertions)]
         println!("asserted sum: {}", asserted_sum);
         expected_vec.insert(0, *asserted_sum);
 

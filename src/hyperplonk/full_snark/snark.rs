@@ -5,19 +5,17 @@ use crate::hyperplonk::pcs::multilinear_kzg::batching::BatchProof;
 use crate::hyperplonk::pcs::structs::Commitment;
 use crate::hyperplonk::pcs::PolynomialCommitmentScheme;
 
+use crate::hyperplonk::full_snark::{
+    errors::HyperPlonkErrors,
+    structs::{HyperPlonkIndex, HyperPlonkProof, HyperPlonkProvingKey, HyperPlonkVerifyingKey},
+    utils::{build_f, eval_f, eval_perm_gate, prover_sanity_check},
+    HyperPlonkSNARK,
+};
 use crate::hyperplonk::poly_iop::perm_check_original::PermutationCheck;
 use crate::hyperplonk::poly_iop::prelude::ZeroCheck;
 use crate::hyperplonk::poly_iop::PolyIOP;
 use crate::hyperplonk::transcript::IOPTranscript;
 use crate::streams::MLE;
-use crate::{
-    hyperplonk::full_snark::{
-        errors::HyperPlonkErrors,
-        structs::{HyperPlonkIndex, HyperPlonkProof, HyperPlonkProvingKey, HyperPlonkVerifyingKey},
-        utils::{build_f, eval_f, eval_perm_gate, prover_sanity_check},
-        HyperPlonkSNARK,
-    },
-};
 use ark_ec::pairing::Pairing;
 
 use ark_std::{end_timer, log2, start_timer, One, Zero};
@@ -209,14 +207,13 @@ where
         // =======================================================================
         let step = start_timer!(|| "Permutation check on w_i(x)");
 
-        let (perm_check_proof, prod_x, frac_poly) =
-            <Self as PermutationCheck<E, PCS>>::prove(
-                &pk.pcs_param,
-                &witnesses,
-                &witnesses,
-                &pk.permutation_oracles,
-                &mut transcript,
-            )?;
+        let (perm_check_proof, prod_x, frac_poly) = <Self as PermutationCheck<E, PCS>>::prove(
+            &pk.pcs_param,
+            &witnesses,
+            &witnesses,
+            &pk.permutation_oracles,
+            &mut transcript,
+        )?;
         let perm_check_point = &perm_check_proof.zero_check_proof.point;
 
         end_timer!(step);
@@ -269,21 +266,9 @@ where
         // prod(x)'s points
         // note that the polynomial inputs aren't modified or consumed by pcs accumulator
         // copies are used because their originals are already folded in sum checks
-        pcs_acc.insert_poly_and_points(
-            &prod_x,
-            &perm_check_proof.prod_x_comm,
-            perm_check_point,
-        );
-        pcs_acc.insert_poly_and_points(
-            &prod_x,
-            &perm_check_proof.prod_x_comm,
-            &perm_check_point_0,
-        );
-        pcs_acc.insert_poly_and_points(
-            &prod_x,
-            &perm_check_proof.prod_x_comm,
-            &perm_check_point_1,
-        );
+        pcs_acc.insert_poly_and_points(&prod_x, &perm_check_proof.prod_x_comm, perm_check_point);
+        pcs_acc.insert_poly_and_points(&prod_x, &perm_check_proof.prod_x_comm, &perm_check_point_0);
+        pcs_acc.insert_poly_and_points(&prod_x, &perm_check_proof.prod_x_comm, &perm_check_point_1);
         pcs_acc.insert_poly_and_points(
             &prod_x,
             &perm_check_proof.prod_x_comm,
@@ -291,11 +276,7 @@ where
         );
 
         // frac(x)'s points
-        pcs_acc.insert_poly_and_points(
-            &frac_poly,
-            &perm_check_proof.frac_comm,
-            perm_check_point,
-        );
+        pcs_acc.insert_poly_and_points(&frac_poly, &perm_check_proof.frac_comm, perm_check_point);
         pcs_acc.insert_poly_and_points(
             &frac_poly,
             &perm_check_proof.frac_comm,
@@ -308,7 +289,8 @@ where
         );
 
         // perms(x)'s points
-        for (perm, pcom) in pk.permutation_oracles
+        for (perm, pcom) in pk
+            .permutation_oracles
             .iter()
             .zip(pk.permutation_commitments.iter())
         {
@@ -697,7 +679,7 @@ mod tests {
                         E::ScalarField::from(0u64),
                         E::ScalarField::from(2u64),
                         E::ScalarField::from(3u64),
-                        ],
+                    ],
                     2,
                 ),
                 MLE::from_evals_vec(
