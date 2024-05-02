@@ -3,7 +3,7 @@ use ark_std::{borrow::Borrow, cfg_chunks_mut, cfg_iter, cfg_iter_mut, fmt};
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
 
-pub const BUFFER_SIZE: usize = 1 << 2;
+pub const BUFFER_SIZE: usize = 1 << 17;
 
 pub mod dense_mle;
 pub use dense_mle::*;

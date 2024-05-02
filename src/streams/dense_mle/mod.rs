@@ -6,7 +6,7 @@ use std::{
 };
 
 use ark_ff::Field;
-use ark_std::rand::RngCore;
+use ark_std::{end_timer, rand::RngCore, start_timer};
 pub use inner::*;
 
 use crate::arithmetic::errors::ArithError;
@@ -88,7 +88,10 @@ impl<F: Field> MLE<F> {
     }
 
     pub fn eq_x_r(r: &[F]) -> Result<Self, ArithError> {
-        eq_x_r_helper(r).map(|evals| Self::from_evals(evals, r.len()))
+        let step = start_timer!(|| "construct eq_x_r polynomial");
+        let res = eq_x_r_helper(r).map(|evals| Self::from_evals(evals, r.len()));
+        end_timer!(step);
+        res
     }
 
     pub fn identity_permutation_mles(num_vars: usize, num_chunk: usize) -> Vec<Self> {

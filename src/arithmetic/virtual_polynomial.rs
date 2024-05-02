@@ -267,7 +267,7 @@ impl<F: PrimeField> VirtualPolynomial<F> {
     //
     // This function is used in ZeroCheck.
     pub fn build_f_hat(&self, r: &[F]) -> Result<Self, ArithError> {
-        let start = start_timer!(|| "build and multiply by eq_x_r polynomial");
+        let start = start_timer!(|| "zero check build hat f");
 
         if self.aux_info.num_variables != r.len() {
             return Err(ArithError::InvalidParameters(format!(

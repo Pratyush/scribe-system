@@ -22,9 +22,9 @@ use scribe::hyperplonk::{
     poly_iop::PolyIOP,
 };
 
-const SUPPORTED_SIZE: usize = 20;
-const MIN_NUM_VARS: usize = 8;
-const MAX_NUM_VARS: usize = 20;
+const SUPPORTED_SIZE: usize = 18;
+const MIN_NUM_VARS: usize = 18;
+const MAX_NUM_VARS: usize = 18;
 const MIN_CUSTOM_DEGREE: usize = 1;
 const MAX_CUSTOM_DEGREE: usize = 32;
 const HIGH_DEGREE_TEST_NV: usize = 15;

@@ -1,0 +1,374 @@
+
+running 34 tests
+test arithmetic::virtual_polynomial::test::test_build_eq_x_r ... ignored
+test arithmetic::virtual_polynomial::test::test_build_perm_check_poly ... ignored
+test arithmetic::virtual_polynomial::test::test_virtual_polynomial_mul_by_mle ... ignored
+test hyperplonk::full_snark::mock::test::test_mock_circuit_e2e ... ignored
+test hyperplonk::full_snark::mock::test::test_mock_circuit_sat ... ignored
+test hyperplonk::full_snark::mock::test::test_mock_circuit_zkp ... ignored
+test hyperplonk::full_snark::mock::test::test_mock_long_selector_e2e ... ignored
+test hyperplonk::full_snark::snark::tests::test_hyperplonk_e2e ... ignored
+test hyperplonk::full_snark::utils::test::test_build_gate ... ignored
+test hyperplonk::pcs::multilinear_kzg::batching::tests::test_multi_open_internal ... ignored
+test hyperplonk::pcs::multilinear_kzg::tests::setup_commit_verify_constant_polynomial ... ignored
+test hyperplonk::pcs::multilinear_kzg::tests::test_single_commit ... ignored
+test hyperplonk::poly_iop::perm_check_original::test::test_normal_polynomial ... ignored
+test hyperplonk::poly_iop::perm_check_original::test::test_trivial_polynomial ... ignored
+test hyperplonk::poly_iop::perm_check_original::test::zero_polynomial_should_error ... ignored
+test hyperplonk::poly_iop::perm_check_original::util::tests::test_compute_nums_and_denoms ... ignored
+test hyperplonk::poly_iop::prod_check::test::test_check_frac_poly ... ignored
+test hyperplonk::poly_iop::prod_check::test::test_normal_polynomial ... ignored
+test hyperplonk::poly_iop::prod_check::test::test_trivial_polynomial ... ignored
+test hyperplonk::poly_iop::prod_check::util::test::test_compute_product_poly ... ignored
+test hyperplonk::poly_iop::prod_check::util::test::test_compute_product_poly_in_memory ... ignored
+test hyperplonk::poly_iop::sum_check::test::test_extract_sum ... ignored
+test hyperplonk::poly_iop::sum_check::test::test_normal_polynomial ... ignored
+test hyperplonk::poly_iop::sum_check::test::test_shared_reference ... ignored
+test hyperplonk::poly_iop::sum_check::test::test_trivial_polynomial ... ignored
+test hyperplonk::poly_iop::sum_check::test::zero_polynomial_should_error ... ignored
+test hyperplonk::poly_iop::sum_check::verifier::test::test_interpolation ... ignored
+test hyperplonk::poly_iop::zero_check::test::test_normal_polynomial ... ignored
+test hyperplonk::poly_iop::zero_check::test::test_trivial_polynomial ... ignored
+test hyperplonk::poly_iop::zero_check::test::zero_polynomial_should_error ... ignored
+test streams::iterator::array_chunks::tests::test_array_chunks_result_is_indexed_parallel_iter ... ignored
+test streams::iterator::chain_many::tests::test_chain_many ... ignored
+test streams::iterator::zip_many::tests::test_zip_many_trait ... ignored
+test streams::iterator::zip_many::tests::test_zip_many_trait_for_each ... ignored
+
+test result: ok. 0 passed; 0 failed; 34 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+start benchmark with #1 threads
+Start:   SRS generation for nv = 18
+··Start:   Prover Param generation
+····Start:   eq extension
+····End:     eq extension ..........................................................164.438ms
+num_vars: 18
+··End:     Prover Param generation .................................................6.108s
+··Start:   VP generation
+··End:     VP generation ...........................................................4.491ms
+End:     SRS generation for nv = 18 ................................................6.112s
+Start:   hyperplonk preprocessing nv = 18
+··Start:   commit poly nv = 18
+··End:     commit poly nv = 18 .....................................................332.599ms
+··Start:   commit poly nv = 18
+··End:     commit poly nv = 18 .....................................................336.720ms
+··Start:   commit poly nv = 18
+··End:     commit poly nv = 18 .....................................................351.315ms
+··Start:   commit poly nv = 18
+··End:     commit poly nv = 18 .....................................................2.626s
+··Start:   commit poly nv = 18
+··End:     commit poly nv = 18 .....................................................2.623s
+··Start:   commit poly nv = 18
+··End:     commit poly nv = 18 .....................................................2.575s
+··Start:   commit poly nv = 18
+··End:     commit poly nv = 18 .....................................................2.574s
+··Start:   commit poly nv = 18
+··End:     commit poly nv = 18 .....................................................2.639s
+End:     hyperplonk preprocessing nv = 18 ..........................................14.210s
+Start:   hyperplonk preprocessing nv = 18
+··Start:   commit poly nv = 18
+··End:     commit poly nv = 18 .....................................................332.470ms
+··Start:   commit poly nv = 18
+··End:     commit poly nv = 18 .....................................................342.587ms
+··Start:   commit poly nv = 18
+··End:     commit poly nv = 18 .....................................................348.800ms
+··Start:   commit poly nv = 18
+··End:     commit poly nv = 18 .....................................................2.634s
+··Start:   commit poly nv = 18
+··End:     commit poly nv = 18 .....................................................2.629s
+··Start:   commit poly nv = 18
+··End:     commit poly nv = 18 .....................................................2.617s
+··Start:   commit poly nv = 18
+··End:     commit poly nv = 18 .....................................................2.618s
+··Start:   commit poly nv = 18
+··End:     commit poly nv = 18 .....................................................2.616s
+End:     hyperplonk preprocessing nv = 18 ..........................................14.289s
+key extraction for 18 variables: 14253767 us
+Start:   hyperplonk preprocessing nv = 18
+··Start:   commit poly nv = 18
+··End:     commit poly nv = 18 .....................................................335.358ms
+··Start:   commit poly nv = 18
+··End:     commit poly nv = 18 .....................................................336.243ms
+··Start:   commit poly nv = 18
+··End:     commit poly nv = 18 .....................................................335.150ms
+··Start:   commit poly nv = 18
+··End:     commit poly nv = 18 .....................................................2.578s
+··Start:   commit poly nv = 18
+··End:     commit poly nv = 18 .....................................................2.589s
+··Start:   commit poly nv = 18
+··End:     commit poly nv = 18 .....................................................2.579s
+··Start:   commit poly nv = 18
+··End:     commit poly nv = 18 .....................................................2.577s
+··Start:   commit poly nv = 18
+··End:     commit poly nv = 18 .....................................................2.574s
+End:     hyperplonk preprocessing nv = 18 ..........................................14.059s
+Start:   hyperplonk proving nv = 18
+··Start:   commit witnesses
+····Start:   commit poly nv = 18
+····End:     commit poly nv = 18 ...................................................2.579s
+····Start:   commit poly nv = 18
+····End:     commit poly nv = 18 ...................................................2.611s
+····Start:   commit poly nv = 18
+····End:     commit poly nv = 18 ...................................................2.604s
+··End:     commit witnesses ........................................................7.795s
+··Start:   ZeroCheck on f
+····Start:   zero check prove
+······Start:   zero check build hat f
+········Start:   construct eq_x_r polynomial
+········End:     construct eq_x_r polynomial .......................................138.477ms
+········Start:   mul by mle
+········End:     mul by mle ........................................................2.792µs
+······End:     zero check build hat f ..............................................138.530ms
+······Start:   sum check prove
+········Start:   sum check prover init
+········End:     sum check prover init .............................................83ns
+········Start:   sum check prove 0-th round and update state
+··········Start:   fix argument
+··········End:     fix argument ....................................................208ns
+··········Start:   generate prover message
+··········End:     generate prover message .........................................491.883ms
+········End:     sum check prove 0-th round and update state .......................491.923ms
+········Start:   sum check prove 1-th round and update state
+··········Start:   fix argument
+··········End:     fix argument ....................................................188.732ms
+··········Start:   generate prover message
+··········End:     generate prover message .........................................249.365ms
+········End:     sum check prove 1-th round and update state .......................438.150ms
+········Start:   sum check prove 2-th round and update state
+··········Start:   fix argument
+··········End:     fix argument ....................................................98.832ms
+··········Start:   generate prover message
+··········End:     generate prover message .........................................145.729ms
+········End:     sum check prove 2-th round and update state .......................244.610ms
+········Start:   sum check prove 3-th round and update state
+··········Start:   fix argument
+··········End:     fix argument ....................................................60.498ms
+··········Start:   generate prover message
+··········End:     generate prover message .........................................81.135ms
+········End:     sum check prove 3-th round and update state .......................141.683ms
+········Start:   sum check prove 4-th round and update state
+··········Start:   fix argument
+··········End:     fix argument ....................................................31.691ms
+··········Start:   generate prover message
+··········End:     generate prover message .........................................50.321ms
+········End:     sum check prove 4-th round and update state .......................82.065ms
+········Start:   sum check prove 5-th round and update state
+··········Start:   fix argument
+··········End:     fix argument ....................................................17.030ms
+··········Start:   generate prover message
+··········End:     generate prover message .........................................36.896ms
+········End:     sum check prove 5-th round and update state .......................53.970ms
+········Start:   sum check prove 6-th round and update state
+··········Start:   fix argument
+··········End:     fix argument ....................................................11.123ms
+··········Start:   generate prover message
+··········End:     generate prover message .........................................29.865ms
+········End:     sum check prove 6-th round and update state .......................41.028ms
+········Start:   sum check prove 7-th round and update state
+··········Start:   fix argument
+··········End:     fix argument ....................................................8.347ms
+··········Start:   generate prover message
+··········End:     generate prover message .........................................26.397ms
+········End:     sum check prove 7-th round and update state .......................34.782ms
+········Start:   sum check prove 8-th round and update state
+··········Start:   fix argument
+··········End:     fix argument ....................................................6.473ms
+··········Start:   generate prover message
+··········End:     generate prover message .........................................21.390ms
+········End:     sum check prove 8-th round and update state .......................27.916ms
+········Start:   sum check prove 9-th round and update state
+··········Start:   fix argument
+··········End:     fix argument ....................................................5.334ms
+··········Start:   generate prover message
+··········End:     generate prover message .........................................26.766ms
+········End:     sum check prove 9-th round and update state .......................32.139ms
+········Start:   sum check prove 10-th round and update state
+··········Start:   fix argument
+··········End:     fix argument ....................................................4.409ms
+··········Start:   generate prover message
+··········End:     generate prover message .........................................23.516ms
+········End:     sum check prove 10-th round and update state ......................27.970ms
+········Start:   sum check prove 11-th round and update state
+··········Start:   fix argument
+··········End:     fix argument ....................................................3.737ms
+··········Start:   generate prover message
+··········End:     generate prover message .........................................23.162ms
+········End:     sum check prove 11-th round and update state ......................26.935ms
+········Start:   sum check prove 12-th round and update state
+··········Start:   fix argument
+··········End:     fix argument ....................................................4.781ms
+··········Start:   generate prover message
+··········End:     generate prover message .........................................20.588ms
+········End:     sum check prove 12-th round and update state ......................25.407ms
+········Start:   sum check prove 13-th round and update state
+··········Start:   fix argument
+··········End:     fix argument ....................................................4.030ms
+··········Start:   generate prover message
+··········End:     generate prover message .........................................20.314ms
+········End:     sum check prove 13-th round and update state ......................24.383ms
+········Start:   sum check prove 14-th round and update state
+··········Start:   fix argument
+··········End:     fix argument ....................................................3.922ms
+··········Start:   generate prover message
+··········End:     generate prover message .........................................66.144ms
+········End:     sum check prove 14-th round and update state ......................70.104ms
+········Start:   sum check prove 15-th round and update state
+··········Start:   fix argument
+··········End:     fix argument ....................................................8.744ms
+··········Start:   generate prover message
+··········End:     generate prover message .........................................31.084ms
+········End:     sum check prove 15-th round and update state ......................39.886ms
+········Start:   sum check prove 16-th round and update state
+··········Start:   fix argument
+··········End:     fix argument ....................................................14.299ms
+··········Start:   generate prover message
+··········End:     generate prover message .........................................26.646ms
+········End:     sum check prove 16-th round and update state ......................41.002ms
+········Start:   sum check prove 17-th round and update state
+··········Start:   fix argument
+··········End:     fix argument ....................................................5.525ms
+··········Start:   generate prover message
+··········End:     generate prover message .........................................24.919ms
+········End:     sum check prove 17-th round and update state ......................30.516ms
+······End:     sum check prove .....................................................1.874s
+····End:     zero check prove ......................................................2.014s
+··End:     ZeroCheck on f ..........................................................2.015s
+··Start:   Permutation check on w_i(x)
+····Start:   Permutation check prove
+······Start:   compute numerators and denominators
+······End:     compute numerators and denominators .................................223.019ms
+······Start:   prod_check prove
+········Start:   compute frac(x)
+········End:     compute frac(x) ...................................................72.694ms
+········Start:   compute evaluations of prod polynomial
+········End:     compute evaluations of prod polynomial ............................21.577ms
+········Start:   commit poly nv = 18
+········End:     commit poly nv = 18 ...............................................79.602ms
+········Start:   commit poly nv = 18
+········End:     commit poly nv = 18 ...............................................89.395ms
+········Start:   zerocheck in product check
+··········Start:   zero check prove
+············Start:   zero check build hat f
+··············Start:   construct eq_x_r polynomial
+··············End:     construct eq_x_r polynomial .................................145.036ms
+··············Start:   mul by mle
+··············End:     mul by mle ..................................................3.041µs
+············End:     zero check build hat f ........................................145.114ms
+············Start:   sum check prove
+··············Start:   sum check prover init
+··············End:     sum check prover init .......................................83ns
+··············Start:   sum check prove 0-th round and update state
+················Start:   fix argument
+················End:     fix argument ..............................................208ns
+················Start:   generate prover message
+················End:     generate prover message ...................................226.987ms
+··············End:     sum check prove 0-th round and update state .................227.050ms
+··············Start:   sum check prove 1-th round and update state
+················Start:   fix argument
+················End:     fix argument ..............................................104.621ms
+················Start:   generate prover message
+················End:     generate prover message ...................................156.533ms
+··············End:     sum check prove 1-th round and update state .................261.223ms
+··············Start:   sum check prove 2-th round and update state
+················Start:   fix argument
+················End:     fix argument ..............................................63.244ms
+················Start:   generate prover message
+················End:     generate prover message ...................................93.551ms
+··············End:     sum check prove 2-th round and update state .................156.874ms
+··············Start:   sum check prove 3-th round and update state
+················Start:   fix argument
+················End:     fix argument ..............................................37.322ms
+················Start:   generate prover message
+················End:     generate prover message ...................................57.076ms
+··············End:     sum check prove 3-th round and update state .................94.488ms
+··············Start:   sum check prove 4-th round and update state
+················Start:   fix argument
+················End:     fix argument ..............................................21.249ms
+················Start:   generate prover message
+················End:     generate prover message ...................................39.795ms
+··············End:     sum check prove 4-th round and update state .................61.105ms
+··············Start:   sum check prove 5-th round and update state
+················Start:   fix argument
+················End:     fix argument ..............................................16.171ms
+················Start:   generate prover message
+················End:     generate prover message ...................................31.634ms
+··············End:     sum check prove 5-th round and update state .................47.857ms
+··············Start:   sum check prove 6-th round and update state
+················Start:   fix argument
+················End:     fix argument ..............................................12.783ms
+················Start:   generate prover message
+················End:     generate prover message ...................................25.579ms
+··············End:     sum check prove 6-th round and update state .................38.423ms
+··············Start:   sum check prove 7-th round and update state
+················Start:   fix argument
+················End:     fix argument ..............................................8.542ms
+················Start:   generate prover message
+················End:     generate prover message ...................................23.417ms
+··············End:     sum check prove 7-th round and update state .................32.016ms
+··············Start:   sum check prove 8-th round and update state
+················Start:   fix argument
+················End:     fix argument ..............................................7.826ms
+················Start:   generate prover message
+················End:     generate prover message ...................................20.106ms
+··············End:     sum check prove 8-th round and update state .................27.987ms
+··············Start:   sum check prove 9-th round and update state
+················Start:   fix argument
+················End:     fix argument ..............................................7.731ms
+················Start:   generate prover message
+················End:     generate prover message ...................................18.052ms
+··············End:     sum check prove 9-th round and update state .................25.846ms
+··············Start:   sum check prove 10-th round and update state
+················Start:   fix argument
+················End:     fix argument ..............................................6.109ms
+················Start:   generate prover message
+················End:     generate prover message ...................................19.159ms
+··············End:     sum check prove 10-th round and update state ................25.316ms
+··············Start:   sum check prove 11-th round and update state
+················Start:   fix argument
+················End:     fix argument ..............................................8.003ms
+················Start:   generate prover message
+················End:     generate prover message ...................................19.514ms
+··············End:     sum check prove 11-th round and update state ................27.580ms
+··············Start:   sum check prove 12-th round and update state
+················Start:   fix argument
+················End:     fix argument ..............................................5.368ms
+················Start:   generate prover message
+················End:     generate prover message ...................................17.501ms
+··············End:     sum check prove 12-th round and update state ................22.913ms
+··············Start:   sum check prove 13-th round and update state
+················Start:   fix argument
+················End:     fix argument ..............................................9.000ms
+················Start:   generate prover message
+················End:     generate prover message ...................................19.163ms
+··············End:     sum check prove 13-th round and update state ................28.225ms
+··············Start:   sum check prove 14-th round and update state
+················Start:   fix argument
+················End:     fix argument ..............................................5.147ms
+················Start:   generate prover message
+················End:     generate prover message ...................................19.201ms
+··············End:     sum check prove 14-th round and update state ................24.398ms
+··············Start:   sum check prove 15-th round and update state
+················Start:   fix argument
+················End:     fix argument ..............................................7.188ms
+················Start:   generate prover message
+················End:     generate prover message ...................................18.386ms
+··············End:     sum check prove 15-th round and update state ................25.634ms
+··············Start:   sum check prove 16-th round and update state
+················Start:   fix argument
+················End:     fix argument ..............................................5.371ms
+················Start:   generate prover message
+················End:     generate prover message ...................................17.137ms
+··············End:     sum check prove 16-th round and update state ................22.561ms
+··············Start:   sum check prove 17-th round and update state
+················Start:   fix argument
+················End:     fix argument ..............................................6.829ms
+················Start:   generate prover message
+················End:     generate prover message ...................................10.395ms
+··············End:     sum check prove 17-th round and update state ................17.267ms
+············End:     sum check prove ...............................................1.167s
+··········End:     zero check prove ................................................1.313s
+········End:     zerocheck in product check ........................................1.327s
+······End:     prod_check prove ....................................................1.595s
+····End:     Permutation check prove ...............................................1.823s
+··End:     Permutation check on w_i(x) .............................................1.830s
+··Start:   opening and evaluations
