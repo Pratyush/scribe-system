@@ -1,6 +1,6 @@
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use rayon::prelude::*;
-use std::iter::Sum;
+use std::{fmt::Display, iter::Sum};
 
 use super::file_vec::FileVec;
 
@@ -72,13 +72,14 @@ pub trait BatchedIterator: Sized {
         F: Fn(T, Self::Item) -> T + Sync + Send,
         F2: Fn(T, T) -> T + Sync + Send,
         ID: Fn() -> T + Sync + Send,
-        T: Send + Clone,
+        T: Send + Clone + core::fmt::Debug + Sync,
     {
         let mut acc = identity();
         while let Some(batch) = self.next_batch() {
-            acc = batch
-                .fold_with(acc, |a, b| fold_op(a, b))
-                .reduce(|| identity(), |a, b| reduce_op(a, b));
+            let res = batch
+                .fold_with(identity(), |a, b| fold_op(a, b))
+                .collect::<Vec<_>>();
+            acc = res.into_iter().fold(acc, |a, b| reduce_op(a, b));
         }
         acc
     }

@@ -46,6 +46,7 @@ mod tests {
     use crate::streams::{
         file_vec::FileVec,
         iterator::{from_iter, zip_many, BatchAdapter, BatchedIterator},
+        BUFFER_SIZE,
     };
 
     #[test]
@@ -58,13 +59,14 @@ mod tests {
 
     #[test]
     fn test_zip_many_trait_for_each() {
-        let iter1 = from_iter(0..100u32);
-        let iter2 = from_iter(100..200u32);
+        let iter1 = from_iter(0..(BUFFER_SIZE + 1) as u32);
+        let iter2 = from_iter(100..(BUFFER_SIZE + 101) as u32);
 
         let zipped = zip_many([iter1, iter2]);
-        let mut vec = FileVec::from_iter(0..100u32);
+        let mut vec = FileVec::from_iter(0..(BUFFER_SIZE + 1) as u32);
         vec.zipped_for_each(zipped, |a, b| {
             assert_eq!(*a, b[0]);
+            assert_eq!(*a + 100u32, b[1]);
         });
     }
 }

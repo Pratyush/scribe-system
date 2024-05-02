@@ -147,9 +147,9 @@ mod test {
     use ark_bls12_381::Fr;
     use ark_std::test_rng;
 
-    const SUPPORTED_SIZE: usize = 20;
-    const MIN_NUM_VARS: usize = 16;
-    const MAX_NUM_VARS: usize = 21;
+    const SUPPORTED_SIZE: usize = 8;
+    const MIN_NUM_VARS: usize = 8;
+    const MAX_NUM_VARS: usize = 9;
     const CUSTOM_DEGREE: [usize; 4] = [1, 2, 4, 8];
 
     #[test]

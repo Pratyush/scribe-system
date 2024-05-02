@@ -11,12 +11,12 @@ use ark_bls12_381::Fr;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Write};
 use ark_std::test_rng;
 use scribe::hyperplonk::full_snark::custom_gate::CustomizedGates;
-use scribe::hyperplonk::{
-    full_snark::{errors::HyperPlonkErrors, mock::MockCircuit, HyperPlonkSNARK},
+use scribe::hyperplonk::full_snark::{
+    errors::HyperPlonkErrors, mock::MockCircuit, HyperPlonkSNARK,
 };
 use scribe::hyperplonk::{
     pcs::{
-        multilinear_kzg::{MultilinearKzgPCS, srs::MultilinearUniversalParams},
+        multilinear_kzg::{srs::MultilinearUniversalParams, MultilinearKzgPCS},
         PolynomialCommitmentScheme,
     },
     poly_iop::PolyIOP,

@@ -341,7 +341,7 @@ mod test {
 
     #[test]
     fn test_normal_polynomial() -> Result<(), PIOPError> {
-        let nv = 6;
+        let nv = 8;
         let num_multiplicands_range = (4, 9);
         let num_products = 5;
 

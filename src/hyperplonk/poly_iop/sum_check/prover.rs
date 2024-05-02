@@ -148,7 +148,15 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
                             }
                             *odd -= even;
                         });
-                        acc[0] += products.iter().map(|[eval, _]| eval).product::<F>();
+                        // println!("acc 0 (before): {}", acc[0]);
+                        acc[0] += products
+                            .iter()
+                            .map(|[eval, _]| {
+                                // println!("product iter eval: {}", eval);
+                                eval
+                            })
+                            .product::<F>();
+                        // println!("acc 0 (first): {}", acc[0]);
                         acc[1..].iter_mut().for_each(|acc| {
                             products
                                 .iter_mut()
@@ -158,7 +166,7 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
                         #[cfg(debug_assertions)]
                         {
                             println!("acc 0: {}", acc[0]);
-                            println!("acc 1: {}", acc[0]);
+                            println!("acc 1: {}", acc[1]);
                         }
                         acc
                     },
@@ -170,9 +178,15 @@ impl<F: PrimeField> SumCheckProver<F> for IOPProverState<F> {
                                 // println!("sum check partial: {}", partial);
                                 *sum += partial;
                             });
+                        // println!("sum in reduce: {:?}", sum);
                         sum
                     },
                 );
+
+                #[cfg(debug_assertions)]
+                {
+                    println!("sum after reduce: {:?}", sum);
+                }
 
                 sum.iter_mut().for_each(|sum| {
                     #[cfg(debug_assertions)]

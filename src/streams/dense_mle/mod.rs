@@ -119,7 +119,6 @@ impl<F: Field> MLE<F> {
         degree: usize,
         rng: &mut R,
     ) -> (Vec<Self>, F) {
-        println!("rand product started");
         let (v, f) = Inner::rand_product_with_sum(num_vars, degree, rng);
         (v.into_iter().map(From::from).collect(), f)
     }

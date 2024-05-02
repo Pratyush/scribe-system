@@ -40,7 +40,7 @@ pub struct FileVec<T: CanonicalSerialize + CanonicalDeserialize> {
 //     }
 
 //     fn serialized_size(&self, compress: ark_serialize::Compress) -> usize {
-//         todo!()   
+//         todo!()
 //     }
 // }
 
