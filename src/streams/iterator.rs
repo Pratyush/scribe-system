@@ -1,25 +1,27 @@
+use super::BUFFER_SIZE;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use rayon::prelude::*;
 use std::iter::Sum;
-use super::BUFFER_SIZE;
 
 use super::file_vec::FileVec;
 
 pub mod array_chunks;
 pub mod chain_many;
 pub mod flat_map;
+pub mod from_fn;
 pub mod map;
+pub mod repeat;
 pub mod zip;
 pub mod zip_many;
-pub mod repeat;
 
 pub use array_chunks::ArrayChunks;
 pub use chain_many::ChainMany;
 pub use flat_map::FlatMap;
+pub use from_fn::FromFn;
 pub use map::Map;
+pub use repeat::Repeat;
 pub use zip::Zip;
 pub use zip_many::ZipMany;
-pub use repeat::Repeat;
 
 pub trait BatchedIterator: Sized {
     type Item: Send + Sync;
@@ -140,6 +142,13 @@ pub fn chain_many<I: BatchedIterator>(iters: impl IntoIterator<Item = I>) -> Cha
 
 pub fn repeat<T: Send + Sync + Copy>(iter: T, count: usize) -> Repeat<T> {
     Repeat { iter, count }
+}
+
+pub fn from_fn<T: Send + Sync, F>(func: F, max: usize) -> FromFn<F>
+where
+    F: Fn(usize) -> Option<T> + Send + Sync + Copy,
+{
+    FromFn::new(func, max)
 }
 
 pub struct BatchAdapter<I: Iterator> {

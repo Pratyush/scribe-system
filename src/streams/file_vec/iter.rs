@@ -22,7 +22,7 @@ impl<'a, T: CanonicalSerialize + CanonicalDeserialize> Iter<'a, T> {
             lifetime: PhantomData,
         }
     }
-    
+
     pub fn new_buffer(buffer: Vec<T>) -> Self {
         Self::Buffer { buffer }
     }
@@ -56,8 +56,7 @@ impl<'a, T: 'static + CanonicalSerialize + CanonicalDeserialize + Send + Sync + 
                 } else {
                     Some(std::mem::replace(buffer, Vec::new()).into_par_iter())
                 }
-            },
+            }
         }
-        
     }
 }

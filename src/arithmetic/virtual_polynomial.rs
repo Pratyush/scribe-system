@@ -1,5 +1,5 @@
 use crate::{arithmetic::errors::ArithError, streams::MLE};
-use ark_ff::PrimeField;
+use ark_ff::{Field, PrimeField};
 // use ark_poly::{DenseMultilinearExtension, MultilinearExtension};
 use ark_serialize::CanonicalSerialize;
 use ark_std::{
@@ -444,7 +444,7 @@ impl<F: PrimeField> VirtualPolynomial<F> {
 ///      eq(x,y) = \prod_i=1^num_var (x_i * y_i + (1-x_i)*(1-y_i))
 /// over r, which is
 ///      eq(x,y) = \prod_i=1^num_var (x_i * r_i + (1-x_i)*(1-r_i))
-pub fn build_eq_x_r_vec<F: PrimeField>(r: &[F]) -> Result<Vec<F>, ArithError> {
+pub fn build_eq_x_r_vec<F: Field>(r: &[F]) -> Result<Vec<F>, ArithError> {
     // we build eq(x,r) from its evaluations
     // we want to evaluate eq(x,r) over x \in {0, 1}^num_vars
     // for example, with num_vars = 4, x is a binary vector of 4, then
@@ -465,7 +465,7 @@ pub fn build_eq_x_r_vec<F: PrimeField>(r: &[F]) -> Result<Vec<F>, ArithError> {
 /// A helper function to build eq(x, r) recursively.
 /// This function takes `r.len()` steps, and for each step it requires a maximum
 /// `r.len()-1` multiplications.
-fn build_eq_x_r_vec_helper<F: PrimeField>(r: &[F], buf: &mut Vec<F>) -> Result<(), ArithError> {
+fn build_eq_x_r_vec_helper<F: Field>(r: &[F], buf: &mut Vec<F>) -> Result<(), ArithError> {
     if r.is_empty() {
         return Err(ArithError::InvalidParameters("r length is 0".to_string()));
     } else if r.len() == 1 {

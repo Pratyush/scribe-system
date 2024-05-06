@@ -7,7 +7,8 @@ use std::{
 
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Write};
 use rayon::iter::{
-    IndexedParallelIterator, IntoParallelIterator, IntoParallelRefMutIterator, ParallelExtend, ParallelIterator
+    IndexedParallelIterator, IntoParallelIterator, IntoParallelRefMutIterator, ParallelExtend,
+    ParallelIterator,
 };
 use tempfile::NamedTempFile;
 
@@ -26,13 +27,8 @@ mod macros;
 
 #[derive(Debug)]
 pub enum FileVec<T: CanonicalSerialize + CanonicalDeserialize> {
-    File {
-        path: PathBuf,
-        file: File,       
-    },
-    Buffer {
-        buffer: Vec<T>,
-    },
+    File { path: PathBuf, file: File },
+    Buffer { buffer: Vec<T> },
 }
 
 // impl<T: CanonicalSerialize + CanonicalDeserialize> CanonicalSerialize for FileVec<T> {
@@ -58,10 +54,7 @@ impl<T: CanonicalSerialize + CanonicalDeserialize> FileVec<T> {
             .create(true)
             .open(&path)
             .expect("failed to open file");
-        Self::File {
-            path,
-            file,
-        }
+        Self::File { path, file }
     }
 
     pub fn new() -> Self {
@@ -69,29 +62,22 @@ impl<T: CanonicalSerialize + CanonicalDeserialize> FileVec<T> {
             .expect("failed to create temp file")
             .keep()
             .expect("failed to keep temp file");
-        Self::File {
-            path,
-            file,
-        }
+        Self::File { path, file }
     }
 
-    pub fn iter<'a>(&'a self) -> Iter<'a, T> where
-        T: Clone
+    pub fn iter<'a>(&'a self) -> Iter<'a, T>
+    where
+        T: Clone,
     {
         match self {
-            Self::File { path, .. } =>  {
+            Self::File { path, .. } => {
                 let file = OpenOptions::new()
                     .read(true)
                     .open(&path)
-                    .expect(&format!(
-                        "failed to open file, {}",
-                        path.to_str().unwrap()
-                    ));               
+                    .expect(&format!("failed to open file, {}", path.to_str().unwrap()));
                 Iter::new_file(file)
             }
-            Self::Buffer { buffer } =>  {
-                Iter::new_buffer(buffer.clone())
-            }
+            Self::Buffer { buffer } => Iter::new_buffer(buffer.clone()),
         }
     }
 
@@ -113,14 +99,14 @@ impl<T: CanonicalSerialize + CanonicalDeserialize> FileVec<T> {
             .keep()
             .expect("failed to keep temp file");
         let mut writer = BufWriter::new(&mut file);
-        
+
         if let Some(batch) = iter.next_batch() {
             buffer.par_extend(batch)
         }
-        
+
         // Read from iterator and write to file.
         // If the iterator contains more than `BUFFER_SIZE` elements
-        // (that is, more than one batch), 
+        // (that is, more than one batch),
         // we write the first batch to the file
         let mut more_than_one_batch = false;
         while let Some(batch) = iter.next_batch() {
@@ -132,7 +118,7 @@ impl<T: CanonicalSerialize + CanonicalDeserialize> FileVec<T> {
             buffer.clear();
             buffer.par_extend(batch);
         }
-        
+
         // Write the last batch to the file.
         if more_than_one_batch {
             for item in &buffer {
@@ -142,10 +128,7 @@ impl<T: CanonicalSerialize + CanonicalDeserialize> FileVec<T> {
             writer.flush().expect("failed to flush file");
             drop(writer);
             file.rewind().expect("failed to seek file");
-            Self::File {
-                path,
-                file,
-            }
+            Self::File { path, file }
         } else {
             FileVec::Buffer { buffer }
         }
@@ -189,34 +172,38 @@ impl<T: CanonicalSerialize + CanonicalDeserialize> FileVec<T> {
             .expect("failed to keep temp file");
         let mut writer_1 = BufWriter::new(&mut file_1);
         let mut writer_2 = BufWriter::new(&mut file_2);
-        
+
         if let Some(batch) = iter.next_batch() {
             buffer.par_extend(batch)
         }
-        
+
         // Read from iterator and write to file.
         // If the iterator contains more than `BUFFER_SIZE` elements
-        // (that is, more than one batch), 
+        // (that is, more than one batch),
         // we write the first batch to the file
         let mut more_than_one_batch = false;
         while let Some(batch) = iter.next_batch() {
             more_than_one_batch = true;
             for (item_1, item_2) in &buffer {
-                item_1.serialize_uncompressed(&mut writer_1)
+                item_1
+                    .serialize_uncompressed(&mut writer_1)
                     .expect("failed to write to file");
-                item_2.serialize_uncompressed(&mut writer_2)
+                item_2
+                    .serialize_uncompressed(&mut writer_2)
                     .expect("failed to write to file");
             }
             buffer.clear();
             buffer.par_extend(batch);
         }
-        
+
         // Write the last batch to the file.
         if more_than_one_batch {
             for (item_1, item_2) in &buffer {
-                item_1.serialize_uncompressed(&mut writer_1)
+                item_1
+                    .serialize_uncompressed(&mut writer_1)
                     .expect("failed to write to file");
-                item_2.serialize_uncompressed(&mut writer_2)
+                item_2
+                    .serialize_uncompressed(&mut writer_2)
                     .expect("failed to write to file");
             }
             writer_1.flush().expect("failed to flush file");
@@ -236,7 +223,10 @@ impl<T: CanonicalSerialize + CanonicalDeserialize> FileVec<T> {
             (v1, v2)
         } else {
             let (b1, b2) = buffer.into_par_iter().unzip();
-            (FileVec::Buffer { buffer: b1 }, FileVec::Buffer { buffer: b2 })
+            (
+                FileVec::Buffer { buffer: b1 },
+                FileVec::Buffer { buffer: b2 },
+            )
         }
     }
 
@@ -276,15 +266,12 @@ impl<T: CanonicalSerialize + CanonicalDeserialize> FileVec<T> {
 impl<T: CanonicalSerialize + CanonicalDeserialize> Drop for FileVec<T> {
     fn drop(&mut self) {
         match self {
-            Self::File { path, .. } => {
-                match std::fs::remove_file(&path) {
-                    Ok(_) => (),
-                    Err(e) => eprintln!("Failed to remove file at path {path:?}: {e:?}"),
-                }
-            }
+            Self::File { path, .. } => match std::fs::remove_file(&path) {
+                Ok(_) => (),
+                Err(e) => eprintln!("Failed to remove file at path {path:?}: {e:?}"),
+            },
             Self::Buffer { .. } => (),
         }
-        
     }
 }
 

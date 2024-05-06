@@ -3,7 +3,7 @@ use smallvec::SmallVec;
 
 use super::{BatchedIterator, BUFFER_SIZE};
 
-pub type SVec<T> = SmallVec<[T; 4]>;
+pub type SVec<T> = SmallVec<[T; 6]>;
 
 pub struct ZipMany<I> {
     iters: Vec<I>,

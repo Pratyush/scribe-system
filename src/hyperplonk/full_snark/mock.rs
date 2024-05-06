@@ -43,10 +43,12 @@ impl<F: PrimeField + Clone> MockCircuit<F> {
         let mut selectors: Vec<MLE<F>> = (0..num_selectors - 1)
             .map(|_| MLE::rand(nv, &mut rng))
             .collect();
+        println!("Hello here after selectors");
 
         let witnesses: Vec<MLE<F>> = (0..num_witnesses)
             .map(|_| MLE::rand(nv, &mut rng))
             .collect();
+        println!("Hello here after witnesses");
 
         // for all test cases in this repo, there's one and only one selector for each monomial
         let mut last_selector = MLE::constant(F::zero(), nv);
@@ -81,6 +83,7 @@ impl<F: PrimeField + Clone> MockCircuit<F> {
             });
 
         selectors.push(last_selector);
+        println!("Hello here after last selector");
 
         let pub_input_len = ark_std::cmp::min(4, num_constraints);
         let mut public_inputs = witnesses[0].evals().iter().to_vec();
@@ -93,6 +96,7 @@ impl<F: PrimeField + Clone> MockCircuit<F> {
         };
 
         let permutation = MLE::identity_permutation_mles(nv as usize, num_witnesses);
+        println!("Hello here after identity permutation");
         let index = HyperPlonkIndex {
             params,
             permutation,

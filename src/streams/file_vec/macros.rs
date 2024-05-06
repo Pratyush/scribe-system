@@ -1,7 +1,7 @@
 macro_rules! process_file {
     ($self:ident, $extra:expr) => {{
         match $self {
-            FileVec::File { ref mut file, path } =>  {
+            FileVec::File { ref mut file, path } => {
                 let mut reader = BufReader::new(&mut *file);
                 let mut buffer = Vec::with_capacity(BUFFER_SIZE);
                 let tmp = NamedTempFile::new().expect("failed to create temp file");
@@ -34,8 +34,7 @@ macro_rules! process_file {
                 new_file.rewind().expect("could not rewind file");
                 *path = new_path;
                 *file = new_file;
-
-            },
+            }
             FileVec::Buffer { buffer } => {
                 $extra(&mut *buffer);
             }
