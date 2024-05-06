@@ -1,5 +1,4 @@
 use std::{
-    iter::repeat,
     ops::{AddAssign, MulAssign, SubAssign},
     path::Path,
 };
@@ -8,7 +7,7 @@ use ark_ff::{batch_inversion, Field};
 use ark_std::rand::RngCore;
 use rayon::prelude::*;
 
-use crate::streams::{file_vec::FileVec, iterator::BatchedIterator};
+use crate::streams::{file_vec::FileVec, iterator::BatchedIterator, iterator::repeat};
 
 #[derive(Debug, Hash, PartialEq, Eq)]
 pub struct Inner<F: Field> {
@@ -58,7 +57,7 @@ impl<F: Field> Inner<F> {
 
     /// Construct a polynomial with all coefficients equal to `coeff`
     pub fn constant(coeff: F, num_vars: usize) -> Self {
-        let evals = FileVec::from_iter(repeat(coeff).take(1 << num_vars));
+        let evals = FileVec::from_batched_iter(repeat(coeff, 1 << num_vars));
         Self::from_evals(evals, num_vars)
     }
 
