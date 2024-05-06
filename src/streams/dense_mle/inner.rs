@@ -177,9 +177,9 @@ impl<F: Field> Inner<F> {
     /// After each fold, the number of variables is reduced by 1.
     pub fn fold_odd_even_in_place(&mut self, f: impl Fn(&F, &F) -> F + Sync) {
         assert!((1 << self.num_vars) % 2 == 0);
-        self.evals = self
-            .evals
-            .iter()
+        let evals = core::mem::replace(&mut self.evals, FileVec::new());
+        self.evals = evals
+            .into_iter()
             .array_chunks::<2>()
             .map(|chunk| f(&chunk[0], &chunk[1]))
             .to_file_vec();

@@ -1,15 +1,15 @@
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-use rayon::{iter::MinLen, prelude::*, vec::IntoIter};
-use std::{fs::File, io::BufReader, marker::PhantomData};
+use rayon::{iter::MinLen, prelude::*, vec::IntoIter as VecIntoIter};
+use std::{fs::File, io::BufReader, path::PathBuf};
 
 use crate::streams::{iterator::BatchedIterator, BUFFER_SIZE};
 
 use super::utils::par_deserialize;
 
-pub enum Iter<'a, T: CanonicalSerialize + CanonicalDeserialize + 'static> {
+pub enum IntoIter<T: CanonicalSerialize + CanonicalDeserialize + 'static> {
     File {
         file: BufReader<File>,
-        lifetime: PhantomData<&'a T>,
+        path: PathBuf,
         work_buffer: Vec<u8>,
     },
     Buffer {
@@ -17,12 +17,12 @@ pub enum Iter<'a, T: CanonicalSerialize + CanonicalDeserialize + 'static> {
     },
 }
 
-impl<'a, T: CanonicalSerialize + CanonicalDeserialize> Iter<'a, T> {
-    pub fn new_file(file: File) -> Self {
+impl<T: CanonicalSerialize + CanonicalDeserialize> IntoIter<T> {
+    pub fn new_file(file: File, path: PathBuf) -> Self {
         let file = BufReader::new(file);
         Self::File {
             file,
-            lifetime: PhantomData,
+            path,
             work_buffer: Vec::with_capacity(BUFFER_SIZE),
         }
     }
@@ -32,15 +32,15 @@ impl<'a, T: CanonicalSerialize + CanonicalDeserialize> Iter<'a, T> {
     }
 }
 
-impl<'a, T: 'static + CanonicalSerialize + CanonicalDeserialize + Send + Sync + Copy>
-    BatchedIterator for Iter<'a, T>
+impl<T: 'static + CanonicalSerialize + CanonicalDeserialize + Send + Sync + Copy>
+    BatchedIterator for IntoIter<T>
 {
     type Item = T;
-    type Batch = MinLen<IntoIter<T>>;
+    type Batch = MinLen<VecIntoIter<T>>;
 
     fn next_batch(&mut self) -> Option<Self::Batch> {
         match self {
-            Iter::File { file, work_buffer, .. } => {
+            IntoIter::File { file, work_buffer, .. } => {
                 let mut result = Vec::with_capacity(BUFFER_SIZE);
                 par_deserialize(file, work_buffer, &mut result)?;
                     
@@ -50,13 +50,25 @@ impl<'a, T: 'static + CanonicalSerialize + CanonicalDeserialize + Send + Sync + 
                     Some(result.into_par_iter().with_min_len(1 << 7))
                 }
             }
-            Iter::Buffer { buffer } => {
+            IntoIter::Buffer { buffer } => {
                 if buffer.is_empty() {
                     return None;
                 } else {
                     Some(std::mem::replace(buffer, Vec::new()).into_par_iter().with_min_len(1 << 7))
                 }
             }
+        }
+    }
+}
+
+impl<T: CanonicalSerialize + CanonicalDeserialize> Drop for IntoIter<T> {
+    fn drop(&mut self) {
+        match self {
+            Self::File { path, .. } => match std::fs::remove_file(&path) {
+                Ok(_) => (),
+                Err(e) => eprintln!("Failed to remove file at path {path:?}: {e:?}"),
+            },
+            Self::Buffer { .. } => (),
         }
     }
 }

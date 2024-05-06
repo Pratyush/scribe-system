@@ -5,13 +5,15 @@ use super::BatchedIterator;
 
 pub struct ArrayChunks<I: BatchedIterator, const N: usize> {
     iter: I,
+    buf: Vec<I::Item>
 }
 
 impl<I: BatchedIterator, const N: usize> ArrayChunks<I, N> {
     pub fn new(iter: I) -> Self {
         assert!(N > 0, "N must be greater than 0");
         assert!(BUFFER_SIZE % N == 0, "BUFFER_SIZE must be divisible by N");
-        Self { iter }
+        let buf = Vec::new();
+        Self { iter, buf }
     }
 }
 
@@ -25,8 +27,9 @@ where
     type Batch = rayon::vec::IntoIter<[I::Item; N]>;
 
     fn next_batch(&mut self) -> Option<Self::Batch> {
-        let batch: Vec<_> = self.iter.next_batch()?.collect();
-        let batch = batch
+        self.buf.clear();
+        self.buf.par_extend(self.iter.next_batch()?);
+        let batch = self.buf
             .par_chunks_exact(N)
             .map(|chunk| <[I::Item; N]>::try_from(chunk).unwrap())
             .collect::<Vec<_>>();

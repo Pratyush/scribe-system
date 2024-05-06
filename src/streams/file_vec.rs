@@ -12,6 +12,7 @@ use rayon::iter::{
 };
 use tempfile::NamedTempFile;
 
+use self::into_iter::IntoIter;
 pub use self::iter::Iter;
 
 use super::{
@@ -20,10 +21,14 @@ use super::{
 };
 
 mod iter;
-#[cfg(test)]
-mod test;
+mod into_iter;
+mod utils;
+
 #[macro_use]
 mod macros;
+
+#[cfg(test)]
+mod test;
 
 #[derive(Debug)]
 pub enum FileVec<T: CanonicalSerialize + CanonicalDeserialize> {
@@ -80,6 +85,21 @@ impl<T: CanonicalSerialize + CanonicalDeserialize> FileVec<T> {
             Self::Buffer { buffer } => Iter::new_buffer(buffer.clone()),
         }
     }
+    
+    pub fn into_iter(mut self) -> IntoIter<T>
+    where
+        T: Clone,
+    {
+        match &mut self {
+            Self::File { path, .. } => {
+                IntoIter::new_file(File::open(&path).unwrap(), path.clone())
+            }
+            Self::Buffer { buffer } => {
+                let buffer = core::mem::replace(buffer, Vec::new());
+                IntoIter::new_buffer(buffer)
+            },
+        }
+    }
 
     pub fn from_iter(iter: impl IntoIterator<Item = T>) -> Self
     where
@@ -130,6 +150,7 @@ impl<T: CanonicalSerialize + CanonicalDeserialize> FileVec<T> {
             file.rewind().expect("failed to seek file");
             Self::File { path, file }
         } else {
+            let _ = std::fs::remove_file(&path);
             FileVec::Buffer { buffer }
         }
     }
@@ -222,6 +243,8 @@ impl<T: CanonicalSerialize + CanonicalDeserialize> FileVec<T> {
             };
             (v1, v2)
         } else {
+            let _ = std::fs::remove_file(&path_1);
+            let _ = std::fs::remove_file(&path_2);
             let (b1, b2) = buffer.into_par_iter().unzip();
             (
                 FileVec::Buffer { buffer: b1 },

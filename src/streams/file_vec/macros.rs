@@ -4,15 +4,14 @@ macro_rules! process_file {
             FileVec::File { ref mut file, path } => {
                 let mut reader = BufReader::new(&mut *file);
                 let mut buffer = Vec::with_capacity(BUFFER_SIZE);
+                let mut byte_buffer = Vec::new();
                 let tmp = NamedTempFile::new().expect("failed to create temp file");
                 let mut writer = BufWriter::new(tmp);
                 loop {
                     buffer.clear();
-                    for _ in 0..BUFFER_SIZE {
-                        match T::deserialize_uncompressed_unchecked(&mut reader) {
-                            Ok(val) => buffer.push(val),
-                            Err(_) => break,
-                        }
+                    byte_buffer.clear();
+                    if utils::par_deserialize(&mut reader, &mut byte_buffer, &mut buffer).is_none() {
+                        break;
                     }
 
                     if buffer.is_empty() {

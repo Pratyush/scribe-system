@@ -73,16 +73,16 @@ pub trait BatchedIterator: Sized {
     fn fold<T, ID, F, F2>(mut self, identity: ID, fold_op: F, reduce_op: F2) -> T
     where
         F: Fn(T, Self::Item) -> T + Sync + Send,
-        F2: Fn(T, T) -> T + Sync + Send,
+        F2: Fn(T, &T) -> T + Sync + Send,
         ID: Fn() -> T + Sync + Send,
         T: Send + Clone + core::fmt::Debug + Sync,
     {
         let mut acc = identity();
+        let mut res = Vec::with_capacity(BUFFER_SIZE);
         while let Some(batch) = self.next_batch() {
-            let res = batch
-                .fold_with(identity(), |a, b| fold_op(a, b))
-                .collect::<Vec<_>>();
-            acc = res.into_iter().fold(acc, |a, b| reduce_op(a, b));
+            res.clear();
+            res.par_extend(batch.fold_with(identity(), |a, b| fold_op(a, b)));
+            acc = res.iter().fold(acc, |a, b| reduce_op(a, b));
         }
         acc
     }

@@ -1,11 +1,11 @@
 #[macro_use]
 extern crate criterion;
 
+use ark_bls12_381::Fr;
 use ark_ff::Field;
 use ark_std::UniformRand;
 use criterion::{BenchmarkId, Criterion, Throughput};
 use scribe::streams::{file_vec::FileVec, BUFFER_SIZE};
-use ark_bls12_381::Fr;
 
 fn for_each_simple(c: &mut Criterion) {
     let mut group = c.benchmark_group("for_each_simple");
@@ -31,9 +31,14 @@ fn for_each_complex(c: &mut Criterion) {
         group.throughput(Throughput::Elements(vec_size as u64));
         group.bench_with_input(BenchmarkId::from_parameter(size), &size, |b, _| {
             let mut fv = FileVec::from_iter((0..vec_size).map(|_| e));
-            b.iter(|| 
-                fv.for_each(|e| {e.square_in_place().square_in_place().double_in_place().square_in_place();
-            }));
+            b.iter(|| {
+                fv.for_each(|e| {
+                    e.square_in_place()
+                        .square_in_place()
+                        .double_in_place()
+                        .square_in_place();
+                })
+            });
         });
     }
     group.finish();

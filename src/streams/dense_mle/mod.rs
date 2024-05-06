@@ -45,7 +45,7 @@ impl<F: Field> From<Inner<F>> for MLE<F> {
 }
 
 impl<F: Field> MLE<F> {
-    pub fn with_path<'a>(num_vars: usize, path: impl AsRef<Path>) -> Self {
+    pub fn with_path(num_vars: usize, path: impl AsRef<Path>) -> Self {
         Inner::with_path(num_vars, path).into()
     }
 
