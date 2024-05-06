@@ -10,7 +10,8 @@ macro_rules! process_file {
                 loop {
                     buffer.clear();
                     byte_buffer.clear();
-                    if utils::par_deserialize(&mut reader, &mut byte_buffer, &mut buffer).is_none() {
+                    if utils::par_deserialize(&mut reader, &mut byte_buffer, &mut buffer).is_none()
+                    {
                         break;
                     }
 

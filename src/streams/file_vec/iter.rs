@@ -40,10 +40,12 @@ impl<'a, T: 'static + CanonicalSerialize + CanonicalDeserialize + Send + Sync + 
 
     fn next_batch(&mut self) -> Option<Self::Batch> {
         match self {
-            Iter::File { file, work_buffer, .. } => {
+            Iter::File {
+                file, work_buffer, ..
+            } => {
                 let mut result = Vec::with_capacity(BUFFER_SIZE);
                 par_deserialize(file, work_buffer, &mut result)?;
-                    
+
                 if result.is_empty() {
                     None
                 } else {
@@ -54,7 +56,11 @@ impl<'a, T: 'static + CanonicalSerialize + CanonicalDeserialize + Send + Sync + 
                 if buffer.is_empty() {
                     return None;
                 } else {
-                    Some(std::mem::replace(buffer, Vec::new()).into_par_iter().with_min_len(1 << 7))
+                    Some(
+                        std::mem::replace(buffer, Vec::new())
+                            .into_par_iter()
+                            .with_min_len(1 << 7),
+                    )
                 }
             }
         }

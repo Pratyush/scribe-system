@@ -5,7 +5,7 @@ use super::BatchedIterator;
 
 pub struct ArrayChunks<I: BatchedIterator, const N: usize> {
     iter: I,
-    buf: Vec<I::Item>
+    buf: Vec<I::Item>,
 }
 
 impl<I: BatchedIterator, const N: usize> ArrayChunks<I, N> {
@@ -29,7 +29,8 @@ where
     fn next_batch(&mut self) -> Option<Self::Batch> {
         self.buf.clear();
         self.buf.par_extend(self.iter.next_batch()?);
-        let batch = self.buf
+        let batch = self
+            .buf
             .par_chunks_exact(N)
             .map(|chunk| <[I::Item; N]>::try_from(chunk).unwrap())
             .collect::<Vec<_>>();

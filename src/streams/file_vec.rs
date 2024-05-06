@@ -20,8 +20,8 @@ use super::{
     BUFFER_SIZE,
 };
 
-mod iter;
 mod into_iter;
+mod iter;
 mod utils;
 
 #[macro_use]
@@ -85,19 +85,17 @@ impl<T: CanonicalSerialize + CanonicalDeserialize> FileVec<T> {
             Self::Buffer { buffer } => Iter::new_buffer(buffer.clone()),
         }
     }
-    
+
     pub fn into_iter(mut self) -> IntoIter<T>
     where
         T: Clone,
     {
         match &mut self {
-            Self::File { path, .. } => {
-                IntoIter::new_file(File::open(&path).unwrap(), path.clone())
-            }
+            Self::File { path, .. } => IntoIter::new_file(File::open(&path).unwrap(), path.clone()),
             Self::Buffer { buffer } => {
                 let buffer = core::mem::replace(buffer, Vec::new());
                 IntoIter::new_buffer(buffer)
-            },
+            }
         }
     }
 

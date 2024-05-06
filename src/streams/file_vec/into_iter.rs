@@ -32,18 +32,20 @@ impl<T: CanonicalSerialize + CanonicalDeserialize> IntoIter<T> {
     }
 }
 
-impl<T: 'static + CanonicalSerialize + CanonicalDeserialize + Send + Sync + Copy>
-    BatchedIterator for IntoIter<T>
+impl<T: 'static + CanonicalSerialize + CanonicalDeserialize + Send + Sync + Copy> BatchedIterator
+    for IntoIter<T>
 {
     type Item = T;
     type Batch = MinLen<VecIntoIter<T>>;
 
     fn next_batch(&mut self) -> Option<Self::Batch> {
         match self {
-            IntoIter::File { file, work_buffer, .. } => {
+            IntoIter::File {
+                file, work_buffer, ..
+            } => {
                 let mut result = Vec::with_capacity(BUFFER_SIZE);
                 par_deserialize(file, work_buffer, &mut result)?;
-                    
+
                 if result.is_empty() {
                     None
                 } else {
@@ -54,7 +56,11 @@ impl<T: 'static + CanonicalSerialize + CanonicalDeserialize + Send + Sync + Copy
                 if buffer.is_empty() {
                     return None;
                 } else {
-                    Some(std::mem::replace(buffer, Vec::new()).into_par_iter().with_min_len(1 << 7))
+                    Some(
+                        std::mem::replace(buffer, Vec::new())
+                            .into_par_iter()
+                            .with_min_len(1 << 7),
+                    )
                 }
             }
         }
