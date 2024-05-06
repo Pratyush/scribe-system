@@ -19,6 +19,8 @@ use super::{
 };
 
 mod iter;
+#[cfg(test)]
+mod test;
 #[macro_use]
 mod macros;
 

@@ -51,8 +51,11 @@ impl<'a, T: 'static + CanonicalSerialize + CanonicalDeserialize + Send + Sync + 
                 }
             }
             Iter::Buffer { buffer } => {
-                let buffer = std::mem::replace(buffer, Vec::new());
-                Some(buffer.into_par_iter())
+                if buffer.is_empty() {
+                    return None;
+                } else {
+                    Some(std::mem::replace(buffer, Vec::new()).into_par_iter())
+                }
             },
         }
         
