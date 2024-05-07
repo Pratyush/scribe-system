@@ -1,4 +1,4 @@
-use crate::arithmetic::virtual_polynomial::{build_eq_x_r_vec, VPAuxInfo, VirtualPolynomial};
+use crate::{arithmetic::virtual_polynomial::{build_eq_x_r_vec, VPAuxInfo, VirtualPolynomial}, streams::serialize::RawPrimeField};
 use crate::hyperplonk::pcs::errors::PCSError;
 use crate::hyperplonk::pcs::structs::Commitment;
 use crate::hyperplonk::pcs::{multilinear_kzg::util::eq_eval, PolynomialCommitmentScheme};
@@ -43,6 +43,7 @@ pub(crate) fn multi_open_internal<E, PCS>(
 ) -> Result<BatchProof<E, PCS>, PCSError>
 where
     E: Pairing,
+    E::ScalarField: RawPrimeField,
     PCS: PolynomialCommitmentScheme<
         E,
         Polynomial = MLE<E::ScalarField>,
@@ -168,6 +169,7 @@ pub(crate) fn batch_verify_internal<E, PCS>(
 ) -> Result<bool, PCSError>
 where
     E: Pairing,
+    E::ScalarField: RawPrimeField,
     PCS: PolynomialCommitmentScheme<
         E,
         Polynomial = MLE<E::ScalarField>,

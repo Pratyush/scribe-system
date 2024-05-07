@@ -1,12 +1,10 @@
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
+use crate::streams::serialize::{DeserializeRaw, SerializeRaw};
 use rayon::{iter::MinLen, prelude::*, vec::IntoIter};
 use std::{fs::File, io::BufReader, marker::PhantomData};
 
 use crate::streams::{iterator::BatchedIterator, BUFFER_SIZE};
 
-use super::utils::par_deserialize;
-
-pub enum Iter<'a, T: CanonicalSerialize + CanonicalDeserialize + 'static> {
+pub enum Iter<'a, T: SerializeRaw + DeserializeRaw + 'static> {
     File {
         file: BufReader<File>,
         lifetime: PhantomData<&'a T>,
@@ -17,9 +15,9 @@ pub enum Iter<'a, T: CanonicalSerialize + CanonicalDeserialize + 'static> {
     },
 }
 
-impl<'a, T: CanonicalSerialize + CanonicalDeserialize> Iter<'a, T> {
+impl<'a, T: SerializeRaw + DeserializeRaw> Iter<'a, T> {
     pub fn new_file(file: File) -> Self {
-        let file = BufReader::new(file);
+        let file = BufReader::with_capacity(BUFFER_SIZE, file);
         Self::File {
             file,
             lifetime: PhantomData,
@@ -32,7 +30,7 @@ impl<'a, T: CanonicalSerialize + CanonicalDeserialize> Iter<'a, T> {
     }
 }
 
-impl<'a, T: 'static + CanonicalSerialize + CanonicalDeserialize + Send + Sync + Copy>
+impl<'a, T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy>
     BatchedIterator for Iter<'a, T>
 {
     type Item = T;
@@ -44,7 +42,7 @@ impl<'a, T: 'static + CanonicalSerialize + CanonicalDeserialize + Send + Sync + 
                 file, work_buffer, ..
             } => {
                 let mut result = Vec::with_capacity(BUFFER_SIZE);
-                par_deserialize(file, work_buffer, &mut result)?;
+                T::deserialize_raw_batch(&mut result, work_buffer, BUFFER_SIZE, file).ok()?;
 
                 if result.is_empty() {
                     None

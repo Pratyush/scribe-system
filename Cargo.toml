@@ -20,17 +20,13 @@ derivative = { version = "2", features = ["use_core"] }
 env_logger = "0.11"
 criterion = { version = "0.5" }
 ark-bls12-381 = { version = "0.4.0", default-features = false, features = [ "curve" ] }
-ark-test-curves = { version = "^0.4.0", features = ["bls12_381_curve", "ed_on_bls12_381"]}
-
-[patch.crates-io]
-# ark-ff = {git = "https://github.com/arkworks-rs/algebra"}
-ark-test-curves = { git = "https://github.com/arkworks-rs/algebra"}
-ark-std = { git = "https://github.com/arkworks-rs/utils"}
-ark-serialize = { git = "https://github.com/arkworks-rs/algebra"}
-ark-serialize-derive = { git = "https://github.com/arkworks-rs/algebra"}
 
 [profile.release]
 debug-assertions = false
+
+[profile.bench]
+debug-assertions = false
+debug = true
 
 [features]
 default = ["parallel"]
@@ -38,6 +34,7 @@ parallel = [
     "rayon",
     "ark-std/parallel", 
     "ark-ff/parallel",  
+    "ark-ec/parallel",  
     "ark-poly/parallel" 
 ]
 print-trace = [ 

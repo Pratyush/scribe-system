@@ -1,4 +1,4 @@
-use crate::arithmetic::virtual_polynomial::VirtualPolynomial;
+use crate::{arithmetic::virtual_polynomial::VirtualPolynomial, streams::serialize::RawPrimeField};
 use crate::hyperplonk::full_snark::{
     custom_gate::CustomizedGates, errors::HyperPlonkErrors, structs::HyperPlonkParams,
 };
@@ -28,6 +28,7 @@ pub(super) struct PcsAccumulator<E: Pairing, PCS: PolynomialCommitmentScheme<E>>
 impl<E, PCS> PcsAccumulator<E, PCS>
 where
     E: Pairing,
+    E::ScalarField: RawPrimeField,
     PCS: PolynomialCommitmentScheme<
         E,
         Polynomial = MLE<E::ScalarField>,
@@ -83,7 +84,7 @@ where
 }
 
 /// Sanity-check for HyperPlonk SNARK proving
-pub(crate) fn prover_sanity_check<F: PrimeField + CanonicalDeserialize + CanonicalSerialize>(
+pub(crate) fn prover_sanity_check<F: RawPrimeField + CanonicalDeserialize + CanonicalSerialize>(
     params: &HyperPlonkParams,
     pub_input: &[F],
     witnesses: Vec<MLE<F>>,
@@ -142,7 +143,7 @@ pub(crate) fn prover_sanity_check<F: PrimeField + CanonicalDeserialize + Canonic
 /// build `f(w_0(x),...w_d(x))` where `f` is the constraint polynomial
 /// i.e., `f(a, b, c) = q_l a(x) + q_r b(x) + q_m a(x)b(x) - q_o c(x)` in
 /// vanilla plonk
-pub(crate) fn build_f<F: PrimeField>(
+pub(crate) fn build_f<F: RawPrimeField>(
     gates: &CustomizedGates,
     num_vars: usize,
     selector_mles: &[MLE<F>],
@@ -283,14 +284,13 @@ pub fn memory_traces() {
 mod test {
     use super::*;
     use ark_bls12_381::Fr;
-    use ark_ff::PrimeField;
     use ark_poly::MultilinearExtension;
     #[test]
     fn test_build_gate() -> Result<(), HyperPlonkErrors> {
         test_build_gate_helper::<Fr>()
     }
 
-    fn test_build_gate_helper<F: PrimeField>() -> Result<(), HyperPlonkErrors> {
+    fn test_build_gate_helper<F: RawPrimeField>() -> Result<(), HyperPlonkErrors> {
         let num_vars = 2;
 
         // ql = 3x1x2 + 2x2 whose evaluations are

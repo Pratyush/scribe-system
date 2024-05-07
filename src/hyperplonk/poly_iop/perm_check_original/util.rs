@@ -1,8 +1,7 @@
-use crate::hyperplonk::poly_iop::errors::PIOPError;
+use crate::{hyperplonk::poly_iop::errors::PIOPError, streams::serialize::RawPrimeField};
 use crate::streams::iterator::zip_many;
 use crate::streams::iterator::BatchedIterator;
 use crate::streams::MLE;
-use ark_ff::PrimeField;
 
 use ark_std::{end_timer, start_timer};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
@@ -21,7 +20,7 @@ use rayon::iter::{IntoParallelIterator, ParallelIterator};
 ///
 /// The caller is responsible for sanity-check
 #[allow(clippy::type_complexity)]
-pub(super) fn computer_nums_and_denoms<F: PrimeField>(
+pub(super) fn computer_nums_and_denoms<F: RawPrimeField>(
     beta: &F,
     gamma: &F,
     fxs: &[MLE<F>],

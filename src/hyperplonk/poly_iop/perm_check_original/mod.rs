@@ -1,5 +1,5 @@
 use self::util::computer_nums_and_denoms;
-use crate::hyperplonk::transcript::IOPTranscript;
+use crate::{hyperplonk::transcript::IOPTranscript, streams::serialize::RawPrimeField};
 use crate::hyperplonk::{
     pcs::PolynomialCommitmentScheme,
     poly_iop::{errors::PIOPError, prod_check::ProductCheck, PolyIOP},
@@ -15,6 +15,7 @@ use ark_std::{end_timer, start_timer};
 pub struct PermutationCheckSubClaim<E, PCS, PC>
 where
     E: Pairing,
+    E::ScalarField: RawPrimeField,
     PC: ProductCheck<E, PCS>,
     PCS: PolynomialCommitmentScheme<E>,
 {
@@ -40,6 +41,7 @@ pub mod util;
 pub trait PermutationCheck<E, PCS>: ProductCheck<E, PCS>
 where
     E: Pairing,
+    E::ScalarField: RawPrimeField,
     PCS: PolynomialCommitmentScheme<E>,
 {
     type PermutationCheckSubClaim;
@@ -92,6 +94,7 @@ where
 impl<E, PCS> PermutationCheck<E, PCS> for PolyIOP<E::ScalarField>
 where
     E: Pairing,
+    E::ScalarField: RawPrimeField,
     PCS: PolynomialCommitmentScheme<E, Polynomial = MLE<E::ScalarField>>,
 {
     type PermutationCheckSubClaim = PermutationCheckSubClaim<E, PCS, Self>;
@@ -183,7 +186,7 @@ where
 #[cfg(test)]
 mod test {
     use super::PermutationCheck;
-    use crate::streams::MLE;
+    use crate::streams::{serialize::RawPrimeField, MLE};
     use crate::{
         arithmetic::virtual_polynomial::VPAuxInfo,
         hyperplonk::{
@@ -207,6 +210,7 @@ mod test {
     ) -> Result<(), PIOPError>
     where
         E: Pairing,
+        E::ScalarField: RawPrimeField,
         PCS: PolynomialCommitmentScheme<E, Polynomial = MLE<E::ScalarField>>,
     {
         let nv = fxs[0].num_vars();

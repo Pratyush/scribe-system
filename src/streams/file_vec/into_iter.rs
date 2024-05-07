@@ -1,12 +1,10 @@
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
+use crate::streams::serialize::{DeserializeRaw, SerializeRaw};
 use rayon::{iter::MinLen, prelude::*, vec::IntoIter as VecIntoIter};
 use std::{fs::File, io::BufReader, path::PathBuf};
 
 use crate::streams::{iterator::BatchedIterator, BUFFER_SIZE};
 
-use super::utils::par_deserialize;
-
-pub enum IntoIter<T: CanonicalSerialize + CanonicalDeserialize + 'static> {
+pub enum IntoIter<T: SerializeRaw + DeserializeRaw + 'static> {
     File {
         file: BufReader<File>,
         path: PathBuf,
@@ -17,9 +15,9 @@ pub enum IntoIter<T: CanonicalSerialize + CanonicalDeserialize + 'static> {
     },
 }
 
-impl<T: CanonicalSerialize + CanonicalDeserialize> IntoIter<T> {
+impl<T: SerializeRaw + DeserializeRaw> IntoIter<T> {
     pub fn new_file(file: File, path: PathBuf) -> Self {
-        let file = BufReader::new(file);
+        let file = BufReader::with_capacity(BUFFER_SIZE, file);
         Self::File {
             file,
             path,
@@ -32,7 +30,7 @@ impl<T: CanonicalSerialize + CanonicalDeserialize> IntoIter<T> {
     }
 }
 
-impl<T: 'static + CanonicalSerialize + CanonicalDeserialize + Send + Sync + Copy> BatchedIterator
+impl<T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy> BatchedIterator
     for IntoIter<T>
 {
     type Item = T;
@@ -44,7 +42,7 @@ impl<T: 'static + CanonicalSerialize + CanonicalDeserialize + Send + Sync + Copy
                 file, work_buffer, ..
             } => {
                 let mut result = Vec::with_capacity(BUFFER_SIZE);
-                par_deserialize(file, work_buffer, &mut result)?;
+                T::deserialize_raw_batch(&mut result, work_buffer, BUFFER_SIZE, file).ok()?;
 
                 if result.is_empty() {
                     None
@@ -67,7 +65,7 @@ impl<T: 'static + CanonicalSerialize + CanonicalDeserialize + Send + Sync + Copy
     }
 }
 
-impl<T: CanonicalSerialize + CanonicalDeserialize> Drop for IntoIter<T> {
+impl<T: SerializeRaw + DeserializeRaw> Drop for IntoIter<T> {
     fn drop(&mut self) {
         match self {
             Self::File { path, .. } => match std::fs::remove_file(&path) {

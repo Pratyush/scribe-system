@@ -8,7 +8,7 @@ use crate::{
         },
         transcript::IOPTranscript,
     },
-    streams::MLE,
+    streams::{serialize::RawPrimeField, MLE},
 };
 use ark_ff::PrimeField;
 use ark_std::{end_timer, start_timer};
@@ -125,7 +125,7 @@ pub struct SumCheckSubClaim<F: PrimeField> {
     pub expected_evaluation: F,
 }
 
-impl<F: PrimeField> SumCheck<F> for PolyIOP<F> {
+impl<F: RawPrimeField> SumCheck<F> for PolyIOP<F> {
     type SumCheckProof = IOPProof<F>;
     type VirtualPolynomial = VirtualPolynomial<F>;
     type VPAuxInfo = VPAuxInfo<F>;

@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use crate::arithmetic::virtual_polynomial::eq_eval;
+use crate::{arithmetic::virtual_polynomial::eq_eval, streams::serialize::RawPrimeField};
 use crate::hyperplonk::poly_iop::{errors::PIOPError, sum_check::SumCheck, PolyIOP};
 use crate::hyperplonk::transcript::IOPTranscript;
 use ark_ff::PrimeField;
@@ -23,7 +23,7 @@ pub struct ZeroCheckSubClaim<F: PrimeField> {
 
 /// A ZeroCheck for `f(x)` proves that `f(x) = 0` for all `x \in {0,1}^num_vars`
 /// It is derived from SumCheck.
-pub trait ZeroCheck<F: PrimeField>: SumCheck<F> {
+pub trait ZeroCheck<F: RawPrimeField>: SumCheck<F> {
     type ZeroCheckSubClaim: Clone + Debug + Default + PartialEq;
     type ZeroCheckProof: Clone + Debug + Default + PartialEq;
 
@@ -50,7 +50,7 @@ pub trait ZeroCheck<F: PrimeField>: SumCheck<F> {
     ) -> Result<Self::ZeroCheckSubClaim, PIOPError>;
 }
 
-impl<F: PrimeField> ZeroCheck<F> for PolyIOP<F> {
+impl<F: RawPrimeField> ZeroCheck<F> for PolyIOP<F> {
     type ZeroCheckSubClaim = ZeroCheckSubClaim<F>;
     type ZeroCheckProof = Self::SumCheckProof;
 

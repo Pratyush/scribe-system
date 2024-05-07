@@ -1,6 +1,6 @@
-use crate::hyperplonk::poly_iop::{
+use crate::{hyperplonk::poly_iop::{
     errors::PIOPError, structs::IOPProof, zero_check::ZeroCheck, PolyIOP,
-};
+}, streams::serialize::RawPrimeField};
 use crate::hyperplonk::transcript::IOPTranscript;
 use crate::{
     arithmetic::virtual_polynomial::VirtualPolynomial,
@@ -11,7 +11,6 @@ use crate::{
     },
 };
 
-use ark_ff::PrimeField;
 use ark_std::{end_timer, start_timer};
 
 /// Compute multilinear fractional polynomial s.t. frac(x) = f1(x) * ... * fk(x)
@@ -19,7 +18,7 @@ use ark_std::{end_timer, start_timer};
 ///
 /// The caller needs to sanity-check that the number of polynomials and
 /// variables match in fxs and gxs; and gi(x) has no zero entries.
-pub(super) fn compute_frac_poly<F: PrimeField>(
+pub(super) fn compute_frac_poly<F: RawPrimeField>(
     fxs: &[MLE<F>],
     gxs: &[MLE<F>],
 ) -> Result<MLE<F>, PIOPError> {
@@ -50,7 +49,7 @@ pub(super) fn compute_frac_poly<F: PrimeField>(
 ///
 /// The caller needs to check num_vars matches in f and g
 /// Cost: linear in N.
-pub(super) fn compute_product_poly<F: PrimeField>(frac_poly: &MLE<F>) -> Result<MLE<F>, PIOPError> {
+pub(super) fn compute_product_poly<F: RawPrimeField>(frac_poly: &MLE<F>) -> Result<MLE<F>, PIOPError> {
     let start = start_timer!(|| "compute evaluations of prod polynomial");
     let num_vars = frac_poly.num_vars();
     // assert that num_vars is at least two
@@ -77,7 +76,7 @@ pub(super) fn compute_product_poly<F: PrimeField>(frac_poly: &MLE<F>) -> Result<
 /// Returns proof.
 ///
 /// Cost: O(N)
-pub(super) fn prove_zero_check<F: PrimeField>(
+pub(super) fn prove_zero_check<F: RawPrimeField>(
     fxs: &[MLE<F>],
     gxs: &[MLE<F>],
     frac_poly: &MLE<F>,
@@ -148,7 +147,7 @@ mod test {
     use std::vec::Vec;
 
     // in memory vector version of calculating the prod_poly from frac_poly
-    fn compute_product_poly_in_memory<F: PrimeField>(frac_poly: Vec<F>, num_vars: usize) -> Vec<F> {
+    fn compute_product_poly_in_memory<F: RawPrimeField>(frac_poly: Vec<F>, num_vars: usize) -> Vec<F> {
         assert!(frac_poly.len() == (1 << num_vars));
 
         let mut prod_poly = Vec::with_capacity(frac_poly.len());

@@ -1,11 +1,11 @@
-use crate::hyperplonk::pcs::{
+use crate::{hyperplonk::pcs::{
     errors::PCSError, multilinear_kzg::util::eq_extension, StructuredReferenceString,
-};
+}, streams::serialize::RawAffine};
 use crate::streams::file_vec::FileVec;
-use ark_ec::{pairing::Pairing, scalar_mul::fixed_base::FixedBase, AffineRepr, CurveGroup};
+use ark_ec::{pairing::Pairing, scalar_mul::fixed_base::FixedBase, CurveGroup};
 use ark_ff::{Field, PrimeField};
 use ark_poly::DenseMultilinearExtension;
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Write};
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::{
     collections::LinkedList, end_timer, format, rand::Rng, start_timer, string::ToString, vec::Vec,
     UniformRand,
@@ -14,14 +14,16 @@ use core::iter::FromIterator;
 
 /// Evaluations over {0,1}^n for G1 or G2
 #[derive(Debug)]
-pub struct Evaluations<C: AffineRepr> {
+pub struct Evaluations<C: RawAffine> {
     /// The evaluations.
     pub evals: FileVec<C>,
 }
 
 /// Universal Parameter
 #[derive(Debug)]
-pub struct MultilinearUniversalParams<E: Pairing> {
+pub struct MultilinearUniversalParams<E: Pairing> 
+where E::G1Affine: RawAffine
+{
     /// prover parameters
     pub prover_param: MultilinearProverParam<E>,
     /// h^randomness: h^t1, h^t2, ..., **h^{t_nv}**
@@ -30,7 +32,9 @@ pub struct MultilinearUniversalParams<E: Pairing> {
 
 /// Prover Parameters
 #[derive(Debug)]
-pub struct MultilinearProverParam<E: Pairing> {
+pub struct MultilinearProverParam<E: Pairing> 
+where E::G1Affine: RawAffine
+{
     /// number of variables
     pub num_vars: usize,
     /// `pp_{0}`, `pp_{1}`, ...,pp_{nu_vars} defined
@@ -56,7 +60,9 @@ pub struct MultilinearVerifierParam<E: Pairing> {
     pub h_mask: Vec<E::G2Affine>,
 }
 
-impl<E: Pairing> StructuredReferenceString<E> for MultilinearUniversalParams<E> {
+impl<E: Pairing> StructuredReferenceString<E> for MultilinearUniversalParams<E> 
+where E::G1Affine: RawAffine
+{
     type ProverParam = MultilinearProverParam<E>;
     type VerifierParam = MultilinearVerifierParam<E>;
 

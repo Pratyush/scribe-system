@@ -1,5 +1,5 @@
-use crate::{arithmetic::errors::ArithError, streams::MLE};
-use ark_ff::{Field, PrimeField};
+use crate::{arithmetic::errors::ArithError, streams::{serialize::RawPrimeField, MLE}};
+use ark_ff::Field;
 // use ark_poly::{DenseMultilinearExtension, MultilinearExtension};
 use ark_serialize::CanonicalSerialize;
 use ark_std::{
@@ -38,7 +38,7 @@ use std::{cmp::max, marker::PhantomData};
 /// - raw_pointers_lookup_table maps fi to i
 ///
 #[derive(Clone)]
-pub struct VirtualPolynomial<F: PrimeField> {
+pub struct VirtualPolynomial<F: RawPrimeField> {
     /// Aux information about the multilinear polynomial
     pub aux_info: VPAuxInfo<F>,
     /// list of reference to products (as usize) of multilinear extension
@@ -50,7 +50,7 @@ pub struct VirtualPolynomial<F: PrimeField> {
 
 /// Auxiliary information about the multilinear polynomial
 #[derive(Clone, Debug, Default, PartialEq, Eq, CanonicalSerialize)]
-pub struct VPAuxInfo<F: PrimeField> {
+pub struct VPAuxInfo<F: RawPrimeField> {
     /// max number of multiplicands in each product
     pub max_degree: usize,
     /// number of variables of the polynomial
@@ -61,7 +61,7 @@ pub struct VPAuxInfo<F: PrimeField> {
 }
 
 // TODO: convert this into a trait
-impl<F: PrimeField> VirtualPolynomial<F> {
+impl<F: RawPrimeField> VirtualPolynomial<F> {
     /// Creates an empty virtual polynomial with `num_variables`.
     pub fn new(num_variables: usize) -> Self {
         VirtualPolynomial {
@@ -492,7 +492,7 @@ fn build_eq_x_r_vec_helper<F: Field>(r: &[F], buf: &mut Vec<F>) -> Result<(), Ar
 }
 
 /// Evaluate eq polynomial.
-pub fn eq_eval<F: PrimeField>(x: &[F], y: &[F]) -> Result<F, ArithError> {
+pub fn eq_eval<F: RawPrimeField>(x: &[F], y: &[F]) -> Result<F, ArithError> {
     if x.len() != y.len() {
         return Err(ArithError::InvalidParameters(
             "x and y have different length".to_string(),
@@ -519,7 +519,7 @@ pub fn bit_decompose(input: u64, num_var: usize) -> Vec<bool> {
     res
 }
 
-pub fn identity_permutation<F: PrimeField>(num_vars: usize, num_chunks: usize) -> Vec<F> {
+pub fn identity_permutation<F: RawPrimeField>(num_vars: usize, num_chunks: usize) -> Vec<F> {
     let len = (num_chunks as u64) * (1u64 << num_vars);
     (0..len).map(F::from).collect()
 }

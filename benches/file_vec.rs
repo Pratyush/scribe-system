@@ -14,7 +14,7 @@ fn for_each_simple(c: &mut Criterion) {
         let e = Fr::rand(&mut rng);
         let vec_size = BUFFER_SIZE * size;
         group.throughput(Throughput::Elements(vec_size as u64));
-        group.bench_with_input(BenchmarkId::from_parameter(size), &size, |b, _| {
+        group.bench_with_input(BenchmarkId::from_parameter(vec_size), &size, |b, _| {
             let mut fv = FileVec::from_iter((0..vec_size).map(|_| e));
             b.iter(|| fv.for_each(|e| *e += Fr::ONE));
         });

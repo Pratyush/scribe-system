@@ -3,22 +3,22 @@ use std::{
     path::Path,
 };
 
-use ark_ff::{batch_inversion, Field};
+use ark_ff::batch_inversion;
 use ark_std::rand::RngCore;
 use rayon::prelude::*;
 
 use crate::streams::{
     file_vec::FileVec,
-    iterator::{from_fn, repeat, BatchedIterator},
+    iterator::{from_fn, repeat, BatchedIterator}, serialize::RawField, LOG_BUFFER_SIZE,
 };
 
 #[derive(Debug, Hash, PartialEq, Eq)]
-pub struct Inner<F: Field> {
+pub struct Inner<F: RawField> {
     pub evals: FileVec<F>,
     pub num_vars: usize,
 }
 
-impl<F: Field> Inner<F> {
+impl<F: RawField> Inner<F> {
     pub fn new(num_vars: usize) -> Self {
         let evals = FileVec::new();
         Self { evals, num_vars }
@@ -178,6 +178,9 @@ impl<F: Field> Inner<F> {
     pub fn fold_odd_even_in_place(&mut self, f: impl Fn(&F, &F) -> F + Sync) {
         assert!((1 << self.num_vars) % 2 == 0);
         let evals = core::mem::replace(&mut self.evals, FileVec::new());
+        if self.num_vars < LOG_BUFFER_SIZE as usize {
+            assert!(matches!(&self.evals, FileVec::Buffer { .. }))
+        }
         self.evals = evals
             .into_iter()
             .array_chunks::<2>()
@@ -253,84 +256,84 @@ impl<F: Field> Inner<F> {
     }
 }
 
-impl<F: Field> MulAssign<Self> for Inner<F> {
+impl<F: RawField> MulAssign<Self> for Inner<F> {
     fn mul_assign(&mut self, other: Self) {
         self.evals
             .zipped_for_each(other.evals.iter(), |a, b| *a *= b);
     }
 }
 
-impl<'a, F: Field> MulAssign<&'a Self> for Inner<F> {
+impl<'a, F: RawField> MulAssign<&'a Self> for Inner<F> {
     fn mul_assign(&mut self, other: &'a Self) {
         self.evals
             .zipped_for_each(other.evals.iter(), |a, b| *a *= b);
     }
 }
 
-impl<F: Field> AddAssign<Self> for Inner<F> {
+impl<F: RawField> AddAssign<Self> for Inner<F> {
     fn add_assign(&mut self, other: Self) {
         self.evals
             .zipped_for_each(other.evals.iter(), |a, b| *a += b);
     }
 }
 
-impl<'a, F: Field> AddAssign<&'a Self> for Inner<F> {
+impl<'a, F: RawField> AddAssign<&'a Self> for Inner<F> {
     fn add_assign(&mut self, other: &'a Self) {
         self.evals
             .zipped_for_each(other.evals.iter(), |a, b| *a += b);
     }
 }
 
-impl<F: Field> SubAssign<Self> for Inner<F> {
+impl<F: RawField> SubAssign<Self> for Inner<F> {
     fn sub_assign(&mut self, other: Self) {
         self.evals
             .zipped_for_each(other.evals.iter(), |a, b| *a -= b);
     }
 }
 
-impl<'a, F: Field> SubAssign<&'a Self> for Inner<F> {
+impl<'a, F: RawField> SubAssign<&'a Self> for Inner<F> {
     fn sub_assign(&mut self, other: &'a Self) {
         self.evals
             .zipped_for_each(other.evals.iter(), |a, b| *a -= b);
     }
 }
 
-impl<F: Field> MulAssign<(F, Self)> for Inner<F> {
+impl<F: RawField> MulAssign<(F, Self)> for Inner<F> {
     fn mul_assign(&mut self, (f, other): (F, Self)) {
         self.evals
             .zipped_for_each(other.evals.iter(), |a, b| *a *= f * b);
     }
 }
 
-impl<'a, F: Field> MulAssign<(F, &'a Self)> for Inner<F> {
+impl<'a, F: RawField> MulAssign<(F, &'a Self)> for Inner<F> {
     fn mul_assign(&mut self, (f, other): (F, &'a Self)) {
         self.evals
             .zipped_for_each(other.evals.iter(), |a, b| *a *= f * b);
     }
 }
 
-impl<F: Field> AddAssign<(F, Self)> for Inner<F> {
+impl<F: RawField> AddAssign<(F, Self)> for Inner<F> {
     fn add_assign(&mut self, (f, other): (F, Self)) {
         self.evals
             .zipped_for_each(other.evals.iter(), |a, b| *a += f * b);
     }
 }
 
-impl<'a, F: Field> AddAssign<(F, &'a Self)> for Inner<F> {
+impl<'a, F: RawField> AddAssign<(F, &'a Self)> for Inner<F> {
     fn add_assign(&mut self, (f, other): (F, &'a Self)) {
         self.evals
             .zipped_for_each(other.evals.iter(), |a, b| *a += f * b);
     }
 }
 
-impl<F: Field> SubAssign<(F, Self)> for Inner<F> {
+impl<F: RawField> SubAssign<(F, Self)> for Inner<F> {
     fn sub_assign(&mut self, (f, other): (F, Self)) {
         self.evals
             .zipped_for_each(other.evals.iter(), |a, b| *a -= f * b);
     }
 }
 
-impl<'a, F: Field> SubAssign<(F, &'a Self)> for Inner<F> {
+impl<'a, F: RawField> SubAssign<(F, &'a Self)> for Inner<F> {
     fn sub_assign(&mut self, (f, other): (F, &'a Self)) {
         self.evals
             .zipped_for_each(other.evals.iter(), |a, b| *a -= f * b);

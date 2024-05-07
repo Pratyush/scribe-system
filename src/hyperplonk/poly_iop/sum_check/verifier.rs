@@ -1,5 +1,5 @@
 use super::{SumCheckSubClaim, SumCheckVerifier};
-use crate::arithmetic::virtual_polynomial::VPAuxInfo;
+use crate::{arithmetic::virtual_polynomial::VPAuxInfo, streams::serialize::RawPrimeField};
 use crate::hyperplonk::poly_iop::{
     errors::PIOPError,
     structs::{IOPProverMessage, IOPVerifierState},
@@ -11,7 +11,7 @@ use ark_std::{end_timer, start_timer};
 #[cfg(feature = "parallel")]
 use rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
 
-impl<F: PrimeField> SumCheckVerifier<F> for IOPVerifierState<F> {
+impl<F: RawPrimeField> SumCheckVerifier<F> for IOPVerifierState<F> {
     type VPAuxInfo = VPAuxInfo<F>;
     type ProverMessage = IOPProverMessage<F>;
     type Challenge = F;

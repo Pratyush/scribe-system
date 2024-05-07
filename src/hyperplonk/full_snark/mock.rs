@@ -1,21 +1,20 @@
 use std::ops::{AddAssign, MulAssign};
 
-use crate::streams::{iterator::BatchedIterator, MLE};
-use ark_ff::PrimeField;
-use ark_std::{log2, test_rng};
+use crate::streams::{iterator::BatchedIterator, serialize::RawPrimeField, MLE};
+use ark_std::{end_timer, log2, start_timer, test_rng};
 
 use crate::hyperplonk::full_snark::{
     custom_gate::CustomizedGates,
     structs::{HyperPlonkIndex, HyperPlonkParams},
 };
 
-pub struct MockCircuit<F: PrimeField> {
+pub struct MockCircuit<F: RawPrimeField> {
     pub public_inputs: Vec<F>,
     pub witnesses: Vec<MLE<F>>,
     pub index: HyperPlonkIndex<F>,
 }
 
-impl<F: PrimeField> MockCircuit<F> {
+impl<F: RawPrimeField> MockCircuit<F> {
     /// Number of variables in a multilinear system
     pub fn num_variables(&self) -> usize {
         self.index.num_variables()
@@ -32,7 +31,7 @@ impl<F: PrimeField> MockCircuit<F> {
     }
 }
 
-impl<F: PrimeField + Clone> MockCircuit<F> {
+impl<F: RawPrimeField> MockCircuit<F> {
     /// Generate a mock plonk circuit for the input constraint size.
     pub fn new(num_constraints: usize, gate: &CustomizedGates) -> MockCircuit<F> {
         let mut rng = test_rng();
@@ -40,18 +39,22 @@ impl<F: PrimeField + Clone> MockCircuit<F> {
         let num_selectors = gate.num_selector_columns();
         let num_witnesses = gate.num_witness_columns();
 
+        let selector_time = start_timer!(|| "selectors");
         let mut selectors: Vec<MLE<F>> = (0..num_selectors - 1)
             .map(|_| MLE::rand(nv, &mut rng))
             .collect();
-        println!("Hello here after selectors");
+        end_timer!(selector_time);
 
+        let witness_time = start_timer!(|| "witnesses");
         let witnesses: Vec<MLE<F>> = (0..num_witnesses)
             .map(|_| MLE::rand(nv, &mut rng))
             .collect();
-        println!("Hello here after witnesses");
+        end_timer!(witness_time);
 
         // for all test cases in this repo, there's one and only one selector for each monomial
+        let last_selector_time = start_timer!(|| "last selector");
         let mut last_selector = MLE::constant(F::zero(), nv);
+        end_timer!(last_selector_time);
 
         gate.gates
             .iter()
@@ -67,12 +70,12 @@ impl<F: PrimeField + Clone> MockCircuit<F> {
                 );
 
                 for wit_index in wit.iter() {
-                    cur_monomial.mul_assign(&witnesses[*wit_index]);
+                    cur_monomial *= &witnesses[*wit_index];
                 }
 
                 if index != num_selectors - 1 {
                     match q {
-                        Some(p) => cur_monomial.mul_assign(&selectors[*p]),
+                        Some(p) => cur_monomial *= &selectors[*p],
                         _ => (),
                     };
                     last_selector.add_assign(cur_monomial);
@@ -83,7 +86,6 @@ impl<F: PrimeField + Clone> MockCircuit<F> {
             });
 
         selectors.push(last_selector);
-        println!("Hello here after last selector");
 
         let pub_input_len = ark_std::cmp::min(4, num_constraints);
         let mut public_inputs = witnesses[0].evals().iter().to_vec();
@@ -95,8 +97,9 @@ impl<F: PrimeField + Clone> MockCircuit<F> {
             gate_func: gate.clone(),
         };
 
+        let identity_time = start_timer!(|| "identity permutation");
         let permutation = MLE::identity_permutation_mles(nv as usize, num_witnesses);
-        println!("Hello here after identity permutation");
+        end_timer!(identity_time);
         let index = HyperPlonkIndex {
             params,
             permutation,

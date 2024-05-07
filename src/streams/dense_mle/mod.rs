@@ -5,18 +5,17 @@ use std::{
     sync::Arc,
 };
 
-use ark_ff::Field;
 use ark_std::{end_timer, rand::RngCore, start_timer};
 pub use inner::*;
 
 use crate::arithmetic::errors::ArithError;
 
-use super::{file_vec::FileVec, iterator::BatchedIterator, LOG_BUFFER_SIZE};
+use super::{file_vec::FileVec, iterator::BatchedIterator, serialize::RawField, LOG_BUFFER_SIZE};
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
-pub struct MLE<F: Field>(Arc<Inner<F>>);
+pub struct MLE<F: RawField>(Arc<Inner<F>>);
 
-impl<F: Field> MLE<F> {
+impl<F: RawField> MLE<F> {
     fn from_inner(inner: Inner<F>) -> Self {
         Self(Arc::new(inner))
     }
@@ -38,13 +37,13 @@ impl<F: Field> MLE<F> {
     }
 }
 
-impl<F: Field> From<Inner<F>> for MLE<F> {
+impl<F: RawField> From<Inner<F>> for MLE<F> {
     fn from(inner: Inner<F>) -> Self {
         Self::from_inner(inner)
     }
 }
 
-impl<F: Field> MLE<F> {
+impl<F: RawField> MLE<F> {
     pub fn with_path(num_vars: usize, path: impl AsRef<Path>) -> Self {
         Inner::with_path(num_vars, path).into()
     }
@@ -187,80 +186,80 @@ impl<F: Field> MLE<F> {
     }
 }
 
-impl<F: Field> MulAssign<Self> for MLE<F> {
+impl<F: RawField> MulAssign<Self> for MLE<F> {
     fn mul_assign(&mut self, other: Self) {
         self.map_in_place_2(&other, |inner, other| inner.mul_assign(other));
     }
 }
 
-impl<'a, F: Field> MulAssign<&'a Self> for MLE<F> {
+impl<'a, F: RawField> MulAssign<&'a Self> for MLE<F> {
     fn mul_assign(&mut self, other: &'a Self) {
         self.map_in_place_2(&other, |inner, other| inner.mul_assign(other));
     }
 }
 
-impl<F: Field> MulAssign<(F, Self)> for MLE<F> {
+impl<F: RawField> MulAssign<(F, Self)> for MLE<F> {
     fn mul_assign(&mut self, (f, other): (F, Self)) {
         self.map_in_place_2(&other, |inner, other| inner.mul_assign((f, other)));
     }
 }
 
-impl<'a, F: Field> MulAssign<(F, &'a Self)> for MLE<F> {
+impl<'a, F: RawField> MulAssign<(F, &'a Self)> for MLE<F> {
     fn mul_assign(&mut self, (f, other): (F, &'a Self)) {
         self.map_in_place_2(&other, |inner, other| inner.mul_assign((f, other)));
     }
 }
 
-impl<F: Field> AddAssign<Self> for MLE<F> {
+impl<F: RawField> AddAssign<Self> for MLE<F> {
     fn add_assign(&mut self, other: Self) {
         self.map_in_place_2(&other, |inner, other| inner.add_assign(other));
     }
 }
 
-impl<'a, F: Field> AddAssign<&'a Self> for MLE<F> {
+impl<'a, F: RawField> AddAssign<&'a Self> for MLE<F> {
     fn add_assign(&mut self, other: &'a Self) {
         self.map_in_place_2(&other, |inner, other| inner.add_assign(other));
     }
 }
 
-impl<F: Field> SubAssign<Self> for MLE<F> {
+impl<F: RawField> SubAssign<Self> for MLE<F> {
     fn sub_assign(&mut self, other: Self) {
         self.map_in_place_2(&other, |inner, other| inner.sub_assign(other));
     }
 }
 
-impl<'a, F: Field> SubAssign<&'a Self> for MLE<F> {
+impl<'a, F: RawField> SubAssign<&'a Self> for MLE<F> {
     fn sub_assign(&mut self, other: &'a Self) {
         self.map_in_place_2(&other, |inner, other| inner.sub_assign(other));
     }
 }
 
-impl<F: Field> AddAssign<(F, Self)> for MLE<F> {
+impl<F: RawField> AddAssign<(F, Self)> for MLE<F> {
     fn add_assign(&mut self, (f, other): (F, Self)) {
         self.map_in_place_2(&other, |inner, other| inner.add_assign((f, other)));
     }
 }
 
-impl<'a, F: Field> AddAssign<(F, &'a Self)> for MLE<F> {
+impl<'a, F: RawField> AddAssign<(F, &'a Self)> for MLE<F> {
     fn add_assign(&mut self, (f, other): (F, &'a Self)) {
         self.map_in_place_2(&other, |inner, other| inner.add_assign((f, other)));
     }
 }
 
-impl<F: Field> SubAssign<(F, Self)> for MLE<F> {
+impl<F: RawField> SubAssign<(F, Self)> for MLE<F> {
     fn sub_assign(&mut self, (f, other): (F, Self)) {
         self.map_in_place_2(&other, |inner, other| inner.sub_assign((f, other)));
     }
 }
 
-impl<'a, F: Field> SubAssign<(F, &'a Self)> for MLE<F> {
+impl<'a, F: RawField> SubAssign<(F, &'a Self)> for MLE<F> {
     fn sub_assign(&mut self, (f, other): (F, &'a Self)) {
         self.map_in_place_2(&other, |inner, other| inner.sub_assign((f, other)));
     }
 }
 
 /// A helper function to build eq(x, r) recursively.
-fn eq_x_r_helper<F: Field>(r: &[F]) -> Result<FileVec<F>, ArithError> {
+fn eq_x_r_helper<F: RawField>(r: &[F]) -> Result<FileVec<F>, ArithError> {
     if r.is_empty() {
         Err(ArithError::InvalidParameters("r length is 0".to_string()))
     } else if r.len() <= LOG_BUFFER_SIZE as usize {

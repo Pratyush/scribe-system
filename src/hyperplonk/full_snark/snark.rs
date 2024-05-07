@@ -15,7 +15,7 @@ use crate::hyperplonk::poly_iop::perm_check_original::PermutationCheck;
 use crate::hyperplonk::poly_iop::prelude::ZeroCheck;
 use crate::hyperplonk::poly_iop::PolyIOP;
 use crate::hyperplonk::transcript::IOPTranscript;
-use crate::streams::MLE;
+use crate::streams::{serialize::RawPrimeField, MLE};
 use ark_ec::pairing::Pairing;
 
 use ark_std::{end_timer, log2, start_timer, One, Zero};
@@ -28,6 +28,7 @@ use std::marker::PhantomData;
 impl<E, PCS> HyperPlonkSNARK<E, PCS> for PolyIOP<E::ScalarField>
 where
     E: Pairing,
+    E::ScalarField: RawPrimeField,
     PCS: PolynomialCommitmentScheme<
         E,
         Polynomial = MLE<E::ScalarField>,
@@ -52,23 +53,29 @@ where
         let start = start_timer!(|| format!("hyperplonk preprocessing nv = {}", num_vars));
 
         // extract PCS prover and verifier keys from SRS
+        let trim_time = start_timer!(|| "trimming PCS SRS");
         let (pcs_prover_param, pcs_verifier_param) =
             PCS::trim(pcs_srs, None, Some(supported_ml_degree))?;
+        end_timer!(trim_time);
 
         // build permutation oracles
         let permutation_oracles = index.permutation.clone();
+        let permutation_commit_time = start_timer!(|| "commit permutation oracles");
         let permutation_commitments = permutation_oracles
             .par_iter()
             .map(|perm_oracle| PCS::commit(&pcs_prover_param, perm_oracle))
             .collect::<Result<Vec<_>, _>>()?;
+        end_timer!(permutation_commit_time);
 
         // commit selector oracles
         let selector_oracles = index.selectors.clone();
 
+        let selector_commit_time = start_timer!(|| "commit selector oracles");
         let selector_commitments = selector_oracles
             .par_iter()
             .map(|poly| PCS::commit(&pcs_prover_param, poly))
             .collect::<Result<Vec<_>, _>>()?;
+        end_timer!(selector_commit_time);
 
         end_timer!(start);
 
@@ -616,7 +623,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::hyperplonk::full_snark::{custom_gate::CustomizedGates, structs::HyperPlonkParams};
+    use crate::{hyperplonk::full_snark::{custom_gate::CustomizedGates, structs::HyperPlonkParams}, streams::serialize::RawAffine};
     use crate::hyperplonk::pcs::multilinear_kzg::MultilinearKzgPCS;
 
     use ark_bls12_381::Bls12_381;
@@ -648,7 +655,11 @@ mod tests {
 
     fn test_hyperplonk_helper<E: Pairing>(
         gate_func: CustomizedGates,
-    ) -> Result<(), HyperPlonkErrors> {
+    ) -> Result<(), HyperPlonkErrors> 
+    where
+        E::ScalarField: RawPrimeField,
+        E::G1Affine: RawAffine,
+    {
         {
             let seed = [
                 1, 0, 0, 0, 23, 0, 0, 0, 200, 1, 0, 0, 210, 30, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,

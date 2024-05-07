@@ -1,7 +1,7 @@
 pub(crate) mod batching;
 pub mod srs;
 pub(crate) mod util;
-use crate::hyperplonk::pcs::multilinear_kzg::batching::multi_open_internal;
+use crate::{hyperplonk::pcs::multilinear_kzg::batching::multi_open_internal, streams::serialize::{RawAffine, RawPrimeField}};
 use crate::hyperplonk::pcs::StructuredReferenceString;
 use crate::hyperplonk::pcs::{structs::Commitment, PCSError, PolynomialCommitmentScheme};
 use crate::hyperplonk::transcript::IOPTranscript;
@@ -18,7 +18,7 @@ use ark_std::{
     borrow::Borrow, end_timer, format, marker::PhantomData, rand::Rng, start_timer,
     string::ToString, vec::Vec, One, Zero,
 };
-use rayon::iter::{ParallelExtend, ParallelIterator};
+use rayon::iter::ParallelExtend;
 use srs::{MultilinearProverParam, MultilinearUniversalParams, MultilinearVerifierParam};
 use std::ops::Mul;
 
@@ -37,7 +37,11 @@ pub struct MultilinearKzgProof<E: Pairing> {
     pub proofs: Vec<E::G1Affine>,
 }
 
-impl<E: Pairing> PolynomialCommitmentScheme<E> for MultilinearKzgPCS<E> {
+impl<E: Pairing> PolynomialCommitmentScheme<E> for MultilinearKzgPCS<E> 
+where
+    E::G1Affine: RawAffine,
+    E::ScalarField: RawPrimeField,
+{
     // Parameters
     type ProverParam = MultilinearProverParam<E>;
     type VerifierParam = MultilinearVerifierParam<E>;
@@ -264,7 +268,12 @@ fn open_internal<E: Pairing>(
     prover_param: &MultilinearProverParam<E>,
     polynomial: &MLE<E::ScalarField>,
     point: &[E::ScalarField],
-) -> Result<(MultilinearKzgProof<E>, E::ScalarField), PCSError> {
+) -> Result<(MultilinearKzgProof<E>, E::ScalarField), PCSError> 
+where
+    E::G1Affine: RawAffine,
+    E::ScalarField: RawPrimeField,
+
+{
     let open_timer = start_timer!(|| format!("open mle with {} variable", polynomial.num_vars()));
 
     if polynomial.num_vars() > prover_param.num_vars {
@@ -410,9 +419,6 @@ fn verify_internal<E: Pairing>(
     let hs = pairings.iter().map(|(_, h)| h.clone());
 
     let res = E::multi_pairing(ps, hs) == ark_ec::pairing::PairingOutput(E::TargetField::one());
-
-    // println!("pairing result: {}", E::multi_pairing(ps, hs));
-    // println!("pairing result: {}", ark_ec::pairing::PairingOutput(E::TargetField::one()));
 
     end_timer!(pairing_product_timer);
     end_timer!(verify_timer);

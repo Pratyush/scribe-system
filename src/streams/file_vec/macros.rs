@@ -1,16 +1,17 @@
 macro_rules! process_file {
     ($self:ident, $extra:expr) => {{
         match $self {
-            FileVec::File { ref mut file, path } => {
-                let mut reader = BufReader::new(&mut *file);
+            FileVec::File { ref mut file, path, .. } => {
+                let mut reader = BufReader::with_capacity(BUFFER_SIZE, &mut *file);
                 let mut buffer = Vec::with_capacity(BUFFER_SIZE);
-                let mut byte_buffer = Vec::new();
+                let mut byte_buffer = Vec::with_capacity(BUFFER_SIZE * 8);
                 let tmp = NamedTempFile::new().expect("failed to create temp file");
-                let mut writer = BufWriter::new(tmp);
+                let mut writer = BufWriter::with_capacity(BUFFER_SIZE, tmp);
+
                 loop {
                     buffer.clear();
                     byte_buffer.clear();
-                    if utils::par_deserialize(&mut reader, &mut byte_buffer, &mut buffer).is_none()
+                    if T::deserialize_raw_batch(&mut buffer, &mut byte_buffer, BUFFER_SIZE, &mut reader).is_err()
                     {
                         break;
                     }
@@ -23,10 +24,9 @@ macro_rules! process_file {
                         break;
                     }
 
-                    for item in &buffer {
-                        item.serialize_uncompressed(&mut writer)
-                            .expect("failed to write to file");
-                    }
+                    byte_buffer.clear();
+                    T::serialize_raw_batch(&buffer, &mut byte_buffer, &mut writer) 
+                        .expect("failed to write to file");
                 }
 
                 let new_file = writer.into_inner().expect("failed to get writer");

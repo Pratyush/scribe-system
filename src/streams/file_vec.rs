@@ -1,11 +1,13 @@
 use std::{
     fs::{File, OpenOptions},
     hash::{Hash, Hasher},
-    io::{BufReader, BufWriter, Seek},
+    io::{BufReader, BufWriter, Seek, Write},
     path::{Path, PathBuf},
 };
 
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Write};
+use crate::streams::serialize::{DeserializeRaw, SerializeRaw};
+use ark_std::{start_timer, end_timer};
+use derivative::Derivative;
 use rayon::iter::{
     IndexedParallelIterator, IntoParallelIterator, IntoParallelRefMutIterator, ParallelExtend,
     ParallelIterator,
@@ -30,13 +32,17 @@ mod macros;
 #[cfg(test)]
 mod test;
 
-#[derive(Debug)]
-pub enum FileVec<T: CanonicalSerialize + CanonicalDeserialize> {
-    File { path: PathBuf, file: File },
+#[derive(Derivative)]
+#[derivative(Debug(bound = "T: core::fmt::Debug"))]
+pub enum FileVec<T: SerializeRaw + DeserializeRaw> {
+    File { 
+        path: PathBuf, 
+        file: File, 
+    },
     Buffer { buffer: Vec<T> },
 }
 
-// impl<T: CanonicalSerialize + CanonicalDeserialize> CanonicalSerialize for FileVec<T> {
+// impl<T: SerializeRaw + DeserializeRaw> SerializeRaw for FileVec<T> {
 //     fn seriali–ze_with_mode<W: Write>(
 //             &self,
 //             writer: W,
@@ -50,7 +56,11 @@ pub enum FileVec<T: CanonicalSerialize + CanonicalDeserialize> {
 //     }
 // }
 
-impl<T: CanonicalSerialize + CanonicalDeserialize> FileVec<T> {
+impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
+    fn new_file(file: File, path: PathBuf) -> Self {
+        Self::File { path, file }
+    }
+
     pub fn with_name(path: impl AsRef<Path>) -> Self {
         let path = path.as_ref().to_path_buf();
         let file = OpenOptions::new()
@@ -59,7 +69,7 @@ impl<T: CanonicalSerialize + CanonicalDeserialize> FileVec<T> {
             .create(true)
             .open(&path)
             .expect("failed to open file");
-        Self::File { path, file }
+        Self::new_file(file, path)
     }
 
     pub fn new() -> Self {
@@ -67,7 +77,7 @@ impl<T: CanonicalSerialize + CanonicalDeserialize> FileVec<T> {
             .expect("failed to create temp file")
             .keep()
             .expect("failed to keep temp file");
-        Self::File { path, file }
+        Self::new_file(file, path)
     }
 
     pub fn iter<'a>(&'a self) -> Iter<'a, T>
@@ -130,7 +140,7 @@ impl<T: CanonicalSerialize + CanonicalDeserialize> FileVec<T> {
         while let Some(batch) = iter.next_batch() {
             more_than_one_batch = true;
             for item in &buffer {
-                item.serialize_uncompressed(&mut writer)
+                item.serialize_raw(&mut writer)
                     .expect("failed to write to file");
             }
             buffer.clear();
@@ -140,13 +150,13 @@ impl<T: CanonicalSerialize + CanonicalDeserialize> FileVec<T> {
         // Write the last batch to the file.
         if more_than_one_batch {
             for item in &buffer {
-                item.serialize_uncompressed(&mut writer)
+                item.serialize_raw(&mut writer)
                     .expect("failed to write to file");
             }
             writer.flush().expect("failed to flush file");
             drop(writer);
             file.rewind().expect("failed to seek file");
-            Self::File { path, file }
+            Self::new_file(file, path)
         } else {
             let _ = std::fs::remove_file(&path);
             FileVec::Buffer { buffer }
@@ -177,8 +187,8 @@ impl<T: CanonicalSerialize + CanonicalDeserialize> FileVec<T> {
         mut iter: impl BatchedIterator<Item = (A, B)>,
     ) -> (FileVec<A>, FileVec<B>)
     where
-        A: CanonicalSerialize + CanonicalDeserialize + Send + Sync,
-        B: CanonicalSerialize + CanonicalDeserialize + Send + Sync,
+        A: SerializeRaw + DeserializeRaw + Send + Sync,
+        B: SerializeRaw + DeserializeRaw + Send + Sync,
     {
         let mut buffer = Vec::<(A, B)>::with_capacity(BUFFER_SIZE);
         let (mut file_1, path_1) = NamedTempFile::new()
@@ -205,10 +215,10 @@ impl<T: CanonicalSerialize + CanonicalDeserialize> FileVec<T> {
             more_than_one_batch = true;
             for (item_1, item_2) in &buffer {
                 item_1
-                    .serialize_uncompressed(&mut writer_1)
+                    .serialize_raw(&mut writer_1)
                     .expect("failed to write to file");
                 item_2
-                    .serialize_uncompressed(&mut writer_2)
+                    .serialize_raw(&mut writer_2)
                     .expect("failed to write to file");
             }
             buffer.clear();
@@ -219,10 +229,10 @@ impl<T: CanonicalSerialize + CanonicalDeserialize> FileVec<T> {
         if more_than_one_batch {
             for (item_1, item_2) in &buffer {
                 item_1
-                    .serialize_uncompressed(&mut writer_1)
+                    .serialize_raw(&mut writer_1)
                     .expect("failed to write to file");
                 item_2
-                    .serialize_uncompressed(&mut writer_2)
+                    .serialize_raw(&mut writer_2)
                     .expect("failed to write to file");
             }
             writer_1.flush().expect("failed to flush file");
@@ -231,14 +241,8 @@ impl<T: CanonicalSerialize + CanonicalDeserialize> FileVec<T> {
             drop(writer_2);
             file_1.rewind().expect("failed to seek file");
             file_2.rewind().expect("failed to seek file");
-            let v1: FileVec<A> = FileVec::File {
-                path: path_1,
-                file: file_1,
-            };
-            let v2: FileVec<B> = FileVec::File {
-                path: path_2,
-                file: file_2,
-            };
+            let v1: FileVec<A> = FileVec::new_file(file_1, path_1);
+            let v2: FileVec<B> = FileVec::new_file(file_2, path_2);
             (v1, v2)
         } else {
             let _ = std::fs::remove_file(&path_1);
@@ -284,19 +288,23 @@ impl<T: CanonicalSerialize + CanonicalDeserialize> FileVec<T> {
     }
 }
 
-impl<T: CanonicalSerialize + CanonicalDeserialize> Drop for FileVec<T> {
+impl<T: SerializeRaw + DeserializeRaw> Drop for FileVec<T> {
     fn drop(&mut self) {
         match self {
-            Self::File { path, .. } => match std::fs::remove_file(&path) {
-                Ok(_) => (),
-                Err(e) => eprintln!("Failed to remove file at path {path:?}: {e:?}"),
+            Self::File { path, .. } => {
+                let remove_timer = start_timer!(|| "Removing temp file");
+                match std::fs::remove_file(&path) {
+                    Ok(_) => (),
+                    Err(e) => eprintln!("Failed to remove file at path {path:?}: {e:?}"),
+                }
+                end_timer!(remove_timer);
             },
             Self::Buffer { .. } => (),
         }
     }
 }
 
-impl<T: CanonicalSerialize + CanonicalDeserialize + Hash> Hash for FileVec<T> {
+impl<T: SerializeRaw + DeserializeRaw + Hash> Hash for FileVec<T> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         match self {
             Self::File { path, .. } => path.hash(state),
@@ -305,7 +313,7 @@ impl<T: CanonicalSerialize + CanonicalDeserialize + Hash> Hash for FileVec<T> {
     }
 }
 
-impl<T: CanonicalSerialize + CanonicalDeserialize + PartialEq> PartialEq for FileVec<T> {
+impl<T: SerializeRaw + DeserializeRaw + PartialEq> PartialEq for FileVec<T> {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::File { path: p1, .. }, Self::File { path: p2, .. }) => p1 == p2,
@@ -315,4 +323,4 @@ impl<T: CanonicalSerialize + CanonicalDeserialize + PartialEq> PartialEq for Fil
     }
 }
 
-impl<T: CanonicalSerialize + CanonicalDeserialize + Eq> Eq for FileVec<T> {}
+impl<T: SerializeRaw + DeserializeRaw + Eq> Eq for FileVec<T> {}

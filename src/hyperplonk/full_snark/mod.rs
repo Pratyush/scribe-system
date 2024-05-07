@@ -1,7 +1,7 @@
 use ark_ec::pairing::Pairing;
 use errors::HyperPlonkErrors;
 
-use crate::streams::MLE;
+use crate::streams::{serialize::RawPrimeField, MLE};
 
 use super::{pcs::PolynomialCommitmentScheme, poly_iop::prelude::SumCheck};
 
@@ -20,6 +20,7 @@ mod witness;
 pub trait HyperPlonkSNARK<E, PCS>: SumCheck<E::ScalarField>
 where
     E: Pairing,
+    E::ScalarField: RawPrimeField,
     PCS: PolynomialCommitmentScheme<E>,
 {
     type Index;

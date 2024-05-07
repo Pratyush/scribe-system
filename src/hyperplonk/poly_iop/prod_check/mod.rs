@@ -1,4 +1,4 @@
-use crate::hyperplonk::transcript::IOPTranscript;
+use crate::{hyperplonk::transcript::IOPTranscript, streams::serialize::RawPrimeField};
 use crate::hyperplonk::{
     pcs::PolynomialCommitmentScheme,
     poly_iop::{
@@ -10,7 +10,7 @@ use crate::hyperplonk::{
 };
 use crate::{arithmetic::virtual_polynomial::VPAuxInfo, streams::MLE};
 use ark_ec::pairing::Pairing;
-use ark_ff::{One, PrimeField, Zero};
+use ark_ff::{One, Zero};
 
 use ark_std::{end_timer, start_timer};
 
@@ -46,6 +46,7 @@ mod util;
 pub trait ProductCheck<E, PCS>: ZeroCheck<E::ScalarField>
 where
     E: Pairing,
+    E::ScalarField: RawPrimeField,
     PCS: PolynomialCommitmentScheme<E>,
 {
     type ProductCheckSubClaim;
@@ -110,7 +111,7 @@ where
 // is independent from the proof. So we should avoid
 // (de)serialize it.
 #[derive(Clone, Debug, Default, PartialEq)]
-pub struct ProductCheckSubClaim<F: PrimeField, ZC: ZeroCheck<F>> {
+pub struct ProductCheckSubClaim<F: RawPrimeField, ZC: ZeroCheck<F>> {
     // the SubClaim from the ZeroCheck
     pub zero_check_sub_claim: ZC::ZeroCheckSubClaim,
     // final query which consists of
@@ -130,15 +131,19 @@ pub struct ProductCheckProof<
     E: Pairing,
     PCS: PolynomialCommitmentScheme<E>,
     ZC: ZeroCheck<E::ScalarField>,
-> {
+> 
+where E::ScalarField: RawPrimeField
+{
     pub zero_check_proof: ZC::ZeroCheckProof,
     pub prod_x_comm: PCS::Commitment,
     pub frac_comm: PCS::Commitment,
 }
 
+
 impl<E, PCS> ProductCheck<E, PCS> for PolyIOP<E::ScalarField>
 where
     E: Pairing,
+    E::ScalarField: RawPrimeField,
     PCS: PolynomialCommitmentScheme<E, Polynomial = MLE<E::ScalarField>>,
 {
     type ProductCheckSubClaim = ProductCheckSubClaim<E::ScalarField, Self>;
@@ -253,7 +258,7 @@ where
 #[cfg(test)]
 mod test {
     use super::ProductCheck;
-    use crate::arithmetic::virtual_polynomial::VPAuxInfo;
+    use crate::{arithmetic::virtual_polynomial::VPAuxInfo, streams::serialize::RawPrimeField};
     use crate::streams::file_vec::FileVec;
     use crate::streams::iterator::zip_many;
     use crate::streams::iterator::BatchedIterator;
@@ -276,6 +281,7 @@ mod test {
         gs: &[MLE<E::ScalarField>],
     ) where
         E: Pairing,
+        E::ScalarField: RawPrimeField,
     {
         let nom: FileVec<E::ScalarField> = zip_many(fs.iter().map(|f| f.evals().iter()))
             .map(|fs| fs.iter().product())
@@ -313,6 +319,7 @@ mod test {
     ) -> Result<(), PIOPError>
     where
         E: Pairing,
+        E::ScalarField: RawPrimeField,
         PCS: PolynomialCommitmentScheme<E, Polynomial = MLE<E::ScalarField>>,
     {
         let mut transcript = <PolyIOP<E::ScalarField> as ProductCheck<E, PCS>>::init_transcript();

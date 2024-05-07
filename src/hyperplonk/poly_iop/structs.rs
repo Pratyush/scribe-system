@@ -1,4 +1,4 @@
-use crate::arithmetic::virtual_polynomial::VirtualPolynomial;
+use crate::{arithmetic::virtual_polynomial::VirtualPolynomial, streams::serialize::RawPrimeField};
 use ark_ff::PrimeField;
 use ark_serialize::CanonicalSerialize;
 
@@ -20,7 +20,7 @@ pub struct IOPProverMessage<F: PrimeField> {
 }
 
 /// Prover State of a PolyIOP.
-pub struct IOPProverState<F: PrimeField> {
+pub struct IOPProverState<F: RawPrimeField> {
     /// sampled randomness given by the verifier
     pub challenges: Vec<F>,
     /// the current round number

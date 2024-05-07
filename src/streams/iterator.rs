@@ -1,5 +1,5 @@
 use super::BUFFER_SIZE;
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
+use crate::streams::serialize::{DeserializeRaw, SerializeRaw};
 use rayon::prelude::*;
 use std::iter::Sum;
 
@@ -75,7 +75,7 @@ pub trait BatchedIterator: Sized {
         F: Fn(T, Self::Item) -> T + Sync + Send,
         F2: Fn(T, &T) -> T + Sync + Send,
         ID: Fn() -> T + Sync + Send,
-        T: Send + Clone + core::fmt::Debug + Sync,
+        T: Send + Clone + Sync,
     {
         let mut acc = identity();
         let mut res = Vec::with_capacity(BUFFER_SIZE);
@@ -89,7 +89,7 @@ pub trait BatchedIterator: Sized {
 
     fn to_file_vec(self) -> FileVec<Self::Item>
     where
-        Self::Item: CanonicalSerialize + CanonicalDeserialize,
+        Self::Item: SerializeRaw + DeserializeRaw,
     {
         FileVec::from_batched_iter(self)
     }
@@ -97,8 +97,8 @@ pub trait BatchedIterator: Sized {
     fn unzip<A, B>(self) -> (FileVec<A>, FileVec<B>)
     where
         Self: BatchedIterator<Item = (A, B)>,
-        A: CanonicalSerialize + CanonicalDeserialize + Send + Sync,
-        B: CanonicalSerialize + CanonicalDeserialize + Send + Sync,
+        A: SerializeRaw + DeserializeRaw + Send + Sync,
+        B: SerializeRaw + DeserializeRaw + Send + Sync,
     {
         FileVec::<(A, B)>::unzip_helper(self)
     }

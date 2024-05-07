@@ -1,4 +1,4 @@
-use crate::hyperplonk::poly_iop::perm_check_original::PermutationCheck;
+use crate::{hyperplonk::poly_iop::perm_check_original::PermutationCheck, streams::serialize::RawPrimeField};
 use crate::hyperplonk::poly_iop::prelude::ZeroCheck;
 use crate::hyperplonk::{
     full_snark::custom_gate::CustomizedGates, pcs::PolynomialCommitmentScheme,
@@ -19,6 +19,7 @@ use super::prelude::HyperPlonkErrors;
 pub struct HyperPlonkProof<E, PC, PCS>
 where
     E: Pairing,
+    E::ScalarField: RawPrimeField,
     PC: PermutationCheck<E, PCS>,
     PCS: PolynomialCommitmentScheme<E>,
 {
@@ -92,13 +93,13 @@ impl HyperPlonkParams {
 ///   - the wire permutation
 ///   - the selector vectors
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct HyperPlonkIndex<F: PrimeField> {
+pub struct HyperPlonkIndex<F: RawPrimeField> {
     pub params: HyperPlonkParams,
     pub permutation: Vec<MLE<F>>,
     pub selectors: Vec<MLE<F>>,
 }
 
-impl<F: PrimeField> HyperPlonkIndex<F> {
+impl<F: RawPrimeField> HyperPlonkIndex<F> {
     /// Number of variables in a multilinear system
     pub fn num_variables(&self) -> usize {
         self.params.num_variables()
@@ -122,7 +123,9 @@ impl<F: PrimeField> HyperPlonkIndex<F> {
 ///   - the parameters for polynomial commitment
 #[derive(Clone, Debug, Default, PartialEq)]
 // pub struct HyperPlonkProvingKey<E: Pairing, PCS: PolynomialCommitmentScheme<E>> {
-pub struct HyperPlonkProvingKey<E: Pairing, PCS: PolynomialCommitmentScheme<E>> {
+pub struct HyperPlonkProvingKey<E: Pairing, PCS: PolynomialCommitmentScheme<E>> 
+where E::ScalarField: RawPrimeField
+{
     /// Hyperplonk instance parameters
     pub params: HyperPlonkParams,
     /// The preprocessed permutation polynomials
