@@ -20,8 +20,8 @@ pub trait SerializeRaw {
         work_buffer.clear();
         let size = result_buffer[0].serialized_size();
         
-        work_buffer.par_extend(result_buffer.par_chunks(1024).flat_map(|v| {
-            let mut buffer = Vec::with_capacity(1024 * size);
+        work_buffer.par_extend(result_buffer.par_chunks(1 << 10).flat_map(|v| {
+            let mut buffer = Vec::with_capacity((1 << 10) * size);
             for val in v {
                 val.serialize_raw(&mut buffer).unwrap();
             }
@@ -57,11 +57,20 @@ pub trait DeserializeRaw: SerializeRaw + Sized {
                 .read_to_end(work_buffer)?;
         end_timer!(read_time);
         let time = start_timer!(|| "Deserializing");
-         result_buffer.extend(
-            work_buffer
-                .chunks(size)
-                .map(|chunk| Self::deserialize_raw(chunk).unwrap()),
-        );               
+        if rayon::current_num_threads() == 1 {
+            result_buffer.extend(
+                work_buffer
+                    .chunks(size)
+                    .map(|chunk| Self::deserialize_raw(chunk).unwrap()),
+            );
+        } else {
+            result_buffer.par_extend(
+                work_buffer
+                    .par_chunks(size)
+                    .with_min_len(1 << 10)
+                    .map(|chunk| Self::deserialize_raw(chunk).unwrap()),
+            );               
+        }
         end_timer!(time);
         
         Ok(())
