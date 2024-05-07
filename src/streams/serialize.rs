@@ -20,7 +20,6 @@ pub trait SerializeRaw {
         work_buffer.clear();
         let size = result_buffer[0].serialized_size();
         
-        let time = start_timer!(|| "Serializing");
         work_buffer.par_extend(result_buffer.par_chunks(1024).flat_map(|v| {
             let mut buffer = Vec::with_capacity(1024 * size);
             for val in v {
@@ -28,10 +27,7 @@ pub trait SerializeRaw {
             }
             buffer
         }));
-        end_timer!(time);
-        let write_time = start_timer!(|| "Writing");
         file.write_all(&work_buffer)?;
-        end_timer!(write_time);
         Ok(())
     }
     
@@ -66,7 +62,6 @@ pub trait DeserializeRaw: SerializeRaw + Sized {
                 .chunks(size)
                 .map(|chunk| Self::deserialize_raw(chunk).unwrap()),
         );               
-        dbg!(result_buffer.len());
         end_timer!(time);
         
         Ok(())
@@ -408,7 +403,7 @@ where P::BaseField: DeserializeRaw
     ) -> Result<Self, io::Error> {
         let x = P::BaseField::deserialize_raw(&mut reader)?;
         let y = P::BaseField::deserialize_raw(reader)?;
-        Ok(Self::new(x, y))
+        Ok(Self::new_unchecked(x, y))
     }
 }
 
@@ -436,7 +431,7 @@ where P::BaseField: DeserializeRaw
     ) -> Result<Self, io::Error> {
         let x = P::BaseField::deserialize_raw(&mut reader)?;
         let y = P::BaseField::deserialize_raw(reader)?;
-        Ok(Self::new(x, y))
+        Ok(Self::new_unchecked(x, y))
     }
 }
 

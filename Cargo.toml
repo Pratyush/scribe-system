@@ -50,3 +50,9 @@ harness = false
 name = "file_vec"
 path = "benches/file_vec.rs"
 harness = false
+
+
+[[bench]]
+name = "serialize"
+path = "benches/serialize.rs"
+harness = false
