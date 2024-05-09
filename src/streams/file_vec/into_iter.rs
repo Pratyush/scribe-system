@@ -17,11 +17,12 @@ pub enum IntoIter<T: SerializeRaw + DeserializeRaw + 'static> {
 
 impl<T: SerializeRaw + DeserializeRaw> IntoIter<T> {
     pub fn new_file(file: File, path: PathBuf) -> Self {
-        let file = BufReader::with_capacity(BUFFER_SIZE, file);
+        let size = core::mem::size_of::<T>();
+        let file = BufReader::with_capacity(size * BUFFER_SIZE, file);
         Self::File {
             file,
             path,
-            work_buffer: Vec::with_capacity(BUFFER_SIZE),
+            work_buffer: Vec::with_capacity(size * BUFFER_SIZE),
         }
     }
 

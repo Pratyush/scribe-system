@@ -88,7 +88,7 @@ macro_rules! impl_uint {
     ($type:ty) => {
         impl SerializeRaw for $type {
             const SIZE: Option<usize> = Some(core::mem::size_of::<$type>());
-            #[inline]
+            #[inline(always)]
             fn serialize_raw<W: Write>(
                 &self,
                 mut writer: W,
@@ -98,7 +98,7 @@ macro_rules! impl_uint {
         }
 
         impl DeserializeRaw for $type {
-            #[inline]
+            #[inline(always)]
             fn deserialize_raw<R: Read>(
                 mut reader: R,
             ) -> Result<Self, io::Error> {
@@ -119,7 +119,7 @@ impl_uint!(u64);
 
 impl SerializeRaw for bool {
     const SIZE: Option<usize> = Some(1);
-    #[inline]
+    #[inline(always)]
     fn serialize_raw<W: Write>(
         &self,
         mut writer: W,
@@ -130,7 +130,7 @@ impl SerializeRaw for bool {
 }
 
 impl DeserializeRaw for bool {
-    #[inline]
+    #[inline(always)]
     fn deserialize_raw<R: Read>(
         mut reader: R,
     ) -> Result<Self, io::Error> {
@@ -142,7 +142,7 @@ impl DeserializeRaw for bool {
 
 impl SerializeRaw for usize {
     const SIZE: Option<usize> = Some(core::mem::size_of::<u64>());
-    #[inline]
+    #[inline(always)]
     fn serialize_raw<W: Write>(
         &self,
         mut writer: W,
@@ -152,7 +152,7 @@ impl SerializeRaw for usize {
 }
 
 impl DeserializeRaw for usize {
-    #[inline]
+    #[inline(always)]
     fn deserialize_raw<R: Read>(
         mut reader: R,
     ) -> Result<Self, io::Error> {
@@ -168,7 +168,7 @@ impl<T: SerializeRaw, const N: usize> SerializeRaw for [T; N] {
         None => None,
     };
      
-    #[inline]
+    #[inline(always)]
     fn serialize_raw<W: Write>(
         &self,
         mut writer: W,
@@ -181,7 +181,7 @@ impl<T: SerializeRaw, const N: usize> SerializeRaw for [T; N] {
 }
 
 impl<T: DeserializeRaw, const N: usize> DeserializeRaw for [T; N] {
-    #[inline]
+    #[inline(always)]
     fn deserialize_raw<R: Read>(
         mut reader: R,
     ) -> Result<Self, io::Error> {
@@ -193,11 +193,6 @@ impl<T: DeserializeRaw, const N: usize> DeserializeRaw for [T; N] {
         Ok(array.map(|item| unsafe { item.assume_init() }))
     }
 }
-
-
-
-
-
 
 // Helper function. Serializes any sequential data type to the format
 //     n as u64 || data[0].serialize() || ... || data[n].serialize()
@@ -309,13 +304,13 @@ macro_rules! impl_tuple {
                 sum
             };
 
-            #[inline]
+            #[inline(always)]
             fn serialize_raw<W: Write>(&self, mut writer: W) -> Result<(), io::Error> {
                 $(self.$no.serialize_raw(&mut writer)?;)*
                 Ok(())
             }
 
-            #[inline]
+            #[inline(always)]
             fn serialized_size(&self) -> usize {
                 [$(
                     self.$no.serialized_size(),
@@ -326,7 +321,7 @@ macro_rules! impl_tuple {
         impl<$($ty, )*> DeserializeRaw for ($($ty,)*) where
             $($ty: DeserializeRaw,)*
         {
-            #[inline]
+            #[inline(always)]
             fn deserialize_raw<R: Read>(
                 #[allow(unused)]
                 mut reader: R
@@ -348,6 +343,7 @@ impl_tuple!(A:0, B:1, C:2, D:3, E:4,);
 
 impl<const N: usize> SerializeRaw for BigInt<N> {
     const SIZE: Option<usize> = Some(N * 8);
+    #[inline(always)]
     fn serialize_raw<W: Write>(
         &self,
         writer: W,
@@ -358,6 +354,7 @@ impl<const N: usize> SerializeRaw for BigInt<N> {
 
 
 impl<const N: usize> DeserializeRaw for BigInt<N> {
+    #[inline(always)]
     fn deserialize_raw<R: Read>(
         reader: R,
     ) -> Result<Self, io::Error> {
@@ -370,6 +367,8 @@ impl<P: FpConfig<N>, const N: usize> RawPrimeField for Fp<P, N> {}
 
 impl<P: FpConfig<N>, const N: usize> SerializeRaw for Fp<P, N> {
     const SIZE: Option<usize> = Some(N * 8);
+
+    #[inline(always)]
     fn serialize_raw<W: Write>(
         &self,
         writer: W,
@@ -379,6 +378,7 @@ impl<P: FpConfig<N>, const N: usize> SerializeRaw for Fp<P, N> {
 }
 
 impl<P: FpConfig<N>, const N: usize> DeserializeRaw for Fp<P, N> {
+    #[inline(always)]
     fn deserialize_raw<R: Read>(
         reader: R,
     ) -> Result<Self, io::Error> {
@@ -395,6 +395,7 @@ where P::BaseField: SerializeRaw
         Some(size) => Some(2usize * size),
         None => None,
     };
+    #[inline(always)]
     fn serialize_raw<W: Write>(
         &self,
         mut writer: W,
@@ -407,6 +408,7 @@ where P::BaseField: SerializeRaw
 impl<P: SWCurveConfig> DeserializeRaw for SWAffine<P> 
 where P::BaseField: DeserializeRaw
 {
+    #[inline(always)]
     fn deserialize_raw<R: Read>(
         mut reader: R,
     ) -> Result<Self, io::Error> {
@@ -423,6 +425,7 @@ where P::BaseField: SerializeRaw
         Some(size) => Some(2usize * size),
         None => None,
     };
+    #[inline(always)]
     fn serialize_raw<W: Write>(
         &self,
         mut writer: W,
@@ -435,6 +438,7 @@ where P::BaseField: SerializeRaw
 impl<P: TECurveConfig> DeserializeRaw for TEAffine<P> 
 where P::BaseField: DeserializeRaw
 {
+    #[inline(always)]
     fn deserialize_raw<R: Read>(
         mut reader: R,
     ) -> Result<Self, io::Error> {

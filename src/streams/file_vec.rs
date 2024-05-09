@@ -1,8 +1,5 @@
 use std::{
-    fs::{File, OpenOptions},
-    hash::{Hash, Hasher},
-    io::{BufReader, BufWriter, Seek, Write},
-    path::{Path, PathBuf},
+    ffi::OsStr, fs::{File, OpenOptions}, hash::{Hash, Hasher}, io::{BufReader, BufWriter, Seek, Write}, path::{Path, PathBuf}
 };
 
 use crate::streams::serialize::{DeserializeRaw, SerializeRaw};
@@ -10,7 +7,7 @@ use ark_std::{start_timer, end_timer};
 use derivative::Derivative;
 use rayon::iter::{
     IndexedParallelIterator, IntoParallelIterator, IntoParallelRefMutIterator, ParallelExtend,
-    ParallelIterator,
+    ParallelIterator, ParallelDrainRange,
 };
 use tempfile::NamedTempFile;
 
@@ -79,6 +76,27 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
             .expect("failed to keep temp file");
         Self::new_file(file, path)
     }
+    
+    pub fn with_prefix(prefix: impl AsRef<OsStr>) -> Self {
+        let (file, path) = NamedTempFile::with_prefix(prefix)
+            .expect("failed to create temp file")
+            .keep()
+            .expect("failed to keep temp file");
+        Self::new_file(file, path)
+    }
+    
+    pub fn convert_to_buffer(&mut self) 
+        where T: Send + Sync
+    {
+        if let Self::Buffer { .. } = self {
+            let mut buffer = Vec::with_capacity(BUFFER_SIZE);
+            process_file!(self, |b: &mut Vec<T>| {
+                buffer.par_extend(b.par_drain(0..b.len()));
+                Some(())
+            });
+            *self = FileVec::Buffer { buffer };               
+        }
+    }
 
     pub fn iter<'a>(&'a self) -> Iter<'a, T>
     where
@@ -122,11 +140,12 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
     {
         let mut iter = iter.into_batched_iter();
         let mut buffer = Vec::with_capacity(BUFFER_SIZE);
-        let (mut file, path) = NamedTempFile::new()
+        let (mut file, path) = NamedTempFile::with_prefix("batched_iter")
             .expect("failed to create temp file")
             .keep()
             .expect("failed to keep temp file");
-        let mut writer = BufWriter::new(&mut file);
+        let size = core::mem::size_of::<T>();
+        let mut writer = BufWriter::with_capacity(size * BUFFER_SIZE, &mut file);
 
         if let Some(batch) = iter.next_batch() {
             buffer.par_extend(batch)
@@ -191,16 +210,17 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
         B: SerializeRaw + DeserializeRaw + Send + Sync,
     {
         let mut buffer = Vec::<(A, B)>::with_capacity(BUFFER_SIZE);
-        let (mut file_1, path_1) = NamedTempFile::new()
+        let (mut file_1, path_1) = NamedTempFile::with_prefix("unzip_1")
             .expect("failed to create temp file")
             .keep()
             .expect("failed to keep temp file");
-        let (mut file_2, path_2) = NamedTempFile::new()
+        let (mut file_2, path_2) = NamedTempFile::with_prefix("unzip_2")
             .expect("failed to create temp file")
             .keep()
             .expect("failed to keep temp file");
-        let mut writer_1 = BufWriter::new(&mut file_1);
-        let mut writer_2 = BufWriter::new(&mut file_2);
+        let size = core::mem::size_of::<A>();
+        let mut writer_1 = BufWriter::with_capacity(size * BUFFER_SIZE / 2, &mut file_1);
+        let mut writer_2 = BufWriter::with_capacity(size * BUFFER_SIZE / 2, &mut file_2);
 
         if let Some(batch) = iter.next_batch() {
             buffer.par_extend(batch)
@@ -292,7 +312,7 @@ impl<T: SerializeRaw + DeserializeRaw> Drop for FileVec<T> {
     fn drop(&mut self) {
         match self {
             Self::File { path, .. } => {
-                let remove_timer = start_timer!(|| "Removing temp file");
+                let remove_timer = start_timer!(|| format!("Removing temp file: {:?}", &path.file_name().unwrap()));
                 match std::fs::remove_file(&path) {
                     Ok(_) => (),
                     Err(e) => eprintln!("Failed to remove file at path {path:?}: {e:?}"),

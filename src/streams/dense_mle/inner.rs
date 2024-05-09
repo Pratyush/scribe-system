@@ -20,7 +20,7 @@ pub struct Inner<F: RawField> {
 
 impl<F: RawField> Inner<F> {
     pub fn new(num_vars: usize) -> Self {
-        let evals = FileVec::new();
+        let evals = FileVec::with_prefix("evals");
         Self { evals, num_vars }
     }
 
@@ -177,17 +177,27 @@ impl<F: RawField> Inner<F> {
     /// After each fold, the number of variables is reduced by 1.
     pub fn fold_odd_even_in_place(&mut self, f: impl Fn(&F, &F) -> F + Sync) {
         assert!((1 << self.num_vars) % 2 == 0);
-        let evals = core::mem::replace(&mut self.evals, FileVec::new());
-        if self.num_vars < LOG_BUFFER_SIZE as usize {
-            assert!(matches!(&self.evals, FileVec::Buffer { .. }))
+        if self.num_vars <= LOG_BUFFER_SIZE as usize {
+            self.evals.convert_to_buffer();
         }
-        self.evals = evals
-            .into_iter()
-            .array_chunks::<2>()
-            .map(|chunk| f(&chunk[0], &chunk[1]))
-            .to_file_vec();
+        match self.evals {
+            FileVec::File { .. } => {
+                self.evals = self.evals
+                    .iter()
+                    .array_chunks::<2>()
+                    .map(|chunk| f(&chunk[0], &chunk[1]))
+                    .to_file_vec();
+            }
+            FileVec::Buffer { ref mut buffer } => {
+                let new_buffer = std::mem::replace(buffer, Vec::new());
+                *buffer = new_buffer
+                    .par_chunks(2)
+                    .map(|chunk| f(&chunk[0], &chunk[1])).collect();
+            }
+        }
         self.decrement_num_vars();
     }
+        
 
     /// Creates a new polynomial whose evaluations are folded versions of `self`,
     /// folded according to the function `f`.

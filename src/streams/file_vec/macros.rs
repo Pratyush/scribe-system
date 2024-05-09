@@ -2,11 +2,12 @@ macro_rules! process_file {
     ($self:ident, $extra:expr) => {{
         match $self {
             FileVec::File { ref mut file, path, .. } => {
-                let mut reader = BufReader::with_capacity(BUFFER_SIZE, &mut *file);
+                let size = core::mem::size_of::<T>();
+                let mut reader = BufReader::with_capacity(size * BUFFER_SIZE, &mut *file);
                 let mut buffer = Vec::with_capacity(BUFFER_SIZE);
                 let mut byte_buffer = Vec::with_capacity(BUFFER_SIZE * 8);
                 let tmp = NamedTempFile::new().expect("failed to create temp file");
-                let mut writer = BufWriter::with_capacity(BUFFER_SIZE, tmp);
+                let mut writer = BufWriter::with_capacity(size * BUFFER_SIZE, tmp);
 
                 loop {
                     buffer.clear();
@@ -28,6 +29,7 @@ macro_rules! process_file {
                     T::serialize_raw_batch(&buffer, &mut byte_buffer, &mut writer) 
                         .expect("failed to write to file");
                 }
+                std::fs::remove_file(&path).expect("failed to remove file");
 
                 let new_file = writer.into_inner().expect("failed to get writer");
                 let (mut new_file, new_path) = new_file.keep().expect("failed to keep temp file");
