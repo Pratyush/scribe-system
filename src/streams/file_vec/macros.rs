@@ -1,7 +1,9 @@
 macro_rules! process_file {
     ($self:ident, $extra:expr) => {{
         match $self {
-            FileVec::File { ref mut file, path, .. } => {
+            FileVec::File {
+                ref mut file, path, ..
+            } => {
                 let size = core::mem::size_of::<T>();
                 let mut reader = BufReader::with_capacity(size * BUFFER_SIZE, &mut *file);
                 let mut buffer = Vec::with_capacity(BUFFER_SIZE);
@@ -12,7 +14,13 @@ macro_rules! process_file {
                 loop {
                     buffer.clear();
                     byte_buffer.clear();
-                    if T::deserialize_raw_batch(&mut buffer, &mut byte_buffer, BUFFER_SIZE, &mut reader).is_err()
+                    if T::deserialize_raw_batch(
+                        &mut buffer,
+                        &mut byte_buffer,
+                        BUFFER_SIZE,
+                        &mut reader,
+                    )
+                    .is_err()
                     {
                         break;
                     }
@@ -26,7 +34,7 @@ macro_rules! process_file {
                     }
 
                     byte_buffer.clear();
-                    T::serialize_raw_batch(&buffer, &mut byte_buffer, &mut writer) 
+                    T::serialize_raw_batch(&buffer, &mut byte_buffer, &mut writer)
                         .expect("failed to write to file");
                 }
                 std::fs::remove_file(&path).expect("failed to remove file");

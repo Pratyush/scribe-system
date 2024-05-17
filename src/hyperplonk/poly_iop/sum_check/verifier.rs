@@ -1,10 +1,10 @@
 use super::{SumCheckSubClaim, SumCheckVerifier};
-use crate::{arithmetic::virtual_polynomial::VPAuxInfo, streams::serialize::RawPrimeField};
 use crate::hyperplonk::poly_iop::{
     errors::PIOPError,
     structs::{IOPProverMessage, IOPVerifierState},
 };
 use crate::hyperplonk::transcript::IOPTranscript;
+use crate::{arithmetic::virtual_polynomial::VPAuxInfo, streams::serialize::RawPrimeField};
 use ark_ff::PrimeField;
 use ark_std::{end_timer, start_timer};
 

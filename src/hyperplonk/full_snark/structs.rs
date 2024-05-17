@@ -1,9 +1,11 @@
-use crate::{hyperplonk::poly_iop::perm_check_original::PermutationCheck, streams::serialize::RawPrimeField};
 use crate::hyperplonk::poly_iop::prelude::ZeroCheck;
 use crate::hyperplonk::{
     full_snark::custom_gate::CustomizedGates, pcs::PolynomialCommitmentScheme,
 };
 use crate::streams::MLE;
+use crate::{
+    hyperplonk::poly_iop::perm_check_original::PermutationCheck, streams::serialize::RawPrimeField,
+};
 use ark_ec::pairing::Pairing;
 use ark_ff::PrimeField;
 use ark_std::log2;
@@ -123,8 +125,9 @@ impl<F: RawPrimeField> HyperPlonkIndex<F> {
 ///   - the parameters for polynomial commitment
 #[derive(Clone, Debug, Default, PartialEq)]
 // pub struct HyperPlonkProvingKey<E: Pairing, PCS: PolynomialCommitmentScheme<E>> {
-pub struct HyperPlonkProvingKey<E: Pairing, PCS: PolynomialCommitmentScheme<E>> 
-where E::ScalarField: RawPrimeField
+pub struct HyperPlonkProvingKey<E: Pairing, PCS: PolynomialCommitmentScheme<E>>
+where
+    E::ScalarField: RawPrimeField,
 {
     /// Hyperplonk instance parameters
     pub params: HyperPlonkParams,

@@ -1,7 +1,10 @@
-use crate::{hyperplonk::pcs::{
-    errors::PCSError, multilinear_kzg::util::eq_extension, StructuredReferenceString,
-}, streams::serialize::RawAffine};
 use crate::streams::file_vec::FileVec;
+use crate::{
+    hyperplonk::pcs::{
+        errors::PCSError, multilinear_kzg::util::eq_extension, StructuredReferenceString,
+    },
+    streams::serialize::RawAffine,
+};
 use ark_ec::{pairing::Pairing, scalar_mul::fixed_base::FixedBase, CurveGroup};
 use ark_ff::{Field, PrimeField};
 use ark_poly::DenseMultilinearExtension;
@@ -21,8 +24,9 @@ pub struct Evaluations<C: RawAffine> {
 
 /// Universal Parameter
 #[derive(Debug)]
-pub struct MultilinearUniversalParams<E: Pairing> 
-where E::G1Affine: RawAffine
+pub struct MultilinearUniversalParams<E: Pairing>
+where
+    E::G1Affine: RawAffine,
 {
     /// prover parameters
     pub prover_param: MultilinearProverParam<E>,
@@ -32,8 +36,9 @@ where E::G1Affine: RawAffine
 
 /// Prover Parameters
 #[derive(Debug)]
-pub struct MultilinearProverParam<E: Pairing> 
-where E::G1Affine: RawAffine
+pub struct MultilinearProverParam<E: Pairing>
+where
+    E::G1Affine: RawAffine,
 {
     /// number of variables
     pub num_vars: usize,
@@ -60,8 +65,9 @@ pub struct MultilinearVerifierParam<E: Pairing> {
     pub h_mask: Vec<E::G2Affine>,
 }
 
-impl<E: Pairing> StructuredReferenceString<E> for MultilinearUniversalParams<E> 
-where E::G1Affine: RawAffine
+impl<E: Pairing> StructuredReferenceString<E> for MultilinearUniversalParams<E>
+where
+    E::G1Affine: RawAffine,
 {
     type ProverParam = MultilinearProverParam<E>;
     type VerifierParam = MultilinearVerifierParam<E>;

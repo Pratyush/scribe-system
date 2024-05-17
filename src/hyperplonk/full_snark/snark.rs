@@ -623,8 +623,11 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{hyperplonk::full_snark::{custom_gate::CustomizedGates, structs::HyperPlonkParams}, streams::serialize::RawAffine};
     use crate::hyperplonk::pcs::multilinear_kzg::MultilinearKzgPCS;
+    use crate::{
+        hyperplonk::full_snark::{custom_gate::CustomizedGates, structs::HyperPlonkParams},
+        streams::serialize::RawAffine,
+    };
 
     use ark_bls12_381::Bls12_381;
     use ark_std::rand::rngs::StdRng;
@@ -655,7 +658,7 @@ mod tests {
 
     fn test_hyperplonk_helper<E: Pairing>(
         gate_func: CustomizedGates,
-    ) -> Result<(), HyperPlonkErrors> 
+    ) -> Result<(), HyperPlonkErrors>
     where
         E::ScalarField: RawPrimeField,
         E::G1Affine: RawAffine,

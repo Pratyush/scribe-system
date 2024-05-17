@@ -9,7 +9,9 @@ use rayon::prelude::*;
 
 use crate::streams::{
     file_vec::FileVec,
-    iterator::{from_fn, repeat, BatchedIterator}, serialize::RawField, LOG_BUFFER_SIZE,
+    iterator::{from_fn, repeat, BatchedIterator},
+    serialize::RawField,
+    LOG_BUFFER_SIZE,
 };
 
 #[derive(Debug, Hash, PartialEq, Eq)]
@@ -182,7 +184,8 @@ impl<F: RawField> Inner<F> {
         }
         match self.evals {
             FileVec::File { .. } => {
-                self.evals = self.evals
+                self.evals = self
+                    .evals
                     .iter()
                     .array_chunks::<2>()
                     .map(|chunk| f(&chunk[0], &chunk[1]))
@@ -192,12 +195,12 @@ impl<F: RawField> Inner<F> {
                 let new_buffer = std::mem::replace(buffer, Vec::new());
                 *buffer = new_buffer
                     .par_chunks(2)
-                    .map(|chunk| f(&chunk[0], &chunk[1])).collect();
+                    .map(|chunk| f(&chunk[0], &chunk[1]))
+                    .collect();
             }
         }
         self.decrement_num_vars();
     }
-        
 
     /// Creates a new polynomial whose evaluations are folded versions of `self`,
     /// folded according to the function `f`.

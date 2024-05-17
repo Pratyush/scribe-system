@@ -1,4 +1,3 @@
-use crate::{arithmetic::virtual_polynomial::VirtualPolynomial, streams::serialize::RawPrimeField};
 use crate::hyperplonk::full_snark::{
     custom_gate::CustomizedGates, errors::HyperPlonkErrors, structs::HyperPlonkParams,
 };
@@ -8,6 +7,7 @@ use crate::hyperplonk::transcript::IOPTranscript;
 use crate::streams::file_vec::FileVec;
 use crate::streams::iterator::BatchedIterator;
 use crate::streams::MLE;
+use crate::{arithmetic::virtual_polynomial::VirtualPolynomial, streams::serialize::RawPrimeField};
 use ark_ec::pairing::Pairing;
 use ark_ff::PrimeField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};

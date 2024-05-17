@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use crate::streams::BUFFER_SIZE;
 use rayon::prelude::*;
 
@@ -20,7 +22,7 @@ impl<I: BatchedIterator, const N: usize> ArrayChunks<I, N> {
 impl<I, const N: usize> BatchedIterator for ArrayChunks<I, N>
 where
     I: BatchedIterator,
-    I::Item: Copy,
+    I::Item: Copy + Debug,
     [I::Item; N]: Send + Sync,
 {
     type Item = [I::Item; N];
@@ -34,8 +36,18 @@ where
             .par_chunks_exact(N)
             .map(|chunk| <[I::Item; N]>::try_from(chunk).unwrap())
             .collect::<Vec<_>>();
+        println!("array chunk batch: {:?}", batch);
         Some(batch.into_par_iter())
     }
+
+    // fn next_batch(&mut self) -> Option<Self::Batch> {
+    //     let batch: Vec<_> = self.iter.next_batch()?.collect();
+    //     let batch = batch
+    //         .par_chunks_exact(N)
+    //         .map(|chunk| <[I::Item; N]>::try_from(chunk).unwrap())
+    //         .collect::<Vec<_>>();
+    //     Some(batch.into_par_iter())
+    // }
 }
 
 #[cfg(test)]

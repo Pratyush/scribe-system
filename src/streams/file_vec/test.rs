@@ -1,6 +1,6 @@
-use ark_std::start_timer;
 use ark_bls12_381::Fr;
 use ark_ff::Field;
+use ark_std::start_timer;
 
 use super::*;
 
@@ -24,7 +24,9 @@ fn file_vec_for_each() {
         let start = start_timer!(|| format!("file_vec_for_each size={size}"));
         let size = (BUFFER_SIZE * size) as u64;
         let mut fv = FileVec::from_iter((0..size).map(Fr::from));
-        fv.for_each(|x| {x.square_in_place();});
+        fv.for_each(|x| {
+            x.square_in_place();
+        });
         let vec: Vec<_> = (0..size).map(|i| Fr::from(i).square()).collect();
         let vec2 = fv.into_iter().to_vec();
         dbg!(&vec2.len());

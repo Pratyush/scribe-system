@@ -1,13 +1,17 @@
 use std::{
-    ffi::OsStr, fs::{File, OpenOptions}, hash::{Hash, Hasher}, io::{BufReader, BufWriter, Seek, Write}, path::{Path, PathBuf}
+    ffi::OsStr,
+    fs::{File, OpenOptions},
+    hash::{Hash, Hasher},
+    io::{BufReader, BufWriter, Seek, Write},
+    path::{Path, PathBuf},
 };
 
 use crate::streams::serialize::{DeserializeRaw, SerializeRaw};
-use ark_std::{start_timer, end_timer};
+use ark_std::{end_timer, start_timer};
 use derivative::Derivative;
 use rayon::iter::{
-    IndexedParallelIterator, IntoParallelIterator, IntoParallelRefMutIterator, ParallelExtend,
-    ParallelIterator, ParallelDrainRange,
+    IndexedParallelIterator, IntoParallelIterator, IntoParallelRefMutIterator, ParallelDrainRange,
+    ParallelExtend, ParallelIterator,
 };
 use tempfile::NamedTempFile;
 
@@ -32,10 +36,7 @@ mod test;
 #[derive(Derivative)]
 #[derivative(Debug(bound = "T: core::fmt::Debug"))]
 pub enum FileVec<T: SerializeRaw + DeserializeRaw> {
-    File { 
-        path: PathBuf, 
-        file: File, 
-    },
+    File { path: PathBuf, file: File },
     Buffer { buffer: Vec<T> },
 }
 
@@ -76,7 +77,7 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
             .expect("failed to keep temp file");
         Self::new_file(file, path)
     }
-    
+
     pub fn with_prefix(prefix: impl AsRef<OsStr>) -> Self {
         let (file, path) = NamedTempFile::with_prefix(prefix)
             .expect("failed to create temp file")
@@ -84,9 +85,10 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
             .expect("failed to keep temp file");
         Self::new_file(file, path)
     }
-    
-    pub fn convert_to_buffer(&mut self) 
-        where T: Send + Sync
+
+    pub fn convert_to_buffer(&mut self)
+    where
+        T: Send + Sync,
     {
         if let Self::Buffer { .. } = self {
             let mut buffer = Vec::with_capacity(BUFFER_SIZE);
@@ -94,7 +96,7 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
                 buffer.par_extend(b.par_drain(0..b.len()));
                 Some(())
             });
-            *self = FileVec::Buffer { buffer };               
+            *self = FileVec::Buffer { buffer };
         }
     }
 
@@ -302,7 +304,7 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
 
     pub fn deep_copy(&self) -> Self
     where
-        T: Send + Sync + Copy + 'static,
+        T: Send + Sync + Copy + std::fmt::Debug + 'static,
     {
         Self::from_batched_iter(self.iter())
     }
@@ -312,13 +314,16 @@ impl<T: SerializeRaw + DeserializeRaw> Drop for FileVec<T> {
     fn drop(&mut self) {
         match self {
             Self::File { path, .. } => {
-                let remove_timer = start_timer!(|| format!("Removing temp file: {:?}", &path.file_name().unwrap()));
+                let remove_timer = start_timer!(|| format!(
+                    "Removing temp file: {:?}",
+                    &path.file_name().unwrap()
+                ));
                 match std::fs::remove_file(&path) {
                     Ok(_) => (),
                     Err(e) => eprintln!("Failed to remove file at path {path:?}: {e:?}"),
                 }
                 end_timer!(remove_timer);
-            },
+            }
             Self::Buffer { .. } => (),
         }
     }

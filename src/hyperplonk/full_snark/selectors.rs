@@ -1,4 +1,7 @@
-use crate::{hyperplonk::full_snark::errors::HyperPlonkErrors, streams::{serialize::RawPrimeField, MLE}};
+use crate::{
+    hyperplonk::full_snark::errors::HyperPlonkErrors,
+    streams::{serialize::RawPrimeField, MLE},
+};
 use ark_ff::PrimeField;
 use ark_std::log2;
 

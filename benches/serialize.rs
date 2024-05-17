@@ -1,11 +1,10 @@
 #[macro_use]
 extern crate criterion;
 
-use ark_bls12_381::{Fr, Fq, G1Affine};
+use ark_bls12_381::{Fq, Fr, G1Affine};
 use ark_std::UniformRand;
 use criterion::Criterion;
 use scribe::streams::serialize::*;
-
 
 fn serialize_fr(c: &mut Criterion) {
     c.bench_function("Serialize bls12_381::Fr", |b| {
@@ -16,7 +15,7 @@ fn serialize_fr(c: &mut Criterion) {
             vec.clear();
         });
     });
-    
+
     c.bench_function("Deserialize bls12_381::Fr", |b| {
         let mut vec = Vec::with_capacity(Fr::SIZE.unwrap());
         let f = Fr::rand(&mut ark_std::test_rng());
@@ -41,9 +40,7 @@ fn serialize_fq(c: &mut Criterion) {
         f.serialize_raw(&mut vec).unwrap();
         b.iter(|| Fq::deserialize_raw(&vec[..]).unwrap());
     });
-
 }
-
 
 fn serialize_g1(c: &mut Criterion) {
     c.bench_function("Serialize bls12_381::G1", |b| {
@@ -60,7 +57,6 @@ fn serialize_g1(c: &mut Criterion) {
         f.serialize_raw(&mut vec).unwrap();
         b.iter(|| G1Affine::deserialize_raw(&vec[..]).unwrap());
     });
-
 }
 
 criterion_group!(serialize, serialize_fr, serialize_g1, serialize_fq);

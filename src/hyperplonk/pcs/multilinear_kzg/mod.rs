@@ -1,12 +1,15 @@
 pub(crate) mod batching;
 pub mod srs;
 pub(crate) mod util;
-use crate::{hyperplonk::pcs::multilinear_kzg::batching::multi_open_internal, streams::serialize::{RawAffine, RawPrimeField}};
 use crate::hyperplonk::pcs::StructuredReferenceString;
 use crate::hyperplonk::pcs::{structs::Commitment, PCSError, PolynomialCommitmentScheme};
 use crate::hyperplonk::transcript::IOPTranscript;
 use crate::streams::file_vec::FileVec;
 use crate::streams::{iterator::BatchedIterator, MLE};
+use crate::{
+    hyperplonk::pcs::multilinear_kzg::batching::multi_open_internal,
+    streams::serialize::{RawAffine, RawPrimeField},
+};
 use ark_ec::{
     pairing::Pairing,
     scalar_mul::{fixed_base::FixedBase, variable_base::VariableBaseMSM},
@@ -37,7 +40,7 @@ pub struct MultilinearKzgProof<E: Pairing> {
     pub proofs: Vec<E::G1Affine>,
 }
 
-impl<E: Pairing> PolynomialCommitmentScheme<E> for MultilinearKzgPCS<E> 
+impl<E: Pairing> PolynomialCommitmentScheme<E> for MultilinearKzgPCS<E>
 where
     E::G1Affine: RawAffine,
     E::ScalarField: RawPrimeField,
@@ -268,11 +271,10 @@ fn open_internal<E: Pairing>(
     prover_param: &MultilinearProverParam<E>,
     polynomial: &MLE<E::ScalarField>,
     point: &[E::ScalarField],
-) -> Result<(MultilinearKzgProof<E>, E::ScalarField), PCSError> 
+) -> Result<(MultilinearKzgProof<E>, E::ScalarField), PCSError>
 where
     E::G1Affine: RawAffine,
     E::ScalarField: RawPrimeField,
-
 {
     let open_timer = start_timer!(|| format!("open mle with {} variable", polynomial.num_vars()));
 

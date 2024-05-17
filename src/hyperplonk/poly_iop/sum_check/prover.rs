@@ -1,11 +1,14 @@
 use super::SumCheckProver;
-use crate::{hyperplonk::poly_iop::{
-    errors::PIOPError,
-    structs::{IOPProverMessage, IOPProverState},
-}, streams::serialize::RawPrimeField};
 use crate::{
     arithmetic::virtual_polynomial::VirtualPolynomial,
     streams::iterator::{zip_many, BatchedIterator},
+};
+use crate::{
+    hyperplonk::poly_iop::{
+        errors::PIOPError,
+        structs::{IOPProverMessage, IOPProverState},
+    },
+    streams::serialize::RawPrimeField,
 };
 use ark_ff::{batch_inversion, PrimeField};
 use ark_std::{cfg_iter, cfg_iter_mut, end_timer, start_timer, vec::Vec};
@@ -132,22 +135,19 @@ impl<F: RawPrimeField> SumCheckProver<F> for IOPProverState<F> {
                     || vec![F::zero(); products.len() + 1],
                     |mut acc, mut products| {
                         products.iter_mut().for_each(|[even, odd]| *odd -= even);
-                        acc[0] += products
-                            .iter()
-                            .map(|[eval, _]| eval)
-                            .product::<F>();
+                        acc[0] += products.iter().map(|[eval, _]| dbg!(eval)).product::<F>();
                         acc[1..].iter_mut().for_each(|acc| {
-                            products
-                                .iter_mut()
-                                .for_each(|[eval, step]| *eval += step);
-                            *acc += products.iter().map(|[eval, _]| eval).product::<F>();
+                            products.iter_mut().for_each(|[eval, step]| *eval += step);
+                            *acc += products.iter().map(|[eval, _]| dbg!(eval)).product::<F>();
                         });
+                        println!("acc: {:?}", acc); // by the bit
                         acc
                     },
                     |mut sum, partial| {
                         sum.iter_mut()
                             .zip(partial.iter())
                             .for_each(|(sum, partial)| *sum += partial);
+                        println!("sum: {:?}", sum); // sum for half of the bits
                         sum
                     },
                 );

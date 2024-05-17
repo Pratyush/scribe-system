@@ -1,6 +1,3 @@
-use crate::{hyperplonk::poly_iop::{
-    errors::PIOPError, structs::IOPProof, zero_check::ZeroCheck, PolyIOP,
-}, streams::serialize::RawPrimeField};
 use crate::hyperplonk::transcript::IOPTranscript;
 use crate::{
     arithmetic::virtual_polynomial::VirtualPolynomial,
@@ -9,6 +6,10 @@ use crate::{
         iterator::{chain_many, zip_many, BatchedIterator},
         MLE,
     },
+};
+use crate::{
+    hyperplonk::poly_iop::{errors::PIOPError, structs::IOPProof, zero_check::ZeroCheck, PolyIOP},
+    streams::serialize::RawPrimeField,
 };
 
 use ark_std::{end_timer, start_timer};
@@ -49,7 +50,9 @@ pub(super) fn compute_frac_poly<F: RawPrimeField>(
 ///
 /// The caller needs to check num_vars matches in f and g
 /// Cost: linear in N.
-pub(super) fn compute_product_poly<F: RawPrimeField>(frac_poly: &MLE<F>) -> Result<MLE<F>, PIOPError> {
+pub(super) fn compute_product_poly<F: RawPrimeField>(
+    frac_poly: &MLE<F>,
+) -> Result<MLE<F>, PIOPError> {
     let start = start_timer!(|| "compute evaluations of prod polynomial");
     let num_vars = frac_poly.num_vars();
     // assert that num_vars is at least two
@@ -147,7 +150,10 @@ mod test {
     use std::vec::Vec;
 
     // in memory vector version of calculating the prod_poly from frac_poly
-    fn compute_product_poly_in_memory<F: RawPrimeField>(frac_poly: Vec<F>, num_vars: usize) -> Vec<F> {
+    fn compute_product_poly_in_memory<F: RawPrimeField>(
+        frac_poly: Vec<F>,
+        num_vars: usize,
+    ) -> Vec<F> {
         assert!(frac_poly.len() == (1 << num_vars));
 
         let mut prod_poly = Vec::with_capacity(frac_poly.len());

@@ -1,4 +1,7 @@
-use crate::{arithmetic::errors::ArithError, streams::{serialize::RawPrimeField, MLE}};
+use crate::{
+    arithmetic::errors::ArithError,
+    streams::{serialize::RawPrimeField, MLE},
+};
 use ark_ff::Field;
 // use ark_poly::{DenseMultilinearExtension, MultilinearExtension};
 use ark_serialize::CanonicalSerialize;
@@ -278,6 +281,12 @@ impl<F: RawPrimeField> VirtualPolynomial<F> {
         }
 
         let eq_x_r = MLE::eq_x_r(r)?;
+
+        #[cfg(debug_assertions)]
+        {
+            println!("eq_x_r: {:?}", eq_x_r.evals());
+        }
+
         let mut res = self.clone();
         res.mul_by_mle(eq_x_r, F::one())?;
 

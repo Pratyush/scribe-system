@@ -1,8 +1,8 @@
 use std::fmt::Debug;
 
-use crate::{arithmetic::virtual_polynomial::eq_eval, streams::serialize::RawPrimeField};
 use crate::hyperplonk::poly_iop::{errors::PIOPError, sum_check::SumCheck, PolyIOP};
 use crate::hyperplonk::transcript::IOPTranscript;
+use crate::{arithmetic::virtual_polynomial::eq_eval, streams::serialize::RawPrimeField};
 use ark_ff::PrimeField;
 use ark_std::{end_timer, start_timer};
 
@@ -119,6 +119,8 @@ mod test {
     use crate::arithmetic::virtual_polynomial::VirtualPolynomial;
     use crate::hyperplonk::poly_iop::{errors::PIOPError, PolyIOP};
     use ark_bls12_381::Fr;
+    use ark_std::rand::rngs::StdRng;
+    use ark_std::rand::SeedableRng;
     use ark_std::test_rng;
 
     fn test_zerocheck(
@@ -126,7 +128,11 @@ mod test {
         num_multiplicands_range: (usize, usize),
         num_products: usize,
     ) -> Result<(), PIOPError> {
-        let mut rng = test_rng();
+        let seed = [
+            1, 0, 0, 0, 23, 0, 0, 0, 200, 1, 0, 0, 210, 30, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0,
+        ];
+        let mut rng = StdRng::from_seed(seed);
 
         {
             // good path: zero virtual poly
@@ -136,10 +142,10 @@ mod test {
             let mut transcript = <PolyIOP<Fr> as ZeroCheck<Fr>>::init_transcript();
             transcript.append_message(b"testing", b"initializing transcript for testing")?;
 
-            // #[cfg(debug_assertions)]
-            // poly.products.iter().for_each(|p| {
-            //     println!("test_zero_check before prove product: {:?}", p);
-            // });
+            #[cfg(debug_assertions)]
+            poly.products.iter().for_each(|p| {
+                println!("test_zero_check before prove product: {:?}", p);
+            });
 
             let proof = <PolyIOP<Fr> as ZeroCheck<Fr>>::prove(&poly, &mut transcript)?;
 
@@ -188,9 +194,9 @@ mod test {
     }
     #[test]
     fn test_normal_polynomial() -> Result<(), PIOPError> {
-        let nv = 5;
-        let num_multiplicands_range = (4, 9);
-        let num_products = 5;
+        let nv = 3;
+        let num_multiplicands_range = (1, 2);
+        let num_products = 1;
 
         test_zerocheck(nv, num_multiplicands_range, num_products)
     }

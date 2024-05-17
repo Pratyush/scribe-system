@@ -1,8 +1,11 @@
-use crate::{arithmetic::virtual_polynomial::{build_eq_x_r_vec, VPAuxInfo, VirtualPolynomial}, streams::serialize::RawPrimeField};
 use crate::hyperplonk::pcs::errors::PCSError;
 use crate::hyperplonk::pcs::structs::Commitment;
 use crate::hyperplonk::pcs::{multilinear_kzg::util::eq_eval, PolynomialCommitmentScheme};
 use crate::hyperplonk::poly_iop::{prelude::SumCheck, structs::IOPProof, PolyIOP};
+use crate::{
+    arithmetic::virtual_polynomial::{build_eq_x_r_vec, VPAuxInfo, VirtualPolynomial},
+    streams::serialize::RawPrimeField,
+};
 
 use crate::streams::MLE;
 use ark_ec::pairing::Pairing;

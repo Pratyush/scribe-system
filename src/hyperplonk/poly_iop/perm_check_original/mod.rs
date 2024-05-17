@@ -1,10 +1,10 @@
 use self::util::computer_nums_and_denoms;
-use crate::{hyperplonk::transcript::IOPTranscript, streams::serialize::RawPrimeField};
 use crate::hyperplonk::{
     pcs::PolynomialCommitmentScheme,
     poly_iop::{errors::PIOPError, prod_check::ProductCheck, PolyIOP},
 };
 use crate::streams::MLE;
+use crate::{hyperplonk::transcript::IOPTranscript, streams::serialize::RawPrimeField};
 use ark_ec::pairing::Pairing;
 use ark_std::{end_timer, start_timer};
 

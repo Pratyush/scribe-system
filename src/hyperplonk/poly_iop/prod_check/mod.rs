@@ -1,4 +1,3 @@
-use crate::{hyperplonk::transcript::IOPTranscript, streams::serialize::RawPrimeField};
 use crate::hyperplonk::{
     pcs::PolynomialCommitmentScheme,
     poly_iop::{
@@ -9,6 +8,7 @@ use crate::hyperplonk::{
     },
 };
 use crate::{arithmetic::virtual_polynomial::VPAuxInfo, streams::MLE};
+use crate::{hyperplonk::transcript::IOPTranscript, streams::serialize::RawPrimeField};
 use ark_ec::pairing::Pairing;
 use ark_ff::{One, Zero};
 
@@ -131,14 +131,13 @@ pub struct ProductCheckProof<
     E: Pairing,
     PCS: PolynomialCommitmentScheme<E>,
     ZC: ZeroCheck<E::ScalarField>,
-> 
-where E::ScalarField: RawPrimeField
+> where
+    E::ScalarField: RawPrimeField,
 {
     pub zero_check_proof: ZC::ZeroCheckProof,
     pub prod_x_comm: PCS::Commitment,
     pub frac_comm: PCS::Commitment,
 }
-
 
 impl<E, PCS> ProductCheck<E, PCS> for PolyIOP<E::ScalarField>
 where
@@ -258,10 +257,10 @@ where
 #[cfg(test)]
 mod test {
     use super::ProductCheck;
-    use crate::{arithmetic::virtual_polynomial::VPAuxInfo, streams::serialize::RawPrimeField};
     use crate::streams::file_vec::FileVec;
     use crate::streams::iterator::zip_many;
     use crate::streams::iterator::BatchedIterator;
+    use crate::{arithmetic::virtual_polynomial::VPAuxInfo, streams::serialize::RawPrimeField};
     use crate::{
         hyperplonk::{
             pcs::{multilinear_kzg::MultilinearKzgPCS, PolynomialCommitmentScheme},

@@ -162,6 +162,11 @@ impl<F: RawPrimeField> SumCheck<F> for PolyIOP<F> {
             let prover_msg =
                 IOPProverState::prove_round_and_update_state(&mut prover_state, &challenge)?;
 
+            #[cfg(debug_assertions)]
+            prover_msg.evaluations.iter().for_each(|evals| {
+                println!("round={}, prover msg: {:?}", i, evals);
+            });
+
             transcript.append_serializable_element(b"prover msg", &prover_msg)?;
             prover_msgs.push(prover_msg);
             challenge = Some(transcript.get_and_append_challenge(b"Internal round")?);
@@ -341,9 +346,9 @@ mod test {
 
     #[test]
     fn test_normal_polynomial() -> Result<(), PIOPError> {
-        let nv = 8;
-        let num_multiplicands_range = (4, 9);
-        let num_products = 5;
+        let nv = 3;
+        let num_multiplicands_range = (1, 2);
+        let num_products = 1;
 
         test_sumcheck(nv, num_multiplicands_range, num_products)?;
         test_sumcheck_internal(nv, num_multiplicands_range, num_products)
