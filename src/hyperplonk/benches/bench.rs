@@ -4,6 +4,7 @@
 // You should have received a copy of the MIT License
 // along with the HyperPlonk library. If not, see <https://mit-license.org/>.
 
+use std::sync::Mutex;
 use std::{fs::File, io, time::Instant};
 
 use ark_bls12_381::Bls12_381;
@@ -75,51 +76,71 @@ fn bench_vanilla_plonk(
     let filename = format!("vanilla threads {}.txt", thread);
     let mut file = File::create(filename).unwrap();
     for nv in MIN_NUM_VARS..=MAX_NUM_VARS {
+
         let vanilla_gate = CustomizedGates::vanilla_plonk_gate();
-        bench_mock_circuit_zkp_helper(&mut file, nv, &vanilla_gate, pcs_srs)?;
+        
+        #[cfg(feature = "print-trace")]
+        {
+            let trace_filename = format!("vanilla threads {} nv {}.txt", thread, nv);
+            let mut trace_file = File::create(trace_filename).unwrap();
+            
+            bench_mock_circuit_zkp_helper(&mut file, Some(&mut trace_file), nv, &vanilla_gate, pcs_srs)?;
+        }
+
+        #[cfg(not(feature = "print-trace"))]
+        {
+            bench_mock_circuit_zkp_helper(&mut file, None, nv, &vanilla_gate, pcs_srs)?;
+        }
+        
     }
 
     Ok(())
 }
 
-fn bench_jellyfish_plonk(
-    pcs_srs: &MultilinearUniversalParams<Bls12_381>,
-    thread: usize,
-) -> Result<(), HyperPlonkErrors> {
-    let filename = format!("jellyfish threads {}.txt", thread);
-    let mut file = File::create(filename).unwrap();
-    for nv in MIN_NUM_VARS..=MAX_NUM_VARS {
-        let jf_gate = CustomizedGates::jellyfish_turbo_plonk_gate();
-        bench_mock_circuit_zkp_helper(&mut file, nv, &jf_gate, pcs_srs)?;
-    }
+// fn bench_jellyfish_plonk(
+//     pcs_srs: &MultilinearUniversalParams<Bls12_381>,
+//     thread: usize,
+// ) -> Result<(), HyperPlonkErrors> {
+//     let filename = format!("jellyfish threads {}.txt", thread);
+//     let mut file = File::create(filename).unwrap();
+//     for nv in MIN_NUM_VARS..=MAX_NUM_VARS {
+//         let jf_gate = CustomizedGates::jellyfish_turbo_plonk_gate();
+//         bench_mock_circuit_zkp_helper(&mut file, nv, &jf_gate, pcs_srs)?;
+//     }
 
-    Ok(())
-}
+//     Ok(())
+// }
 
-fn bench_high_degree_plonk(
-    pcs_srs: &MultilinearUniversalParams<Bls12_381>,
-    degree: usize,
-    thread: usize,
-) -> Result<(), HyperPlonkErrors> {
-    let filename = format!("high degree {} thread {}.txt", degree, thread);
-    let mut file = File::create(filename).unwrap();
-    println!("custom gate of degree {}", degree);
-    let vanilla_gate = CustomizedGates::mock_gate(2, degree);
-    bench_mock_circuit_zkp_helper(&mut file, HIGH_DEGREE_TEST_NV, &vanilla_gate, pcs_srs)?;
+// fn bench_high_degree_plonk(
+//     pcs_srs: &MultilinearUniversalParams<Bls12_381>,
+//     degree: usize,
+//     thread: usize,
+// ) -> Result<(), HyperPlonkErrors> {
+//     let filename = format!("high degree {} thread {}.txt", degree, thread);
+//     let mut file = File::create(filename).unwrap();
+//     println!("custom gate of degree {}", degree);
+//     let vanilla_gate = CustomizedGates::mock_gate(2, degree);
+//     bench_mock_circuit_zkp_helper(&mut file, HIGH_DEGREE_TEST_NV, &vanilla_gate, pcs_srs)?;
 
-    Ok(())
-}
+//     Ok(())
+// }
 
 fn bench_mock_circuit_zkp_helper(
     file: &mut File,
+    trace_file: Option<&mut File>,
     nv: usize,
     gate: &CustomizedGates,
     pcs_srs: &MultilinearUniversalParams<Bls12_381>,
 ) -> Result<(), HyperPlonkErrors> {
+    #[cfg(feature = "print-trace")]
+    {
+        
+    }
+
     let repetition = if nv < 10 {
         5
-    } else if nv < 20 {
-        2
+    // } else if nv < 20 {
+    //     2
     } else {
         1
     };
@@ -187,5 +208,8 @@ fn bench_mock_circuit_zkp_helper(
         nv,
         start.elapsed().as_micros() / repetition as u128
     );
+
+    io::set_output_capture(original_stdout);
+
     Ok(())
 }
