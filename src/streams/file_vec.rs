@@ -1,5 +1,10 @@
 use std::{
-    ffi::OsStr, fmt::Debug, fs::{File, OpenOptions}, hash::{Hash, Hasher}, io::{BufReader, BufWriter, Seek, Write}, path::{Path, PathBuf}
+    ffi::OsStr,
+    fmt::Debug,
+    fs::{File, OpenOptions},
+    hash::{Hash, Hasher},
+    io::{BufReader, BufWriter, Seek, Write},
+    path::{Path, PathBuf},
 };
 
 use crate::streams::serialize::{DeserializeRaw, SerializeRaw};
@@ -147,7 +152,6 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
 
         let mut more_than_one_batch = false;
 
-        println!("from_batched_iter before: {:?}", buffer);
         if let Some(batch) = iter.next_batch() {
             buffer.par_extend(batch);
 
@@ -160,14 +164,13 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
                 more_than_one_batch = true;
                 buffer.clear();
             }
-            println!("from_batched_iter first buffer: {:?}", buffer);
         }
 
         // Read from iterator and write to file.
         // If the iterator contains more than `BUFFER_SIZE` elements
         // (that is, more than one batch),
         // we write the first batch to the file
-        
+
         while let Some(batch) = iter.next_batch() {
             more_than_one_batch = true;
             for item in &buffer {
@@ -176,7 +179,6 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
             }
             buffer.clear();
             buffer.par_extend(batch);
-            println!("from_batched_iter next buffer: {:?}", buffer);
         }
 
         // Write the last batch to the file.
@@ -188,11 +190,9 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
             writer.flush().expect("failed to flush file");
             drop(writer);
             file.rewind().expect("failed to seek file");
-            println!("from_batched_iter FILE");
             Self::new_file(file, path)
         } else {
             let _ = std::fs::remove_file(&path);
-            println!("from_batched_iter BUFFER");
             FileVec::Buffer { buffer }
         }
     }

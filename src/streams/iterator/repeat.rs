@@ -23,7 +23,6 @@ where
         } else {
             BUFFER_SIZE
         };
-        println!("repeat batch_size: {}", batch_size);
         self.count -= batch_size;
         Some(rayon::iter::repeatn(self.iter, batch_size))
     }

@@ -195,10 +195,6 @@ where
         transcript.append_serializable_element(b"frac(x)", &frac_comm)?;
         transcript.append_serializable_element(b"prod(x)", &prod_x_comm)?;
         let alpha = transcript.get_and_append_challenge(b"alpha")?;
-        #[cfg(debug_assertions)]
-        {
-            println!("prod_check prove_zero_check alpha: {}", alpha);
-        }
 
         // build the zero-check proof
         let (zero_check_proof, _) =

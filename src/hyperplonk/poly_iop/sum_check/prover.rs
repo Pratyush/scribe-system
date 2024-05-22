@@ -135,20 +135,18 @@ impl<F: RawPrimeField> SumCheckProver<F> for IOPProverState<F> {
                     || vec![F::zero(); products.len() + 1],
                     |mut acc, mut products| {
                         products.iter_mut().for_each(|[even, odd]| *odd -= even);
-                        acc[0] += products.iter().map(|[eval, _]| dbg!(eval)).product::<F>();
+                        acc[0] += products.iter().map(|[eval, _]| eval).product::<F>();
                         acc[1..].iter_mut().for_each(|acc| {
                             products.iter_mut().for_each(|[eval, step]| *eval += step);
-                            *acc += products.iter().map(|[eval, _]| dbg!(eval)).product::<F>();
+                            *acc += products.iter().map(|[eval, _]| eval).product::<F>();
                         });
-                        println!("acc: {:?}", acc); // by the bit
-                        acc
+                        acc // by the bit
                     },
                     |mut sum, partial| {
                         sum.iter_mut()
                             .zip(partial.iter())
                             .for_each(|(sum, partial)| *sum += partial);
-                        println!("sum: {:?}", sum); // sum for half of the bits
-                        sum
+                        sum // sum for half of the bits
                     },
                 );
 

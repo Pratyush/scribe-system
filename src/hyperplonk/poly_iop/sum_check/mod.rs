@@ -162,21 +162,9 @@ impl<F: RawPrimeField> SumCheck<F> for PolyIOP<F> {
             let prover_msg =
                 IOPProverState::prove_round_and_update_state(&mut prover_state, &challenge)?;
 
-            #[cfg(debug_assertions)]
-            prover_msg.evaluations.iter().for_each(|evals| {
-                println!("round={}, prover msg: {:?}", i, evals);
-            });
-
             transcript.append_serializable_element(b"prover msg", &prover_msg)?;
             prover_msgs.push(prover_msg);
             challenge = Some(transcript.get_and_append_challenge(b"Internal round")?);
-
-            #[cfg(debug_assertions)]
-            println!(
-                "round={}, prover challenge: {}",
-                i,
-                challenge.clone().unwrap()
-            );
         }
         // pushing the last challenge point to the state
         if let Some(p) = challenge {

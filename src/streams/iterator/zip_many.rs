@@ -35,11 +35,7 @@ where
                     // println!("zip many batch: {:?}", batch.to_file_vec());
                     // batch
                 })
-                .for_each(|(zipped, b)| {
-                    println!("iters id: {:?}", iters_id);
-                    println!("batch elem: {:?}", b);
-                    zipped.push(b)
-                });
+                .for_each(|(zipped, b)| zipped.push(b));
             iters_id += 1;
         }
         let start_of_empty = batched

@@ -36,18 +36,8 @@ where
             .par_chunks_exact(N)
             .map(|chunk| <[I::Item; N]>::try_from(chunk).unwrap())
             .collect::<Vec<_>>();
-        println!("array chunk batch: {:?}", batch);
         Some(batch.into_par_iter())
     }
-
-    // fn next_batch(&mut self) -> Option<Self::Batch> {
-    //     let batch: Vec<_> = self.iter.next_batch()?.collect();
-    //     let batch = batch
-    //         .par_chunks_exact(N)
-    //         .map(|chunk| <[I::Item; N]>::try_from(chunk).unwrap())
-    //         .collect::<Vec<_>>();
-    //     Some(batch.into_par_iter())
-    // }
 }
 
 #[cfg(test)]

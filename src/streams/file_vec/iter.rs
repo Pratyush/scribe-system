@@ -43,9 +43,7 @@ impl<'a, T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy + Debug
                 file, work_buffer, ..
             } => {
                 let mut result = Vec::with_capacity(BUFFER_SIZE);
-                println!("iter next batch FILE: {:?}", result);
                 T::deserialize_raw_batch(&mut result, work_buffer, BUFFER_SIZE, file).ok()?;
-                println!("iter next batch FILE WORK BUFFER: {:?}", work_buffer);
                 if result.is_empty() {
                     None
                 } else {
@@ -53,7 +51,6 @@ impl<'a, T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy + Debug
                 }
             }
             Iter::Buffer { buffer } => {
-                println!("iter next batch BUFFER: {:?}", buffer);
                 if buffer.is_empty() {
                     return None;
                 } else {

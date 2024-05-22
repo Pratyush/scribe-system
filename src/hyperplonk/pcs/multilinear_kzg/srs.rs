@@ -217,7 +217,6 @@ where
             powers_of_g,
         };
 
-        println!("num_vars: {}", num_vars);
         // print the length of each powers_of_g evaluation
         // for i in 0..num_vars + 1 {
         //     println!(
