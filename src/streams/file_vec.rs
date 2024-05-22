@@ -1,9 +1,5 @@
 use std::{
-    ffi::OsStr,
-    fs::{File, OpenOptions},
-    hash::{Hash, Hasher},
-    io::{BufReader, BufWriter, Seek, Write},
-    path::{Path, PathBuf},
+    ffi::OsStr, fmt::Debug, fs::{File, OpenOptions}, hash::{Hash, Hasher}, io::{BufReader, BufWriter, Seek, Write}, path::{Path, PathBuf}
 };
 
 use crate::streams::serialize::{DeserializeRaw, SerializeRaw};
@@ -131,14 +127,14 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
 
     pub fn from_iter(iter: impl IntoIterator<Item = T>) -> Self
     where
-        T: Send + Sync,
+        T: Send + Sync + Debug,
     {
         Self::from_batched_iter(BatchAdapter::from(iter.into_iter()))
     }
 
     pub fn from_batched_iter(iter: impl IntoBatchedIterator<Item = T>) -> Self
     where
-        T: Send + Sync,
+        T: Send + Sync + Debug,
     {
         let mut iter = iter.into_batched_iter();
         let mut buffer = Vec::with_capacity(BUFFER_SIZE);
@@ -149,15 +145,29 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
         let size = core::mem::size_of::<T>();
         let mut writer = BufWriter::with_capacity(size * BUFFER_SIZE, &mut file);
 
+        let mut more_than_one_batch = false;
+
+        println!("from_batched_iter before: {:?}", buffer);
         if let Some(batch) = iter.next_batch() {
-            buffer.par_extend(batch)
+            buffer.par_extend(batch);
+
+            // buffer might be longer than BUFFER_SIZE, in cases such as the FlatMap mapping one element to two
+            if buffer.len() > BUFFER_SIZE {
+                for item in &buffer {
+                    item.serialize_raw(&mut writer)
+                        .expect("failed to write to file");
+                }
+                more_than_one_batch = true;
+                buffer.clear();
+            }
+            println!("from_batched_iter first buffer: {:?}", buffer);
         }
 
         // Read from iterator and write to file.
         // If the iterator contains more than `BUFFER_SIZE` elements
         // (that is, more than one batch),
         // we write the first batch to the file
-        let mut more_than_one_batch = false;
+        
         while let Some(batch) = iter.next_batch() {
             more_than_one_batch = true;
             for item in &buffer {
@@ -166,6 +176,7 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
             }
             buffer.clear();
             buffer.par_extend(batch);
+            println!("from_batched_iter next buffer: {:?}", buffer);
         }
 
         // Write the last batch to the file.
@@ -177,9 +188,11 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
             writer.flush().expect("failed to flush file");
             drop(writer);
             file.rewind().expect("failed to seek file");
+            println!("from_batched_iter FILE");
             Self::new_file(file, path)
         } else {
             let _ = std::fs::remove_file(&path);
+            println!("from_batched_iter BUFFER");
             FileVec::Buffer { buffer }
         }
     }

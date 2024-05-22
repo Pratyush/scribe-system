@@ -263,15 +263,18 @@ fn eq_x_r_helper<F: RawField>(r: &[F]) -> Result<FileVec<F>, ArithError> {
     if r.is_empty() {
         Err(ArithError::InvalidParameters("r length is 0".to_string()))
     } else if r.len() <= LOG_BUFFER_SIZE as usize {
+        println!("eq_x_r buffer");
         let result = crate::arithmetic::virtual_polynomial::build_eq_x_r_vec(r).unwrap();
         // initializing the buffer with [1-r_0, r_0]
         Ok(FileVec::from_iter(result))
     } else {
+        println!("eq_x_r file");
         let prev = eq_x_r_helper(&r[1..])?;
         Ok(prev
             .iter()
             .flat_map(|cur| {
                 let tmp = r[0] * cur;
+                println!("cur eq_x_r file elem: {:?}", cur);
                 [cur - tmp, tmp]
             })
             .to_file_vec())

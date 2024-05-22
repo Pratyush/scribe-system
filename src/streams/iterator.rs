@@ -89,7 +89,7 @@ pub trait BatchedIterator: Sized {
 
     fn to_file_vec(self) -> FileVec<Self::Item>
     where
-        Self::Item: SerializeRaw + DeserializeRaw,
+        Self::Item: SerializeRaw + DeserializeRaw + std::fmt::Debug,
     {
         FileVec::from_batched_iter(self)
     }

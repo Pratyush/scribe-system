@@ -108,6 +108,7 @@ impl<F: RawField> Inner<F> {
     }
 
     pub fn rand<R: ark_std::rand::RngCore>(num_vars: usize, rng: &mut R) -> Self {
+        println!("rand poly gen");
         let evals = FileVec::from_iter((0..(1 << num_vars)).map(|_| F::rand(rng)));
         Self::from_evals(evals, num_vars)
     }

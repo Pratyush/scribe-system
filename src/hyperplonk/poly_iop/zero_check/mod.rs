@@ -194,9 +194,9 @@ mod test {
     }
     #[test]
     fn test_normal_polynomial() -> Result<(), PIOPError> {
-        let nv = 3;
-        let num_multiplicands_range = (1, 2);
-        let num_products = 1;
+        let nv = 4;
+        let num_multiplicands_range = (4, 9);
+        let num_products = 4;
 
         test_zerocheck(nv, num_multiplicands_range, num_products)
     }

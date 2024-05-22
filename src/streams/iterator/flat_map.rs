@@ -27,3 +27,14 @@ where
         Some(iter.flat_map(self.f.clone()))
     }
 }
+
+
+//  self.buf.clear();
+//         self.buf.par_extend(self.iter.next_batch()?);
+//         let batch = self
+//             .buf
+//             .par_chunks_exact(N)
+//             .map(|chunk| <[I::Item; N]>::try_from(chunk).unwrap())
+//             .collect::<Vec<_>>();
+//         println!("array chunk batch: {:?}", batch);
+//         Some(batch.into_par_iter())
