@@ -327,15 +327,15 @@ impl<T: SerializeRaw + DeserializeRaw> Drop for FileVec<T> {
     fn drop(&mut self) {
         match self {
             Self::File { path, .. } => {
-                let remove_timer = start_timer!(|| format!(
-                    "Removing temp file: {:?}",
-                    &path.file_name().unwrap()
-                ));
+                // let remove_timer = start_timer!(|| format!(
+                //     "Removing temp file: {:?}",
+                //     &path.file_name().unwrap()
+                // ));
                 match std::fs::remove_file(&path) {
                     Ok(_) => (),
                     Err(e) => eprintln!("Failed to remove file at path {path:?}: {e:?}"),
                 }
-                end_timer!(remove_timer);
+                // end_timer!(remove_timer);
             }
             Self::Buffer { .. } => (),
         }

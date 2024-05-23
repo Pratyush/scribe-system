@@ -58,12 +58,12 @@ pub trait DeserializeRaw: SerializeRaw + Sized {
         let val = Self::deserialize_raw(&mut file)?;
         let size = val.serialized_size();
         result_buffer.push(val);
-        let read_time = start_timer!(|| "Reading");
+        // let read_time = start_timer!(|| "Reading");
         (&mut file)
             .take((size * (batch_size - 1)) as u64)
             .read_to_end(work_buffer)?;
-        end_timer!(read_time);
-        let time = start_timer!(|| "Deserializing");
+        // end_timer!(read_time);
+        // let time = start_timer!(|| "Deserializing");
         if rayon::current_num_threads() == 1 {
             result_buffer.extend(
                 work_buffer
@@ -78,7 +78,7 @@ pub trait DeserializeRaw: SerializeRaw + Sized {
                     .map(|chunk| Self::deserialize_raw(chunk).unwrap()),
             );
         }
-        end_timer!(time);
+        // end_timer!(time);
 
         Ok(())
     }
