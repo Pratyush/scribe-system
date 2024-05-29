@@ -2,6 +2,7 @@
 
 # Array of different thread numbers
 threads=(1 2 4 8)
+# export TMPDIR=/home/ec2-user/external/tmp
 
 # Loop over the thread numbers
 for num_threads in "${threads[@]}"
