@@ -25,7 +25,7 @@ use scribe::streams::LOG_BUFFER_SIZE;
 
 const SUPPORTED_SIZE: usize = 22;
 const MIN_NUM_VARS: usize = 10;
-const MAX_NUM_VARS: usize = 22;
+const MAX_NUM_VARS: usize = 20;
 const MIN_CUSTOM_DEGREE: usize = 1;
 const MAX_CUSTOM_DEGREE: usize = 32;
 const HIGH_DEGREE_TEST_NV: usize = 15;
@@ -45,7 +45,10 @@ fn main() -> Result<(), HyperPlonkErrors> {
     //         },
     //     }
     // };
-    let pcs_srs = MultilinearKzgPCS::<Bls12_381>::gen_srs_for_testing(&mut rng, SUPPORTED_SIZE)?;
+    let pool = rayon::ThreadPoolBuilder::new().num_threads(8).build().unwrap();
+    let pcs_srs = pool.install(|| {
+        MultilinearKzgPCS::<Bls12_381>::gen_srs_for_testing(&mut rng, SUPPORTED_SIZE)
+    })?;
     // bench_jellyfish_plonk(&pcs_srs, thread)?;
     // println!();
     bench_vanilla_plonk(&pcs_srs, thread)?;
@@ -133,57 +136,34 @@ fn bench_mock_circuit_zkp_helper(
     //==========================================================
     // generate pk and vks
     let start = Instant::now();
-    for _ in 0..repetition {
-        let (_pk, _vk) = <PolyIOP<Fr> as HyperPlonkSNARK<
-            Bls12_381,
-            MultilinearKzgPCS<Bls12_381>,
-        >>::preprocess(&index, pcs_srs)?;
-    }
-    println!(
-        "key extraction for {} variables: {} us",
-        nv,
-        start.elapsed().as_micros() / repetition as u128
-    );
-    let (pk, vk) =
-        <PolyIOP<Fr> as HyperPlonkSNARK<Bls12_381, MultilinearKzgPCS<Bls12_381>>>::preprocess(
-            &index, pcs_srs,
-        )?;
+
+    let pool = rayon::ThreadPoolBuilder::new().num_threads(8).build().unwrap();
+    let (pk, vk) = pool.install(|| {
+        <PolyIOP<Fr> as HyperPlonkSNARK<Bls12_381, MultilinearKzgPCS<_>>>::preprocess(&index, pcs_srs)
+    })?;
     //==========================================================
     // generate a proof
     let start = Instant::now();
-    for _ in 0..repetition {
-        let _proof =
-            <PolyIOP<Fr> as HyperPlonkSNARK<Bls12_381, MultilinearKzgPCS<Bls12_381>>>::prove(
-                &pk,
-                &circuit.public_inputs,
-                &circuit.witnesses,
-            )?;
-    }
-    let t = start.elapsed().as_micros() / repetition as u128;
-    println!(
-        "proving for {} variables: {} us",
-        nv,
-        start.elapsed().as_micros() / repetition as u128
-    );
-    file.write_all(format!("{} {}\n", nv, t).as_ref()).unwrap();
+    let proof =
+        <PolyIOP<Fr> as HyperPlonkSNARK<Bls12_381, MultilinearKzgPCS<Bls12_381>>>::prove(
+            &pk,
+            &circuit.public_inputs,
+            &circuit.witnesses,
+        )?;
+    let t = start.elapsed().as_micros();
+    println!("proving for {nv} variables: {t} us",);
+    file.write_all(format!("{nv} {t}\n").as_ref()).unwrap();
 
-    let proof = <PolyIOP<Fr> as HyperPlonkSNARK<Bls12_381, MultilinearKzgPCS<Bls12_381>>>::prove(
-        &pk,
-        &circuit.public_inputs,
-        &circuit.witnesses,
-    )?;
     //==========================================================
     // verify a proof
     let start = Instant::now();
-    for _ in 0..repetition {
-        let verify =
-            <PolyIOP<Fr> as HyperPlonkSNARK<Bls12_381, MultilinearKzgPCS<Bls12_381>>>::verify(
-                &vk,
-                &circuit.public_inputs,
-                &proof,
-            )?;
-        assert!(verify);
-    }
+    let verify =
+        <PolyIOP<Fr> as HyperPlonkSNARK<Bls12_381, MultilinearKzgPCS<Bls12_381>>>::verify(
+            &vk,
+            &circuit.public_inputs,
+            &proof,
+        )?;
+    assert!(verify);
     println!(
         "verifying for {} variables: {} us",
         nv,
