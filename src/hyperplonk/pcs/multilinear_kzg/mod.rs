@@ -298,8 +298,8 @@ where
     // the first `ignored` SRS vectors are unused for opening.
     let ignored = prover_param.num_vars - nv + 1;
     let mut f = polynomial.evals();
-    let mut r = FileVec::<E::ScalarField>::new();
-    let mut q = FileVec::<E::ScalarField>::new();
+    let mut r;
+    let mut q;
 
     let mut proofs = Vec::new();
 
@@ -321,7 +321,7 @@ where
                 let r_bit = chunk[0] + q_bit * point_at_k;
                 (q_bit, r_bit)
             })
-            .unzip();
+            .unzip_faster();
 
         f = &r;
 

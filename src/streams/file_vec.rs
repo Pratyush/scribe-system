@@ -234,8 +234,8 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
             .keep()
             .expect("failed to keep temp file");
         let size = core::mem::size_of::<A>();
-        let mut writer_1 = BufWriter::with_capacity(size * BUFFER_SIZE / 2, &mut file_1);
-        let mut writer_2 = BufWriter::with_capacity(size * BUFFER_SIZE / 2, &mut file_2);
+        let mut writer_1 = BufWriter::with_capacity(size * BUFFER_SIZE, &mut file_1);
+        let mut writer_2 = BufWriter::with_capacity(size * BUFFER_SIZE, &mut file_2);
 
         if let Some(batch) = iter.next_batch() {
             buffer.par_extend(batch)
@@ -286,6 +286,76 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
             (
                 FileVec::Buffer { buffer: b1 },
                 FileVec::Buffer { buffer: b2 },
+            )
+        }
+    }
+    
+    pub(crate) fn unzip_helper_when_indexed<A, B, I>(mut iter: I) -> (FileVec<A>, FileVec<B>)
+    where
+        I: BatchedIterator<Item = (A, B)>,
+        I::Batch: IndexedParallelIterator,
+        A: SerializeRaw + DeserializeRaw + Send + Sync,
+        B: SerializeRaw + DeserializeRaw + Send + Sync,
+    {
+        let mut buffer_a = Vec::<A>::with_capacity(BUFFER_SIZE);
+        let mut buffer_b = Vec::<B>::with_capacity(BUFFER_SIZE);
+        let (mut file_1, path_1) = NamedTempFile::with_prefix("unzip_1")
+            .expect("failed to create temp file")
+            .keep()
+            .expect("failed to keep temp file");
+        let (mut file_2, path_2) = NamedTempFile::with_prefix("unzip_2")
+            .expect("failed to create temp file")
+            .keep()
+            .expect("failed to keep temp file");
+        let size = core::mem::size_of::<A>();
+        let mut writer_1 = BufWriter::with_capacity(size * BUFFER_SIZE, &mut file_1);
+        let mut writer_2 = BufWriter::with_capacity(size * BUFFER_SIZE, &mut file_2);
+
+        if let Some(batch) = iter.next_batch() {
+            batch.unzip_into_vecs(&mut buffer_a, &mut buffer_b);
+        }
+
+        // Read from iterator and write to file.
+        // If the iterator contains more than `BUFFER_SIZE` elements
+        // (that is, more than one batch),
+        // we write the first batch to the file
+        let mut more_than_one_batch = false;
+        while let Some(batch) = iter.next_batch() {
+            more_than_one_batch = true;
+            for a in &buffer_a {
+                a.serialize_raw(&mut writer_1).unwrap();
+            }
+            for b in &buffer_b {
+                b.serialize_raw(&mut writer_2).unwrap();
+            }
+            buffer_a.clear();
+            buffer_b.clear();
+            batch.unzip_into_vecs(&mut buffer_a, &mut buffer_b);
+        }
+
+        // Write the last batch to the file.
+        if more_than_one_batch {
+            for a in buffer_a {
+                a.serialize_raw(&mut writer_1).unwrap();
+            }
+            for b in buffer_b {
+                b.serialize_raw(&mut writer_2).unwrap();
+            }
+            writer_1.flush().expect("failed to flush file");
+            writer_2.flush().expect("failed to flush file");
+            drop(writer_1);
+            drop(writer_2);
+            file_1.rewind().expect("failed to seek file");
+            file_2.rewind().expect("failed to seek file");
+            let v1: FileVec<A> = FileVec::new_file(file_1, path_1);
+            let v2: FileVec<B> = FileVec::new_file(file_2, path_2);
+            (v1, v2)
+        } else {
+            let _ = std::fs::remove_file(&path_1);
+            let _ = std::fs::remove_file(&path_2);
+            (
+                FileVec::Buffer { buffer: buffer_a },
+                FileVec::Buffer { buffer: buffer_b },
             )
         }
     }

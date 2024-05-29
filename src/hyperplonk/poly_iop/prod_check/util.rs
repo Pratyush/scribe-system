@@ -101,7 +101,7 @@ pub(super) fn prove_zero_check<F: RawPrimeField>(
             .map(|mle| (*mle).evals().iter().array_chunks()),
     )
     .map(|[even, odd]| (even, odd))
-    .unzip();
+    .unzip_faster();
 
     let num_vars = frac_poly.num_vars();
 
