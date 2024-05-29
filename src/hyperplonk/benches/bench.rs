@@ -32,7 +32,10 @@ const HIGH_DEGREE_TEST_NV: usize = 15;
 
 fn main() -> Result<(), HyperPlonkErrors> {
     let thread = rayon::current_num_threads();
-    println!("=== START BENCHMARK WITH {} LOG_BUFFER {} THREADS ===", thread, LOG_BUFFER_SIZE);
+    println!(
+        "=== START BENCHMARK WITH {} LOG_BUFFER {} THREADS ===",
+        thread, LOG_BUFFER_SIZE
+    );
     let mut rng = test_rng();
     // let pcs_srs = {
     //     match read_srs() {
@@ -45,7 +48,10 @@ fn main() -> Result<(), HyperPlonkErrors> {
     //         },
     //     }
     // };
-    let pool = rayon::ThreadPoolBuilder::new().num_threads(8).build().unwrap();
+    let pool = rayon::ThreadPoolBuilder::new()
+        .num_threads(8)
+        .build()
+        .unwrap();
     let pcs_srs = pool.install(|| {
         MultilinearKzgPCS::<Bls12_381>::gen_srs_for_testing(&mut rng, SUPPORTED_SIZE)
     })?;
@@ -76,7 +82,10 @@ fn bench_vanilla_plonk(
     pcs_srs: &MultilinearUniversalParams<Bls12_381>,
     thread: usize,
 ) -> Result<(), HyperPlonkErrors> {
-    let filename = format!("vanilla threads {} log buffer {}.txt", thread, LOG_BUFFER_SIZE);
+    let filename = format!(
+        "vanilla threads {} log buffer {}.txt",
+        thread, LOG_BUFFER_SIZE
+    );
     let mut file = File::create(filename).unwrap();
     for nv in MIN_NUM_VARS..=MAX_NUM_VARS {
         println!("=== START BENCHMARK WITH {} THREADS {} NV ===", thread, nv);
@@ -137,19 +146,23 @@ fn bench_mock_circuit_zkp_helper(
     // generate pk and vks
     let start = Instant::now();
 
-    let pool = rayon::ThreadPoolBuilder::new().num_threads(8).build().unwrap();
+    let pool = rayon::ThreadPoolBuilder::new()
+        .num_threads(8)
+        .build()
+        .unwrap();
     let (pk, vk) = pool.install(|| {
-        <PolyIOP<Fr> as HyperPlonkSNARK<Bls12_381, MultilinearKzgPCS<_>>>::preprocess(&index, pcs_srs)
+        <PolyIOP<Fr> as HyperPlonkSNARK<Bls12_381, MultilinearKzgPCS<_>>>::preprocess(
+            &index, pcs_srs,
+        )
     })?;
     //==========================================================
     // generate a proof
     let start = Instant::now();
-    let proof =
-        <PolyIOP<Fr> as HyperPlonkSNARK<Bls12_381, MultilinearKzgPCS<Bls12_381>>>::prove(
-            &pk,
-            &circuit.public_inputs,
-            &circuit.witnesses,
-        )?;
+    let proof = <PolyIOP<Fr> as HyperPlonkSNARK<Bls12_381, MultilinearKzgPCS<Bls12_381>>>::prove(
+        &pk,
+        &circuit.public_inputs,
+        &circuit.witnesses,
+    )?;
     let t = start.elapsed().as_micros();
     println!("proving for {nv} variables: {t} us",);
     file.write_all(format!("{nv} {t}\n").as_ref()).unwrap();
@@ -157,12 +170,11 @@ fn bench_mock_circuit_zkp_helper(
     //==========================================================
     // verify a proof
     let start = Instant::now();
-    let verify =
-        <PolyIOP<Fr> as HyperPlonkSNARK<Bls12_381, MultilinearKzgPCS<Bls12_381>>>::verify(
-            &vk,
-            &circuit.public_inputs,
-            &proof,
-        )?;
+    let verify = <PolyIOP<Fr> as HyperPlonkSNARK<Bls12_381, MultilinearKzgPCS<Bls12_381>>>::verify(
+        &vk,
+        &circuit.public_inputs,
+        &proof,
+    )?;
     assert!(verify);
     println!(
         "verifying for {} variables: {} us",

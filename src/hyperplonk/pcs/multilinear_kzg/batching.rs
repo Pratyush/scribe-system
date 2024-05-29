@@ -82,19 +82,23 @@ where
         BTreeMap::from_iter(point_indices.iter().map(|(point, idx)| (*idx, *point)))
             .into_values()
             .collect::<Vec<_>>();
-    let merged_tilde_gs = polynomials
+    let merged_tilde_gs: Vec<MLE<_>> = polynomials
         .iter()
         .zip(points.iter())
         .zip(eq_t_i_list.iter())
         .fold(
-            iter::repeat_with(|| MLE::constant(E::ScalarField::zero(), num_var))
-                .take(point_indices.len())
-                .collect::<Vec<MLE<E::ScalarField>>>(),
+            vec![None; point_indices.len()],
             |mut merged_tilde_gs, ((poly, point), coeff)| {
-                merged_tilde_gs[point_indices[point]] += (*coeff, poly);
+                match &mut merged_tilde_gs[point_indices[point]] {
+                    Some(merged_tilde_g) => *merged_tilde_g += (*coeff, poly),
+                    None => merged_tilde_gs[point_indices[point]] = Some(poly * *coeff),
+                }
                 merged_tilde_gs
             },
-        );
+        )
+        .into_iter()
+        .map(|merged_tilde_g| merged_tilde_g.unwrap())
+        .collect();
     end_timer!(timer);
 
     let timer = start_timer!(|| format!("compute tilde eq for {} points", points.len()));

@@ -289,7 +289,7 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
             )
         }
     }
-    
+
     pub(crate) fn unzip_helper_when_indexed<A, B, I>(mut iter: I) -> (FileVec<A>, FileVec<B>)
     where
         I: BatchedIterator<Item = (A, B)>,

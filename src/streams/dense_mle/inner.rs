@@ -1,5 +1,5 @@
 use std::{
-    ops::{AddAssign, MulAssign, SubAssign},
+    ops::{AddAssign, Mul, MulAssign, SubAssign},
     path::Path,
 };
 
@@ -322,6 +322,20 @@ impl<'a, F: RawField> MulAssign<(F, &'a Self)> for Inner<F> {
     fn mul_assign(&mut self, (f, other): (F, &'a Self)) {
         self.evals
             .zipped_for_each(other.evals.iter(), |a, b| *a *= f * b);
+    }
+}
+
+impl<'a, F: RawField> MulAssign<F> for Inner<F> {
+    fn mul_assign(&mut self, f: F) {
+        self.evals.for_each(|a| *a *= f);
+    }
+}
+
+impl<'a, F: RawField> Mul<F> for &'a Inner<F> {
+    type Output = Inner<F>;
+    fn mul(self, f: F) -> Self::Output {
+        let evals = self.evals.iter().map(|a| f * a).to_file_vec();
+        Inner::from_evals(evals, self.num_vars)
     }
 }
 

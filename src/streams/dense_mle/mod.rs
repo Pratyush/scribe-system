@@ -1,6 +1,6 @@
 mod inner;
 use std::{
-    ops::{AddAssign, MulAssign, SubAssign},
+    ops::{AddAssign, Mul, MulAssign, SubAssign},
     path::Path,
     sync::Arc,
 };
@@ -207,6 +207,20 @@ impl<F: RawField> MulAssign<(F, Self)> for MLE<F> {
 impl<'a, F: RawField> MulAssign<(F, &'a Self)> for MLE<F> {
     fn mul_assign(&mut self, (f, other): (F, &'a Self)) {
         self.map_in_place_2(&other, |inner, other| inner.mul_assign((f, other)));
+    }
+}
+
+impl<F: RawField> MulAssign<F> for MLE<F> {
+    fn mul_assign(&mut self, f: F) {
+        self.map_in_place(|inner| inner.mul_assign(f));
+    }
+}
+
+impl<'a, F: RawField> Mul<F> for &'a MLE<F> {
+    type Output = MLE<F>;
+
+    fn mul(self, other: F) -> Self::Output {
+        self.map(|inner| inner.mul(other)).into()
     }
 }
 
