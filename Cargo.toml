@@ -14,10 +14,12 @@ merlin = "3.0.0"
 smallvec = "1.6"
 rayon = { version = "1.5.2", default-features = false, optional = true }
 displaydoc = "0.2.0"
-log = { version = "0.4.14", optional = true }
-libc = { version = "0.2.101", optional = true }
-procinfo = { version = "0.4", optional = true }
 derivative = { version = "2", features = ["use_core"] }
+
+[target_os.'cfg(linux)'.dependencies]
+procfs = { version = "0.16"}
+libc = { version = "0.2.101"}
+log = { version = "0.4.14"}
 
 [dev-dependencies]
 env_logger = "0.11"
@@ -42,9 +44,6 @@ parallel = [
 ]
 print-trace = [ 
     "ark-std/print-trace",
-    "log",
-    "libc",
-    "procinfo"
 ] 
 
 [[bench]]
