@@ -62,7 +62,7 @@ where
         let permutation_oracles = index.permutation.clone();
         let permutation_commit_time = start_timer!(|| "commit permutation oracles");
         let permutation_commitments = permutation_oracles
-            .par_iter()
+            .iter()
             .map(|perm_oracle| PCS::commit(&pcs_prover_param, perm_oracle))
             .collect::<Result<Vec<_>, _>>()?;
         end_timer!(permutation_commit_time);
@@ -72,7 +72,7 @@ where
 
         let selector_commit_time = start_timer!(|| "commit selector oracles");
         let selector_commitments = selector_oracles
-            .par_iter()
+            .iter()
             .map(|poly| PCS::commit(&pcs_prover_param, poly))
             .collect::<Result<Vec<_>, _>>()?;
         end_timer!(selector_commit_time);
@@ -172,7 +172,7 @@ where
         let step = start_timer!(|| "commit witnesses");
 
         let witness_commits = witnesses
-            .par_iter()
+            .iter()
             .map(|x| PCS::commit(&pk.pcs_param, x).unwrap())
             .collect::<Vec<_>>();
         for w_com in witness_commits.iter() {
