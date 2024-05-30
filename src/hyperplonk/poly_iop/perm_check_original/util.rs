@@ -1,4 +1,3 @@
-use crate::streams::iterator::zip_many;
 use crate::streams::iterator::BatchedIterator;
 use crate::streams::MLE;
 use crate::{hyperplonk::poly_iop::errors::PIOPError, streams::serialize::RawPrimeField};
@@ -31,21 +30,21 @@ pub(super) fn computer_nums_and_denoms<F: RawPrimeField>(
 
     let num_vars = fxs[0].num_vars();
 
-    // Use Arc<Mutex<Vec<_>>> for parallel access to writing results
-    let s_ids = MLE::identity_permutation_mles(num_vars, fxs.len());
+    let s_ids = MLE::<F>::identity_permutation_mles(num_vars, fxs.len());
 
     let (numerators, denominators) = (fxs, gxs, &s_ids, perms)
         .into_par_iter()
         .map(|(fx, gx, s_id, perm)| {
-            let (numerator, denominator) = zip_many([
-                fx.evals().iter(),
-                gx.evals().iter(),
-                s_id.evals().iter(),
-                perm.evals().iter(),
-            ])
-            .map(|vals| {
-                let numerator = vals[0] + *beta * vals[2] + gamma;
-                let denominator = vals[1] + *beta * vals[3] + gamma;
+            let (numerator, denominator) = 
+                fx
+                    .evals()
+                    .iter()
+                    .zip(gx.evals().iter())
+                    .zip(s_id.evals().iter())
+                    .zip(perm.evals().iter())
+            .map(|(((f, g), s_id), perm)| {
+                let numerator = f + *beta * s_id + gamma;
+                let denominator = g + *beta * perm + gamma;
                 (numerator, denominator)
             })
             .unzip_faster();
@@ -65,6 +64,7 @@ pub(super) fn computer_nums_and_denoms<F: RawPrimeField>(
 mod tests {
     use super::*;
     use ark_bls12_381::Fr;
+    use crate::streams::iterator::zip_many;
 
     #[test]
     fn test_compute_nums_and_denoms() {

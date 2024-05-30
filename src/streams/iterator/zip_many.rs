@@ -32,11 +32,11 @@ where
                 .zip(iter.next_batch()?)
                 .for_each(|(zipped, b)| zipped.push(b));
         }
-        let start_of_empty = batched
+        /* let start_of_empty = batched
             .par_iter()
             .position_first(|x| x.is_empty())
-            .unwrap_or(batched.len());
-        batched.truncate(start_of_empty);
+            .unwrap_or(batched.len()); */
+        // batched.truncate(start_of_empty);
         Some(batched.into_par_iter())
     }
 }
