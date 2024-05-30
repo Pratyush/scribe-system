@@ -37,20 +37,6 @@ pub enum FileVec<T: SerializeRaw + DeserializeRaw> {
     Buffer { buffer: Vec<T> },
 }
 
-// impl<T: SerializeRaw + DeserializeRaw> SerializeRaw for FileVec<T> {
-//     fn seriali–ze_with_mode<W: Write>(
-//             &self,
-//             writer: W,
-//             compress: ark_serialize::Compress,
-//         ) -> Result<(), ark_serialize::SerializationError> {
-//             todo!()
-//     }
-
-//     fn serialized_size(&self, compress: ark_serialize::Compress) -> usize {
-//         todo!()
-//     }
-// }
-
 impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
     fn new_file(file: File, path: PathBuf) -> Self {
         Self::File { path, file }
@@ -149,6 +135,10 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
         let mut more_than_one_batch = false;
         if let Some(batch) = iter.next_batch() {
             buffer.par_extend(batch);
+            
+            if buffer.len() > BUFFER_SIZE {
+                more_than_one_batch = true;
+            }
         }
 
         // Read from iterator and write to file.
@@ -158,7 +148,7 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
 
         while let Some(batch) = iter.next_batch() {
             if !more_than_one_batch {
-                byte_buffer = Some(Vec::with_capacity(buffer.len() * size));
+                byte_buffer = Some(vec![0u8; buffer.len() * size]);
             }
             let byte_buffer = byte_buffer.as_mut().unwrap();
 

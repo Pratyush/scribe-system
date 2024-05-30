@@ -26,17 +26,11 @@ where
 
     fn next_batch(&mut self) -> Option<Self::Batch> {
         let mut batched = vec![SVec::with_capacity(self.iters.len()); BUFFER_SIZE];
-        let mut iters_id = 0;
         for iter in &mut self.iters {
             batched
                 .par_iter_mut()
-                .zip({
-                    iter.next_batch()?
-                    // println!("zip many batch: {:?}", batch.to_file_vec());
-                    // batch
-                })
+                .zip(iter.next_batch()?)
                 .for_each(|(zipped, b)| zipped.push(b));
-            iters_id += 1;
         }
         let start_of_empty = batched
             .par_iter()
