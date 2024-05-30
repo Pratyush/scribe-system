@@ -1,10 +1,5 @@
 use std::{
-    ffi::OsStr,
-    fmt::Debug,
-    fs::{File, OpenOptions},
-    hash::{Hash, Hasher},
-    io::{BufWriter, Seek, Write},
-    path::{Path, PathBuf},
+    ffi::OsStr, fmt::Debug, fs::{File, OpenOptions}, hash::{Hash, Hasher}, io::{BufWriter, Seek, Write}, mem, path::{Path, PathBuf}
 };
 
 use crate::streams::serialize::{DeserializeRaw, SerializeRaw};
@@ -104,7 +99,11 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
         T: Clone,
     {
         match &mut self {
-            Self::File { path, .. } => IntoIter::new_file(File::open(&path).unwrap(), path.clone()),
+            Self::File { path, .. } => {
+                let iter = IntoIter::new_file(File::open(&path).unwrap(), path.clone());
+                mem::forget(self);
+                iter
+            },
             Self::Buffer { buffer } => {
                 let buffer = core::mem::replace(buffer, Vec::new());
                 IntoIter::new_buffer(buffer)
@@ -172,13 +171,19 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
             byte_buffer
                 .par_chunks_mut(size)
                 .zip(&buffer)
+                .with_min_len(1 << 10)
                 .for_each(|(chunk, item)| {
                     item.serialize_raw(chunk).unwrap();
                 });
-            file.write_all(&byte_buffer[..buffer.len() * size])
-                .expect("failed to write to file");
-            buffer.clear();
-            buffer.par_extend(batch);
+            let buffer_length = buffer.len();
+            rayon::join(
+                || file.write_all(&byte_buffer[..buffer_length * size])
+                .expect("failed to write to file"),
+                ||  {
+                    buffer.clear();
+                    buffer.par_extend(batch);
+                }
+            );
         }
 
         // Write the last batch to the file.
@@ -189,6 +194,7 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
             byte_buffer
                 .par_chunks_mut(size)
                 .zip(&buffer)
+                .with_min_len(1 << 10)
                 .for_each(|(chunk, item)| {
                     item.serialize_raw(chunk).unwrap();
                 });

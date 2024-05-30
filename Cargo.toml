@@ -56,6 +56,10 @@ name = "file_vec"
 path = "benches/file_vec.rs"
 harness = false
 
+[[bench]]
+name = "iter"
+path = "benches/iter.rs"
+harness = false
 
 [[bench]]
 name = "serialize"
