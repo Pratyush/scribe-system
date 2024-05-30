@@ -125,10 +125,7 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
     {
         let mut iter = iter.into_batched_iter();
         let mut buffer = Vec::with_capacity(BUFFER_SIZE);
-        let (mut file, path) = NamedTempFile::with_prefix("from_batched_iter")
-            .expect("failed to create temp file")
-            .keep()
-            .expect("failed to keep temp file");
+        let (mut file, mut path) = (None, None);
         let size = T::SIZE;
 
         let mut byte_buffer = None;
@@ -136,9 +133,19 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
         let mut batch_is_larger_than_buffer = false;
         if let Some(batch) = iter.next_batch() {
             buffer.par_extend(batch);
-            
+
+            // If the first batch is larger than BUFFER_SIZE,
+            // (e.g., if the batch is the output of a FlatMap that doubles the length)
+            // then our output FileVec should go to disk.
+            // So, we initialize the byte_buffer and file here.
             if buffer.len() > BUFFER_SIZE {
                 batch_is_larger_than_buffer = true;
+                byte_buffer = Some(vec![0u8; buffer.len() * size]);
+                let (f, p) = NamedTempFile::with_prefix("from_batched_iter")
+                    .expect("failed to create temp file")
+                    .keep()
+                    .expect("failed to keep temp file");
+                (file, path) = (Some(f), Some(p));
             }
         }
 
@@ -146,18 +153,30 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
         // If the iterator contains more than `BUFFER_SIZE` elements
         // (that is, more than one batch),
         // we write the first batch to the file
-
         while let Some(batch) = iter.next_batch() {
             if !more_than_one_batch {
                 byte_buffer = Some(vec![0u8; buffer.len() * size]);
             }
+            if file.is_none() {
+                assert!(path.is_none());
+                let (f, p) = NamedTempFile::with_prefix("from_batched_iter")
+                    .expect("failed to create temp file")
+                    .keep()
+                    .expect("failed to keep temp file");
+                (file, path) = (Some(f), Some(p));
+            }
             let byte_buffer = byte_buffer.as_mut().unwrap();
+            let file = file.as_mut().unwrap();
 
             more_than_one_batch = true;
-            byte_buffer.par_chunks_mut(size).zip(&buffer).for_each(|(chunk, item)| {
-                item.serialize_raw(chunk).unwrap();
-            });
-            file.write_all(&byte_buffer[..buffer.len() * size]).expect("failed to write to file");
+            byte_buffer
+                .par_chunks_mut(size)
+                .zip(&buffer)
+                .for_each(|(chunk, item)| {
+                    item.serialize_raw(chunk).unwrap();
+                });
+            file.write_all(&byte_buffer[..buffer.len() * size])
+                .expect("failed to write to file");
             buffer.clear();
             buffer.par_extend(batch);
         }
@@ -165,15 +184,20 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
         // Write the last batch to the file.
         if more_than_one_batch || batch_is_larger_than_buffer {
             let byte_buffer = byte_buffer.as_mut().unwrap();
-            byte_buffer.par_chunks_mut(size).zip(&buffer).for_each(|(chunk, item)| {
-                item.serialize_raw(chunk).unwrap();
-            });
-            file.write_all(&byte_buffer[..buffer.len() * size]).expect("failed to write to file");
+            let mut file = file.unwrap();
+            let path = path.unwrap();
+            byte_buffer
+                .par_chunks_mut(size)
+                .zip(&buffer)
+                .for_each(|(chunk, item)| {
+                    item.serialize_raw(chunk).unwrap();
+                });
+            file.write_all(&byte_buffer[..buffer.len() * size])
+                .expect("failed to write to file");
             file.flush().expect("failed to flush file");
             file.rewind().expect("failed to seek file");
             Self::new_file(file, path)
         } else {
-            let _ = std::fs::remove_file(&path);
             FileVec::Buffer { buffer }
         }
     }

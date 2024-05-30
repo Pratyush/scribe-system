@@ -1,6 +1,6 @@
 use ark_bls12_381::Fr;
 use ark_ff::Field;
-use ark_std::{start_timer, end_timer};
+use ark_std::{end_timer, start_timer};
 
 use super::*;
 
