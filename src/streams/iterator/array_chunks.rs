@@ -20,7 +20,7 @@ impl<I: BatchedIterator, const N: usize> ArrayChunks<I, N> {
 impl<I, const N: usize> BatchedIterator for ArrayChunks<I, N>
 where
     I: BatchedIterator,
-    I::Item: Clone + Debug,
+    I::Item: Debug,
     [I::Item; N]: Send + Sync,
 {
     type Item = [I::Item; N];
