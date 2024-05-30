@@ -36,6 +36,7 @@ where
             .buf
             .par_chunks_exact(N)
             .map(|chunk| <[I::Item; N]>::try_from(chunk).unwrap())
+            .with_min_len(1 << 8)
             .collect::<Vec<_>>();
         Some(batch.into_par_iter())
     }

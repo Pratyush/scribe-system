@@ -7,13 +7,12 @@ use std::{
 
 use ark_std::{end_timer, rand::RngCore, start_timer};
 pub use inner::*;
-use rayon::iter::IntoParallelIterator;
 
 use crate::arithmetic::errors::ArithError;
 
 use super::{
     file_vec::FileVec,
-    iterator::{from_fn, BatchedIterator},
+    iterator::BatchedIterator,
     serialize::RawField,
     LOG_BUFFER_SIZE,
 };
@@ -326,17 +325,10 @@ fn eq_x_r_helper<F: RawField>(r: &[F]) -> Result<FileVec<F>, ArithError> {
     if r.is_empty() {
         Err(ArithError::InvalidParameters("r length is 0".to_string()))
     } else if r.len() <= LOG_BUFFER_SIZE as usize {
-        let time = start_timer!(|| "Base case");
         let result = crate::arithmetic::virtual_polynomial::build_eq_x_r_vec(r).unwrap();
-        let f = FileVec::from_iter(result);
-        end_timer!(time);
-        Ok(f)
+        Ok(FileVec::from_iter(result))
     } else {
-        let time = start_timer!(|| format!("Recursive case with r.len() = {}", r.len()));
-        let prev_time = start_timer!(|| "Recursive call");
         let prev = eq_x_r_helper(&r[1..])?;
-        end_timer!(prev_time);
-        let expansion_time = start_timer!(|| "Expansion");
         let result = prev
             .into_iter()
             .map(|cur| {
@@ -345,34 +337,7 @@ fn eq_x_r_helper<F: RawField>(r: &[F]) -> Result<FileVec<F>, ArithError> {
             })
             .to_file_vec()
             .reinterpret_type();
-        end_timer!(expansion_time);
-        end_timer!(time);
         Ok(result)
-    }
-}
-
-fn eq_x_r_helper_2<F: RawField>(r: &[F]) -> Result<FileVec<F>, ArithError> {
-    if r.is_empty() {
-        Err(ArithError::InvalidParameters("r length is 0".to_string()))
-    } else {
-        let length = 1 << r.len();
-        let iter = from_fn(
-            |i| {
-                (i < length).then(|| {
-                    let mut res = F::ONE;
-                    for j in 0..r.len() {
-                        if i & (1 << j) == 0 {
-                            res *= F::ONE - r[j];
-                        } else {
-                            res *= r[j];
-                        }
-                    }
-                    res
-                })
-            },
-            length,
-        );
-        Ok(FileVec::from_batched_iter(iter))
     }
 }
 
