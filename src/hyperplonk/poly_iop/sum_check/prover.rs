@@ -134,13 +134,13 @@ impl<F: RawPrimeField> SumCheckProver<F> for IOPProverState<F> {
                 .array_chunks::<2>()
                 .fold(
                     || vec![F::zero(); products.len() + 1],
-                    |mut acc, [even_products, odd_products]| {
-                        even_products.iter_mut().zip(&odd_products).for_each(|(even, odd)| {
+                    |mut acc, [mut even_products, mut odd_products]| {
+                        even_products.iter().zip(&mut odd_products).for_each(|(even, odd)| {
                             *odd -= *even;
                         });
                         acc[0] += even_products.iter().product::<F>();
                         acc[1..].iter_mut().for_each(|acc| {
-                            even_products.iter_mut().zip(odd_products).for_each(|[eval, step]| *eval += step);
+                            even_products.iter_mut().zip(&odd_products).for_each(|(eval, step)| *eval += step);
                             *acc += even_products.iter().product::<F>();
                         });
                         acc // by the bit

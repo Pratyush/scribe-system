@@ -1,4 +1,4 @@
-use std::{fmt::Debug, mem::MaybeUninit};
+use std::fmt::Debug;
 
 use crate::streams::BUFFER_SIZE;
 use rayon::prelude::*;

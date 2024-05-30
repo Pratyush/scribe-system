@@ -71,7 +71,7 @@ pub trait BatchedIterator: Sized {
     fn array_chunks<const N: usize>(self) -> ArrayChunks<Self, N>
     where
         Self::Batch: IndexedParallelIterator,
-        Self::Item: Copy,
+        Self::Item: Clone,
     {
         ArrayChunks::new(self)
     }
