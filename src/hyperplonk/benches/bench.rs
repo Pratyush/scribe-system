@@ -23,7 +23,7 @@ use scribe::hyperplonk::{
 };
 use scribe::streams::LOG_BUFFER_SIZE;
 
-const SUPPORTED_SIZE: usize = 22;
+const SUPPORTED_SIZE: usize = 20;
 const MIN_NUM_VARS: usize = 10;
 const MAX_NUM_VARS: usize = 20;
 const MIN_CUSTOM_DEGREE: usize = 1;
