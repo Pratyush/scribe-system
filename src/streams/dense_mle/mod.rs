@@ -379,32 +379,21 @@ fn eq_x_r_helper_2<F: RawField>(r: &[F]) -> Result<FileVec<F>, ArithError> {
 #[cfg(test)]
 mod test {
     use super::MLE;
-    use crate::{arithmetic::virtual_polynomial::VirtualPolynomial, streams::LOG_BUFFER_SIZE};
+    use crate::{arithmetic::virtual_polynomial::build_eq_x_r_vec, streams::{file_vec::FileVec, LOG_BUFFER_SIZE}};
     use ark_bls12_381::Fr;
-    use ark_std::rand::rngs::StdRng;
-    use ark_std::rand::SeedableRng;
     use ark_std::test_rng;
     use ark_std::UniformRand;
-
-    #[test]
-    fn test_eq_x_r() {
-        let seed = [
-            1, 0, 0, 0, 23, 0, 0, 0, 200, 1, 0, 0, 210, 30, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0,
-        ];
-        let mut rng = StdRng::from_seed(seed);
-
-        let r: Vec<Fr> = (0..3).map(|_| Fr::rand(&mut rng)).collect::<Vec<_>>();
-        let eq_x_r = MLE::eq_x_r(&r).unwrap();
-        println!("{:?}", eq_x_r.evals());
-    }
 
     #[test]
     fn multi_eq_x_r() {
         for i in 0..=8 {
             let num_vars = i + LOG_BUFFER_SIZE as usize;
             let r: Vec<Fr> = (0..num_vars).map(|_| Fr::rand(&mut test_rng())).collect();
-            let _ = MLE::eq_x_r(&r).unwrap();
+            let eq_1 = MLE::eq_x_r(&r).unwrap();
+            let eq_2 = FileVec::from_iter(build_eq_x_r_vec(&r).unwrap().into_iter());
+            eq_1.to_evals().zipped_for_each(eq_2.into_iter(), |a, b| {
+                assert_eq!(*a, b);
+            });
         }
     }
 }

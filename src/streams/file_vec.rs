@@ -239,20 +239,24 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
         U: Send + Sync + 'static,
     {
         assert_eq!(T::SIZE % U::SIZE, 0);
-        let f = match &self {
-            Self::File { file, path } => FileVec::File {
-                file: file.try_clone().unwrap(),
-                path: path.clone(),
+        match &self {
+            Self::File { file, path } => {
+                let f = 
+                    FileVec::File {
+                    file: file.try_clone().unwrap(),
+                    path: path.clone(),
+                };
+                mem::forget(self);
+                f
             },
             Self::Buffer { buffer } => {
                 let size_equal = T::SIZE == U::SIZE;
                 let mem_size_equal = std::mem::size_of::<T>() == std::mem::size_of::<U>();
                 let align_equal = std::mem::align_of::<T>() == std::mem::align_of::<U>();
                 if size_equal && mem_size_equal && align_equal {
-                    println!("In equal case");
                     unsafe { std::mem::transmute(self) }
                 } else {
-                    let mut byte_buffer = Vec::with_capacity(buffer.len() * U::SIZE);
+                    let mut byte_buffer = vec![0u8; buffer.len() * T::SIZE];
                     byte_buffer
                         .par_chunks_mut(T::SIZE)
                         .zip(buffer)
@@ -268,8 +272,7 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
                     FileVec::File { file, path }
                 }
             }
-        };
-        f
+        }
     }
 
     pub fn batched_for_each(&mut self, f: impl Fn(&mut Vec<T>) + Send + Sync)
