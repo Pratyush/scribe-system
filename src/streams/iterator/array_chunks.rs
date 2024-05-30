@@ -28,6 +28,7 @@ where
     type Item = [I::Item; N];
     type Batch = rayon::vec::IntoIter<[I::Item; N]>;
 
+    #[inline]
     fn next_batch(&mut self) -> Option<Self::Batch> {
         self.buf.clear();
         self.buf.par_extend(self.iter.next_batch()?);

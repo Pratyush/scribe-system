@@ -15,6 +15,7 @@ where
     type Item = U;
     type Batch = rayon::iter::Map<I::Batch, F>;
 
+    #[inline]
     fn next_batch(&mut self) -> Option<Self::Batch> {
         self.iter.next_batch().map(|i| i.map(self.f.clone()))
     }

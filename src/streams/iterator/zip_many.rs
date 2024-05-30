@@ -24,6 +24,7 @@ where
     type Item = SVec<I::Item>;
     type Batch = rayon::vec::IntoIter<SVec<I::Item>>;
 
+    #[inline]
     fn next_batch(&mut self) -> Option<Self::Batch> {
         let mut batched = vec![SVec::with_capacity(self.iters.len()); BUFFER_SIZE];
         for iter in &mut self.iters {

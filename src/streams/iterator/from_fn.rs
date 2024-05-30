@@ -28,6 +28,7 @@ where
     type Item = T;
     type Batch = rayon::iter::FilterMap<rayon::range::Iter<usize>, F>;
 
+    #[inline]
     fn next_batch(&mut self) -> Option<Self::Batch> {
         if self.cur_pos >= self.max {
             return None;

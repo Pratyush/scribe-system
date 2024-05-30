@@ -28,6 +28,7 @@ pub trait BatchedIterator: Sized {
     type Batch: ParallelIterator<Item = Self::Item>;
     fn next_batch(&mut self) -> Option<Self::Batch>;
 
+    #[inline(always)]
     fn map<U: Send + Sync, F>(self, f: F) -> Map<Self, U, F>
     where
         F: Fn(Self::Item) -> U + Send + Sync + Clone,
@@ -35,18 +36,21 @@ pub trait BatchedIterator: Sized {
         Map { iter: self, f }
     }
 
+    #[inline(always)]
     fn for_each(mut self, f: impl Fn(Self::Item) + Send + Sync + Clone) {
         while let Some(batch) = self.next_batch() {
             batch.for_each(f.clone());
         }
     }
 
+    #[inline(always)]
     fn batched_for_each(mut self, f: impl Fn(Self::Batch) + Send + Sync + Clone) {
         while let Some(batch) = self.next_batch() {
             f(batch)
         }
     }
 
+    #[inline(always)]
     fn zip<I2: BatchedIterator>(self, other: I2) -> Zip<Self, I2> {
         Zip {
             iter1: self,
@@ -54,6 +58,7 @@ pub trait BatchedIterator: Sized {
         }
     }
 
+    #[inline(always)]
     fn flat_map<U, F>(self, f: F) -> FlatMap<Self, U, F>
     where
         U: IntoParallelIterator + Send + Sync,
@@ -62,6 +67,7 @@ pub trait BatchedIterator: Sized {
         FlatMap { iter: self, f }
     }
 
+    #[inline(always)]
     fn array_chunks<const N: usize>(self) -> ArrayChunks<Self, N>
     where
         Self::Batch: IndexedParallelIterator,
@@ -70,6 +76,7 @@ pub trait BatchedIterator: Sized {
         ArrayChunks::new(self)
     }
 
+    #[inline(always)]
     fn fold<T, ID, F, F2>(mut self, identity: ID, fold_op: F, reduce_op: F2) -> T
     where
         F: Fn(T, Self::Item) -> T + Sync + Send,
@@ -87,6 +94,7 @@ pub trait BatchedIterator: Sized {
         acc
     }
 
+    #[inline(always)]
     fn to_file_vec(self) -> FileVec<Self::Item>
     where
         Self::Item: SerializeRaw + DeserializeRaw + std::fmt::Debug,
@@ -94,6 +102,7 @@ pub trait BatchedIterator: Sized {
         FileVec::from_batched_iter(self)
     }
 
+    #[inline(always)]
     fn unzip<A, B>(self) -> (FileVec<A>, FileVec<B>)
     where
         Self: BatchedIterator<Item = (A, B)>,
@@ -103,6 +112,7 @@ pub trait BatchedIterator: Sized {
         FileVec::<(A, B)>::unzip_helper(self)
     }
 
+    #[inline(always)]
     fn unzip_faster<A, B>(self) -> (FileVec<A>, FileVec<B>)
     where
         Self: BatchedIterator<Item = (A, B)>,
@@ -114,6 +124,7 @@ pub trait BatchedIterator: Sized {
     }
 
     /// Helper function to convert the iterator into a vector.
+    #[inline(always)]
     fn to_vec(mut self) -> Vec<Self::Item>
     where
         Self::Batch: IndexedParallelIterator,
@@ -125,6 +136,7 @@ pub trait BatchedIterator: Sized {
         vec
     }
 
+    #[inline(always)]
     fn sum<S>(mut self) -> S
     where
         S: Sum<Self::Item> + Sum<S> + Send + Sync,
@@ -138,6 +150,7 @@ pub trait BatchedIterator: Sized {
     }
 }
 
+#[inline(always)]
 pub fn zip_many<I>(iters: impl IntoIterator<Item = I>) -> ZipMany<I>
 where
     I: BatchedIterator,
@@ -146,14 +159,17 @@ where
     ZipMany::new(iters.into_iter().collect())
 }
 
+#[inline(always)]
 pub fn chain_many<I: BatchedIterator>(iters: impl IntoIterator<Item = I>) -> ChainMany<I> {
     ChainMany::new(iters.into_iter().collect())
 }
 
+#[inline(always)]
 pub fn repeat<T: Send + Sync + Copy>(iter: T, count: usize) -> Repeat<T> {
     Repeat { iter, count }
 }
 
+#[inline(always)]
 pub fn from_fn<T: Send + Sync, F>(func: F, max: usize) -> FromFn<F>
 where
     F: Fn(usize) -> Option<T> + Send + Sync + Copy,
@@ -166,11 +182,13 @@ pub struct BatchAdapter<I: Iterator> {
 }
 
 impl<I: Iterator> From<I> for BatchAdapter<I> {
+    #[inline(always)]
     fn from(iter: I) -> Self {
         Self { iter }
     }
 }
 
+#[inline(always)]
 pub fn from_iter<I: IntoIterator>(iter: I) -> BatchAdapter<I::IntoIter> {
     BatchAdapter::from(iter.into_iter())
 }
@@ -182,6 +200,7 @@ where
     type Item = I::Item;
     type Batch = rayon::vec::IntoIter<I::Item>;
 
+    #[inline(always)]
     fn next_batch(&mut self) -> Option<Self::Batch> {
         let batch: Vec<_> = self.iter.by_ref().take(BUFFER_SIZE).collect();
         if batch.is_empty() {

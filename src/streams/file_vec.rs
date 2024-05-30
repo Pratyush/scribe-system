@@ -1,5 +1,11 @@
 use std::{
-    ffi::OsStr, fmt::Debug, fs::{File, OpenOptions}, hash::{Hash, Hasher}, io::{BufWriter, Seek, Write}, mem, path::{Path, PathBuf}
+    ffi::OsStr,
+    fmt::Debug,
+    fs::{File, OpenOptions},
+    hash::{Hash, Hasher},
+    io::{BufWriter, Seek, Write},
+    mem,
+    path::{Path, PathBuf},
 };
 
 use crate::streams::serialize::{DeserializeRaw, SerializeRaw};
@@ -17,7 +23,6 @@ use super::{
 
 mod into_iter;
 mod iter;
-mod utils;
 
 #[macro_use]
 mod macros;
@@ -33,10 +38,12 @@ pub enum FileVec<T: SerializeRaw + DeserializeRaw> {
 }
 
 impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
+    #[inline(always)]
     fn new_file(file: File, path: PathBuf) -> Self {
         Self::File { path, file }
     }
 
+    #[inline(always)]
     pub fn with_name(path: impl AsRef<Path>) -> Self {
         let path = path.as_ref().to_path_buf();
         let file = OpenOptions::new()
@@ -48,6 +55,7 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
         Self::new_file(file, path)
     }
 
+    #[inline(always)]
     pub fn new() -> Self {
         let (file, path) = NamedTempFile::new()
             .expect("failed to create temp file")
@@ -56,6 +64,7 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
         Self::new_file(file, path)
     }
 
+    #[inline(always)]
     pub fn with_prefix(prefix: impl AsRef<OsStr>) -> Self {
         let (file, path) = NamedTempFile::with_prefix(prefix)
             .expect("failed to create temp file")
@@ -64,6 +73,7 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
         Self::new_file(file, path)
     }
 
+    #[inline(always)]
     pub fn convert_to_buffer(&mut self)
     where
         T: Send + Sync,
@@ -78,6 +88,7 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
         }
     }
 
+    #[inline(always)]
     pub fn iter<'a>(&'a self) -> Iter<'a, T>
     where
         T: Clone,
@@ -94,6 +105,7 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
         }
     }
 
+    #[inline(always)]
     pub fn into_iter(mut self) -> IntoIter<T>
     where
         T: Clone,
@@ -103,7 +115,7 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
                 let iter = IntoIter::new_file(File::open(&path).unwrap(), path.clone());
                 mem::forget(self);
                 iter
-            },
+            }
             Self::Buffer { buffer } => {
                 let buffer = core::mem::replace(buffer, Vec::new());
                 IntoIter::new_buffer(buffer)
@@ -111,6 +123,7 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
         }
     }
 
+    #[inline(always)]
     pub fn from_iter(iter: impl IntoIterator<Item = T>) -> Self
     where
         T: Send + Sync + Debug,
@@ -177,12 +190,14 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
                 });
             let buffer_length = buffer.len();
             rayon::join(
-                || file.write_all(&byte_buffer[..buffer_length * size])
-                .expect("failed to write to file"),
-                ||  {
+                || {
+                    file.write_all(&byte_buffer[..buffer_length * size])
+                        .expect("failed to write to file")
+                },
+                || {
                     buffer.clear();
                     buffer.par_extend(batch);
-                }
+                },
             );
         }
 
@@ -396,6 +411,7 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
         })
     }
 
+    #[inline(always)]
     pub fn deep_copy(&self) -> Self
     where
         T: Send + Sync + Copy + std::fmt::Debug + 'static,
@@ -405,25 +421,20 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
 }
 
 impl<T: SerializeRaw + DeserializeRaw> Drop for FileVec<T> {
+    #[inline(always)]
     fn drop(&mut self) {
         match self {
-            Self::File { path, .. } => {
-                // let remove_timer = start_timer!(|| format!(
-                //     "Removing temp file: {:?}",
-                //     &path.file_name().unwrap()
-                // ));
-                match std::fs::remove_file(&path) {
-                    Ok(_) => (),
-                    Err(e) => eprintln!("Failed to remove file at path {path:?}: {e:?}"),
-                }
-                // end_timer!(remove_timer);
-            }
+            Self::File { path, .. } => match std::fs::remove_file(&path) {
+                Ok(_) => (),
+                Err(e) => eprintln!("Failed to remove file at path {path:?}: {e:?}"),
+            },
             Self::Buffer { .. } => (),
         }
     }
 }
 
 impl<T: SerializeRaw + DeserializeRaw + Hash> Hash for FileVec<T> {
+    #[inline(always)]
     fn hash<H: Hasher>(&self, state: &mut H) {
         match self {
             Self::File { path, .. } => path.hash(state),
@@ -433,6 +444,7 @@ impl<T: SerializeRaw + DeserializeRaw + Hash> Hash for FileVec<T> {
 }
 
 impl<T: SerializeRaw + DeserializeRaw + PartialEq> PartialEq for FileVec<T> {
+    #[inline(always)]
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::File { path: p1, .. }, Self::File { path: p2, .. }) => p1 == p2,

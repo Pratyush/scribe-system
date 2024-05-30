@@ -21,6 +21,8 @@ where
 {
     type Item = I::Item;
     type Batch = I::Batch;
+
+    #[inline]
     fn next_batch(&mut self) -> Option<Self::Batch> {
         let batch = self.iters.last_mut()?.next_batch();
         if let Some(batch) = batch {

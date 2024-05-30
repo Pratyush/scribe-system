@@ -14,6 +14,7 @@ where
     type Item = T;
     type Batch = rayon::iter::RepeatN<T>;
 
+    #[inline]
     fn next_batch(&mut self) -> Option<Self::Batch> {
         if self.count == 0 {
             return None;

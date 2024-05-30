@@ -36,6 +36,7 @@ impl<'a, T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy + Debug
     type Item = T;
     type Batch = MinLen<IntoIter<T>>;
 
+    #[inline]
     fn next_batch(&mut self) -> Option<Self::Batch> {
         match self {
             Iter::File {

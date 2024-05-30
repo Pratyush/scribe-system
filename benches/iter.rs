@@ -5,8 +5,8 @@ use ark_bls12_381::Fr;
 use ark_ff::Field;
 use ark_std::UniformRand;
 use criterion::{BenchmarkId, Criterion, Throughput};
-use scribe::streams::BUFFER_SIZE;
 use scribe::streams::iterator::*;
+use scribe::streams::BUFFER_SIZE;
 
 fn map(c: &mut Criterion) {
     let num_threads = rayon::current_num_threads();
@@ -17,7 +17,11 @@ fn map(c: &mut Criterion) {
         let vec_size = BUFFER_SIZE * size;
         group.throughput(Throughput::Elements(vec_size as u64));
         group.bench_with_input(BenchmarkId::from_parameter(vec_size), &size, |b, _| {
-            b.iter(|| repeat(e, vec_size).map(|e| e.double().double().double()).for_each(|_| {}));
+            b.iter(|| {
+                repeat(e, vec_size)
+                    .map(|e| e.double().double().double())
+                    .for_each(|_| {})
+            });
         });
     }
     group.finish();
@@ -32,7 +36,11 @@ fn for_each(c: &mut Criterion) {
         let vec_size = BUFFER_SIZE * size;
         group.throughput(Throughput::Elements(vec_size as u64));
         group.bench_with_input(BenchmarkId::from_parameter(vec_size), &size, |b, _| {
-            b.iter(|| repeat(e, vec_size).map(|e| e.double()).for_each(|mut e| {e.double_in_place();}));
+            b.iter(|| {
+                repeat(e, vec_size).map(|e| e.double()).for_each(|mut e| {
+                    e.double_in_place();
+                })
+            });
         });
     }
     group.finish();

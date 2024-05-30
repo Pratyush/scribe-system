@@ -35,19 +35,18 @@ pub(super) fn computer_nums_and_denoms<F: RawPrimeField>(
     let (numerators, denominators) = (fxs, gxs, &s_ids, perms)
         .into_par_iter()
         .map(|(fx, gx, s_id, perm)| {
-            let (numerator, denominator) = 
-                fx
-                    .evals()
-                    .iter()
-                    .zip(gx.evals().iter())
-                    .zip(s_id.evals().iter())
-                    .zip(perm.evals().iter())
-            .map(|(((f, g), s_id), perm)| {
-                let numerator = f + *beta * s_id + gamma;
-                let denominator = g + *beta * perm + gamma;
-                (numerator, denominator)
-            })
-            .unzip_faster();
+            let (numerator, denominator) = fx
+                .evals()
+                .iter()
+                .zip(gx.evals().iter())
+                .zip(s_id.evals().iter())
+                .zip(perm.evals().iter())
+                .map(|(((f, g), s_id), perm)| {
+                    let numerator = f + *beta * s_id + gamma;
+                    let denominator = g + *beta * perm + gamma;
+                    (numerator, denominator)
+                })
+                .unzip_faster();
 
             (
                 MLE::from_evals(numerator, num_vars),
@@ -63,8 +62,8 @@ pub(super) fn computer_nums_and_denoms<F: RawPrimeField>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ark_bls12_381::Fr;
     use crate::streams::iterator::zip_many;
+    use ark_bls12_381::Fr;
 
     #[test]
     fn test_compute_nums_and_denoms() {

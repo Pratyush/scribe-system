@@ -1,6 +1,5 @@
 use rayon::prelude::*;
 use std::{
-    borrow::Borrow,
     io,
     mem::{self, MaybeUninit},
 };
@@ -12,9 +11,6 @@ use ark_ec::{
 };
 use ark_ff::{BigInt, Field, Fp, FpConfig, PrimeField};
 use ark_serialize::{Read, Write};
-use ark_std::{end_timer, start_timer};
-
-use crate::streams::BUFFER_SIZE;
 
 pub trait SerializeRaw: Sized {
     const SIZE: usize = mem::size_of::<Self>();

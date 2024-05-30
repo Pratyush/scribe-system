@@ -21,16 +21,19 @@ pub struct Inner<F: RawField> {
 }
 
 impl<F: RawField> Inner<F> {
+    #[inline(always)]
     pub fn new(num_vars: usize) -> Self {
         let evals = FileVec::with_prefix("evals");
         Self { evals, num_vars }
     }
 
+    #[inline(always)]
     pub fn with_path(num_vars: usize, path: impl AsRef<Path>) -> Self {
         let evals = FileVec::with_name(path);
         Self { evals, num_vars }
     }
 
+    #[inline(always)]
     pub fn from_evals(evals: FileVec<F>, num_vars: usize) -> Self {
         Self { evals, num_vars }
     }
@@ -38,29 +41,35 @@ impl<F: RawField> Inner<F> {
     /// Construct a polynomial with coefficients specified by `evals`.
     ///
     /// This should only be used for testing.
+    #[inline(always)]
     pub fn from_evals_vec(evals: Vec<F>, num_vars: usize) -> Self {
         assert_eq!(evals.len(), 1 << num_vars);
         let evals = FileVec::from_iter(evals);
         Self { evals, num_vars }
     }
 
+    #[inline(always)]
     pub fn evals(&self) -> &FileVec<F> {
         &self.evals
     }
 
+    #[inline(always)]
     pub fn evals_mut(&mut self) -> &mut FileVec<F> {
         &mut self.evals
     }
 
+    #[inline(always)]
     pub fn to_evals(self) -> FileVec<F> {
         self.evals
     }
 
+    #[inline(always)]
     pub fn num_vars(&self) -> usize {
         self.num_vars
     }
 
     /// Construct a polynomial with all coefficients equal to `coeff`
+    #[inline(always)]
     pub fn constant(coeff: F, num_vars: usize) -> Self {
         let evals = FileVec::from_batched_iter(repeat(coeff, 1 << num_vars));
         Self::from_evals(evals, num_vars)
@@ -68,6 +77,7 @@ impl<F: RawField> Inner<F> {
 
     /// Creates multiple identity permutation streams equal to the number of witness streams
     /// Identity permutations are continuous from one to another
+    #[inline(always)]
     pub fn identity_permutation(num_vars: usize, num_chunks: usize) -> Vec<Self> {
         let shift = (1 << num_vars) as u64;
         (0..num_chunks as u64)
@@ -107,11 +117,13 @@ impl<F: RawField> Inner<F> {
             .collect()
     }
 
+    #[inline(always)]
     pub fn rand<R: ark_std::rand::RngCore>(num_vars: usize, rng: &mut R) -> Self {
         let evals = FileVec::from_iter((0..(1 << num_vars)).map(|_| F::rand(rng)));
         Self::from_evals(evals, num_vars)
     }
 
+    #[inline(always)]
     pub fn decrement_num_vars(&mut self) {
         if self.num_vars <= 0 {
             panic!("Cannot decrement num_vars below 0");
@@ -125,6 +137,7 @@ impl<F: RawField> Inner<F> {
     ///
     /// # Panics
     /// Panics if `partial_point.len() > self.num_vars`.
+    #[inline]
     pub fn fix_variables_in_place(&mut self, partial_point: &[F]) {
         assert!(
             partial_point.len() <= self.num_vars,
@@ -140,6 +153,7 @@ impl<F: RawField> Inner<F> {
     /// Creates a new polynomial by fixing the first `partial_point.len()` variables to
     /// the values in `partial_point`.
     /// The number of variables in the result is `self.num_vars() - partial_point.len()`.
+    #[inline]
     pub fn fix_variables(&self, partial_point: &[F]) -> Self {
         assert!(
             partial_point.len() <= self.num_vars,
@@ -163,6 +177,7 @@ impl<F: RawField> Inner<F> {
 
     /// Evaluates `self` at the given point.
     /// Returns `None` if the point has the wrong length.
+    #[inline]
     pub fn evaluate(&self, point: &[F]) -> Option<F> {
         if point.len() == self.num_vars {
             let mut tmp = self.deep_copy();
@@ -177,6 +192,7 @@ impl<F: RawField> Inner<F> {
 
     /// Modifies self by folding the evaluations over the hypercube with the function `f`.
     /// After each fold, the number of variables is reduced by 1.
+    #[inline]
     pub fn fold_odd_even_in_place(&mut self, f: impl Fn(&F, &F) -> F + Sync) {
         assert!((1 << self.num_vars) % 2 == 0);
         if self.num_vars <= LOG_BUFFER_SIZE as usize {
@@ -206,6 +222,7 @@ impl<F: RawField> Inner<F> {
     /// Creates a new polynomial whose evaluations are folded versions of `self`,
     /// folded according to the function `f`.
     /// After each fold, the number of variables is reduced by 1.
+    #[inline]
     pub fn fold_odd_even(&self, f: impl Fn(&F, &F) -> F + Sync) -> Self {
         assert!((1 << self.num_vars) % 2 == 0);
         let evals = self
@@ -221,6 +238,7 @@ impl<F: RawField> Inner<F> {
     }
 
     /// Modifies self by replacing evaluations over the hypercube with their inverse.
+    #[inline]
     pub fn invert_in_place(&mut self) {
         self.evals
             .batched_for_each(|mut chunk| batch_inversion(&mut chunk));
@@ -228,6 +246,7 @@ impl<F: RawField> Inner<F> {
 
     /// Creates a new polynomial whose evaluations over the hypercube are
     /// the inverses of the evaluations of this polynomial.
+    #[inline]
     pub fn invert(&self) -> Self {
         let mut result = self.deep_copy();
         result.invert_in_place();
@@ -235,6 +254,7 @@ impl<F: RawField> Inner<F> {
     }
 
     /// Creates a deep copy of the polynomial by copying the evaluations to a new stream.
+    #[inline]
     pub fn deep_copy(&self) -> Self {
         Self::from_evals(self.evals.deep_copy().into(), self.num_vars)
     }
@@ -271,6 +291,7 @@ impl<F: RawField> Inner<F> {
 }
 
 impl<F: RawField> MulAssign<Self> for Inner<F> {
+    #[inline(always)]
     fn mul_assign(&mut self, other: Self) {
         self.evals
             .zipped_for_each(other.evals.iter(), |a, b| *a *= b);
@@ -278,6 +299,7 @@ impl<F: RawField> MulAssign<Self> for Inner<F> {
 }
 
 impl<'a, F: RawField> MulAssign<&'a Self> for Inner<F> {
+    #[inline(always)]
     fn mul_assign(&mut self, other: &'a Self) {
         self.evals
             .zipped_for_each(other.evals.iter(), |a, b| *a *= b);
@@ -285,6 +307,7 @@ impl<'a, F: RawField> MulAssign<&'a Self> for Inner<F> {
 }
 
 impl<F: RawField> AddAssign<Self> for Inner<F> {
+    #[inline(always)]
     fn add_assign(&mut self, other: Self) {
         self.evals
             .zipped_for_each(other.evals.iter(), |a, b| *a += b);
@@ -292,6 +315,7 @@ impl<F: RawField> AddAssign<Self> for Inner<F> {
 }
 
 impl<'a, F: RawField> AddAssign<&'a Self> for Inner<F> {
+    #[inline(always)]
     fn add_assign(&mut self, other: &'a Self) {
         self.evals
             .zipped_for_each(other.evals.iter(), |a, b| *a += b);
@@ -299,6 +323,7 @@ impl<'a, F: RawField> AddAssign<&'a Self> for Inner<F> {
 }
 
 impl<F: RawField> SubAssign<Self> for Inner<F> {
+    #[inline(always)]
     fn sub_assign(&mut self, other: Self) {
         self.evals
             .zipped_for_each(other.evals.iter(), |a, b| *a -= b);
@@ -306,6 +331,7 @@ impl<F: RawField> SubAssign<Self> for Inner<F> {
 }
 
 impl<'a, F: RawField> SubAssign<&'a Self> for Inner<F> {
+    #[inline(always)]
     fn sub_assign(&mut self, other: &'a Self) {
         self.evals
             .zipped_for_each(other.evals.iter(), |a, b| *a -= b);
@@ -313,6 +339,7 @@ impl<'a, F: RawField> SubAssign<&'a Self> for Inner<F> {
 }
 
 impl<F: RawField> MulAssign<(F, Self)> for Inner<F> {
+    #[inline(always)]
     fn mul_assign(&mut self, (f, other): (F, Self)) {
         self.evals
             .zipped_for_each(other.evals.iter(), |a, b| *a *= f * b);
@@ -320,6 +347,7 @@ impl<F: RawField> MulAssign<(F, Self)> for Inner<F> {
 }
 
 impl<'a, F: RawField> MulAssign<(F, &'a Self)> for Inner<F> {
+    #[inline(always)]
     fn mul_assign(&mut self, (f, other): (F, &'a Self)) {
         self.evals
             .zipped_for_each(other.evals.iter(), |a, b| *a *= f * b);
@@ -327,6 +355,7 @@ impl<'a, F: RawField> MulAssign<(F, &'a Self)> for Inner<F> {
 }
 
 impl<'a, F: RawField> MulAssign<F> for Inner<F> {
+    #[inline(always)]
     fn mul_assign(&mut self, f: F) {
         self.evals.for_each(|a| *a *= f);
     }
@@ -334,6 +363,7 @@ impl<'a, F: RawField> MulAssign<F> for Inner<F> {
 
 impl<'a, F: RawField> Mul<F> for &'a Inner<F> {
     type Output = Inner<F>;
+    #[inline(always)]
     fn mul(self, f: F) -> Self::Output {
         let evals = self.evals.iter().map(|a| f * a).to_file_vec();
         Inner::from_evals(evals, self.num_vars)
@@ -341,6 +371,7 @@ impl<'a, F: RawField> Mul<F> for &'a Inner<F> {
 }
 
 impl<F: RawField> AddAssign<(F, Self)> for Inner<F> {
+    #[inline(always)]
     fn add_assign(&mut self, (f, other): (F, Self)) {
         self.evals
             .zipped_for_each(other.evals.iter(), |a, b| *a += f * b);
@@ -348,6 +379,7 @@ impl<F: RawField> AddAssign<(F, Self)> for Inner<F> {
 }
 
 impl<'a, F: RawField> AddAssign<(F, &'a Self)> for Inner<F> {
+    #[inline(always)]
     fn add_assign(&mut self, (f, other): (F, &'a Self)) {
         self.evals
             .zipped_for_each(other.evals.iter(), |a, b| *a += f * b);
@@ -355,6 +387,7 @@ impl<'a, F: RawField> AddAssign<(F, &'a Self)> for Inner<F> {
 }
 
 impl<F: RawField> SubAssign<(F, Self)> for Inner<F> {
+    #[inline(always)]
     fn sub_assign(&mut self, (f, other): (F, Self)) {
         self.evals
             .zipped_for_each(other.evals.iter(), |a, b| *a -= f * b);
@@ -362,6 +395,7 @@ impl<F: RawField> SubAssign<(F, Self)> for Inner<F> {
 }
 
 impl<'a, F: RawField> SubAssign<(F, &'a Self)> for Inner<F> {
+    #[inline(always)]
     fn sub_assign(&mut self, (f, other): (F, &'a Self)) {
         self.evals
             .zipped_for_each(other.evals.iter(), |a, b| *a -= f * b);

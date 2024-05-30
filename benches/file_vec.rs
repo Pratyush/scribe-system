@@ -33,8 +33,11 @@ fn from_batched_iter(c: &mut Criterion) {
         group.throughput(Throughput::Elements(vec_size as u64));
         group.bench_with_input(BenchmarkId::from_parameter(vec_size), &size, |b, _| {
             use scribe::streams::iterator::*;
-            b.iter(|| repeat(e, vec_size)
-            .map(|e| e.square().square()).to_file_vec());
+            b.iter(|| {
+                repeat(e, vec_size)
+                    .map(|e| e.square().square())
+                    .to_file_vec()
+            });
         });
     }
     group.finish();
@@ -73,9 +76,7 @@ fn iter_map(c: &mut Criterion) {
         group.throughput(Throughput::Elements(vec_size as u64));
         group.bench_with_input(BenchmarkId::from_parameter(vec_size), &size, |b, _| {
             let fv = FileVec::from_iter((0..vec_size).map(|_| e));
-            b.iter(|| {
-                fv.iter().map(|e| e.double()).for_each(|_| {})
-            });
+            b.iter(|| fv.iter().map(|e| e.double()).for_each(|_| {}));
         });
     }
     group.finish();
@@ -100,5 +101,12 @@ fn into_iter_map(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(file_vec, for_each_simple, for_each_complex, from_batched_iter, iter_map, into_iter_map);
+criterion_group!(
+    file_vec,
+    for_each_simple,
+    for_each_complex,
+    from_batched_iter,
+    iter_map,
+    into_iter_map
+);
 criterion_main!(file_vec);

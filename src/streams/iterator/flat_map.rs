@@ -22,6 +22,7 @@ where
     type Item = U::Item;
     type Batch = rayon::iter::FlatMap<I::Batch, F>;
 
+    #[inline]
     fn next_batch(&mut self) -> Option<Self::Batch> {
         let iter = self.iter.next_batch()?;
         Some(iter.flat_map(self.f.clone()))

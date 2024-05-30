@@ -16,6 +16,7 @@ pub enum IntoIter<T: SerializeRaw + DeserializeRaw + 'static> {
 }
 
 impl<T: SerializeRaw + DeserializeRaw> IntoIter<T> {
+    #[inline]
     pub fn new_file(file: File, path: PathBuf) -> Self {
         let size = T::SIZE;
         Self::File {
@@ -25,6 +26,7 @@ impl<T: SerializeRaw + DeserializeRaw> IntoIter<T> {
         }
     }
 
+    #[inline]
     pub fn new_buffer(buffer: Vec<T>) -> Self {
         Self::Buffer { buffer }
     }
@@ -36,6 +38,7 @@ impl<T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy> BatchedIte
     type Item = T;
     type Batch = MinLen<VecIntoIter<T>>;
 
+    #[inline]
     fn next_batch(&mut self) -> Option<Self::Batch> {
         match self {
             IntoIter::File {

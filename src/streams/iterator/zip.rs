@@ -17,6 +17,7 @@ where
     type Item = (I1::Item, I2::Item);
     type Batch = rayon::iter::Zip<I1::Batch, I2::Batch>;
 
+    #[inline]
     fn next_batch(&mut self) -> Option<Self::Batch> {
         let iter1 = self.iter1.next_batch()?;
         let iter2 = self.iter2.next_batch()?;
