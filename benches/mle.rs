@@ -12,7 +12,9 @@ fn eq(c: &mut Criterion) {
     let mut rng = &mut ark_std::test_rng();
     for num_vars in LOG_BUFFER_SIZE as usize..=20 {
         let e = Fr::rand(&mut rng);
-        group.bench_with_input(BenchmarkId::from_parameter(num_vars), &num_vars, |b, _| b.iter(|| MLE::eq_x_r(&vec![e; num_vars])));
+        group.bench_with_input(BenchmarkId::from_parameter(num_vars), &num_vars, |b, _| {
+            b.iter(|| MLE::eq_x_r(&vec![e; num_vars]))
+        });
     }
     group.finish();
 }

@@ -232,31 +232,39 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
             Some(())
         })
     }
-    
-    pub fn reinterpret_type<U: SerializeRaw + DeserializeRaw>(self) -> FileVec<U> 
-        where T: Send + Sync + 'static, U: Send + Sync + 'static
+
+    pub fn reinterpret_type<U: SerializeRaw + DeserializeRaw>(self) -> FileVec<U>
+    where
+        T: Send + Sync + 'static,
+        U: Send + Sync + 'static,
     {
         assert_eq!(T::SIZE % U::SIZE, 0);
         let f = match &self {
-            Self::File { file, path } =>{
-            FileVec::File {
+            Self::File { file, path } => FileVec::File {
                 file: file.try_clone().unwrap(),
                 path: path.clone(),
-            }
             },
             Self::Buffer { buffer } => {
                 let size_equal = T::SIZE == U::SIZE;
                 let mem_size_equal = std::mem::size_of::<T>() == std::mem::size_of::<U>();
                 let align_equal = std::mem::align_of::<T>() == std::mem::align_of::<U>();
                 if size_equal && mem_size_equal && align_equal {
+                    println!("In equal case");
                     unsafe { std::mem::transmute(self) }
                 } else {
                     let mut byte_buffer = Vec::with_capacity(buffer.len() * U::SIZE);
-                    byte_buffer.par_chunks_mut(T::SIZE).zip(buffer).for_each(|(chunk, item)| {
-                        item.serialize_raw(chunk).unwrap();
-                    });
-                    let (mut file, path) = NamedTempFile::new().expect("failed to create temp file").keep().expect("failed to keep temp file");
-                    file.write_all(&byte_buffer).expect("failed to write to file");
+                    byte_buffer
+                        .par_chunks_mut(T::SIZE)
+                        .zip(buffer)
+                        .for_each(|(chunk, item)| {
+                            item.serialize_raw(chunk).unwrap();
+                        });
+                    let (mut file, path) = NamedTempFile::new()
+                        .expect("failed to create temp file")
+                        .keep()
+                        .expect("failed to keep temp file");
+                    file.write_all(&byte_buffer)
+                        .expect("failed to write to file");
                     FileVec::File { file, path }
                 }
             }

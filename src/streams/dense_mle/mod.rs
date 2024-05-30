@@ -11,7 +11,12 @@ use rayon::iter::IntoParallelIterator;
 
 use crate::arithmetic::errors::ArithError;
 
-use super::{file_vec::FileVec, iterator::{from_fn, BatchedIterator}, serialize::RawField, LOG_BUFFER_SIZE};
+use super::{
+    file_vec::FileVec,
+    iterator::{from_fn, BatchedIterator},
+    serialize::RawField,
+    LOG_BUFFER_SIZE,
+};
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct MLE<F: RawField>(Arc<Inner<F>>);
@@ -393,7 +398,7 @@ mod test {
         let eq_x_r = MLE::eq_x_r(&r).unwrap();
         println!("{:?}", eq_x_r.evals());
     }
-    
+
     #[test]
     fn multi_eq_x_r() {
         for i in 0..=8 {
