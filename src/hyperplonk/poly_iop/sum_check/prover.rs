@@ -146,7 +146,7 @@ impl<F: RawPrimeField> SumCheckProver<F> for IOPProverState<F> {
                     },
                     |mut sum, partial| {
                         sum.iter_mut()
-                            .zip(partial.iter())
+                            .zip(partial)
                             .for_each(|(sum, partial)| *sum += partial);
                         sum // sum for half of the bits
                     },
