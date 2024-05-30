@@ -7,10 +7,11 @@ use std::{
 
 use ark_std::{end_timer, rand::RngCore, start_timer};
 pub use inner::*;
+use rayon::iter::IntoParallelIterator;
 
 use crate::arithmetic::errors::ArithError;
 
-use super::{file_vec::FileVec, iterator::BatchedIterator, serialize::RawField, LOG_BUFFER_SIZE};
+use super::{file_vec::FileVec, iterator::{from_fn, BatchedIterator}, serialize::RawField, LOG_BUFFER_SIZE};
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct MLE<F: RawField>(Arc<Inner<F>>);
@@ -320,24 +321,60 @@ fn eq_x_r_helper<F: RawField>(r: &[F]) -> Result<FileVec<F>, ArithError> {
     if r.is_empty() {
         Err(ArithError::InvalidParameters("r length is 0".to_string()))
     } else if r.len() <= LOG_BUFFER_SIZE as usize {
+        let time = start_timer!(|| "Base case");
         let result = crate::arithmetic::virtual_polynomial::build_eq_x_r_vec(r).unwrap();
-        Ok(FileVec::from_iter(result))
+        let f = FileVec::from_iter(result);
+        end_timer!(time);
+        Ok(f)
     } else {
+        let time = start_timer!(|| format!("Recursive case with r.len() = {}", r.len()));
+        let prev_time = start_timer!(|| "Recursive call");
         let prev = eq_x_r_helper(&r[1..])?;
-        Ok(prev
-            .iter()
-            .flat_map(|cur| {
+        end_timer!(prev_time);
+        let expansion_time = start_timer!(|| "Expansion");
+        let result = prev
+            .into_iter()
+            .map(|cur| {
                 let tmp = r[0] * cur;
                 [cur - tmp, tmp]
             })
-            .to_file_vec())
+            .to_file_vec()
+            .reinterpret_type();
+        end_timer!(expansion_time);
+        end_timer!(time);
+        Ok(result)
+    }
+}
+
+fn eq_x_r_helper_2<F: RawField>(r: &[F]) -> Result<FileVec<F>, ArithError> {
+    if r.is_empty() {
+        Err(ArithError::InvalidParameters("r length is 0".to_string()))
+    } else {
+        let length = 1 << r.len();
+        let iter = from_fn(
+            |i| {
+                (i < length).then(|| {
+                    let mut res = F::ONE;
+                    for j in 0..r.len() {
+                        if i & (1 << j) == 0 {
+                            res *= F::ONE - r[j];
+                        } else {
+                            res *= r[j];
+                        }
+                    }
+                    res
+                })
+            },
+            length,
+        );
+        Ok(FileVec::from_batched_iter(iter))
     }
 }
 
 #[cfg(test)]
 mod test {
     use super::MLE;
-    use crate::arithmetic::virtual_polynomial::VirtualPolynomial;
+    use crate::{arithmetic::virtual_polynomial::VirtualPolynomial, streams::LOG_BUFFER_SIZE};
     use ark_bls12_381::Fr;
     use ark_std::rand::rngs::StdRng;
     use ark_std::rand::SeedableRng;
@@ -355,6 +392,15 @@ mod test {
         let r: Vec<Fr> = (0..3).map(|_| Fr::rand(&mut rng)).collect::<Vec<_>>();
         let eq_x_r = MLE::eq_x_r(&r).unwrap();
         println!("{:?}", eq_x_r.evals());
+    }
+    
+    #[test]
+    fn multi_eq_x_r() {
+        for i in 0..=8 {
+            let num_vars = i + LOG_BUFFER_SIZE as usize;
+            let r: Vec<Fr> = (0..num_vars).map(|_| Fr::rand(&mut test_rng())).collect();
+            let _ = MLE::eq_x_r(&r).unwrap();
+        }
     }
 }
 
