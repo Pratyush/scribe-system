@@ -129,16 +129,19 @@ impl<F: RawPrimeField> SumCheckProver<F> for IOPProverState<F> {
                 let mut sum = zip_many(
                     polys_in_product
                         .iter()
-                        .map(|x| x.iter().array_chunks::<2>()),
+                        .map(|x| x.iter()),
                 )
+                .array_chunks::<2>()
                 .fold(
                     || vec![F::zero(); products.len() + 1],
-                    |mut acc, mut products| {
-                        products.iter_mut().for_each(|[even, odd]| *odd -= even);
-                        acc[0] += products.iter().map(|[eval, _]| eval).product::<F>();
+                    |mut acc, [even_products, odd_products]| {
+                        even_products.iter_mut().zip(&odd_products).for_each(|(even, odd)| {
+                            *odd -= *even;
+                        });
+                        acc[0] += even_products.iter().product::<F>();
                         acc[1..].iter_mut().for_each(|acc| {
-                            products.iter_mut().for_each(|[eval, step]| *eval += step);
-                            *acc += products.iter().map(|[eval, _]| eval).product::<F>();
+                            even_products.iter_mut().zip(odd_products).for_each(|[eval, step]| *eval += step);
+                            *acc += even_products.iter().product::<F>();
                         });
                         acc // by the bit
                     },

@@ -1,4 +1,4 @@
-use std::fmt::Debug;
+use std::{fmt::Debug, mem::MaybeUninit};
 
 use crate::streams::BUFFER_SIZE;
 use rayon::prelude::*;
@@ -7,22 +7,20 @@ use super::BatchedIterator;
 
 pub struct ArrayChunks<I: BatchedIterator, const N: usize> {
     iter: I,
-    buf: Vec<I::Item>,
 }
 
 impl<I: BatchedIterator, const N: usize> ArrayChunks<I, N> {
     pub fn new(iter: I) -> Self {
         assert!(N > 0, "N must be greater than 0");
         assert!(BUFFER_SIZE % N == 0, "BUFFER_SIZE must be divisible by N");
-        let buf = Vec::new();
-        Self { iter, buf }
+        Self { iter }
     }
 }
 
 impl<I, const N: usize> BatchedIterator for ArrayChunks<I, N>
 where
     I: BatchedIterator,
-    I::Item: Copy + Debug,
+    I::Item: Clone + Debug,
     [I::Item; N]: Send + Sync,
 {
     type Item = [I::Item; N];
@@ -30,14 +28,11 @@ where
 
     #[inline]
     fn next_batch(&mut self) -> Option<Self::Batch> {
-        self.buf.clear();
-        self.buf.par_extend(self.iter.next_batch()?);
-        let batch = self
-            .buf
-            .par_chunks_exact(N)
-            .map(|chunk| <[I::Item; N]>::try_from(chunk).unwrap())
-            .with_min_len(1 << 8)
-            .collect::<Vec<_>>();
+        let batch = self.iter.next_batch()?.collect::<Vec<_>>();
+        assert_eq!(batch.len() % N, 0, "Buffer size must be divisible by N");
+        assert_eq!(std::mem::align_of::<[I::Item; N]>(), std::mem::align_of::<I::Item>());
+        assert_eq!(std::mem::align_of::<[I::Item; N]>(), N * std::mem::align_of::<I::Item>());
+        let batch = unsafe { std::mem::transmute::<Vec<I::Item>, Vec<[I::Item; N]>>(batch) };
         Some(batch.into_par_iter())
     }
 }
