@@ -133,11 +133,12 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
 
         let mut byte_buffer = None;
         let mut more_than_one_batch = false;
+        let mut batch_is_larger_than_buffer = false;
         if let Some(batch) = iter.next_batch() {
             buffer.par_extend(batch);
             
             if buffer.len() > BUFFER_SIZE {
-                more_than_one_batch = true;
+                batch_is_larger_than_buffer = true;
             }
         }
 
@@ -162,7 +163,7 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
         }
 
         // Write the last batch to the file.
-        if more_than_one_batch {
+        if more_than_one_batch || batch_is_larger_than_buffer {
             let byte_buffer = byte_buffer.as_mut().unwrap();
             byte_buffer.par_chunks_mut(size).zip(&buffer).for_each(|(chunk, item)| {
                 item.serialize_raw(chunk).unwrap();
