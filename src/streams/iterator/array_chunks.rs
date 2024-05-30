@@ -31,7 +31,7 @@ where
         let batch = self.iter.next_batch()?.collect::<Vec<_>>();
         assert_eq!(batch.len() % N, 0, "Buffer size must be divisible by N");
         assert_eq!(std::mem::align_of::<[I::Item; N]>(), std::mem::align_of::<I::Item>());
-        assert_eq!(std::mem::align_of::<[I::Item; N]>(), N * std::mem::align_of::<I::Item>());
+        assert_eq!(std::mem::size_of::<[I::Item; N]>(), N * std::mem::size_of::<I::Item>());
         let batch = unsafe { std::mem::transmute::<Vec<I::Item>, Vec<[I::Item; N]>>(batch) };
         Some(batch.into_par_iter())
     }
