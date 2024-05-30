@@ -3,17 +3,13 @@ use std::{
     fmt::Debug,
     fs::{File, OpenOptions},
     hash::{Hash, Hasher},
-    io::{BufReader, BufWriter, Seek, Write},
+    io::{BufWriter, Seek, Write},
     path::{Path, PathBuf},
 };
 
 use crate::streams::serialize::{DeserializeRaw, SerializeRaw};
-use ark_std::{end_timer, start_timer};
 use derivative::Derivative;
-use rayon::iter::{
-    IndexedParallelIterator, IntoParallelIterator, IntoParallelRefMutIterator, ParallelDrainRange,
-    ParallelExtend, ParallelIterator,
-};
+use rayon::prelude::*;
 use tempfile::NamedTempFile;
 
 use self::into_iter::IntoIter;
@@ -143,27 +139,16 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
     {
         let mut iter = iter.into_batched_iter();
         let mut buffer = Vec::with_capacity(BUFFER_SIZE);
-        let (mut file, path) = NamedTempFile::with_prefix("batched_iter")
+        let (mut file, path) = NamedTempFile::with_prefix("from_batched_iter")
             .expect("failed to create temp file")
             .keep()
             .expect("failed to keep temp file");
-        let size = core::mem::size_of::<T>();
-        let mut writer = BufWriter::with_capacity(size * BUFFER_SIZE, &mut file);
+        let size = T::SIZE;
 
+        let mut byte_buffer = None;
         let mut more_than_one_batch = false;
-
         if let Some(batch) = iter.next_batch() {
             buffer.par_extend(batch);
-
-            // buffer might be longer than BUFFER_SIZE, in cases such as the FlatMap mapping one element to two
-            if buffer.len() > BUFFER_SIZE {
-                for item in &buffer {
-                    item.serialize_raw(&mut writer)
-                        .expect("failed to write to file");
-                }
-                more_than_one_batch = true;
-                buffer.clear();
-            }
         }
 
         // Read from iterator and write to file.
@@ -172,23 +157,28 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
         // we write the first batch to the file
 
         while let Some(batch) = iter.next_batch() {
-            more_than_one_batch = true;
-            for item in &buffer {
-                item.serialize_raw(&mut writer)
-                    .expect("failed to write to file");
+            if !more_than_one_batch {
+                byte_buffer = Some(Vec::with_capacity(buffer.len() * size));
             }
+            let byte_buffer = byte_buffer.as_mut().unwrap();
+
+            more_than_one_batch = true;
+            byte_buffer.par_chunks_mut(size).zip(&buffer).for_each(|(chunk, item)| {
+                item.serialize_raw(chunk).unwrap();
+            });
+            file.write_all(&byte_buffer[..buffer.len() * size]).expect("failed to write to file");
             buffer.clear();
             buffer.par_extend(batch);
         }
 
         // Write the last batch to the file.
         if more_than_one_batch {
-            for item in &buffer {
-                item.serialize_raw(&mut writer)
-                    .expect("failed to write to file");
-            }
-            writer.flush().expect("failed to flush file");
-            drop(writer);
+            let byte_buffer = byte_buffer.as_mut().unwrap();
+            byte_buffer.par_chunks_mut(size).zip(&buffer).for_each(|(chunk, item)| {
+                item.serialize_raw(chunk).unwrap();
+            });
+            file.write_all(&byte_buffer[..buffer.len() * size]).expect("failed to write to file");
+            file.flush().expect("failed to flush file");
             file.rewind().expect("failed to seek file");
             Self::new_file(file, path)
         } else {

@@ -196,6 +196,7 @@ impl<F: RawField> Inner<F> {
                 *buffer = new_buffer
                     .par_chunks(2)
                     .map(|chunk| f(&chunk[0], &chunk[1]))
+                    .with_min_len(1 << 8)
                     .collect();
             }
         }
