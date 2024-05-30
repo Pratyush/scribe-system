@@ -1,5 +1,5 @@
 use rayon::prelude::*;
-use smallvec::SmallVec;
+use smallvec::{smallvec, SmallVec};
 
 use super::{BatchedIterator, BUFFER_SIZE};
 
@@ -24,15 +24,52 @@ where
     type Item = SVec<I::Item>;
     type Batch = rayon::vec::IntoIter<SVec<I::Item>>;
 
-    #[inline]
     fn next_batch(&mut self) -> Option<Self::Batch> {
-        let mut batched = vec![SVec::with_capacity(self.iters.len()); BUFFER_SIZE];
-        for iter in &mut self.iters {
-            batched
-                .par_iter_mut()
-                .zip(iter.next_batch()?)
-                .for_each(|(zipped, b)| zipped.push(b));
-        }
+        let mut batched = match self.iters.len() {
+            0 => unreachable!("ZipMany must have at least one iterator"),
+            1 => self.iters[0].next_batch()?.into_par_iter().map(|b| smallvec![b]).collect(),
+            2 => {
+                (self.iters[0].next_batch()?, self.iters[1].next_batch()?)
+                    .into_par_iter()
+                    .map(|(a, b)| smallvec![a, b])
+                                        .collect()
+            },
+            3 => {
+                (self.iters[0].next_batch()?, self.iters[1].next_batch()?, self.iters[2].next_batch()?)
+                    .into_par_iter()
+                    .map(|(a, b, c)| smallvec![a, b, c])
+                                        .collect()
+            },
+            4 => {
+                (self.iters[0].next_batch()?, self.iters[1].next_batch()?, self.iters[2].next_batch()?, self.iters[3].next_batch()?)
+                    .into_par_iter()
+                    .map(|(a, b, c, d)| smallvec![a, b, c, d])
+                                        .collect()
+            },
+            5 => {
+                (self.iters[0].next_batch()?, self.iters[1].next_batch()?, self.iters[2].next_batch()?, self.iters[3].next_batch()?, self.iters[4].next_batch()?)
+                    .into_par_iter()
+                    .map(|(a, b, c, d, e)| smallvec![a, b, c, d, e])
+                    .collect()
+            },
+            6 => {
+                (self.iters[0].next_batch()?, self.iters[1].next_batch()?, self.iters[2].next_batch()?, self.iters[3].next_batch()?, self.iters[4].next_batch()?, self.iters[5].next_batch()?)
+                    .into_par_iter()
+                    .map(|(a, b, c, d, e, f)| smallvec![a, b, c, d, e, f])
+                .collect()
+            },
+            _ => {
+
+                let mut batched = vec![SVec::with_capacity(self.iters.len()); BUFFER_SIZE];
+                for iter in &mut self.iters {
+                    batched
+                        .par_iter_mut()
+                        .zip(iter.next_batch()?)
+                        .for_each(|(zipped, b)| zipped.push(b));
+                }
+                batched
+            }
+        };
         let start_of_empty = batched.partition_point(|x| !x.is_empty());
         batched.truncate(start_of_empty);
         Some(batched.into_par_iter())
