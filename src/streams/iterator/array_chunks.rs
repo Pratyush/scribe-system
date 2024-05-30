@@ -32,7 +32,10 @@ where
         assert_eq!(batch.len() % N, 0, "Buffer size must be divisible by N");
         assert_eq!(std::mem::align_of::<[I::Item; N]>(), std::mem::align_of::<I::Item>());
         assert_eq!(std::mem::size_of::<[I::Item; N]>(), N * std::mem::size_of::<I::Item>());
-        let batch = unsafe { std::mem::transmute::<Vec<I::Item>, Vec<[I::Item; N]>>(batch) };
+        let mut batch = unsafe { std::mem::transmute::<Vec<I::Item>, Vec<[I::Item; N]>>(batch) };
+        unsafe {
+            batch.set_len(batch.len() / N);
+        }
         Some(batch.into_par_iter())
     }
 }
