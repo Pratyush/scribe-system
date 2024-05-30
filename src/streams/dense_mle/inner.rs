@@ -194,7 +194,7 @@ impl<F: RawField> Inner<F> {
             FileVec::Buffer { ref mut buffer } => {
                 let new_buffer = std::mem::replace(buffer, Vec::new());
                 *buffer = new_buffer
-                    .par_chunks(2)
+                    .par_chunks_exact(2)
                     .map(|chunk| f(&chunk[0], &chunk[1]))
                     .with_min_len(1 << 8)
                     .collect();
