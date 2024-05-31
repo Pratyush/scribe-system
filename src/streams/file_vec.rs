@@ -14,13 +14,14 @@ use rayon::prelude::*;
 use tempfile::NamedTempFile;
 
 pub use self::iter::Iter;
-use self::{into_iter::IntoIter, iter_chunk_mapped::IterChunkMapped};
+use self::{array_chunks::ArrayChunks, into_iter::IntoIter, iter_chunk_mapped::IterChunkMapped};
 
 use super::{
     iterator::{BatchAdapter, BatchedIterator, IntoBatchedIterator},
     BUFFER_SIZE,
 };
 
+mod array_chunks;
 mod into_iter;
 mod iter;
 mod iter_chunk_mapped;
@@ -159,6 +160,22 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
                 IterChunkMapped::new_file(file, f)
             }
             Self::Buffer { buffer } => IterChunkMapped::new_buffer(buffer.clone(), f),
+        }
+    }
+
+    pub fn array_chunks<const N: usize>(&self) -> ArrayChunks<T, N>
+    where
+        T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy,
+    {
+        match self {
+            Self::File { path, .. } => {
+                let file = OpenOptions::new()
+                    .read(true)
+                    .open(&path)
+                    .expect(&format!("failed to open file, {}", path.to_str().unwrap()));
+                ArrayChunks::new_file(file)
+            }
+            Self::Buffer { buffer } => ArrayChunks::new_buffer(buffer.clone()),
         }
     }
 

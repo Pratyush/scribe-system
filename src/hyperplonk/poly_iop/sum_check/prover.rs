@@ -126,31 +126,27 @@ impl<F: RawPrimeField> SumCheckProver<F> for IOPProverState<F> {
                     .iter()
                     .map(|&f| self.poly.mles[f].evals())
                     .collect::<Vec<_>>();
-                let mut sum = zip_many(
-                    polys_in_product
-                        .iter()
-                        .map(|x| x.iter().array_chunks::<2>()),
-                )
-                .fold(
-                    || vec![F::zero(); products.len() + 1],
-                    |mut acc, mut products| {
-                        products.iter_mut().for_each(|[even, odd]| {
-                            *odd -= *even;
-                        });
-                        acc[0] += products.iter().map(|[e, _]| *e).product::<F>();
-                        acc[1..].iter_mut().for_each(|acc| {
-                            products.iter_mut().for_each(|[eval, step]| *eval += step);
-                            *acc += products.iter().map(|[e, _]| e).product::<F>();
-                        });
-                        acc // by the bit
-                    },
-                    |mut sum, partial| {
-                        sum.iter_mut()
-                            .zip(partial)
-                            .for_each(|(sum, partial)| *sum += partial);
-                        sum // sum for half of the bits
-                    },
-                );
+                let mut sum = zip_many(polys_in_product.iter().map(|x| x.array_chunks::<2>()))
+                    .fold(
+                        || vec![F::zero(); products.len() + 1],
+                        |mut acc, mut products| {
+                            products.iter_mut().for_each(|[even, odd]| {
+                                *odd -= *even;
+                            });
+                            acc[0] += products.iter().map(|[e, _]| *e).product::<F>();
+                            acc[1..].iter_mut().for_each(|acc| {
+                                products.iter_mut().for_each(|[eval, step]| *eval += step);
+                                *acc += products.iter().map(|[e, _]| e).product::<F>();
+                            });
+                            acc // by the bit
+                        },
+                        |mut sum, partial| {
+                            sum.iter_mut()
+                                .zip(partial)
+                                .for_each(|(sum, partial)| *sum += partial);
+                            sum // sum for half of the bits
+                        },
+                    );
 
                 sum.iter_mut().for_each(|sum| *sum *= *coefficient);
                 let extrapolation = (0..self.poly.aux_info.max_degree - products.len())
