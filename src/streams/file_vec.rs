@@ -13,8 +13,8 @@ use derivative::Derivative;
 use rayon::prelude::*;
 use tempfile::NamedTempFile;
 
-use self::into_iter::IntoIter;
 pub use self::iter::Iter;
+use self::{into_iter::IntoIter, iter_chunk_mapped::IterChunkMapped};
 
 use super::{
     iterator::{BatchAdapter, BatchedIterator, IntoBatchedIterator},
@@ -23,6 +23,7 @@ use super::{
 
 mod into_iter;
 mod iter;
+mod iter_chunk_mapped;
 
 #[macro_use]
 mod macros;
@@ -32,6 +33,7 @@ mod test;
 
 #[derive(Derivative)]
 #[derivative(Debug(bound = "T: core::fmt::Debug"))]
+#[must_use]
 pub enum FileVec<T: SerializeRaw + DeserializeRaw> {
     File { path: PathBuf, file: File },
     Buffer { buffer: Vec<T> },
@@ -74,17 +76,38 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
     }
 
     #[inline(always)]
-    pub fn convert_to_buffer(&mut self)
+    pub fn convert_to_buffer_in_place(&mut self)
     where
         T: Send + Sync,
     {
         if let Self::Buffer { .. } = self {
             let mut buffer = Vec::with_capacity(BUFFER_SIZE);
             process_file!(self, |b: &mut Vec<T>| {
-                buffer.par_extend(b.par_drain(0..b.len()));
+                buffer.par_extend(b.par_drain(..));
                 Some(())
             });
             *self = FileVec::Buffer { buffer };
+        }
+    }
+
+    #[inline]
+    pub fn convert_to_buffer(&self) -> Self
+    where
+        T: Send + Sync + Clone,
+    {
+        match self {
+            Self::File { path, .. } => {
+                let file_2 = File::open(&path).unwrap();
+                let mut fv = FileVec::File {
+                    file: file_2,
+                    path: path.clone(),
+                };
+                fv.convert_to_buffer_in_place();
+                fv
+            }
+            Self::Buffer { buffer } => FileVec::Buffer {
+                buffer: buffer.clone(),
+            },
         }
     }
 
@@ -102,6 +125,43 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
                 Iter::new_file(file)
             }
             Self::Buffer { buffer } => Iter::new_buffer(buffer.clone()),
+        }
+    }
+
+    pub fn iter_chunk_mapped_in_place<const N: usize, F>(&mut self, f: F)
+    where
+        T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy,
+        F: for<'b> Fn(&[T]) -> T + Sync + Send,
+    {
+        let mut result_buffer = Vec::with_capacity(BUFFER_SIZE);
+        process_file!(self, |buffer: &mut Vec<T>| {
+            buffer
+                .par_chunks(N)
+                .map(|chunk| f(chunk))
+                .collect_into_vec(&mut result_buffer);
+            mem::swap(buffer, &mut result_buffer);
+            Some(())
+        })
+    }
+
+    #[inline(always)]
+    pub fn iter_chunk_mapped<'a, const N: usize, F>(
+        &'a mut self,
+        f: F,
+    ) -> IterChunkMapped<'a, T, F, N>
+    where
+        T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy,
+        F: for<'b> Fn(&[T]) -> T + Sync + Send,
+    {
+        match self {
+            Self::File { path, .. } => {
+                let file = OpenOptions::new()
+                    .read(true)
+                    .open(&path)
+                    .expect(&format!("failed to open file, {}", path.to_str().unwrap()));
+                IterChunkMapped::new_file(file, f)
+            }
+            Self::Buffer { buffer } => IterChunkMapped::new_buffer(buffer.clone(), f),
         }
     }
 
@@ -192,7 +252,7 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
             rayon::join(
                 || {
                     file.write_all(&byte_buffer[..buffer_length * size])
-                        .expect("failed to write to file")
+                        .expect("failed to write to file");
                 },
                 || {
                     buffer.clear();
@@ -233,28 +293,52 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
         })
     }
 
-    pub fn reinterpret_type<U: SerializeRaw + DeserializeRaw>(self) -> FileVec<U>
+    #[inline(always)]
+    pub fn fold_odd_even_in_place(&mut self, f: impl Fn(&T, &T) -> T + Sync)
+    where
+        T: Send + Sync,
+    {
+        process_file!(self, |buffer: &mut Vec<T>| {
+            *buffer = buffer
+                .par_chunks(2)
+                .map(|chunk| f(&chunk[0], &chunk[1]))
+                .collect();
+            Some(())
+        })
+    }
+
+    pub fn reinterpret_type<U: SerializeRaw + DeserializeRaw>(mut self) -> FileVec<U>
     where
         T: Send + Sync + 'static,
         U: Send + Sync + 'static,
     {
         assert_eq!(T::SIZE % U::SIZE, 0);
-        match &self {
+        match &mut self {
             Self::File { file, path } => {
-                let f = 
-                    FileVec::File {
+                let f = FileVec::File {
                     file: file.try_clone().unwrap(),
                     path: path.clone(),
                 };
                 mem::forget(self);
                 f
-            },
+            }
             Self::Buffer { buffer } => {
                 let size_equal = T::SIZE == U::SIZE;
                 let mem_size_equal = std::mem::size_of::<T>() == std::mem::size_of::<U>();
                 let align_equal = std::mem::align_of::<T>() == std::mem::align_of::<U>();
                 if size_equal && mem_size_equal && align_equal {
-                    unsafe { std::mem::transmute(self) }
+                    let mut new_buffer = vec![];
+                    mem::swap(buffer, &mut new_buffer);
+                    let buffer = unsafe {
+                        // Ensure the original vector is not dropped.
+                        let mut new_buffer = std::mem::ManuallyDrop::new(new_buffer);
+                        Vec::from_raw_parts(
+                            new_buffer.as_mut_ptr() as *mut U,
+                            new_buffer.len(),
+                            new_buffer.capacity(),
+                        )
+                    };
+                    FileVec::Buffer { buffer }
                 } else {
                     let mut byte_buffer = vec![0u8; buffer.len() * T::SIZE];
                     byte_buffer

@@ -14,7 +14,9 @@ macro_rules! process_file {
 
                 let mut writer = NamedTempFile::new().expect("failed to create temp file");
 
+                let mut num_iters = 0;
                 loop {
+                    num_iters += 1;
                     read_byte_buffer.clear();
                     write_buffer.clear();
                     // Now read_buffer is empty, and
@@ -44,12 +46,18 @@ macro_rules! process_file {
                         break;
                     }
                 }
-                std::fs::remove_file(&path).expect("failed to remove file");
-
-                let (mut new_file, new_path) = writer.keep().expect("failed to keep temp file");
-                new_file.rewind().expect("could not rewind file");
-                *path = new_path;
-                *file = new_file;
+                std::fs::remove_file(&path).expect(&format!("failed to remove file {path:?}"));
+                if num_iters == 1 {
+                    assert!(read_buffer.len() <= BUFFER_SIZE);
+                    *$self = FileVec::Buffer {
+                        buffer: read_buffer,
+                    };
+                } else {
+                    let (mut new_file, new_path) = writer.keep().expect("failed to keep temp file");
+                    new_file.rewind().expect("could not rewind file");
+                    *path = new_path;
+                    *file = new_file;
+                }
             }
             FileVec::Buffer { buffer } => {
                 $extra(&mut *buffer);

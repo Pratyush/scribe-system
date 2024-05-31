@@ -52,7 +52,7 @@ impl<'a, T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy + Debug
             }
             Iter::Buffer { buffer } => {
                 if buffer.is_empty() {
-                    return None;
+                    None
                 } else {
                     Some(
                         std::mem::replace(buffer, Vec::new())

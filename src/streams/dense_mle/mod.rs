@@ -10,12 +10,7 @@ pub use inner::*;
 
 use crate::arithmetic::errors::ArithError;
 
-use super::{
-    file_vec::FileVec,
-    iterator::BatchedIterator,
-    serialize::RawField,
-    LOG_BUFFER_SIZE,
-};
+use super::{file_vec::FileVec, iterator::BatchedIterator, serialize::RawField, LOG_BUFFER_SIZE};
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct MLE<F: RawField>(Arc<Inner<F>>);
@@ -344,7 +339,10 @@ fn eq_x_r_helper<F: RawField>(r: &[F]) -> Result<FileVec<F>, ArithError> {
 #[cfg(test)]
 mod test {
     use super::MLE;
-    use crate::{arithmetic::virtual_polynomial::build_eq_x_r_vec, streams::{file_vec::FileVec, LOG_BUFFER_SIZE}};
+    use crate::{
+        arithmetic::virtual_polynomial::build_eq_x_r_vec,
+        streams::{file_vec::FileVec, LOG_BUFFER_SIZE},
+    };
     use ark_bls12_381::Fr;
     use ark_std::test_rng;
     use ark_std::UniformRand;

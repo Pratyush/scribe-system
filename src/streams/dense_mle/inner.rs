@@ -4,14 +4,14 @@ use std::{
 };
 
 use ark_ff::batch_inversion;
-use ark_std::rand::RngCore;
+use ark_std::{end_timer, rand::RngCore, start_timer};
 use rayon::prelude::*;
 
 use crate::streams::{
     file_vec::FileVec,
     iterator::{from_fn, repeat, BatchedIterator},
     serialize::RawField,
-    LOG_BUFFER_SIZE,
+    BUFFER_SIZE, LOG_BUFFER_SIZE,
 };
 
 #[derive(Debug, Hash, PartialEq, Eq)]
@@ -146,7 +146,7 @@ impl<F: RawField> Inner<F> {
 
         for &r in partial_point {
             // Decrements num_vars internally.
-            self.fold_odd_even_in_place(|even, odd| *even + r * (*odd - even));
+            self.fold_odd_even_in_place(|even, odd| r * (*odd - even) + even);
         }
     }
 
@@ -160,19 +160,13 @@ impl<F: RawField> Inner<F> {
             "invalid size of partial point"
         );
 
-        let mut result = None;
+        let mut result = self.deep_copy();
 
         for &r in partial_point {
             // Decrements num_vars internally.
-            if result.is_none() {
-                result = Some(self.fold_odd_even(|even, odd| *even + r * (*odd - even)));
-            } else {
-                result
-                    .as_mut()
-                    .map(|s| s.fold_odd_even_in_place(|even, odd| *even + r * (*odd - even)));
-            }
+            result.fold_odd_even_in_place(|even, odd| r * (*odd - even) + even);
         }
-        result.unwrap_or_else(|| self.deep_copy())
+        result
     }
 
     /// Evaluates `self` at the given point.
@@ -184,7 +178,14 @@ impl<F: RawField> Inner<F> {
             tmp.fix_variables_in_place(point);
 
             // The result is the first element in the stream
-            Some(tmp.evals.iter().next_batch()?.collect::<Vec<_>>()[0])
+            let result = tmp
+                .evals
+                .iter()
+                .next_batch()?
+                .with_min_len(BUFFER_SIZE)
+                .collect::<Vec<_>>();
+            assert_eq!(result.len(), 1);
+            result.first().copied()
         } else {
             None
         }
@@ -196,21 +197,20 @@ impl<F: RawField> Inner<F> {
     pub fn fold_odd_even_in_place(&mut self, f: impl Fn(&F, &F) -> F + Sync) {
         assert!((1 << self.num_vars) % 2 == 0);
         if self.num_vars <= LOG_BUFFER_SIZE as usize {
-            self.evals.convert_to_buffer();
+            self.evals.convert_to_buffer_in_place();
         }
+
         match self.evals {
             FileVec::File { .. } => {
                 self.evals = self
                     .evals
-                    .iter()
-                    .array_chunks::<2>()
-                    .map(|chunk| f(&chunk[0], &chunk[1]))
+                    .iter_chunk_mapped::<2, _>(|chunk| f(&chunk[0], &chunk[1]))
                     .to_file_vec();
             }
             FileVec::Buffer { ref mut buffer } => {
                 let new_buffer = std::mem::replace(buffer, Vec::new());
                 *buffer = new_buffer
-                    .par_chunks_exact(2)
+                    .par_chunks(2)
                     .map(|chunk| f(&chunk[0], &chunk[1]))
                     .with_min_len(1 << 8)
                     .collect();
@@ -399,5 +399,76 @@ impl<'a, F: RawField> SubAssign<(F, &'a Self)> for Inner<F> {
     fn sub_assign(&mut self, (f, other): (F, &'a Self)) {
         self.evals
             .zipped_for_each(other.evals.iter(), |a, b| *a -= f * b);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use ark_bls12_381::Fr;
+    use ark_ff::Field;
+    use ark_poly::{DenseMultilinearExtension, MultilinearExtension};
+    use ark_std::UniformRand;
+    use rayon::prelude::*;
+
+    use crate::streams::{
+        iterator::{BatchAdapter, BatchedIterator},
+        LOG_BUFFER_SIZE, MLE,
+    };
+
+    #[test]
+    fn evaluate() {
+        let mut rng = ark_std::test_rng();
+        for num_vars in LOG_BUFFER_SIZE..=(LOG_BUFFER_SIZE + 5) {
+            let num_vars = num_vars as usize;
+            let lde = DenseMultilinearExtension::rand(num_vars, &mut rng);
+            let point = (0..num_vars)
+                .map(|_| Fr::rand(&mut rng))
+                .collect::<Vec<_>>();
+            let mle = MLE::from_evals_vec(lde.to_evaluations(), num_vars);
+            let eval = lde.evaluate(&point).unwrap();
+            let eval_2 = mle.evaluate(&point).unwrap();
+            let lde_evals = BatchAdapter::from(lde.to_evaluations().into_iter());
+            mle.evals()
+                .iter()
+                .zip(lde_evals)
+                .for_each(|(a, b)| assert_eq!(a, b));
+            assert_eq!(eval, evaluate_opt(&lde, &point));
+            assert_eq!(eval, eval_2);
+        }
+    }
+
+    pub fn evaluate_opt<F: Field>(poly: &DenseMultilinearExtension<F>, point: &[F]) -> F {
+        assert_eq!(poly.num_vars, point.len());
+        fix_variables(poly, point).evaluations[0]
+    }
+
+    pub fn fix_variables<F: Field>(
+        poly: &DenseMultilinearExtension<F>,
+        partial_point: &[F],
+    ) -> DenseMultilinearExtension<F> {
+        assert!(
+            partial_point.len() <= poly.num_vars,
+            "invalid size of partial point"
+        );
+        let nv = poly.num_vars;
+        let mut poly = poly.evaluations.to_vec();
+        let dim = partial_point.len();
+        // evaluate single variable of partial point from left to right
+        for (i, point) in partial_point.iter().enumerate().take(dim) {
+            poly = fix_one_variable_helper(&poly, nv - i, point);
+        }
+
+        DenseMultilinearExtension::<F>::from_evaluations_slice(nv - dim, &poly[..(1 << (nv - dim))])
+    }
+
+    fn fix_one_variable_helper<F: Field>(data: &[F], nv: usize, point: &F) -> Vec<F> {
+        let mut res = vec![F::zero(); 1 << (nv - 1)];
+
+        #[cfg(feature = "parallel")]
+        res.par_iter_mut().enumerate().for_each(|(i, x)| {
+            *x = data[i << 1] + (data[(i << 1) + 1] - data[i << 1]) * point;
+        });
+
+        res
     }
 }

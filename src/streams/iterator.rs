@@ -89,7 +89,9 @@ pub trait BatchedIterator: Sized {
             res.clear();
             res.par_extend(batch.fold_with(identity(), |a, b| fold_op(a, b)));
             res.push(acc);
-            acc = res.par_drain(..res.len()).reduce(|| identity(), |a, b| reduce_op(a, b));
+            acc = res
+                .par_drain(..res.len())
+                .reduce(|| identity(), |a, b| reduce_op(a, b));
         }
         acc
     }
@@ -146,7 +148,7 @@ pub trait BatchedIterator: Sized {
             let sum: S = batch.sum();
             intermediate_sums.push(sum);
         }
-        intermediate_sums.into_iter().sum()
+        intermediate_sums.into_par_iter().sum()
     }
 }
 

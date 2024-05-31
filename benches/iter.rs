@@ -65,5 +65,23 @@ fn zip(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(iter, map, for_each, zip);
+fn array_chunks(c: &mut Criterion) {
+    let num_threads = rayon::current_num_threads();
+    let mut group = c.benchmark_group(format!("iter::array_chunks {num_threads}"));
+    let mut rng = &mut ark_std::test_rng();
+    for size in [1, 2, 4, 8, 16] {
+        let e = Fr::rand(&mut rng);
+        let vec_size = BUFFER_SIZE * size;
+        group.throughput(Throughput::Elements(vec_size as u64));
+        group.bench_with_input(BenchmarkId::from_parameter(vec_size), &size, |b, _| {
+            b.iter(|| {
+                let one = repeat(e, vec_size);
+                one.array_chunks::<2>().map(|[a, b]| a + b).for_each(|_| {});
+            });
+        });
+    }
+    group.finish();
+}
+
+criterion_group!(iter, map, for_each, zip, array_chunks);
 criterion_main!(iter);

@@ -28,38 +28,49 @@ where
         let mut batched = match self.iters.len() {
             0 => unreachable!("ZipMany must have at least one iterator"),
             1 => self.iters[0].next_batch()?.map(|b| smallvec![b]).collect(),
-            2 => {
-                (self.iters[0].next_batch()?, self.iters[1].next_batch()?)
-                    .into_par_iter()
-                    .map(|(a, b)| smallvec![a, b])
-                                        .collect()
-            },
-            3 => {
-                (self.iters[0].next_batch()?, self.iters[1].next_batch()?, self.iters[2].next_batch()?)
-                    .into_par_iter()
-                    .map(|(a, b, c)| smallvec![a, b, c])
-                                        .collect()
-            },
-            4 => {
-                (self.iters[0].next_batch()?, self.iters[1].next_batch()?, self.iters[2].next_batch()?, self.iters[3].next_batch()?)
-                    .into_par_iter()
-                    .map(|(a, b, c, d)| smallvec![a, b, c, d])
-                                        .collect()
-            },
-            5 => {
-                (self.iters[0].next_batch()?, self.iters[1].next_batch()?, self.iters[2].next_batch()?, self.iters[3].next_batch()?, self.iters[4].next_batch()?)
-                    .into_par_iter()
-                    .map(|(a, b, c, d, e)| smallvec![a, b, c, d, e])
-                    .collect()
-            },
-            6 => {
-                (self.iters[0].next_batch()?, self.iters[1].next_batch()?, self.iters[2].next_batch()?, self.iters[3].next_batch()?, self.iters[4].next_batch()?, self.iters[5].next_batch()?)
-                    .into_par_iter()
-                    .map(|(a, b, c, d, e, f)| smallvec![a, b, c, d, e, f])
-                .collect()
-            },
+            2 => (self.iters[0].next_batch()?, self.iters[1].next_batch()?)
+                .into_par_iter()
+                .map(|(a, b)| smallvec![a, b])
+                .collect(),
+            3 => (
+                self.iters[0].next_batch()?,
+                self.iters[1].next_batch()?,
+                self.iters[2].next_batch()?,
+            )
+                .into_par_iter()
+                .map(|(a, b, c)| smallvec![a, b, c])
+                .collect(),
+            4 => (
+                self.iters[0].next_batch()?,
+                self.iters[1].next_batch()?,
+                self.iters[2].next_batch()?,
+                self.iters[3].next_batch()?,
+            )
+                .into_par_iter()
+                .map(|(a, b, c, d)| smallvec![a, b, c, d])
+                .collect(),
+            5 => (
+                self.iters[0].next_batch()?,
+                self.iters[1].next_batch()?,
+                self.iters[2].next_batch()?,
+                self.iters[3].next_batch()?,
+                self.iters[4].next_batch()?,
+            )
+                .into_par_iter()
+                .map(|(a, b, c, d, e)| smallvec![a, b, c, d, e])
+                .collect(),
+            6 => (
+                self.iters[0].next_batch()?,
+                self.iters[1].next_batch()?,
+                self.iters[2].next_batch()?,
+                self.iters[3].next_batch()?,
+                self.iters[4].next_batch()?,
+                self.iters[5].next_batch()?,
+            )
+                .into_par_iter()
+                .map(|(a, b, c, d, e, f)| smallvec![a, b, c, d, e, f])
+                .collect(),
             _ => {
-
                 let mut batched = vec![SVec::with_capacity(self.iters.len()); BUFFER_SIZE];
                 for iter in &mut self.iters {
                     batched
