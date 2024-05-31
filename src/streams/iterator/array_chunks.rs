@@ -1,7 +1,6 @@
 use std::fmt::Debug;
 
 use crate::streams::BUFFER_SIZE;
-use ark_std::{end_timer, start_timer};
 use rayon::prelude::*;
 
 use super::BatchedIterator;
@@ -37,27 +36,19 @@ where
 
     #[inline]
     fn next_batch(&mut self) -> Option<Self::Batch> {
-        let next_batch_time = start_timer!(|| "ArrayChunks::next_batch");
-        let batch = self.iter.next_batch();
-        end_timer!(next_batch_time);
-        batch.map(|i| {
-            let inside_map = start_timer!(|| "ArrayChunks::next_batch inside map");
-            let e = {
-                let batch = i.collect::<Vec<_>>();
-                assert_eq!(batch.len() % N, 0, "Buffer size must be divisible by N");
-                let batch = unsafe {
-                    // Ensure the original vector is not dropped.
-                    let mut batch = std::mem::ManuallyDrop::new(batch);
-                    Vec::from_raw_parts(
-                        batch.as_mut_ptr() as *mut [I::Item; N],
-                        batch.len() / N,
-                        batch.capacity(),
+        self.iter.next_batch().map(|i| {
+            let batch = i.collect::<Vec<_>>();
+            assert_eq!(batch.len() % N, 0, "Buffer size must be divisible by N");
+            let batch = unsafe {
+                // Ensure the original vector is not dropped.
+                let mut batch = std::mem::ManuallyDrop::new(batch);
+                Vec::from_raw_parts(
+                    batch.as_mut_ptr() as *mut [I::Item; N],
+                    batch.len() / N,
+                    batch.capacity(),
                     )
-                };
-                batch.into_par_iter()
             };
-            end_timer!(inside_map);
-            e
+            batch.into_par_iter()
         })
     }
 }
