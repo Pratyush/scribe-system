@@ -54,7 +54,10 @@ where
                 )
             };
             end_timer!(cast_time);
-            batch.into_par_iter()
+            let t = start_timer!(|| "into_par_iter");
+            let result = batch.into_par_iter();
+            end_timer!(t);
+            result
         });
         end_timer!(array_chunks_time);
         e
