@@ -75,7 +75,7 @@ where
                         result
                             .par_chunks(N)
                             .map(|chunk| f(chunk))
-                            .with_min_len(1 << 7)
+                            .with_min_len(1 << 10)
                             .collect::<Vec<_>>()
                             .into_par_iter(),
                     )

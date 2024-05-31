@@ -233,9 +233,7 @@ impl<F: RawField> Inner<F> {
         assert!((1 << self.num_vars) % 2 == 0);
         let evals = self
             .evals
-            .iter()
-            .array_chunks::<2>()
-            .map(|chunk| f(&chunk[0], &chunk[1]))
+            .iter_chunk_mapped::<2, _>(|chunk| f(&chunk[0], &chunk[1]))
             .to_file_vec();
         Self {
             evals,
