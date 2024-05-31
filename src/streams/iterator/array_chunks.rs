@@ -37,7 +37,10 @@ where
 
     #[inline]
     fn next_batch(&mut self) -> Option<Self::Batch> {
-        self.iter.next_batch().map(|i| {
+        let next_batch_time = start_timer!(|| "ArrayChunks::next_batch");
+        let batch = self.iter.next_batch();
+        end_timer!(next_batch_time);
+        batch.map(|i| {
             let inside_map = start_timer!(|| "ArrayChunks::next_batch inside map");
             let e = {
                 let batch = i.collect::<Vec<_>>();
