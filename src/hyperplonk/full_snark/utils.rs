@@ -11,6 +11,7 @@ use crate::{arithmetic::virtual_polynomial::VirtualPolynomial, streams::serializ
 use ark_ec::pairing::Pairing;
 use ark_ff::PrimeField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
+use rayon::prelude::*;
 
 use std::borrow::Borrow;
 
@@ -22,7 +23,6 @@ pub(super) struct PcsAccumulator<E: Pairing, PCS: PolynomialCommitmentScheme<E>>
     pub(crate) polynomials: Vec<PCS::Polynomial>,
     pub(crate) commitments: Vec<PCS::Commitment>,
     pub(crate) points: Vec<PCS::Point>,
-    pub(crate) evals: Vec<PCS::Evaluation>,
 }
 
 impl<E, PCS> PcsAccumulator<E, PCS>
@@ -44,7 +44,6 @@ where
             polynomials: vec![],
             commitments: vec![],
             points: vec![],
-            evals: vec![],
         }
     }
 
@@ -58,9 +57,6 @@ where
         assert!(poly.num_vars() == point.len());
         assert!(poly.num_vars() == self.num_var);
 
-        let eval = poly.evaluate(point).unwrap();
-
-        self.evals.push(eval);
         self.polynomials.push(poly.clone());
         self.points.push(point.clone());
         self.commitments.push(*commit);
@@ -73,11 +69,23 @@ where
         prover_param: impl Borrow<PCS::ProverParam>,
         transcript: &mut IOPTranscript<E::ScalarField>,
     ) -> Result<PCS::BatchProof, HyperPlonkErrors> {
+        let evals = self
+            .polynomials
+            .par_iter()
+            .zip(&self.points)
+            .map(|(poly, point)| {
+                let pool = rayon::ThreadPoolBuilder::new()
+                    .num_threads(1)
+                    .build()
+                    .unwrap();
+                pool.install(|| poly.evaluate(&point).unwrap())
+            })
+            .collect::<Vec<_>>();
         Ok(PCS::multi_open(
             prover_param.borrow(),
             self.polynomials.as_ref(),
             self.points.as_ref(),
-            self.evals.as_ref(),
+            &evals,
             transcript,
         )?)
     }
