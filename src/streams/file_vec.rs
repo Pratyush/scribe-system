@@ -146,10 +146,11 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
     }
 
     #[inline(always)]
-    pub fn iter_chunk_mapped<'a, const N: usize, F>(&'a self, f: F) -> IterChunkMapped<'a, T, F, N>
+    pub fn iter_chunk_mapped<'a, const N: usize, F, U>(&'a self, f: F) -> IterChunkMapped<'a, T, U, F, N>
     where
         T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy,
-        F: for<'b> Fn(&[T]) -> T + Sync + Send,
+        F: for<'b> Fn(&[T]) -> U + Sync + Send,
+        U: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy,
     {
         match self {
             Self::File { path, .. } => {

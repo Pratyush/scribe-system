@@ -4,10 +4,11 @@ use std::{fs::File, marker::PhantomData};
 
 use crate::streams::{iterator::BatchedIterator, BUFFER_SIZE};
 
-pub enum IterChunkMapped<'a, T, F, const N: usize>
+pub enum IterChunkMapped<'a, T, U, F, const N: usize>
 where
     T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy,
-    F: for<'b> Fn(&[T]) -> T + Sync + Send,
+    U: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy,
+    F: for<'b> Fn(&[T]) -> U + Sync + Send,
 {
     File {
         file: File,
@@ -21,10 +22,11 @@ where
     },
 }
 
-impl<'a, T, F, const N: usize> IterChunkMapped<'a, T, F, N>
+impl<'a, T, U, F, const N: usize> IterChunkMapped<'a, T, U, F, N>
 where
     T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy,
-    F: for<'b> Fn(&[T]) -> T + Sync + Send,
+    U: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy,
+    F: for<'b> Fn(&[T]) -> U + Sync + Send,
 {
     pub fn new_file(file: File, f: F) -> Self {
         let size = T::SIZE;
@@ -49,13 +51,14 @@ where
     }
 }
 
-impl<'a, T, F, const N: usize> BatchedIterator for IterChunkMapped<'a, T, F, N>
+impl<'a, T, U, F, const N: usize> BatchedIterator for IterChunkMapped<'a, T, U, F, N>
 where
     T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy,
-    F: for<'b> Fn(&[T]) -> T + Sync + Send,
+    U: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy,
+    F: for<'b> Fn(&[T]) -> U + Sync + Send,
 {
-    type Item = T;
-    type Batch = IntoIter<T>;
+    type Item = U;
+    type Batch = IntoIter<U>;
 
     #[inline]
     fn next_batch(&mut self) -> Option<Self::Batch> {

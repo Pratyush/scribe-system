@@ -4,7 +4,6 @@ pub(crate) mod util;
 use crate::hyperplonk::pcs::StructuredReferenceString;
 use crate::hyperplonk::pcs::{structs::Commitment, PCSError, PolynomialCommitmentScheme};
 use crate::hyperplonk::transcript::IOPTranscript;
-use crate::streams::file_vec::FileVec;
 use crate::streams::{iterator::BatchedIterator, MLE};
 use crate::{
     hyperplonk::pcs::multilinear_kzg::batching::multi_open_internal,

@@ -4,7 +4,7 @@ use std::{
 };
 
 use ark_ff::batch_inversion;
-use ark_std::{end_timer, rand::RngCore, start_timer};
+use ark_std::rand::RngCore;
 use rayon::prelude::*;
 
 use crate::streams::{
@@ -210,7 +210,7 @@ impl<F: RawField> Inner<F> {
             FileVec::File { .. } => {
                 self.evals = self
                     .evals
-                    .iter_chunk_mapped::<2, _>(|chunk| f(&chunk[0], &chunk[1]))
+                    .iter_chunk_mapped::<2, _, _>(|chunk| f(&chunk[0], &chunk[1]))
                     .to_file_vec();
             }
             FileVec::Buffer { ref mut buffer } => {
@@ -233,7 +233,7 @@ impl<F: RawField> Inner<F> {
         assert!((1 << self.num_vars) % 2 == 0);
         let evals = self
             .evals
-            .iter_chunk_mapped::<2, _>(|chunk| f(&chunk[0], &chunk[1]))
+            .iter_chunk_mapped::<2, _, _>(|chunk| f(&chunk[0], &chunk[1]))
             .to_file_vec();
         Self {
             evals,
