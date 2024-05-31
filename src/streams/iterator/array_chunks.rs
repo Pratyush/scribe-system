@@ -42,8 +42,9 @@ where
             let collect_time = start_timer!(|| "collect");
             let batch = i.collect::<Vec<_>>();
             end_timer!(collect_time);
+            let assert_time = start_timer!(|| "assert");
             assert_eq!(batch.len() % N, 0, "Buffer size must be divisible by N");
-            let cast_time = start_timer!(|| "cast");
+            end_timer!(assert_time);
             let batch = unsafe {
                 // Ensure the original vector is not dropped.
                 let mut batch = std::mem::ManuallyDrop::new(batch);
@@ -53,10 +54,7 @@ where
                     batch.capacity(),
                 )
             };
-            end_timer!(cast_time);
-            let t = start_timer!(|| "into_par_iter");
             let result = batch.into_par_iter();
-            end_timer!(t);
             result
         });
         end_timer!(array_chunks_time);
