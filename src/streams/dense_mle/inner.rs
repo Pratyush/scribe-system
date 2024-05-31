@@ -160,13 +160,19 @@ impl<F: RawField> Inner<F> {
             "invalid size of partial point"
         );
 
-        let mut result = self.deep_copy();
+        let mut result = None;
 
         for &r in partial_point {
             // Decrements num_vars internally.
-            result.fold_odd_even_in_place(|even, odd| r * (*odd - even) + even);
+            if result.is_none() {
+                result = Some(self.fold_odd_even(|even, odd| *even + r * (*odd - even)));
+            } else {
+                result
+                    .as_mut()
+                    .map(|s| s.fold_odd_even_in_place(|even, odd| *even + r * (*odd - even)));
+            }
         }
-        result
+        result.unwrap_or_else(|| self.deep_copy())
     }
 
     /// Evaluates `self` at the given point.
