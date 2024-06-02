@@ -89,9 +89,10 @@ where
         .fold(
             vec![None; point_indices.len()],
             |mut merged_tilde_gs, ((poly, point), coeff)| {
-                match &mut merged_tilde_gs[point_indices[point]] {
-                    Some(merged_tilde_g) => *merged_tilde_g += (*coeff, poly),
-                    None => merged_tilde_gs[point_indices[point]] = Some(poly * *coeff),
+                let e = &mut merged_tilde_gs[point_indices[point]];
+                match e {
+                    Some(e) => *e += (*coeff, poly),
+                    None => *e = Some(poly * *coeff),
                 }
                 merged_tilde_gs
             },
