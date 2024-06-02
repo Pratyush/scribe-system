@@ -264,6 +264,17 @@ pub(crate) fn eval_perm_gate<F: PrimeField>(
     Ok(res)
 }
 
+pub(crate) fn exec_in_pool_with_num_threads<F: FnOnce() -> R + Send, R: Send>(
+    f: F,
+    num_threads: usize,
+) -> R {
+    let pool = rayon::ThreadPoolBuilder::new()
+        .num_threads(num_threads)
+        .build()
+        .unwrap();
+    pool.install(f)
+}
+
 pub fn memory_traces() {
     #[cfg(all(feature = "print-trace", target_os = "linux"))]
     {

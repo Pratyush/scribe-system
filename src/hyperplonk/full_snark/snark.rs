@@ -1,4 +1,4 @@
-use crate::arithmetic::util::gen_eval_point;
+use crate::{arithmetic::util::gen_eval_point, hyperplonk::full_snark::utils::exec_in_pool_with_num_threads};
 use crate::arithmetic::virtual_polynomial::VPAuxInfo;
 use crate::hyperplonk::full_snark::utils::PcsAccumulator;
 use crate::hyperplonk::pcs::multilinear_kzg::batching::BatchProof;
@@ -171,10 +171,18 @@ where
         // =======================================================================
         let step = start_timer!(|| "commit witnesses");
 
-        let witness_commits = witnesses
-            .iter()
-            .map(|x| PCS::commit(&pk.pcs_param, x).unwrap())
-            .collect::<Vec<_>>();
+        let num_witnesses = witnesses.len();
+        let num_threads = rayon::current_num_threads();
+        let threads_per_witness = if num_witnesses < num_threads {
+            1
+        } else {
+            num_witnesses / num_threads
+        };
+        let witness_commits = 
+             witnesses
+                .par_iter()
+                .map(|x| PCS::commit(&pk.pcs_param, x).unwrap())
+                .collect::<Vec<_>>();
         for w_com in witness_commits.iter() {
             transcript.append_serializable_element(b"w", w_com)?;
         }
