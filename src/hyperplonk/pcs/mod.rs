@@ -28,7 +28,7 @@ pub trait PolynomialCommitmentScheme<E: Pairing> {
     /// Polynomial Evaluation
     type Evaluation: Field;
     /// Commitments
-    type Commitment: Clone + CanonicalSerialize + CanonicalDeserialize + Debug + PartialEq + Eq;
+    type Commitment: Clone + CanonicalSerialize + CanonicalDeserialize + Debug + PartialEq + Eq + Send;
     /// Proofs
     type Proof: Clone + CanonicalSerialize + CanonicalDeserialize + Debug + PartialEq + Eq;
     /// Batch proofs
