@@ -1,6 +1,7 @@
 #[macro_use]
 extern crate criterion;
 
+use ark_ff::Field;
 use ark_bls12_381::Fr;
 use ark_std::UniformRand;
 use criterion::{BenchmarkId, Criterion};
@@ -89,9 +90,9 @@ fn add_assign(c: &mut Criterion) {
     group.finish();
 }
 
-fn add_coeff_assign(c: &mut Criterion) {
+fn add_assign_coeff(c: &mut Criterion) {
     let num_threads = rayon::current_num_threads();
-    let mut group = c.benchmark_group(format!("mle::add_coeff_assign {num_threads}"));
+    let mut group = c.benchmark_group(format!("mle::add_assign_coeff {num_threads}"));
     let mut rng = &mut ark_std::test_rng();
     for num_vars in LOG_BUFFER_SIZE as usize..=20 {
         group.bench_with_input(BenchmarkId::from_parameter(num_vars), &num_vars, |b, _| {
@@ -104,7 +105,21 @@ fn add_coeff_assign(c: &mut Criterion) {
     group.finish();
 }
 
+fn add_assign_one(c: &mut Criterion) {
+    let num_threads = rayon::current_num_threads();
+    let mut group = c.benchmark_group(format!("mle::add_assign_one {num_threads}"));
+    let mut rng = &mut ark_std::test_rng();
+    for num_vars in LOG_BUFFER_SIZE as usize..=20 {
+        group.bench_with_input(BenchmarkId::from_parameter(num_vars), &num_vars, |b, _| {
+            let mut p = MLE::<Fr>::rand(num_vars, &mut rng);
+            let q = MLE::rand(num_vars, &mut rng);
+            b.iter(|| p += (Fr::ONE, &q))
+        });
+    }
+    group.finish();
+}
 
 
-criterion_group!(iter, eq, eval, eval_vec, add_assign, add_coeff_assign);
+
+criterion_group!(iter, eq, eval, eval_vec, add_assign, add_assign_coeff, add_assign_one);
 criterion_main!(iter);

@@ -345,7 +345,9 @@ impl<'a, F: RawField> SubAssign<&'a Self> for Inner<F> {
 impl<F: RawField> MulAssign<(F, Self)> for Inner<F> {
     #[inline(always)]
     fn mul_assign(&mut self, (f, other): (F, Self)) {
-        if !f.is_one() {
+        if f.is_one() {
+            *self *= other;
+        } else {
             self.evals
                 .zipped_for_each(other.evals.iter(), |a, b| *a *= f * b);           
         }
@@ -355,7 +357,9 @@ impl<F: RawField> MulAssign<(F, Self)> for Inner<F> {
 impl<'a, F: RawField> MulAssign<(F, &'a Self)> for Inner<F> {
     #[inline(always)]
     fn mul_assign(&mut self, (f, other): (F, &'a Self)) {
-        if !f.is_one() {
+        if f.is_one() {
+            *self *= other;
+        } else {
             self.evals
                 .zipped_for_each(other.evals.iter(), |a, b| *a *= f * b);
         }
@@ -388,8 +392,7 @@ impl<F: RawField> AddAssign<(F, Self)> for Inner<F> {
     #[inline(always)]
     fn add_assign(&mut self, (f, other): (F, Self)) {
         if f.is_one() {
-            self.evals
-                .zipped_for_each(other.evals.iter(), |a, b| *a += b);
+            *self += other;
         } else {
             self.evals
                 .zipped_for_each(other.evals.iter(), |a, b| *a += f * b);
@@ -401,8 +404,7 @@ impl<'a, F: RawField> AddAssign<(F, &'a Self)> for Inner<F> {
     #[inline(always)]
     fn add_assign(&mut self, (f, other): (F, &'a Self)) {
         if f.is_one() {
-            self.evals
-                .zipped_for_each(other.evals.iter(), |a, b| *a += b);
+            *self += other;
         } else {
             self.evals
                 .zipped_for_each(other.evals.iter(), |a, b| *a += f * b);
@@ -414,8 +416,7 @@ impl<F: RawField> SubAssign<(F, Self)> for Inner<F> {
     #[inline(always)]
     fn sub_assign(&mut self, (f, other): (F, Self)) {
         if f.is_one() {
-            self.evals
-                .zipped_for_each(other.evals.iter(), |a, b| *a -= b);
+            *self += other;
         } else {
             self.evals
                 .zipped_for_each(other.evals.iter(), |a, b| *a -= f * b);
@@ -427,8 +428,7 @@ impl<'a, F: RawField> SubAssign<(F, &'a Self)> for Inner<F> {
     #[inline(always)]
     fn sub_assign(&mut self, (f, other): (F, &'a Self)) {
         if f.is_one() {
-            self.evals
-                .zipped_for_each(other.evals.iter(), |a, b| *a -= b);
+            *self -= other;
         } else {
             self.evals
                 .zipped_for_each(other.evals.iter(), |a, b| *a -= f * b);
