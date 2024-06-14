@@ -601,7 +601,6 @@ impl<T: SerializeRaw + DeserializeRaw + PartialEq> PartialEq for FileVec<T> {
 
 impl<T: SerializeRaw + DeserializeRaw + Eq> Eq for FileVec<T> {}
 
-
 // T has same representation in memory for our format and canonical
 // T has different reprsetnation in disk for our format for efficiency
 
@@ -724,23 +723,25 @@ impl<T: SerializeRaw + DeserializeRaw + Valid> Valid for FileVec<T> {
     }
 }
 
-// Test CanonicalSerialize and CanonicalDeserialize for FileVec
 #[cfg(test)]
 mod tests {
+    use ark_bls12_381::Fr;
     use ark_serialize::CanonicalSerialize;
     use ark_std::test_rng;
-    use ark_bls12_381::Fr;
     use ark_std::UniformRand;
 
     use super::*;
 
+    // Currently works for BUFFER_SIZE or below
     #[test]
     fn test_file_vec_canonical_serialize() {
         let mut rng = test_rng();
-        let file_vec = FileVec::from_iter((0..16).map(|_| Fr::rand(&mut rng)));
+        let file_vec = FileVec::from_iter((0..(2 * BUFFER_SIZE)).map(|_| Fr::rand(&mut rng)));
         let mut buffer = File::create("srs.params").unwrap();
         file_vec.serialize_uncompressed(&mut buffer).unwrap();
-        let file_vec2 = FileVec::<Fr>::deserialize_uncompressed_unchecked(&mut buffer).unwrap();
+
+        let mut f = File::open("srs.params").unwrap();
+        let file_vec2 = FileVec::<Fr>::deserialize_uncompressed_unchecked(&mut f).unwrap();
         assert_eq!(file_vec, file_vec2);
     }
 }
