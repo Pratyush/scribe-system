@@ -46,7 +46,7 @@ where
                     batch.as_mut_ptr() as *mut [I::Item; N],
                     batch.len() / N,
                     batch.capacity(),
-                    )
+                )
             };
             batch.into_par_iter()
         })

@@ -349,7 +349,7 @@ impl<F: RawField> MulAssign<(F, Self)> for Inner<F> {
             *self *= other;
         } else {
             self.evals
-                .zipped_for_each(other.evals.iter(), |a, b| *a *= f * b);           
+                .zipped_for_each(other.evals.iter(), |a, b| *a *= f * b);
         }
     }
 }

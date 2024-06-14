@@ -53,7 +53,7 @@ fn main() -> Result<(), HyperPlonkErrors> {
         .build()
         .unwrap();
     let pcs_srs = pool.install(|| {
-        MultilinearKzgPCS::<Bls12_381>::gen_srs_for_testing(&mut rng, SUPPORTED_SIZE)
+        MultilinearKzgPCS::<Bls12_381>::gen_fake_srs_for_testing(&mut rng, SUPPORTED_SIZE)
     })?;
     // bench_jellyfish_plonk(&pcs_srs, thread)?;
     // println!();
@@ -68,15 +68,15 @@ fn main() -> Result<(), HyperPlonkErrors> {
     Ok(())
 }
 
-// fn read_srs() -> Result<MultilinearUniversalParams<Bls12_381>, io::Error> {
-//     let mut f = File::open("srs.params")?;
-//     Ok(MultilinearUniversalParams::<Bls12_381>::deserialize_compressed_unchecked(&mut f).unwrap())
-// }
+fn read_srs() -> Result<MultilinearUniversalParams<Bls12_381>, io::Error> {
+    let mut f = File::open("srs.params")?;
+    Ok(MultilinearUniversalParams::<Bls12_381>::deserialize_compressed_unchecked(&mut f).unwrap())
+}
 
-// fn write_srs(pcs_srs: &MultilinearUniversalParams<Bls12_381>) {
-//     let mut f = File::create("srs.params").unwrap();
-//     pcs_srs.serialize_uncompressed(&mut f).unwrap();
-// }
+fn write_srs(pcs_srs: &MultilinearUniversalParams<Bls12_381>) {
+    let mut f = File::create("srs.params").unwrap();
+    pcs_srs.serialize_uncompressed(&mut f).unwrap();
+}
 
 fn bench_vanilla_plonk(
     pcs_srs: &MultilinearUniversalParams<Bls12_381>,

@@ -1,9 +1,11 @@
-use crate::{arithmetic::util::gen_eval_point, hyperplonk::full_snark::utils::exec_in_pool_with_num_threads};
 use crate::arithmetic::virtual_polynomial::VPAuxInfo;
 use crate::hyperplonk::full_snark::utils::PcsAccumulator;
 use crate::hyperplonk::pcs::multilinear_kzg::batching::BatchProof;
 use crate::hyperplonk::pcs::structs::Commitment;
 use crate::hyperplonk::pcs::PolynomialCommitmentScheme;
+use crate::{
+    arithmetic::util::gen_eval_point, hyperplonk::full_snark::utils::exec_in_pool_with_num_threads,
+};
 
 use crate::hyperplonk::full_snark::{
     errors::HyperPlonkErrors,
@@ -178,11 +180,10 @@ where
         } else {
             num_witnesses / num_threads
         };
-        let witness_commits = 
-             witnesses
-                .par_iter()
-                .map(|x| PCS::commit(&pk.pcs_param, x).unwrap())
-                .collect::<Vec<_>>();
+        let witness_commits = witnesses
+            .par_iter()
+            .map(|x| PCS::commit(&pk.pcs_param, x).unwrap())
+            .collect::<Vec<_>>();
         for w_com in witness_commits.iter() {
             transcript.append_serializable_element(b"w", w_com)?;
         }

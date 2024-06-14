@@ -1,8 +1,8 @@
 #[macro_use]
 extern crate criterion;
 
-use ark_ff::Field;
 use ark_bls12_381::Fr;
+use ark_ff::Field;
 use ark_std::UniformRand;
 use criterion::{BenchmarkId, Criterion};
 use scribe::streams::{LOG_BUFFER_SIZE, MLE};
@@ -119,7 +119,13 @@ fn add_assign_one(c: &mut Criterion) {
     group.finish();
 }
 
-
-
-criterion_group!(iter, eq, eval, eval_vec, add_assign, add_assign_coeff, add_assign_one);
+criterion_group!(
+    iter,
+    eq,
+    eval,
+    eval_vec,
+    add_assign,
+    add_assign_coeff,
+    add_assign_one
+);
 criterion_main!(iter);

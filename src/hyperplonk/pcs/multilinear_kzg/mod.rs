@@ -313,8 +313,7 @@ where
 
         // TODO: confirm that FileVec in prior round's q and r are auto dropped via the Drop trait once q and r are assigned new FileVec
         (q, r) = f
-            .iter_chunk_mapped::<2, _, _>(
-            |chunk| {
+            .iter_chunk_mapped::<2, _, _>(|chunk| {
                 let q_bit = chunk[1] - chunk[0];
                 let r_bit = chunk[0] + q_bit * point_at_k;
                 (q_bit, r_bit)
