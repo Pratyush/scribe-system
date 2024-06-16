@@ -733,7 +733,7 @@ mod tests {
 
         match (&file_vec, &file_vec2) {
             (FileVec::Buffer { buffer: b1 }, FileVec::Buffer { buffer: b2 }) => {
-                assert_eq!(b1, b2);
+                panic!("should both be File enums");
             }
             (FileVec::File { .. }, FileVec::File { .. }) => {
                 let vec1 = file_vec.iter().to_vec();

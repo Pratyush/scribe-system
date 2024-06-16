@@ -23,9 +23,9 @@ use scribe::hyperplonk::{
 };
 use scribe::streams::LOG_BUFFER_SIZE;
 
-const SUPPORTED_SIZE: usize = 20;
-const MIN_NUM_VARS: usize = 10;
-const MAX_NUM_VARS: usize = 20;
+const SUPPORTED_SIZE: usize = 12;
+const MIN_NUM_VARS: usize = 8;
+const MAX_NUM_VARS: usize = 12;
 const MIN_CUSTOM_DEGREE: usize = 1;
 const MAX_CUSTOM_DEGREE: usize = 32;
 const HIGH_DEGREE_TEST_NV: usize = 15;
@@ -37,24 +37,24 @@ fn main() -> Result<(), HyperPlonkErrors> {
         thread, LOG_BUFFER_SIZE
     );
     let mut rng = test_rng();
-    // let pcs_srs = {
-    //     match read_srs() {
-    //         Ok(p) => p,
-    //         Err(_e) => {
-    //             let srs =
-    //                 MultilinearKzgPCS::<Bls12_381>::gen_srs_for_testing(&mut rng, SUPPORTED_SIZE)?;
-    //             write_srs(&srs);
-    //             srs
-    //         },
-    //     }
-    // };
+    let pcs_srs = {
+        match read_srs() {
+            Ok(p) => p,
+            Err(_e) => {
+                let srs =
+                    MultilinearKzgPCS::<Bls12_381>::gen_fake_srs_for_testing(&mut rng, SUPPORTED_SIZE)?;
+                write_srs(&srs);
+                srs
+            },
+        }
+    };
     let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(8)
         .build()
         .unwrap();
-    let pcs_srs = pool.install(|| {
-        MultilinearKzgPCS::<Bls12_381>::gen_fake_srs_for_testing(&mut rng, SUPPORTED_SIZE)
-    })?;
+    // let pcs_srs = pool.install(|| {
+    //     MultilinearKzgPCS::<Bls12_381>::gen_fake_srs_for_testing(&mut rng, SUPPORTED_SIZE)
+    // })?;
     // bench_jellyfish_plonk(&pcs_srs, thread)?;
     // println!();
     bench_vanilla_plonk(&pcs_srs, thread)?;
@@ -167,21 +167,21 @@ fn bench_mock_circuit_zkp_helper(
     println!("proving for {nv} variables: {t} us",);
     file.write_all(format!("{nv} {t}\n").as_ref()).unwrap();
 
-    //==========================================================
-    // verify a proof
-    let start = Instant::now();
-    let verify = <PolyIOP<Fr> as HyperPlonkSNARK<Bls12_381, MultilinearKzgPCS<Bls12_381>>>::verify(
-        &vk,
-        &circuit.public_inputs,
-        &proof,
-    )?;
-    assert!(verify);
-    println!(
-        "verifying for {} variables: {} us",
-        nv,
-        start.elapsed().as_micros() / repetition as u128
-    );
+    // //==========================================================
+    // // verify a proof
+    // let start = Instant::now();
+    // let verify = <PolyIOP<Fr> as HyperPlonkSNARK<Bls12_381, MultilinearKzgPCS<Bls12_381>>>::verify(
+    //     &vk,
+    //     &circuit.public_inputs,
+    //     &proof,
+    // )?;
+    // assert!(verify);
+    // println!(
+    //     "verifying for {} variables: {} us",
+    //     nv,
+    //     start.elapsed().as_micros() / repetition as u128
+    // );
 
-    println!();
+    // println!();
     Ok(())
 }

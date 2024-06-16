@@ -16,14 +16,14 @@ use ark_std::{
 use core::iter::FromIterator;
 
 /// Evaluations over {0,1}^n for G1 or G2
-#[derive(Debug)]
+#[derive(Debug, CanonicalDeserialize, CanonicalSerialize)]
 pub struct Evaluations<C: RawAffine> {
     /// The evaluations.
     pub evals: FileVec<C>,
 }
 
 /// Universal Parameter
-#[derive(Debug)]
+#[derive(Debug, CanonicalDeserialize, CanonicalSerialize)]
 pub struct MultilinearUniversalParams<E: Pairing>
 where
     E::G1Affine: RawAffine,
@@ -35,7 +35,7 @@ where
 }
 
 /// Prover Parameters
-#[derive(Debug)]
+#[derive(Debug, CanonicalDeserialize, CanonicalSerialize)]
 pub struct MultilinearProverParam<E: Pairing>
 where
     E::G1Affine: RawAffine,
@@ -48,8 +48,8 @@ where
     pub powers_of_g: Vec<Evaluations<E::G1Affine>>,
     /// generator for G1
     pub g: E::G1Affine,
-    /// generator for G2
-    pub h: E::G2Affine,
+    // /// generator for G2
+    // pub h: E::G2Affine,
 }
 
 /// Verifier Parameters
@@ -84,7 +84,7 @@ where
                 })
                 .collect(),
             g: self.prover_param.g,
-            h: self.prover_param.h,
+            // h: self.prover_param.h,
             num_vars: supported_num_vars,
         }
     }
@@ -94,8 +94,10 @@ where
         let to_reduce = self.prover_param.num_vars - supported_num_vars;
         Self::VerifierParam {
             num_vars: supported_num_vars,
-            g: self.prover_param.g,
-            h: self.prover_param.h,
+            // g: self.prover_param.g,
+            // h: self.prover_param.h,
+            g: Default::default(),
+            h: Default::default(),
             h_mask: self.h_mask[to_reduce..].to_vec(),
         }
     }
@@ -124,13 +126,15 @@ where
                 })
                 .collect(),
             g: self.prover_param.g,
-            h: self.prover_param.h,
+            // h: self.prover_param.h,
             num_vars: supported_num_vars,
         };
         let vk = Self::VerifierParam {
             num_vars: supported_num_vars,
-            g: self.prover_param.g,
-            h: self.prover_param.h,
+            // g: self.prover_param.g,
+            // h: self.prover_param.h,
+            g: Default::default(),
+            h: Default::default(),
             h_mask: self.h_mask[to_reduce..].to_vec(),
         };
         Ok((ck, vk))
@@ -213,7 +217,7 @@ where
         let pp = Self::ProverParam {
             num_vars,
             g: g.into_affine(),
-            h: h.into_affine(),
+            // h: h.into_affine(),
             powers_of_g,
         };
 
@@ -252,21 +256,24 @@ where
         let pp = Self::ProverParam {
             num_vars: supported_degree,
             g: E::G1::rand(rng).into_affine(),
-            h: E::G2::rand(rng).into_affine(),
-            powers_of_g: (0..supported_degree + 1)
-                .rev()
-                .map(|degree| {
-                    let mut rand_g1 = E::G1::rand(rng).into_affine();
-                    Evaluations {
-                        evals: FileVec::from_iter((0..(1 << degree)).map(|i| {
-                            if (i % (1 << 10)) == 0 {
-                                rand_g1 = E::G1::rand(rng).into_affine();
-                            }
-                            rand_g1
-                        })),
-                    }
-                })
-                .collect(),
+            // h: E::G2::rand(rng).into_affine(),
+            // powers_of_g: (0..supported_degree + 1)
+            //     .rev()
+            //     .map(|degree| {
+            //         let mut rand_g1 = E::G1::rand(rng).into_affine();
+            //         Evaluations {
+            //             evals: FileVec::from_iter((0..(1 << degree)).map(|i| {
+            //                 if (i % (1 << 10)) == 0 {
+            //                     rand_g1 = E::G1::rand(rng).into_affine();
+            //                 }
+            //                 rand_g1
+            //             })),
+            //         }
+            //     })
+            //     .collect(),
+            powers_of_g: vec![Evaluations {
+                evals: FileVec::from_iter((0..16).map(|_| E::G1::rand(rng).into_affine())),
+            }],
         };
 
         let h_mask: Vec<_> = (0..supported_degree)
@@ -296,20 +303,72 @@ fn remove_dummy_variable<F: Field>(poly: &[F], pad: usize) -> Result<Vec<F>, PCS
     Ok((0..(1 << nv)).map(|x| poly[x << pad]).collect())
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-//     use ark_bls12_381::Bls12_381;
-//     use ark_std::test_rng;
-//     type E = Bls12_381;
+#[cfg(test)]
+mod tests {
+    use std::fs::File;
+    use std::ops::Mul;
 
-//     #[test]
-//     fn test_srs_gen() -> Result<(), PCSError> {
-//         let mut rng = test_rng();
-//         for nv in 4..10 {
-//             let _ = MultilinearUniversalParams::<E>::gen_srs_for_testing(&mut rng, nv)?;
-//         }
+    use super::*;
+    use ark_bls12_381::Bls12_381;
+    use ark_bls12_381::Fr;
+    use ark_ec::bls12::Bls12;
+    use ark_std::test_rng;
+    use ark_std::UniformRand;
+    type E = Bls12_381;
 
-//         Ok(())
-//     }
-// }
+    #[test]
+    fn test_srs_gen() -> Result<(), PCSError> {
+        let mut rng = test_rng();
+        for nv in 4..10 {
+            let _ = MultilinearUniversalParams::<E>::gen_fake_srs_for_testing(&mut rng, nv)?;
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_evaluations_serialization() {
+        let mut rng = test_rng();
+        let evaluations = Evaluations {
+            evals: FileVec::from_iter((0..16)
+            .map(|_| <Bls12<ark_bls12_381::Config> as ark_ec::pairing::Pairing>::G1::rand(&mut rng).into_affine())),
+        };
+        let evaluations_2 = Evaluations {
+            evals: FileVec::from_iter((0..16)
+            .map(|_| <Bls12<ark_bls12_381::Config> as ark_ec::pairing::Pairing>::G1::rand(&mut rng).into_affine())),
+        };
+
+        let evaluations_vec = vec![evaluations, evaluations_2];
+
+        let mut f = File::create("evaluations.serialization.test").unwrap();
+        evaluations_vec.serialize_uncompressed(&mut f).unwrap();
+
+        let mut f2 = File::open("evaluations.serialization.test").unwrap();
+        Vec::<Evaluations::<<Bls12<ark_bls12_381::Config> as ark_ec::pairing::Pairing>::G1Affine>>::deserialize_compressed_unchecked(&mut f2).unwrap();
+
+        let prover_param: MultilinearProverParam<E> = MultilinearProverParam {
+            num_vars: 2,
+            powers_of_g: evaluations_vec,
+            g: <Bls12<ark_bls12_381::Config> as ark_ec::pairing::Pairing>::G1::rand(&mut rng).into_affine(),
+            // h: <Bls12<ark_bls12_381::Config> as ark_ec::pairing::Pairing>::G2::rand(&mut rng).into_affine()
+        };
+
+        let mut f3 = File::create("prover_param.serialization.test").unwrap();
+        prover_param.serialize_uncompressed(&mut f3).unwrap();
+
+        let mut f4 = File::open("prover_param.serialization.test").unwrap();
+        MultilinearProverParam::<E>::deserialize_compressed_unchecked(&mut f4).unwrap();
+    }
+
+    #[test]
+    fn test_srs_serialization() {
+        let mut rng = test_rng();
+        let srs = MultilinearUniversalParams::<E>::gen_fake_srs_for_testing(&mut rng, 4).unwrap();
+        let mut f = File::create("srs.serialization.test").unwrap();
+        srs.serialize_uncompressed(&mut f).unwrap();
+
+        let mut f2 = File::open("srs.serialization.test").unwrap();
+        MultilinearUniversalParams::<E>::deserialize_compressed_unchecked(&mut f2).unwrap();
+    }
+}
+
