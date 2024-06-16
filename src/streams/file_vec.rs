@@ -607,8 +607,8 @@ impl<T: SerializeRaw + DeserializeRaw + Eq> Eq for FileVec<T> {}
 // serialize:
 // File: use our local serialization to read the entire file to a Vec<T>, and call T::serialize_uncompressed on Vec<T>
 // Buffer: call T::serialize_uncompressed directly on the inner content (automatically writes length first)
-impl<T: SerializeRaw + DeserializeRaw + Valid + Sync + Send + CanonicalSerialize> CanonicalSerialize
-    for FileVec<T>
+impl<T: SerializeRaw + DeserializeRaw + Valid + Sync + Send + CanonicalSerialize + Debug>
+    CanonicalSerialize for FileVec<T>
 {
     fn serialize_with_mode<W: Write>(
         &self,
@@ -634,10 +634,14 @@ impl<T: SerializeRaw + DeserializeRaw + Valid + Sync + Send + CanonicalSerialize
                         file,
                     )
                     .unwrap();
+
+                    // need to store result_buffer len first or append removes all elements from result buffer
+                    let result_buffer_len = result_buffer.len();
+
                     final_result.append(&mut result_buffer);
 
                     // if we have read less than BUFFER_SIZE items, we've reached EOF
-                    if result_buffer.len() < BUFFER_SIZE {
+                    if result_buffer_len < BUFFER_SIZE {
                         break;
                     }
                 }
@@ -662,15 +666,15 @@ impl<T: SerializeRaw + DeserializeRaw + Valid + Sync + Send + CanonicalSerialize
 //        c. use SerializeRaw to write each T to the File
 // if the length less than buffer size, it's a buffer
 //        a. read one buffer batch and return it directly (just a Vec) Vec<T>::deserialize_uncompressed_unchecked
-impl<T: SerializeRaw + DeserializeRaw + Valid + Sync + Send + CanonicalDeserialize>
+impl<T: SerializeRaw + DeserializeRaw + Valid + Sync + Send + CanonicalDeserialize + Debug>
     CanonicalDeserialize for FileVec<T>
 {
     fn deserialize_with_mode<R: ark_serialize::Read>(
         reader: R,
-        compress: ark_serialize::Compress,
-        validate: ark_serialize::Validate,
+        _compress: ark_serialize::Compress,
+        _validate: ark_serialize::Validate,
     ) -> Result<Self, ark_serialize::SerializationError> {
-        let final_result = Vec::<T>::deserialize_compressed_unchecked(reader).unwrap();
+        let final_result = Vec::<T>::deserialize_uncompressed_unchecked(reader).unwrap();
         if final_result.len() > BUFFER_SIZE {
             let (mut file, path) = NamedTempFile::new()
                 .expect("failed to create temp file")
@@ -686,25 +690,6 @@ impl<T: SerializeRaw + DeserializeRaw + Valid + Sync + Send + CanonicalDeseriali
                 buffer: final_result,
             })
         }
-        // length (# elem in underlying vec) is serialized as a u64
-        // let length = u64::deserialize_uncompressed(reader).unwrap();
-        // if length > BUFFER_SIZE as u64 {
-        //     let (mut file, path) = NamedTempFile::new()
-        //         .expect("failed to create temp file")
-        //         .keep()
-        //         .expect("failed to keep temp file");
-        //     for _ in 0..length / BUFFER_SIZE as u64 { // one batch each loop
-        //         let mut work_buffer = vec![0u8; T::SIZE * BUFFER_SIZE];
-        //         let mut buffer = vec![];
-        //         T::deserialize_compressed_unchecked(reader);
-        //     }
-        //     T::serialize_raw(&self, writer)
-
-        //     Ok(FileVec::new_file(file, path))
-        // } else {
-        //     let buffer = Vec::<T>::deserialize_uncompressed(reader).unwrap();
-        //     Ok(FileVec::Buffer { buffer })
-        // }
     }
 }
 
@@ -736,12 +721,26 @@ mod tests {
     #[test]
     fn test_file_vec_canonical_serialize() {
         let mut rng = test_rng();
-        let file_vec = FileVec::from_iter((0..(2 * BUFFER_SIZE)).map(|_| Fr::rand(&mut rng)));
+        let vec1 = (0..(BUFFER_SIZE * 2))
+            .map(|_| Fr::rand(&mut rng))
+            .collect::<Vec<Fr>>();
+        let file_vec = FileVec::from_iter(vec1.clone().into_iter());
         let mut buffer = File::create("srs.params").unwrap();
         file_vec.serialize_uncompressed(&mut buffer).unwrap();
 
         let mut f = File::open("srs.params").unwrap();
         let file_vec2 = FileVec::<Fr>::deserialize_uncompressed_unchecked(&mut f).unwrap();
-        assert_eq!(file_vec, file_vec2);
+
+        match (&file_vec, &file_vec2) {
+            (FileVec::Buffer { buffer: b1 }, FileVec::Buffer { buffer: b2 }) => {
+                assert_eq!(b1, b2);
+            }
+            (FileVec::File { .. }, FileVec::File { .. }) => {
+                let vec1 = file_vec.iter().to_vec();
+                let vec2 = file_vec2.iter().to_vec();
+                assert_eq!(vec1, vec2);
+            }
+            _ => panic!("file_vec and file_vec2 are different types"),
+        }
     }
 }
