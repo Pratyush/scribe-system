@@ -11,7 +11,7 @@ use std::{
 use crate::streams::serialize::{DeserializeRaw, SerializeRaw};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Valid};
 use derivative::Derivative;
-use rayon::{prelude::*, result};
+use rayon::prelude::*;
 use tempfile::NamedTempFile;
 
 pub use self::iter::Iter;
@@ -617,16 +617,15 @@ impl<T: SerializeRaw + DeserializeRaw + Valid + Sync + Send + CanonicalSerialize
     ) -> Result<(), ark_serialize::SerializationError> {
         match self {
             Self::Buffer { buffer } => {
-                Vec::<T>::serialize_uncompressed(buffer, writer).unwrap();
-                Ok(())
-            }
+                println!("Here in serializing buffer");
+                buffer.serialize_uncompressed(&mut writer)},
             Self::File { path, file } => {
                 let size = T::SIZE;
                 let mut final_result = vec![];
                 let mut work_buffer = vec![0u8; size * BUFFER_SIZE];
 
+                let mut result_buffer = Vec::with_capacity(BUFFER_SIZE);
                 loop {
-                    let mut result_buffer = vec![];
                     T::deserialize_raw_batch(
                         &mut result_buffer,
                         &mut work_buffer,
@@ -647,13 +646,13 @@ impl<T: SerializeRaw + DeserializeRaw + Valid + Sync + Send + CanonicalSerialize
                 }
 
                 // size of final_result vec (not byte size) should be serialized as a u64 as a part of this API
-                Vec::<T>::serialize_uncompressed(&final_result, writer).unwrap();
-                Ok(())
+                dbg!(final_result.len());
+                final_result.serialize_uncompressed(&mut writer)
             }
         }
     }
 
-    fn serialized_size(&self, compress: ark_serialize::Compress) -> usize {
+    fn serialized_size(&self, _compress: ark_serialize::Compress) -> usize {
         todo!()
     }
 }
@@ -670,32 +669,47 @@ impl<T: SerializeRaw + DeserializeRaw + Valid + Sync + Send + CanonicalDeseriali
     CanonicalDeserialize for FileVec<T>
 {
     fn deserialize_with_mode<R: ark_serialize::Read>(
-        reader: R,
+        mut reader: R,
         _compress: ark_serialize::Compress,
         _validate: ark_serialize::Validate,
     ) -> Result<Self, ark_serialize::SerializationError> {
-        let final_result = Vec::<T>::deserialize_uncompressed_unchecked(reader).unwrap();
-        if final_result.len() > BUFFER_SIZE {
+        let size = usize::deserialize_uncompressed_unchecked(&mut reader)?;
+        dbg!(size);
+        let mut buffer = Vec::with_capacity(BUFFER_SIZE);
+        if size > BUFFER_SIZE {
             let (mut file, path) = NamedTempFile::new()
                 .expect("failed to create temp file")
                 .keep()
                 .expect("failed to keep temp file");
-            final_result.chunks(BUFFER_SIZE).for_each(|batch| {
-                let mut work_buffer = vec![0u8; T::SIZE * BUFFER_SIZE];
-                T::serialize_raw_batch(batch, &mut work_buffer, &mut file).unwrap();
-            });
+            let mut remaining = size;
+
+            let mut work_buffer = vec![0u8; T::SIZE * BUFFER_SIZE];
+            while remaining > 0 {
+                for _ in 0..std::cmp::min(remaining, BUFFER_SIZE) {
+                    let item = T::deserialize_uncompressed_unchecked(&mut reader).unwrap();
+                    buffer.push(item);
+                }
+                remaining = remaining.saturating_sub(BUFFER_SIZE);
+                T::serialize_raw_batch(&buffer, &mut work_buffer, &mut file).unwrap();
+                buffer.clear();
+                work_buffer.clear();
+            }
+            
             Ok(FileVec::new_file(file, path))
         } else {
-            Ok(FileVec::Buffer {
-                buffer: final_result,
-            })
+            for _ in 0..size {
+                let item = T::deserialize_uncompressed_unchecked(&mut reader).unwrap();
+                buffer.push(item);
+            }
+
+            Ok(FileVec::Buffer { buffer })
         }
     }
 }
 
 impl<T: SerializeRaw + DeserializeRaw + Valid> Valid for FileVec<T> {
     fn check(&self) -> Result<(), ark_serialize::SerializationError> {
-        todo!()
+        unimplemented!()
     }
 
     fn batch_check<'a>(
@@ -704,7 +718,7 @@ impl<T: SerializeRaw + DeserializeRaw + Valid> Valid for FileVec<T> {
     where
         Self: 'a,
     {
-        todo!()
+        unimplemented!()
     }
 }
 

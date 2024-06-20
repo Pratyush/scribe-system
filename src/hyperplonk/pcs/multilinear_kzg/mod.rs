@@ -120,7 +120,7 @@ where
 
         let commitment = {
             let mut poly_evals = poly.evals().iter();
-            let mut srs = prover_param.powers_of_g[ignored].evals.iter();
+            let mut srs = prover_param.powers_of_g[ignored].iter();
             let mut f_buf = Vec::with_capacity(crate::streams::BUFFER_SIZE);
             let mut g_buf = Vec::with_capacity(crate::streams::BUFFER_SIZE);
             let mut commitment = E::G1::zero();
@@ -331,7 +331,7 @@ where
 
         let commitment = {
             let mut scalars = q.iter();
-            let mut bases = gi.evals.iter();
+            let mut bases = gi.iter();
             let mut scalars_buf = Vec::with_capacity(crate::streams::BUFFER_SIZE);
             let mut bases_buf = Vec::with_capacity(crate::streams::BUFFER_SIZE);
             let mut commitment = E::G1::zero();
