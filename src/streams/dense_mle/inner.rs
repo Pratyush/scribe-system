@@ -4,6 +4,7 @@ use std::{
 };
 
 use ark_ff::batch_inversion;
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::rand::RngCore;
 use rayon::prelude::*;
 
@@ -14,7 +15,7 @@ use crate::streams::{
     BUFFER_SIZE, LOG_BUFFER_SIZE,
 };
 
-#[derive(Debug, Hash, PartialEq, Eq)]
+#[derive(Debug, Hash, PartialEq, Eq, CanonicalDeserialize, CanonicalSerialize)]
 pub struct Inner<F: RawField> {
     pub evals: FileVec<F>,
     pub num_vars: usize,

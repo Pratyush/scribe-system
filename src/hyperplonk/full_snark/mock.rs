@@ -1,6 +1,7 @@
 use std::ops::{AddAssign, MulAssign};
 
 use crate::streams::{iterator::BatchedIterator, serialize::RawPrimeField, MLE};
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::{end_timer, log2, start_timer, test_rng};
 
 use crate::hyperplonk::full_snark::{
@@ -8,6 +9,7 @@ use crate::hyperplonk::full_snark::{
     structs::{HyperPlonkIndex, HyperPlonkParams},
 };
 
+#[derive(CanonicalDeserialize, CanonicalSerialize)]
 pub struct MockCircuit<F: RawPrimeField> {
     pub public_inputs: Vec<F>,
     pub witnesses: Vec<MLE<F>>,

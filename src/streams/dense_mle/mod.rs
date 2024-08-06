@@ -5,6 +5,7 @@ use std::{
     sync::Arc,
 };
 
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::{end_timer, rand::RngCore, start_timer};
 pub use inner::*;
 
@@ -12,7 +13,7 @@ use crate::arithmetic::errors::ArithError;
 
 use super::{file_vec::FileVec, iterator::BatchedIterator, serialize::RawField, LOG_BUFFER_SIZE};
 
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq, CanonicalDeserialize, CanonicalSerialize)]
 pub struct MLE<F: RawField>(Arc<Inner<F>>);
 
 impl<F: RawField> MLE<F> {

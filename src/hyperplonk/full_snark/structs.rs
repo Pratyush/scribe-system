@@ -8,6 +8,7 @@ use crate::{
 };
 use ark_ec::pairing::Pairing;
 use ark_ff::PrimeField;
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::log2;
 
 use super::prelude::HyperPlonkErrors;
@@ -41,7 +42,7 @@ where
 ///   - the number of constraints
 ///   - number of public input columns
 ///   - the customized gate function
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, CanonicalDeserialize, CanonicalSerialize)]
 pub struct HyperPlonkParams {
     /// the number of constraints
     pub num_constraints: usize,
@@ -94,7 +95,7 @@ impl HyperPlonkParams {
 ///   - HyperPlonk parameters
 ///   - the wire permutation
 ///   - the selector vectors
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq, CanonicalDeserialize, CanonicalSerialize)]
 pub struct HyperPlonkIndex<F: RawPrimeField> {
     pub params: HyperPlonkParams,
     pub permutation: Vec<MLE<F>>,

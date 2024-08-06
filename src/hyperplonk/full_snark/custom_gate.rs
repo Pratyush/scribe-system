@@ -1,3 +1,4 @@
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::cmp::max;
 
 /// Customized gate is a list of tuples of
@@ -22,9 +23,9 @@ use ark_std::cmp::max;
 /// id_w2 = 1 // second witness
 ///
 /// NOTE: here coeff is a signed integer, instead of a field element
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, CanonicalDeserialize, CanonicalSerialize)]
 pub struct CustomizedGates {
-    pub(crate) gates: Vec<(i64, Option<usize>, Vec<usize>)>,
+    pub(crate) gates: Vec<(u64, Option<usize>, Vec<usize>)>,
 }
 
 impl CustomizedGates {

@@ -321,7 +321,8 @@ mod tests {
         evaluations_vec.serialize_uncompressed(&mut f).unwrap();
 
         let mut f2 = File::open("evaluations.serialization.test").unwrap();
-        Vec::<FileVec::<<Bls12_381 as ark_ec::pairing::Pairing>::G1Affine>>::deserialize_uncompressed_unchecked(&mut f2).unwrap();
+        let evaluations_deserialized = Vec::<FileVec::<<Bls12_381 as ark_ec::pairing::Pairing>::G1Affine>>::deserialize_uncompressed_unchecked(&mut f2).unwrap();
+        assert_eq!(evaluations_vec, evaluations_deserialized);
 
         let prover_param: MultilinearProverParam<E> = MultilinearProverParam {
             num_vars: 4,
@@ -334,7 +335,8 @@ mod tests {
         prover_param.serialize_uncompressed(&mut f3).unwrap();
 
         let mut f4 = File::open("prover_param.serialization.test").unwrap();
-        MultilinearProverParam::<E>::deserialize_uncompressed_unchecked(&mut f4).unwrap();
+        let prover_param_deserailized = MultilinearProverParam::<E>::deserialize_uncompressed_unchecked(&mut f4).unwrap();
+        assert_eq!(prover_param.powers_of_g, prover_param_deserailized.powers_of_g);
     }
 
     #[test]
