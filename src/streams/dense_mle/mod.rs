@@ -394,6 +394,8 @@ fn eq_x_r_helper<F: RawField>(r: &[F]) -> Result<FileVec<F>, ArithError> {
 
 #[cfg(test)]
 mod test {
+    use std::fs::File;
+
     use super::MLE;
     use crate::{
         arithmetic::virtual_polynomial::build_eq_x_r_vec,
@@ -402,6 +404,8 @@ mod test {
     use ark_bls12_381::Fr;
     use ark_std::test_rng;
     use ark_std::UniformRand;
+    use ark_serialize::{CanonicalSerialize, CanonicalDeserialize};
+    use crate::streams::iterator::BatchedIterator;
 
     #[test]
     fn multi_eq_x_r() {
@@ -414,6 +418,22 @@ mod test {
                 assert_eq!(*a, b);
             });
         }
+    }
+
+    #[test]
+    fn test_serialize_mle() {
+        let rng = &mut test_rng();
+        let mle = MLE::<Fr>::rand(4, rng);
+        let mut file = File::create("mle.test").unwrap();
+        mle.serialize_uncompressed(&mut file).unwrap();
+
+        let mut file_2 = File::open("mle.test").unwrap();
+        let mle_2 = MLE::<Fr>::deserialize_uncompressed_unchecked(&mut file_2).unwrap();
+
+        let vec: Vec<Fr> = mle.to_evals().iter().to_vec();
+        let vec_2: Vec<Fr> = mle_2.to_evals().iter().to_vec();
+
+        assert_eq!(vec, vec_2);
     }
 }
 

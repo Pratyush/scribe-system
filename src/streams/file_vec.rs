@@ -747,7 +747,7 @@ mod tests {
 
         match (&file_vec, &file_vec2) {
             (FileVec::Buffer { buffer: b1 }, FileVec::Buffer { buffer: b2 }) => {
-                panic!("should both be File enums");
+                panic!("should both be File enums"); // size is both greater than BUFFER_SIZE, so should be File
             }
             (FileVec::File { .. }, FileVec::File { .. }) => {
                 let vec1 = file_vec.iter().to_vec();

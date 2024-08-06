@@ -7,7 +7,7 @@ pub mod structs;
 use crate::hyperplonk::transcript::IOPTranscript;
 use ark_ec::pairing::Pairing;
 use ark_ff::Field;
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Valid};
 use ark_std::rand::Rng;
 use errors::PCSError;
 use std::{borrow::Borrow, fmt::Debug, hash::Hash};
@@ -16,7 +16,7 @@ use std::{borrow::Borrow, fmt::Debug, hash::Hash};
 /// Note that for our usage of PCS, we do not require the hiding property.
 pub trait PolynomialCommitmentScheme<E: Pairing> {
     /// Prover parameters
-    type ProverParam: Sync;
+    type ProverParam: Sync + CanonicalDeserialize + CanonicalSerialize;
     /// Verifier parameters
     type VerifierParam: Clone + CanonicalSerialize + CanonicalDeserialize;
     /// Structured reference string

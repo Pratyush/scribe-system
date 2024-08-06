@@ -145,6 +145,8 @@ impl<F: RawPrimeField> MockCircuit<F> {
 
 #[cfg(test)]
 mod test {
+    use std::fs::File;
+
     use super::*;
     use crate::hyperplonk::full_snark::utils::memory_traces;
     use crate::hyperplonk::full_snark::{errors::HyperPlonkErrors, HyperPlonkSNARK};
@@ -263,6 +265,19 @@ mod test {
 
         let long_selector_gate = CustomizedGates::super_long_selector_gate();
         test_mock_circuit_zkp_helper(nv, &long_selector_gate, &pcs_srs)?;
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_mock_circuit_serialization() -> Result<(), HyperPlonkErrors> {
+        let vanilla_gate = CustomizedGates::vanilla_plonk_gate();
+        let circuit = MockCircuit::<Fr>::new(1 << 10, &vanilla_gate);
+        let mut buf = File::create("mock_circuit.test").unwrap();
+        circuit.serialize_uncompressed(&mut buf).unwrap();
+
+        let mut buf_2 = File::open("mock_circuit.test").unwrap();
+        let circuit_2 = MockCircuit::<Fr>::deserialize_uncompressed_unchecked(&buf_2).unwrap();
 
         Ok(())
     }
