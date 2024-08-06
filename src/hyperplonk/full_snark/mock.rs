@@ -61,12 +61,12 @@ impl<F: RawPrimeField> MockCircuit<F> {
         gate.gates
             .iter()
             .enumerate()
-            .for_each(|(index, (coeff, q, wit))| {
+            .for_each(|(index, (sign, coeff, q, wit))| {
                 let mut cur_monomial = MLE::constant(
-                    if *coeff < 0 {
-                        -F::from((-coeff) as u64)
+                    if !sign {
+                        -F::from(*coeff)
                     } else {
-                        F::from(*coeff as u64)
+                        F::from(*coeff)
                     },
                     nv,
                 );
@@ -118,12 +118,12 @@ impl<F: RawPrimeField> MockCircuit<F> {
     pub fn is_satisfied(&self) -> bool {
         let nv = self.num_variables();
         let mut cur = MLE::constant(F::zero(), nv);
-        for (coeff, q, wit) in self.index.params.gate_func.gates.iter() {
+        for (sign, coeff, q, wit) in self.index.params.gate_func.gates.iter() {
             let mut cur_monomial = MLE::constant(
-                if *coeff < 0 {
-                    -F::from((-coeff) as u64)
+                if !sign {
+                    -F::from(*coeff)
                 } else {
-                    F::from(*coeff as u64)
+                    F::from(*coeff)
                 },
                 nv,
             );

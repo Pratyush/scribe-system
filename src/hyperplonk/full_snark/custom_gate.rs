@@ -25,7 +25,9 @@ use ark_std::cmp::max;
 /// NOTE: here coeff is a signed integer, instead of a field element
 #[derive(Clone, Debug, Default, PartialEq, Eq, CanonicalDeserialize, CanonicalSerialize)]
 pub struct CustomizedGates {
-    pub(crate) gates: Vec<(u64, Option<usize>, Vec<usize>)>,
+    pub(crate) gates: Vec<(bool, u64, Option<usize>, Vec<usize>)>, // true for pos, false for neg
+    // had to add a bool to keep track of sign, because we cannot implement CanonicalDeserialize and CanonicalSerialize traits for i64
+    // as Rust forbids implementing an outside trait for an outside type
 }
 
 impl CustomizedGates {
@@ -33,7 +35,7 @@ impl CustomizedGates {
     pub fn degree(&self) -> usize {
         let mut res = 0;
         for x in self.gates.iter() {
-            res = max(res, x.2.len() + (x.1.is_some() as usize))
+            res = max(res, x.3.len() + (x.2.is_some() as usize))
         }
         res
     }
@@ -41,7 +43,7 @@ impl CustomizedGates {
     /// The number of selectors in a customized gate
     pub fn num_selector_columns(&self) -> usize {
         let mut res = 0;
-        for (_coeff, q, _ws) in self.gates.iter() {
+        for (_sign, _coeff, q, _ws) in self.gates.iter() {
             // a same selector must not be used for multiple monomials.
             if q.is_some() {
                 res += 1;
@@ -53,7 +55,7 @@ impl CustomizedGates {
     /// The number of witnesses in a customized gate
     pub fn num_witness_columns(&self) -> usize {
         let mut res = 0;
-        for (_coeff, _q, ws) in self.gates.iter() {
+        for (_sign, _coeff, _q, ws) in self.gates.iter() {
             // witness list must be ordered
             // so we just need to compare with the last one
             if let Some(&p) = ws.last() {
@@ -81,11 +83,11 @@ impl CustomizedGates {
     pub fn vanilla_plonk_gate() -> Self {
         Self {
             gates: vec![
-                (1, Some(0), vec![0]),
-                (1, Some(1), vec![1]),
-                (1, Some(2), vec![2]),
-                (1, Some(3), vec![0, 1]),
-                (1, Some(4), vec![]),
+                (true, 1, Some(0), vec![0]),
+                (true, 1, Some(1), vec![1]),
+                (true, 1, Some(2), vec![2]),
+                (true, 1, Some(3), vec![0, 1]),
+                (true, 1, Some(4), vec![]),
             ],
         }
     }
@@ -124,19 +126,19 @@ impl CustomizedGates {
     pub fn jellyfish_turbo_plonk_gate() -> Self {
         CustomizedGates {
             gates: vec![
-                (1, Some(0), vec![0]),
-                (1, Some(1), vec![1]),
-                (1, Some(2), vec![2]),
-                (1, Some(3), vec![3]),
-                (1, Some(4), vec![0, 1]),
-                (1, Some(5), vec![2, 3]),
-                (1, Some(6), vec![0, 0, 0, 0, 0]),
-                (1, Some(7), vec![1, 1, 1, 1, 1]),
-                (1, Some(8), vec![2, 2, 2, 2, 2]),
-                (1, Some(9), vec![3, 3, 3, 3, 3]),
-                (1, Some(10), vec![0, 1, 2, 3]),
-                (1, Some(11), vec![4]),
-                (1, Some(12), vec![]),
+                (true, 1, Some(0), vec![0]),
+                (true, 1, Some(1), vec![1]),
+                (true, 1, Some(2), vec![2]),
+                (true, 1, Some(3), vec![3]),
+                (true, 1, Some(4), vec![0, 1]),
+                (true, 1, Some(5), vec![2, 3]),
+                (true, 1, Some(6), vec![0, 0, 0, 0, 0]),
+                (true, 1, Some(7), vec![1, 1, 1, 1, 1]),
+                (true, 1, Some(8), vec![2, 2, 2, 2, 2]),
+                (true, 1, Some(9), vec![3, 3, 3, 3, 3]),
+                (true, 1, Some(10), vec![0, 1, 2, 3]),
+                (true, 1, Some(11), vec![4]),
+                (true, 1, Some(12), vec![]),
             ],
         }
     }
@@ -149,11 +151,11 @@ impl CustomizedGates {
         let mut high_degree_term = vec![0; degree - 1];
         high_degree_term.push(1);
 
-        gates.push((1, Some(0), high_degree_term));
+        gates.push((true, 1, Some(0), high_degree_term));
         for i in 0..num_witness {
-            gates.push((1, Some(i + 1), vec![i]))
+            gates.push((true, 1, Some(i + 1), vec![i]))
         }
-        gates.push((1, Some(num_witness + 1), vec![]));
+        gates.push((true, 1, Some(num_witness + 1), vec![]));
 
         CustomizedGates { gates }
     }
@@ -175,13 +177,13 @@ impl CustomizedGates {
     pub fn super_long_selector_gate() -> Self {
         Self {
             gates: vec![
-                (1, Some(0), vec![0]),
-                (1, Some(1), vec![1]),
-                (1, Some(2), vec![2]),
-                (1, Some(3), vec![0, 1]),
-                (1, Some(4), vec![0, 2]),
-                (1, Some(5), vec![1, 2]),
-                (1, Some(6), vec![]),
+                (true, 1, Some(0), vec![0]),
+                (true, 1, Some(1), vec![1]),
+                (true, 1, Some(2), vec![2]),
+                (true, 1, Some(3), vec![0, 1]),
+                (true, 1, Some(4), vec![0, 2]),
+                (true, 1, Some(5), vec![1, 2]),
+                (true, 1, Some(6), vec![]),
             ],
         }
     }

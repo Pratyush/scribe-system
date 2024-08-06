@@ -13,8 +13,9 @@ use crate::arithmetic::errors::ArithError;
 
 use super::{file_vec::FileVec, iterator::BatchedIterator, serialize::RawField, LOG_BUFFER_SIZE};
 
-#[derive(Debug, Clone, Hash, PartialEq, Eq, CanonicalDeserialize, CanonicalSerialize)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct MLE<F: RawField>(Arc<Inner<F>>);
+
 
 impl<F: RawField> MLE<F> {
     #[inline(always)]
