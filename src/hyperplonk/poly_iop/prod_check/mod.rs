@@ -183,11 +183,27 @@ where
             }
         }
 
+        println!("printed product check");
+        fxs.iter().for_each(|fx| {
+            println!("fx"); 
+            fx.evals().deep_copy().for_each(|e| println!("fx eval: {}", e))
+        });
+
+        gxs.iter().for_each(|fx| {
+            println!("gx"); 
+            fx.evals().deep_copy().for_each(|e| println!("gx eval: {}", e))
+        });
+
         // compute the fractional polynomial frac_p s.t.
         // frac_p(x) = f1(x) * ... * fk(x) / (g1(x) * ... * gk(x))
         let frac_poly = compute_frac_poly(&fxs, &gxs)?;
         // compute the product polynomial
         let prod_x = compute_product_poly(&frac_poly)?;
+
+        println!("printed product check");
+        frac_poly.evals().deep_copy().for_each(|e| println!("frac_poly eval: {}", e));
+        prod_x.evals().deep_copy().for_each(|e| println!("prod_x eval: {}", e));
+        
 
         // generate challenge
         let (frac_comm, prod_x_comm) = rayon::join(
@@ -199,6 +215,11 @@ where
         let alpha = transcript.get_and_append_challenge(b"alpha")?;
 
         // build the zero-check proof
+        println!("printed product check");
+        frac_poly.evals().deep_copy().for_each(|e| println!("frac_poly eval: {}", e));
+        prod_x.evals().deep_copy().for_each(|e| println!("prod_x eval: {}", e));
+        
+
         let (zero_check_proof, _) =
             prove_zero_check(fxs, gxs, &frac_poly, &prod_x, &alpha, transcript)?;
 

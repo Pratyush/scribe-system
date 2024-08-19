@@ -38,6 +38,8 @@ where
     fn next_batch(&mut self) -> Option<Self::Batch> {
         self.iter.next_batch().map(|i| {
             let batch = i.collect::<Vec<_>>();
+            println!("N: {}", N);
+            println!("Batch len: {}", batch.len());
             assert_eq!(batch.len() % N, 0, "Buffer size must be divisible by N");
             let batch = unsafe {
                 // Ensure the original vector is not dropped.

@@ -131,6 +131,23 @@ where
             )));
         }
 
+        println!("print perm check");
+
+        fxs.iter().for_each(|fx| {
+            println!("fx"); 
+            fx.evals().deep_copy().for_each(|e| println!("fx eval: {}", e))
+        });
+
+        gxs.iter().for_each(|fx| {
+            println!("gx"); 
+            fx.evals().deep_copy().for_each(|e| println!("gx eval: {}", e))
+        });
+
+        perms.iter().for_each(|fx| {
+            println!("perm"); 
+            fx.evals().deep_copy().for_each(|e| println!("perm eval: {}", e))
+        });
+
         let num_vars = fxs[0].num_vars();
         for ((fx, gx), perm) in fxs.iter().zip(gxs.iter()).zip(perms.iter()) {
             if (fx.num_vars() != num_vars)

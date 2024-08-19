@@ -161,3 +161,60 @@ pub struct HyperPlonkVerifyingKey<E: Pairing, PCS: PolynomialCommitmentScheme<E>
     /// Permutation oracles' commitments
     pub perm_commitments: Vec<PCS::Commitment>,
 }
+
+
+#[cfg(test)]
+mod test {
+    use std::fs::File;
+
+    use super::*;
+    use crate::hyperplonk::full_snark::mock::MockCircuit;
+    use crate::hyperplonk::full_snark::utils::memory_traces;
+    use crate::hyperplonk::full_snark::{errors::HyperPlonkErrors, HyperPlonkSNARK};
+    use crate::hyperplonk::pcs::multilinear_kzg::srs::MultilinearUniversalParams;
+    use crate::hyperplonk::pcs::multilinear_kzg::MultilinearKzgPCS;
+    use crate::hyperplonk::pcs::PolynomialCommitmentScheme;
+    use crate::hyperplonk::poly_iop::PolyIOP;
+    use ark_bls12_381::Bls12_381;
+    use ark_bls12_381::Fr;
+    use ark_std::test_rng;
+    use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Write};
+    use crate::streams::iterator::BatchedIterator;
+
+    const SUPPORTED_SIZE: usize = 22;
+    const MIN_NUM_VARS: usize = 10;
+    const MAX_NUM_VARS: usize = 22;
+    const CUSTOM_DEGREE: [usize; 4] = [1, 2, 4, 8];
+
+    #[test]
+    fn test_pk_serialization() -> Result<(), HyperPlonkErrors> {
+        let mut rng = test_rng();
+        let srs = MultilinearKzgPCS::<Bls12_381>::gen_fake_srs_for_testing(&mut rng, 6).unwrap();
+
+        let vanilla_gate = CustomizedGates::vanilla_plonk_gate();
+        let circuit = MockCircuit::<Fr>::new(1 << 6, &vanilla_gate);
+
+        let index = circuit.index;
+        let pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(8)
+            .build()
+            .unwrap();
+
+        let (pk, vk) = pool.install(|| {
+            <PolyIOP<Fr> as HyperPlonkSNARK<Bls12_381, MultilinearKzgPCS<_>>>::preprocess(
+                &index, &srs,
+            )
+        }).unwrap();
+
+        let file = File::create("pk.serialization.test").unwrap();
+        pk.serialize_uncompressed(&file).unwrap();
+
+        let file_2 = File::open("pk.serialization.test").unwrap();
+        let pk_2 = HyperPlonkProvingKey::<Bls12_381, MultilinearKzgPCS<Bls12_381>>::deserialize_uncompressed_unchecked(&file_2).unwrap();
+        println!("{:?}", pk_2.params);
+        pk_2.permutation_oracles.iter().for_each(|perm| println!("perm oracle: {:?}", perm.evals().iter().to_vec()));
+        pk_2.selector_oracles.iter().for_each(|perm| println!("selector oracle: {:?}", perm.evals().iter().to_vec()));    
+
+        Ok(())
+    }
+}

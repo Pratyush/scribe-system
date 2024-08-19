@@ -6,10 +6,12 @@ use ark_bls12_381::Fr;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Write};
 use ark_std::test_rng;
 use scribe::hyperplonk::full_snark::custom_gate::CustomizedGates;
+use scribe::hyperplonk::full_snark::structs::{HyperPlonkProvingKey, HyperPlonkVerifyingKey};
 use scribe::hyperplonk::full_snark::{
     errors::HyperPlonkErrors, mock::MockCircuit, HyperPlonkSNARK,
 };
 use scribe::hyperplonk::pcs::multilinear_kzg::srs;
+use scribe::streams::iterator::BatchedIterator;
 use scribe::hyperplonk::{
     pcs::{
         multilinear_kzg::{srs::MultilinearUniversalParams, MultilinearKzgPCS},
@@ -19,9 +21,9 @@ use scribe::hyperplonk::{
 };
 use scribe::streams::LOG_BUFFER_SIZE;
 
-const SUPPORTED_SIZE: usize = 12;
-const MIN_NUM_VARS: usize = 8;
-const MAX_NUM_VARS: usize = 12;
+const SUPPORTED_SIZE: usize = 6;
+const MIN_NUM_VARS: usize = 4;
+const MAX_NUM_VARS: usize = 6;
 
 fn main() {
     // generate and serialize srs
@@ -52,11 +54,12 @@ fn main() {
             println!("Circuit already exists, please clear {} to reset", circuit_filename.clone());
         },
         Err(_) => {
-            let file = File::create(circuit_filename).unwrap();
+            let file = File::create(circuit_filename.clone()).unwrap();
             let vanilla_gate = CustomizedGates::vanilla_plonk_gate();
             for nv in MIN_NUM_VARS..=MAX_NUM_VARS {
                 println!("nv = {}", nv);
                 let circuit = MockCircuit::<Fr>::new(1 << nv, &vanilla_gate);
+
                 circuit.serialize_uncompressed(&file).unwrap();
                 let index = circuit.index;
                 let pool = rayon::ThreadPoolBuilder::new()
@@ -69,9 +72,30 @@ fn main() {
                         &index, &pcs_srs,
                     )
                 }).unwrap();
-                pk.serialize_uncompressed(&file).unwrap();
-                vk.serialize_uncompressed(&file).unwrap();
+
+                println!("pk 1");
+                pk.permutation_oracles.iter().for_each(|perm| println!("perm oracle: {:?}", perm.evals().iter().to_vec()));
+                pk.selector_oracles.iter().for_each(|perm| println!("selector oracle: {:?}", perm.evals().iter().to_vec()));
+
+                HyperPlonkProvingKey::<Bls12_381, MultilinearKzgPCS<Bls12_381>>::serialize_uncompressed(&pk, &file).unwrap();
+                HyperPlonkVerifyingKey::<Bls12_381, MultilinearKzgPCS<Bls12_381>>::serialize_uncompressed(&vk, &file).unwrap();
             }
         }
     };
+
+    let mut file_2 = File::open(circuit_filename.clone()).unwrap();
+    let circuit_2 = MockCircuit::<Fr>::deserialize_uncompressed_unchecked(&mut file_2).unwrap();
+
+    println!("circuit");
+    println!("pub inputs: {:?}", circuit_2.public_inputs);
+    circuit_2.witnesses.iter().for_each(|perm| println!("witness: {:?}", perm.evals().iter().to_vec()));
+    println!("params: {:?}", circuit_2.index.params);
+    circuit_2.index.permutation.iter().for_each(|perm| println!("perm oracle: {:?}", perm.evals().iter().to_vec()));
+    circuit_2.index.selectors.iter().for_each(|perm| println!("selector oracle: {:?}", perm.evals().iter().to_vec()));      
+
+    println!("pk 2");
+    let pk_2 = HyperPlonkProvingKey::<Bls12_381, MultilinearKzgPCS<Bls12_381>>::deserialize_uncompressed_unchecked(&mut file_2).unwrap();
+    println!("{:?}", pk_2.params);
+    pk_2.permutation_oracles.iter().for_each(|perm| println!("perm oracle: {:?}", perm.evals().iter().to_vec()));
+    pk_2.selector_oracles.iter().for_each(|perm| println!("selector oracle: {:?}", perm.evals().iter().to_vec()));    
 }

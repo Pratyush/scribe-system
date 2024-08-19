@@ -272,12 +272,18 @@ mod test {
     #[test]
     fn test_mock_circuit_serialization() -> Result<(), HyperPlonkErrors> {
         let vanilla_gate = CustomizedGates::vanilla_plonk_gate();
-        let circuit = MockCircuit::<Fr>::new(1 << 10, &vanilla_gate);
+        let circuit = MockCircuit::<Fr>::new(1 << 6, &vanilla_gate);
         let mut buf = File::create("mock_circuit.test").unwrap();
         circuit.serialize_uncompressed(&mut buf).unwrap();
 
         let mut buf_2 = File::open("mock_circuit.test").unwrap();
         let circuit_2 = MockCircuit::<Fr>::deserialize_uncompressed_unchecked(&buf_2).unwrap();
+
+        println!("pub inputs: {:?}", circuit_2.public_inputs);
+        circuit_2.witnesses.iter().for_each(|perm| println!("witness: {:?}", perm.evals().iter().to_vec()));
+        println!("params: {:?}", circuit_2.index.params);
+        circuit_2.index.permutation.iter().for_each(|perm| println!("perm oracle: {:?}", perm.evals().iter().to_vec()));
+        circuit_2.index.selectors.iter().for_each(|perm| println!("selector oracle: {:?}", perm.evals().iter().to_vec()));
 
         Ok(())
     }

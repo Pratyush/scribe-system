@@ -8,6 +8,7 @@ use scribe::hyperplonk::full_snark::custom_gate::CustomizedGates;
 use scribe::hyperplonk::full_snark::{
     errors::HyperPlonkErrors, mock::MockCircuit, HyperPlonkSNARK,
 };
+use scribe::streams::iterator::BatchedIterator;
 use scribe::hyperplonk::{
     pcs::{
         multilinear_kzg::{srs::MultilinearUniversalParams, MultilinearKzgPCS},
@@ -18,9 +19,9 @@ use scribe::hyperplonk::{
 use scribe::streams::LOG_BUFFER_SIZE;
 use scribe::hyperplonk::full_snark::structs::{HyperPlonkProvingKey, HyperPlonkVerifyingKey};
 
-const SUPPORTED_SIZE: usize = 12;
-const MIN_NUM_VARS: usize = 8;
-const MAX_NUM_VARS: usize = 12;
+const SUPPORTED_SIZE: usize = 6;
+const MIN_NUM_VARS: usize = 4;
+const MAX_NUM_VARS: usize = 6;
 const MIN_CUSTOM_DEGREE: usize = 1;
 const MAX_CUSTOM_DEGREE: usize = 32;
 const HIGH_DEGREE_TEST_NV: usize = 15;
@@ -40,19 +41,31 @@ fn bench_vanilla_plonk(
         thread, LOG_BUFFER_SIZE
     );
     let mut log_file = File::create(filename).unwrap();
-    let mut param_file = File::open(format!("circuit_pk_vk_{}_to_{}.params", MIN_NUM_VARS, MAX_NUM_VARS)).unwrap();
-    for nv in MIN_NUM_VARS..=MAX_NUM_VARS {
-        let circuit = MockCircuit::<Fr>::deserialize_uncompressed_unchecked(&mut param_file).unwrap();
-        assert_eq!(circuit.index.num_variables(), nv);
-        assert!(circuit.is_satisfied());
-        let pk = HyperPlonkProvingKey::<Bls12_381, MultilinearKzgPCS<Bls12_381>>::deserialize_uncompressed_unchecked(&mut param_file).unwrap();
-        assert_eq!(pk.params.num_variables(), nv);
-        let vk = HyperPlonkVerifyingKey::<Bls12_381, MultilinearKzgPCS<Bls12_381>>::deserialize_uncompressed_unchecked(&mut param_file).unwrap();
-        assert_eq!(vk.params.num_variables(), nv);
+    let param_file = File::open(format!("circuit_pk_vk_{}_to_{}.params", MIN_NUM_VARS, MAX_NUM_VARS)).unwrap();
+    
+    let circuit = MockCircuit::<Fr>::deserialize_uncompressed_unchecked(&param_file).unwrap();
+    let pk = HyperPlonkProvingKey::<Bls12_381, MultilinearKzgPCS<Bls12_381>>::deserialize_uncompressed_unchecked(&param_file).unwrap();
+    println!("print pk");
+    println!("{:?}", pk.params);
+    println!("perm oracles: {:?}", pk.permutation_oracles.iter().for_each(|perm| println!("perm {:?}", perm.evals().iter().to_vec())));
+    println!("selector oracles: {:?}", pk.selector_oracles);
+    
+    // for nv in MIN_NUM_VARS..=MAX_NUM_VARS {
+    //     let circuit = MockCircuit::<Fr>::deserialize_uncompressed_unchecked(&mut param_file).unwrap();
+    //     assert_eq!(circuit.index.num_variables(), nv);
+    //     assert!(circuit.is_satisfied());
+    //     let pk = HyperPlonkProvingKey::<Bls12_381, MultilinearKzgPCS<Bls12_381>>::deserialize_uncompressed_unchecked(&mut param_file).unwrap();
+    //     println!("print pk");
+    //     println!("{:?}", pk.params);
+    //     println!("perm oracles: {:?}", pk.permutation_oracles.iter().for_each(|perm| println!("perm {:?}", perm.evals().iter().to_vec())));
+    //     println!("selector oracles: {:?}", pk.selector_oracles);
+    //     assert_eq!(pk.params.num_variables(), nv);
+    //     let vk = HyperPlonkVerifyingKey::<Bls12_381, MultilinearKzgPCS<Bls12_381>>::deserialize_uncompressed_unchecked(&mut param_file).unwrap();
+    //     assert_eq!(vk.params.num_variables(), nv);
 
-        println!("=== START BENCHMARK WITH {} THREADS {} NV ===", thread, nv);
-        bench_mock_circuit_zkp_helper(&mut log_file, circuit, pk, vk)?;
-    }
+    //     println!("=== START BENCHMARK WITH {} THREADS {} NV ===", thread, nv);
+    //     bench_mock_circuit_zkp_helper(&mut log_file, circuit, pk, vk)?;
+    // }
 
     Ok(())
 }
