@@ -11,7 +11,7 @@ pub mod mock;
 pub mod prelude;
 mod selectors;
 mod snark;
-mod structs;
+pub mod structs;
 pub mod utils;
 mod witness;
 

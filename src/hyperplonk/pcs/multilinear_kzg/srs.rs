@@ -238,21 +238,18 @@ where
             num_vars: supported_degree,
             g: E::G1::rand(rng).into_affine(),
             h: E::G2::rand(rng).into_affine(),
-            // powers_of_g: (0..supported_degree + 1)
-            //     .rev()
-            //     .map(|degree| {
-            //         let mut rand_g1 = E::G1::rand(rng).into_affine();
-            //         Evaluations {
-            //             evals: FileVec::from_iter((0..(1 << degree)).map(|i| {
-            //                 if (i % (1 << 10)) == 0 {
-            //                     rand_g1 = E::G1::rand(rng).into_affine();
-            //                 }
-            //                 rand_g1
-            //             })),
-            //         }
-            //     })
-            //     .collect(),
-            powers_of_g: vec![FileVec::from_iter((0..16).map(|_| E::G1::rand(rng).into_affine()))],
+            powers_of_g: (0..supported_degree + 1)
+                .rev()
+                .map(|degree| {
+                    let mut rand_g1 = E::G1::rand(rng).into_affine();
+                    FileVec::from_iter((0..(1 << degree)).map(|i| {
+                            if (i % (1 << 10)) == 0 {
+                                rand_g1 = E::G1::rand(rng).into_affine();
+                            }
+                            rand_g1
+                        }))
+                })
+                .collect(),
         };
 
         let h_mask: Vec<_> = (0..supported_degree)

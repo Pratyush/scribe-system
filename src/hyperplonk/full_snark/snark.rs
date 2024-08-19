@@ -277,7 +277,7 @@ where
         .concat();
 
         // prod(x)'s points
-        // note that the polynomial inputs aren't modified or consumed by pcs accumulator
+        // note that the polynomial inputs aren't dified or consumed by pcs accumulator
         // copies are used because their originals are already folded in sum checks
         pcs_acc.insert_poly_and_points(&prod_x, &perm_check_proof.prod_x_comm, perm_check_point);
         pcs_acc.insert_poly_and_points(&prod_x, &perm_check_proof.prod_x_comm, &perm_check_point_0);

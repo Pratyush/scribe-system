@@ -77,3 +77,7 @@ harness = false
 [[bin]]
 name = "setup"
 path = "example/setup.rs"
+
+[[bin]]
+name = "bench"
+path = "example/bench.rs"
