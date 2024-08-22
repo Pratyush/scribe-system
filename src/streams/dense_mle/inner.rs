@@ -214,7 +214,7 @@ impl<F: RawField> Inner<F> {
                     .evals
                     .iter_chunk_mapped::<2, _, _>(|chunk| f(&chunk[0], &chunk[1]))
                     .to_file_vec();
-            }
+            },
             FileVec::Buffer { ref mut buffer } => {
                 let new_buffer = std::mem::replace(buffer, Vec::new());
                 *buffer = new_buffer
@@ -222,7 +222,7 @@ impl<F: RawField> Inner<F> {
                     .map(|chunk| f(&chunk[0], &chunk[1]))
                     .with_min_len(1 << 8)
                     .collect();
-            }
+            },
         }
         self.decrement_num_vars();
     }

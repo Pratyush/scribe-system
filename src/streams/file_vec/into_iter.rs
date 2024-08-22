@@ -52,7 +52,7 @@ impl<T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy> BatchedIte
                 } else {
                     Some(result.into_par_iter().with_min_len(1 << 7))
                 }
-            }
+            },
             IntoIter::Buffer { buffer } => {
                 if buffer.is_empty() {
                     return None;
@@ -63,7 +63,7 @@ impl<T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy> BatchedIte
                             .with_min_len(1 << 7),
                     )
                 }
-            }
+            },
         }
     }
 }

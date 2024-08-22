@@ -58,10 +58,10 @@ macro_rules! process_file {
                     *path = new_path;
                     *file = new_file;
                 }
-            }
+            },
             FileVec::Buffer { buffer } => {
                 $extra(&mut *buffer);
-            }
+            },
         }
     }};
 }

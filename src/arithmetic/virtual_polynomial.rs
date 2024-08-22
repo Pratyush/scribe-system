@@ -139,7 +139,7 @@ impl<F: RawPrimeField> VirtualPolynomial<F> {
                 None => {
                     self.mles.push(mle.clone());
                     self.mles.len() - 1
-                }
+                },
             };
             indexed_product.push(mle_index);
         }
@@ -166,7 +166,7 @@ impl<F: RawPrimeField> VirtualPolynomial<F> {
             None => {
                 self.mles.push(mle);
                 self.mles.len() - 1
-            }
+            },
         };
 
         for (prod_coef, indices) in self.products.iter_mut() {

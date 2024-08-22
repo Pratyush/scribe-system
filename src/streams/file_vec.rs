@@ -106,7 +106,7 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
                 };
                 fv.convert_to_buffer_in_place();
                 fv
-            }
+            },
             Self::Buffer { buffer } => FileVec::Buffer {
                 buffer: buffer.clone(),
             },
@@ -125,7 +125,7 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
                     .open(&path)
                     .expect(&format!("failed to open file, {}", path.to_str().unwrap()));
                 Iter::new_file(file)
-            }
+            },
             Self::Buffer { buffer } => Iter::new_buffer(buffer.clone()),
         }
     }
@@ -163,7 +163,7 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
                     .open(&path)
                     .expect(&format!("failed to open file, {}", path.to_str().unwrap()));
                 IterChunkMapped::new_file(file, f)
-            }
+            },
             Self::Buffer { buffer } => IterChunkMapped::new_buffer(buffer.clone(), f),
         }
     }
@@ -179,7 +179,7 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
                     .open(&path)
                     .expect(&format!("failed to open file, {}", path.to_str().unwrap()));
                 ArrayChunks::new_file(file)
-            }
+            },
             Self::Buffer { buffer } => ArrayChunks::new_buffer(buffer.clone()),
         }
     }
@@ -194,11 +194,11 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
                 let iter = IntoIter::new_file(File::open(&path).unwrap(), path.clone());
                 mem::forget(self);
                 iter
-            }
+            },
             Self::Buffer { buffer } => {
                 let buffer = core::mem::replace(buffer, Vec::new());
                 IntoIter::new_buffer(buffer)
-            }
+            },
         }
     }
 
@@ -340,7 +340,7 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
                 };
                 mem::forget(self);
                 f
-            }
+            },
             Self::Buffer { buffer } => {
                 let size_equal = T::SIZE == U::SIZE;
                 let mem_size_equal = std::mem::size_of::<T>() == std::mem::size_of::<U>();
@@ -374,7 +374,7 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
                         .expect("failed to write to file");
                     FileVec::File { file, path }
                 }
-            }
+            },
         }
     }
 
@@ -650,7 +650,7 @@ impl<
 
                 // size of final_result vec (not byte size) should be serialized as a u64 as a part of this API
                 final_result.serialize_uncompressed(&mut writer)
-            }
+            },
         }
     }
 
@@ -735,7 +735,7 @@ impl<T: SerializeRaw + DeserializeRaw + Display> Display for FileVec<T> {
                 }
                 writeln!(f, "]")?;
                 Ok(())
-            }
+            },
             Self::Buffer { buffer } => {
                 writeln!(f, "FileVec: [")?;
                 for item in buffer {
@@ -743,7 +743,7 @@ impl<T: SerializeRaw + DeserializeRaw + Display> Display for FileVec<T> {
                 }
                 writeln!(f, "]")?;
                 Ok(())
-            }
+            },
         }
     }
 }
@@ -774,12 +774,12 @@ mod tests {
         match (&file_vec, &file_vec2) {
             (FileVec::Buffer { .. }, FileVec::Buffer { .. }) => {
                 panic!("should both be File enums"); // size is both greater than BUFFER_SIZE, so should be File
-            }
+            },
             (FileVec::File { .. }, FileVec::File { .. }) => {
                 let vec1 = file_vec.iter().to_vec();
                 let vec2 = file_vec2.iter().to_vec();
                 assert_eq!(vec1, vec2);
-            }
+            },
             _ => panic!("file_vec and file_vec2 are different types"),
         }
     }

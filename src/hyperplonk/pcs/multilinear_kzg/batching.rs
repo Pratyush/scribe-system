@@ -129,7 +129,7 @@ where
             return Err(PCSError::InvalidProver(
                 "Sumcheck in batch proving Failed".to_string(),
             ));
-        }
+        },
     };
 
     end_timer!(timer);
@@ -237,7 +237,7 @@ where
             return Err(PCSError::InvalidProver(
                 "Sumcheck in batch verification failed".to_string(),
             ));
-        }
+        },
     };
     let tilde_g_eval = subclaim.expected_evaluation;
 

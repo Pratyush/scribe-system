@@ -49,7 +49,7 @@ impl<'a, T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy + Debug
                 } else {
                     Some(result.into_par_iter().with_min_len(1 << 7))
                 }
-            }
+            },
             Iter::Buffer { buffer } => {
                 if buffer.is_empty() {
                     None
@@ -60,7 +60,7 @@ impl<'a, T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy + Debug
                             .with_min_len(1 << 7),
                     )
                 }
-            }
+            },
         }
     }
 }

@@ -91,7 +91,7 @@ where
                 return Err(PCSError::InvalidParameters(
                     "multilinear should receive a num_var param".to_string(),
                 ))
-            }
+            },
         };
         let (ml_ck, ml_vk) = srs.borrow().trim(supported_num_vars)?;
 

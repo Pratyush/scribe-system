@@ -47,7 +47,7 @@ fn main() -> Result<(), HyperPlonkErrors> {
                 )?;
                 write_srs(&srs);
                 srs
-            }
+            },
         }
     };
     let pool = rayon::ThreadPoolBuilder::new()

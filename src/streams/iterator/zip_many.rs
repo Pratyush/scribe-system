@@ -79,7 +79,7 @@ where
                         .for_each(|(zipped, b)| zipped.push(b));
                 }
                 batched
-            }
+            },
         };
         let start_of_empty = batched.partition_point(|x| !x.is_empty());
         batched.truncate(start_of_empty);

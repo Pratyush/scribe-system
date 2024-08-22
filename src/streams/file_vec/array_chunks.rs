@@ -71,7 +71,7 @@ where
                             .into_par_iter(),
                     )
                 }
-            }
+            },
             Self::Buffer { buffer } => {
                 if buffer.is_empty() {
                     None
@@ -85,7 +85,7 @@ where
                             .into_par_iter(),
                     )
                 }
-            }
+            },
         }
     }
 }
