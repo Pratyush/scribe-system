@@ -5,12 +5,9 @@ use ark_bls12_381::Fr;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::test_rng;
 use scribe::hyperplonk::full_snark::custom_gate::CustomizedGates;
-use scribe::hyperplonk::full_snark::structs::{HyperPlonkProvingKey, HyperPlonkVerifyingKey};
+use scribe::hyperplonk::full_snark::structs::{ProvingKey, VerifyingKey};
 use scribe::hyperplonk::full_snark::{mock::MockCircuit, HyperPlonkSNARK};
-use scribe::hyperplonk::{
-    pcs::{multilinear_kzg::MultilinearKzgPCS, PolynomialCommitmentScheme},
-    poly_iop::PolyIOP,
-};
+use scribe::hyperplonk::pcs::{multilinear_kzg::MultilinearKzgPCS, PolynomialCommitmentScheme};
 
 const SUPPORTED_SIZE: usize = 6;
 const MIN_NUM_VARS: usize = 4;
@@ -68,13 +65,11 @@ fn main() {
             .unwrap();
 
         let (pk, vk) = pool
-            .install(|| <PolyIOP<Fr>>::preprocess(&index, &pc_srs))
+            .install(|| HyperPlonkSNARK::preprocess(&index, &pc_srs))
             .unwrap();
 
-        HyperPlonkProvingKey::<_, MultilinearKzgPCS<_>>::serialize_uncompressed(&pk, &pk_file)
-            .unwrap();
-        HyperPlonkVerifyingKey::<_, MultilinearKzgPCS<_>>::serialize_uncompressed(&vk, &vk_file)
-            .unwrap();
+        ProvingKey::<_, MultilinearKzgPCS<_>>::serialize_uncompressed(&pk, &pk_file).unwrap();
+        VerifyingKey::<_, MultilinearKzgPCS<_>>::serialize_uncompressed(&vk, &vk_file).unwrap();
     }
 
     println!("Serializing Circuit");
@@ -85,7 +80,7 @@ fn main() {
     println!("Serializing PK");
     let mut pk_file = OpenOptions::new().read(true).open(&pk_filename).unwrap();
     println!("Serializing VK");
-    let vk_file = OpenOptions::new().read(true).open(&vk_filename).unwrap();
+    let _vk_file = OpenOptions::new().read(true).open(&vk_filename).unwrap();
 
     let circuit_2 =
         MockCircuit::<Fr>::deserialize_uncompressed_unchecked(&mut circuit_file).unwrap();
@@ -109,7 +104,10 @@ fn main() {
         .for_each(|selector| println!("selector: {selector}"));
 
     println!("pk 2");
-    let pk_2 = HyperPlonkProvingKey::<_, MultilinearKzgPCS<Bls12_381>>::deserialize_uncompressed_unchecked(&mut pk_file).unwrap();
+    let pk_2 = ProvingKey::<_, MultilinearKzgPCS<Bls12_381>>::deserialize_uncompressed_unchecked(
+        &mut pk_file,
+    )
+    .unwrap();
     println!("{:?}", pk_2.params);
     assert_eq!(pk_2.params, circuit_2.index.params);
     pk_2.permutation_oracles

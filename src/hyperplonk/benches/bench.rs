@@ -14,12 +14,9 @@ use scribe::hyperplonk::full_snark::custom_gate::CustomizedGates;
 use scribe::hyperplonk::full_snark::{
     errors::HyperPlonkErrors, mock::MockCircuit, HyperPlonkSNARK,
 };
-use scribe::hyperplonk::{
-    pcs::{
-        multilinear_kzg::{srs::MultilinearUniversalParams, MultilinearKzgPCS},
-        PolynomialCommitmentScheme,
-    },
-    poly_iop::PolyIOP,
+use scribe::hyperplonk::pcs::{
+    multilinear_kzg::{srs::MultilinearUniversalParams, MultilinearKzgPCS},
+    PolynomialCommitmentScheme,
 };
 use scribe::streams::LOG_BUFFER_SIZE;
 
@@ -153,14 +150,12 @@ fn bench_mock_circuit_zkp_helper(
         .build()
         .unwrap();
     let (pk, vk) = pool.install(|| {
-        <PolyIOP<Fr> as HyperPlonkSNARK<Bls12_381, MultilinearKzgPCS<_>>>::preprocess(
-            &index, pcs_srs,
-        )
+        <HyperPlonkSNARK<Bls12_381, MultilinearKzgPCS<_>>>::preprocess(&index, pcs_srs)
     })?;
     //==========================================================
     // generate a proof
     let start = Instant::now();
-    let proof = <PolyIOP<Fr> as HyperPlonkSNARK<Bls12_381, MultilinearKzgPCS<Bls12_381>>>::prove(
+    let proof = <HyperPlonkSNARK<Bls12_381, MultilinearKzgPCS<Bls12_381>>>::prove(
         &pk,
         &circuit.public_inputs,
         &circuit.witnesses,

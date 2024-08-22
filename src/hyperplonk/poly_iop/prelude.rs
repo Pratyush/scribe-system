@@ -4,5 +4,4 @@ pub use crate::hyperplonk::poly_iop::{
     // structs::IOPProof,
     sum_check::SumCheck,
     zero_check::ZeroCheck,
-    PolyIOP,
 };

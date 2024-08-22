@@ -1,28 +1,30 @@
 use self::util::computer_nums_and_denoms;
-use crate::hyperplonk::{
-    pcs::PolynomialCommitmentScheme,
-    poly_iop::{errors::PIOPError, prod_check::ProductCheck, PolyIOP},
-};
 use crate::streams::MLE;
+use crate::{
+    arithmetic::virtual_polynomial::VPAuxInfo,
+    hyperplonk::{
+        pcs::PolynomialCommitmentScheme,
+        poly_iop::{errors::PIOPError, prod_check::ProductCheck},
+    },
+};
 use crate::{hyperplonk::transcript::IOPTranscript, streams::serialize::RawPrimeField};
 use ark_ec::pairing::Pairing;
 use ark_std::{end_timer, start_timer};
+
+use super::prod_check::{ProductCheckProof, ProductCheckSubClaim};
 
 /// A permutation subclaim consists of
 /// - the SubClaim from the ProductCheck
 /// - Challenges beta and gamma
 #[derive(Clone, Debug, Default, PartialEq)]
-pub struct PermutationCheckSubClaim<E, PCS, PC>
+pub struct PermutationCheckSubClaim<F>
 where
-    E: Pairing,
-    E::ScalarField: RawPrimeField,
-    PC: ProductCheck<E, PCS>,
-    PCS: PolynomialCommitmentScheme<E>,
+    F: RawPrimeField,
 {
     /// the SubClaim from the ProductCheck
-    pub product_check_sub_claim: PC::ProductCheckSubClaim,
+    pub product_check_sub_claim: ProductCheckSubClaim<F>,
     /// Challenges beta and gamma
-    pub challenges: (E::ScalarField, E::ScalarField),
+    pub challenges: (F, F),
 }
 
 pub mod util;
@@ -38,83 +40,35 @@ pub mod util;
 /// - fs = (f1, ..., fk)
 /// - gs = (g1, ..., gk)
 /// - permutation oracles = (p1, ..., pk)
-pub trait PermutationCheck<E, PCS>: ProductCheck<E, PCS>
+pub struct PermutationCheck<E, PCS>(std::marker::PhantomData<E>, std::marker::PhantomData<PCS>)
 where
     E: Pairing,
     E::ScalarField: RawPrimeField,
-    PCS: PolynomialCommitmentScheme<E>,
-{
-    type PermutationCheckSubClaim;
-    type PermutationProof;
+    PCS: PolynomialCommitmentScheme<E>;
 
-    /// Initialize the system with a transcript
-    ///
-    /// This function is optional -- in the case where a PermutationCheck is
-    /// an building block for a more complex protocol, the transcript
-    /// may be initialized by this complex protocol, and passed to the
-    /// PermutationCheck prover/verifier.
-    fn init_transcript() -> Self::Transcript;
+pub type PermutationProof<E, PCS> = ProductCheckProof<E, PCS>;
 
-    /// Inputs:
-    /// - fs = (f1, ..., fk)
-    /// - gs = (g1, ..., gk)
-    /// - permutation oracles = (p1, ..., pk)
-    /// Outputs:
-    /// - a permutation check proof proving that gs is a permutation of fs under
-    ///   permutation
-    /// - the product polynomial built during product check
-    /// - the fractional polynomial built during product check
-    ///
-    /// Cost: O(N)
-    #[allow(clippy::type_complexity)]
-    fn prove(
-        pcs_param: &PCS::ProverParam,
-        fxs: &[Self::MultilinearExtension],
-        gxs: &[Self::MultilinearExtension],
-        perms: &[Self::MultilinearExtension],
-        transcript: &mut IOPTranscript<E::ScalarField>,
-    ) -> Result<
-        (
-            Self::PermutationProof,
-            Self::MultilinearExtension,
-            Self::MultilinearExtension,
-        ),
-        PIOPError,
-    >;
-
-    /// Verify that (g1, ..., gk) is a permutation of
-    /// (f1, ..., fk) over the permutation oracles (perm1, ..., permk)
-    fn verify(
-        proof: &Self::PermutationProof,
-        aux_info: &Self::VPAuxInfo,
-        transcript: &mut Self::Transcript,
-    ) -> Result<Self::PermutationCheckSubClaim, PIOPError>;
-}
-
-impl<E, PCS> PermutationCheck<E, PCS> for PolyIOP<E::ScalarField>
+impl<E, PCS> PermutationCheck<E, PCS>
 where
     E: Pairing,
     E::ScalarField: RawPrimeField,
     PCS: PolynomialCommitmentScheme<E, Polynomial = MLE<E::ScalarField>>,
 {
-    type PermutationCheckSubClaim = PermutationCheckSubClaim<E, PCS, Self>;
-    type PermutationProof = Self::ProductCheckProof;
-
-    fn init_transcript() -> Self::Transcript {
+    pub fn init_transcript() -> IOPTranscript<E::ScalarField> {
         IOPTranscript::<E::ScalarField>::new(b"Initializing PermutationCheck transcript")
     }
 
-    fn prove(
+    pub fn prove(
         pcs_param: &PCS::ProverParam,
-        fxs: &[Self::MultilinearExtension],
-        gxs: &[Self::MultilinearExtension],
-        perms: &[Self::MultilinearExtension],
+        fxs: &[MLE<E::ScalarField>],
+        gxs: &[MLE<E::ScalarField>],
+        perms: &[MLE<E::ScalarField>],
         transcript: &mut IOPTranscript<E::ScalarField>,
     ) -> Result<
         (
-            Self::PermutationProof,
-            Self::MultilinearExtension,
-            Self::MultilinearExtension,
+            PermutationProof<E, PCS>,
+            MLE<E::ScalarField>,
+            MLE<E::ScalarField>,
         ),
         PIOPError,
     > {
@@ -173,30 +127,25 @@ where
             computer_nums_and_denoms(&beta, &gamma, &fxs, &gxs, &perms)?;
 
         // invoke product check on numerator and denominator
-        let (proof, prod_poly, frac_poly) = <Self as ProductCheck<E, PCS>>::prove(
-            pcs_param,
-            &numerators,
-            &denominators,
-            transcript,
-        )?;
+        let (proof, prod_poly, frac_poly) =
+            ProductCheck::<E, PCS>::prove(pcs_param, &numerators, &denominators, transcript)?;
 
         end_timer!(start);
         Ok((proof, prod_poly, frac_poly))
     }
 
-    fn verify(
-        proof: &Self::PermutationProof,
-        aux_info: &Self::VPAuxInfo,
-        transcript: &mut Self::Transcript,
-    ) -> Result<Self::PermutationCheckSubClaim, PIOPError> {
+    pub fn verify(
+        proof: &PermutationProof<E, PCS>,
+        aux_info: &VPAuxInfo<E::ScalarField>,
+        transcript: &mut IOPTranscript<E::ScalarField>,
+    ) -> Result<PermutationCheckSubClaim<E::ScalarField>, PIOPError> {
         let start = start_timer!(|| "Permutation check verify");
 
         let beta = transcript.get_and_append_challenge(b"beta")?;
         let gamma = transcript.get_and_append_challenge(b"gamma")?;
 
         // invoke the zero check on the iop_proof
-        let product_check_sub_claim =
-            <Self as ProductCheck<E, PCS>>::verify(proof, aux_info, transcript)?;
+        let product_check_sub_claim = ProductCheck::<E, PCS>::verify(proof, aux_info, transcript)?;
 
         end_timer!(start);
         Ok(PermutationCheckSubClaim {
@@ -214,7 +163,7 @@ mod test {
         arithmetic::virtual_polynomial::VPAuxInfo,
         hyperplonk::{
             pcs::{multilinear_kzg::MultilinearKzgPCS, PolynomialCommitmentScheme},
-            poly_iop::{errors::PIOPError, PolyIOP},
+            poly_iop::errors::PIOPError,
         },
     };
     use ark_bls12_381::Bls12_381;
@@ -244,27 +193,16 @@ mod test {
         };
 
         // prover
-        let mut transcript =
-            <PolyIOP<E::ScalarField> as PermutationCheck<E, PCS>>::init_transcript();
+        let mut transcript = PermutationCheck::<E, PCS>::init_transcript();
         transcript.append_message(b"testing", b"initializing transcript for testing")?;
         let (proof, prod_x, _frac_poly) =
-            <PolyIOP<E::ScalarField> as PermutationCheck<E, PCS>>::prove(
-                pcs_param,
-                fxs,
-                gxs,
-                perms,
-                &mut transcript,
-            )?;
+            PermutationCheck::<E, PCS>::prove(pcs_param, fxs, gxs, perms, &mut transcript)?;
 
         // verifier
-        let mut transcript =
-            <PolyIOP<E::ScalarField> as PermutationCheck<E, PCS>>::init_transcript();
+        let mut transcript = PermutationCheck::<E, PCS>::init_transcript();
         transcript.append_message(b"testing", b"initializing transcript for testing")?;
-        let perm_check_sub_claim = <PolyIOP<E::ScalarField> as PermutationCheck<E, PCS>>::verify(
-            &proof,
-            &poly_info,
-            &mut transcript,
-        )?;
+        let perm_check_sub_claim =
+            PermutationCheck::<E, PCS>::verify(&proof, &poly_info, &mut transcript)?;
 
         // check product subclaim
         // MLE::evaluate creates deep_copy of inner first

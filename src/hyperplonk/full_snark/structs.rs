@@ -1,11 +1,11 @@
-use crate::hyperplonk::poly_iop::prelude::ZeroCheck;
+use crate::hyperplonk::poly_iop::{
+    perm_check_original::PermutationProof, zero_check::ZeroCheckProof,
+};
 use crate::hyperplonk::{
     full_snark::custom_gate::CustomizedGates, pcs::PolynomialCommitmentScheme,
 };
+use crate::streams::serialize::RawPrimeField;
 use crate::streams::MLE;
-use crate::{
-    hyperplonk::poly_iop::perm_check_original::PermutationCheck, streams::serialize::RawPrimeField,
-};
 use ark_ec::pairing::Pairing;
 use ark_ff::PrimeField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
@@ -19,11 +19,10 @@ use super::prelude::HyperPlonkErrors;
 ///   - the zero-check proof for checking custom gate-satisfiability
 ///   - the permutation-check proof for checking the copy constraints
 #[derive(Clone, Debug, PartialEq)]
-pub struct HyperPlonkProof<E, PC, PCS>
+pub struct Proof<E, PCS>
 where
     E: Pairing,
     E::ScalarField: RawPrimeField,
-    PC: PermutationCheck<E, PCS>,
     PCS: PolynomialCommitmentScheme<E>,
 {
     // PCS commit for witnesses
@@ -33,9 +32,9 @@ where
     // IOP proofs
     // =======================================================================
     // the custom gate zerocheck proof
-    pub zero_check_proof: <PC as ZeroCheck<E::ScalarField>>::ZeroCheckProof,
+    pub zero_check_proof: ZeroCheckProof<E::ScalarField>,
     // the permutation check proof for copy constraints
-    pub perm_check_proof: PC::PermutationProof,
+    pub perm_check_proof: PermutationProof<E, PCS>,
 }
 
 /// The HyperPlonk instance parameters, consists of the following:
@@ -96,13 +95,13 @@ impl HyperPlonkParams {
 ///   - the wire permutation
 ///   - the selector vectors
 #[derive(Clone, Debug, Default, Eq, PartialEq, CanonicalDeserialize, CanonicalSerialize)]
-pub struct HyperPlonkIndex<F: RawPrimeField> {
+pub struct Index<F: RawPrimeField> {
     pub params: HyperPlonkParams,
     pub permutation: Vec<MLE<F>>,
     pub selectors: Vec<MLE<F>>,
 }
 
-impl<F: RawPrimeField> HyperPlonkIndex<F> {
+impl<F: RawPrimeField> Index<F> {
     /// Number of variables in a multilinear system
     pub fn num_variables(&self) -> usize {
         self.params.num_variables()
@@ -125,7 +124,7 @@ impl<F: RawPrimeField> HyperPlonkIndex<F> {
 ///   - the commitment to the selectors and permutations
 ///   - the parameters for polynomial commitment
 #[derive(Clone, Debug, Default, PartialEq, CanonicalDeserialize, CanonicalSerialize)]
-pub struct HyperPlonkProvingKey<E: Pairing, PCS: PolynomialCommitmentScheme<E>>
+pub struct ProvingKey<E: Pairing, PCS: PolynomialCommitmentScheme<E>>
 where
     E::ScalarField: RawPrimeField,
 {
@@ -148,7 +147,7 @@ where
 ///   - the commitments to the preprocessed polynomials output by the indexer
 ///   - the parameters for polynomial commitment
 #[derive(Clone, Debug, Default, PartialEq, CanonicalDeserialize, CanonicalSerialize)]
-pub struct HyperPlonkVerifyingKey<E: Pairing, PCS: PolynomialCommitmentScheme<E>> {
+pub struct VerifyingKey<E: Pairing, PCS: PolynomialCommitmentScheme<E>> {
     /// Hyperplonk instance parameters
     pub params: HyperPlonkParams,
     /// The parameters for PCS commitment
@@ -171,7 +170,6 @@ mod test {
 
     use crate::hyperplonk::pcs::multilinear_kzg::MultilinearKzgPCS;
     use crate::hyperplonk::pcs::PolynomialCommitmentScheme;
-    use crate::hyperplonk::poly_iop::PolyIOP;
     use ark_bls12_381::Bls12_381;
     use ark_bls12_381::Fr;
     use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
@@ -191,14 +189,15 @@ mod test {
             .build()
             .unwrap();
 
-        let (pk, _): (HyperPlonkProvingKey<_, MultilinearKzgPCS<Bls12_381>>, _) =
-            pool.install(|| PolyIOP::preprocess(&index, &srs)).unwrap();
+        let (pk, _): (ProvingKey<_, MultilinearKzgPCS<Bls12_381>>, _) = pool
+            .install(|| HyperPlonkSNARK::preprocess(&index, &srs))
+            .unwrap();
 
         let file = File::create("pk.serialization.test").unwrap();
         pk.serialize_uncompressed(&file).unwrap();
 
         let file_2 = File::open("pk.serialization.test").unwrap();
-        let pk_2 = HyperPlonkProvingKey::<Bls12_381, MultilinearKzgPCS<Bls12_381>>::deserialize_uncompressed_unchecked(&file_2).unwrap();
+        let pk_2 = ProvingKey::<Bls12_381, MultilinearKzgPCS<Bls12_381>>::deserialize_uncompressed_unchecked(&file_2).unwrap();
         pk_2.permutation_oracles
             .iter()
             .for_each(|p| println!("perm oracle: {p}"));

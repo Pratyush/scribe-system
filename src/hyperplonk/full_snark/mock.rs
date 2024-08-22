@@ -6,14 +6,14 @@ use ark_std::{end_timer, log2, start_timer, test_rng};
 
 use crate::hyperplonk::full_snark::{
     custom_gate::CustomizedGates,
-    structs::{HyperPlonkIndex, HyperPlonkParams},
+    structs::{HyperPlonkParams, Index},
 };
 
 #[derive(CanonicalDeserialize, CanonicalSerialize)]
 pub struct MockCircuit<F: RawPrimeField> {
     pub public_inputs: Vec<F>,
     pub witnesses: Vec<MLE<F>>,
-    pub index: HyperPlonkIndex<F>,
+    pub index: Index<F>,
 }
 
 impl<F: RawPrimeField> MockCircuit<F> {
@@ -102,7 +102,7 @@ impl<F: RawPrimeField> MockCircuit<F> {
         let identity_time = start_timer!(|| "identity permutation");
         let permutation = MLE::identity_permutation_mles(nv as usize, num_witnesses);
         end_timer!(identity_time);
-        let index = HyperPlonkIndex {
+        let index = Index {
             params,
             permutation,
             selectors,
@@ -152,7 +152,6 @@ mod test {
     use crate::hyperplonk::pcs::multilinear_kzg::srs::MultilinearUniversalParams;
     use crate::hyperplonk::pcs::multilinear_kzg::MultilinearKzgPCS;
     use crate::hyperplonk::pcs::PolynomialCommitmentScheme;
-    use crate::hyperplonk::poly_iop::PolyIOP;
     use ark_bls12_381::Bls12_381;
     use ark_bls12_381::Fr;
     use ark_std::test_rng;
@@ -193,24 +192,21 @@ mod test {
 
         let index = circuit.index;
         // generate pk and vks
-        let (pk, vk) =
-            <PolyIOP<Fr> as HyperPlonkSNARK<Bls12_381, MultilinearKzgPCS<Bls12_381>>>::preprocess(
-                &index, pcs_srs,
-            )?;
+        let (pk, vk) = <HyperPlonkSNARK<Bls12_381, MultilinearKzgPCS<Bls12_381>>>::preprocess(
+            &index, pcs_srs,
+        )?;
         // generate a proof and verify
-        let proof =
-            <PolyIOP<Fr> as HyperPlonkSNARK<Bls12_381, MultilinearKzgPCS<Bls12_381>>>::prove(
-                &pk,
-                &circuit.public_inputs,
-                &circuit.witnesses,
-            )?;
+        let proof = <HyperPlonkSNARK<Bls12_381, MultilinearKzgPCS<Bls12_381>>>::prove(
+            &pk,
+            &circuit.public_inputs,
+            &circuit.witnesses,
+        )?;
 
-        let verify =
-            <PolyIOP<Fr> as HyperPlonkSNARK<Bls12_381, MultilinearKzgPCS<Bls12_381>>>::verify(
-                &vk,
-                &circuit.public_inputs,
-                &proof,
-            )?;
+        let verify = <HyperPlonkSNARK<Bls12_381, MultilinearKzgPCS<Bls12_381>>>::verify(
+            &vk,
+            &circuit.public_inputs,
+            &proof,
+        )?;
         assert!(verify);
         Ok(())
     }

@@ -7,13 +7,12 @@ use crate::hyperplonk::pcs::PolynomialCommitmentScheme;
 
 use crate::hyperplonk::full_snark::{
     errors::HyperPlonkErrors,
-    structs::{HyperPlonkIndex, HyperPlonkProof, HyperPlonkProvingKey, HyperPlonkVerifyingKey},
+    structs::{Index, Proof, ProvingKey, VerifyingKey},
     utils::{build_f, eval_f, eval_perm_gate, prover_sanity_check},
     HyperPlonkSNARK,
 };
 use crate::hyperplonk::poly_iop::perm_check_original::PermutationCheck;
 use crate::hyperplonk::poly_iop::prelude::ZeroCheck;
-use crate::hyperplonk::poly_iop::PolyIOP;
 use crate::hyperplonk::transcript::IOPTranscript;
 use crate::streams::{serialize::RawPrimeField, MLE};
 use ark_ec::pairing::Pairing;
@@ -25,7 +24,7 @@ use rayon::iter::ParallelIterator;
 
 use std::marker::PhantomData;
 
-impl<E, PCS> HyperPlonkSNARK<E, PCS> for PolyIOP<E::ScalarField>
+impl<E, PCS> HyperPlonkSNARK<E, PCS>
 where
     E: Pairing,
     E::ScalarField: RawPrimeField,
@@ -38,15 +37,10 @@ where
         BatchProof = BatchProof<E, PCS>,
     >,
 {
-    type Index = HyperPlonkIndex<E::ScalarField>;
-    type ProvingKey = HyperPlonkProvingKey<E, PCS>;
-    type VerifyingKey = HyperPlonkVerifyingKey<E, PCS>;
-    type Proof = HyperPlonkProof<E, Self, PCS>;
-
-    fn preprocess(
-        index: &Self::Index,
+    pub fn preprocess(
+        index: &Index<E::ScalarField>,
         pcs_srs: &PCS::SRS,
-    ) -> Result<(Self::ProvingKey, Self::VerifyingKey), HyperPlonkErrors> {
+    ) -> Result<(ProvingKey<E, PCS>, VerifyingKey<E, PCS>), HyperPlonkErrors> {
         let num_vars = index.num_variables();
         let supported_ml_degree = num_vars;
 
@@ -80,7 +74,7 @@ where
         end_timer!(start);
 
         Ok((
-            Self::ProvingKey {
+            ProvingKey {
                 params: index.params.clone(),
                 permutation_oracles,
                 selector_oracles,
@@ -88,7 +82,7 @@ where
                 permutation_commitments: permutation_commitments.clone(),
                 pcs_param: pcs_prover_param,
             },
-            Self::VerifyingKey {
+            VerifyingKey {
                 params: index.params.clone(),
                 pcs_param: pcs_verifier_param,
                 selector_commitments,
@@ -144,11 +138,11 @@ where
     ///   - pi_poly(r_pi) where r_pi is sampled from transcript
     ///
     /// - 5. deferred batch opening
-    fn prove(
-        pk: &Self::ProvingKey,
+    pub fn prove(
+        pk: &ProvingKey<E, PCS>,
         pub_input: &[E::ScalarField],
         witnesses: &[MLE<E::ScalarField>],
-    ) -> Result<Self::Proof, HyperPlonkErrors> {
+    ) -> Result<Proof<E, PCS>, HyperPlonkErrors> {
         let start =
             start_timer!(|| format!("hyperplonk proving nv = {}", pk.params.num_variables()));
         let mut transcript = IOPTranscript::<E::ScalarField>::new(b"hyperplonk");
@@ -202,7 +196,7 @@ where
             &witnesses,
         )?;
 
-        let zero_check_proof = <Self as ZeroCheck<E::ScalarField>>::prove(&fx, &mut transcript)?;
+        let zero_check_proof = <ZeroCheck<E::ScalarField>>::prove(&fx, &mut transcript)?;
         end_timer!(step);
 
         // =======================================================================
@@ -211,7 +205,7 @@ where
         // =======================================================================
         let step = start_timer!(|| "Permutation check on w_i(x)");
 
-        let (perm_check_proof, prod_x, frac_poly) = <Self as PermutationCheck<E, PCS>>::prove(
+        let (perm_check_proof, prod_x, frac_poly) = <PermutationCheck<E, PCS>>::prove(
             &pk.pcs_param,
             &witnesses,
             &witnesses,
@@ -342,7 +336,7 @@ where
 
         end_timer!(start);
 
-        Ok(HyperPlonkProof {
+        Ok(Proof {
             // PCS commit for witnesses
             witness_commits,
             // batch_openings,
@@ -385,10 +379,10 @@ where
     /// - check permutation check evaluations
     /// - check zero check evaluations
     /// - public input consistency checks
-    fn verify(
-        vk: &Self::VerifyingKey,
+    pub fn verify(
+        vk: &VerifyingKey<E, PCS>,
         pub_input: &[E::ScalarField],
-        proof: &Self::Proof,
+        proof: &Proof<E, PCS>,
     ) -> Result<bool, HyperPlonkErrors> {
         let start = start_timer!(|| "hyperplonk verification");
 
@@ -447,7 +441,7 @@ where
             transcript.append_serializable_element(b"w", w_com)?;
         }
 
-        let zero_check_sub_claim = <Self as ZeroCheck<E::ScalarField>>::verify(
+        let zero_check_sub_claim = <ZeroCheck<E::ScalarField>>::verify(
             &proof.zero_check_proof,
             &zero_check_aux_info,
             &mut transcript,
@@ -476,7 +470,7 @@ where
             num_variables: num_vars,
             phantom: PhantomData::default(),
         };
-        let perm_check_sub_claim = <Self as PermutationCheck<E, PCS>>::verify(
+        let perm_check_sub_claim = <PermutationCheck<E, PCS>>::verify(
             &proof.perm_check_proof,
             &perm_check_aux_info,
             &mut transcript,
@@ -715,7 +709,7 @@ mod tests {
                 ],
                 2,
             );
-            let index = HyperPlonkIndex {
+            let index = Index {
                 params: params.clone(),
                 permutation,
                 selectors: vec![q1],
@@ -723,9 +717,7 @@ mod tests {
 
             // generate pk and vks
             let (pk, vk) =
-                <PolyIOP<E::ScalarField> as HyperPlonkSNARK<E, MultilinearKzgPCS<E>>>::preprocess(
-                    &index, &pcs_srs,
-                )?;
+                <HyperPlonkSNARK<E, MultilinearKzgPCS<E>>>::preprocess(&index, &pcs_srs)?;
 
             // w1 := [1, 1, 2, 3]
             let w1 = MLE::from_evals_vec(
@@ -763,17 +755,9 @@ mod tests {
             ];
 
             // generate a proof and verify
-            let proof =
-                <PolyIOP<E::ScalarField> as HyperPlonkSNARK<E, MultilinearKzgPCS<E>>>::prove(
-                    &pk,
-                    &pi,
-                    &[w1, w2],
-                )?;
+            let proof = <HyperPlonkSNARK<E, MultilinearKzgPCS<E>>>::prove(&pk, &pi, &[w1, w2])?;
 
-            let _verify =
-                <PolyIOP<E::ScalarField> as HyperPlonkSNARK<E, MultilinearKzgPCS<E>>>::verify(
-                    &vk, &pi, &proof,
-                )?;
+            let _verify = <HyperPlonkSNARK<E, MultilinearKzgPCS<E>>>::verify(&vk, &pi, &proof)?;
 
             assert!(_verify);
         }
@@ -830,17 +814,15 @@ mod tests {
                 ],
                 2,
             );
-            let bad_index = HyperPlonkIndex {
+            let bad_index = Index {
                 params,
                 permutation: rand_perm,
                 selectors: vec![q1],
             };
 
             // generate pk and vks
-            let (pk, bad_vk) = <PolyIOP<E::ScalarField> as HyperPlonkSNARK<
-                E,
-                MultilinearKzgPCS<E>,
-            >>::preprocess(&bad_index, &pcs_srs)?;
+            let (pk, bad_vk) =
+                <HyperPlonkSNARK<E, MultilinearKzgPCS<E>>>::preprocess(&bad_index, &pcs_srs)?;
 
             // w1 := [1, 1, 2, 3]
             let w1 = MLE::from_evals_vec(
@@ -871,18 +853,10 @@ mod tests {
             ];
 
             // generate a proof and verify
-            let proof =
-                <PolyIOP<E::ScalarField> as HyperPlonkSNARK<E, MultilinearKzgPCS<E>>>::prove(
-                    &pk,
-                    &pi,
-                    &[w1, w2],
-                )?;
+            let proof = <HyperPlonkSNARK<E, MultilinearKzgPCS<E>>>::prove(&pk, &pi, &[w1, w2])?;
 
             assert!(
-                <PolyIOP<E::ScalarField> as HyperPlonkSNARK<E, MultilinearKzgPCS<E>>>::verify(
-                    &bad_vk, &pi, &proof,
-                )
-                .is_err()
+                <HyperPlonkSNARK<E, MultilinearKzgPCS<E>>>::verify(&bad_vk, &pi, &proof,).is_err()
             );
         }
 

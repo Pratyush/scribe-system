@@ -1,9 +1,7 @@
+use crate::streams::serialize::RawPrimeField;
 use ark_ec::pairing::Pairing;
-use errors::HyperPlonkErrors;
 
-use crate::streams::{serialize::RawPrimeField, MLE};
-
-use super::{pcs::PolynomialCommitmentScheme, poly_iop::prelude::SumCheck};
+use super::pcs::PolynomialCommitmentScheme;
 
 pub mod custom_gate;
 pub mod errors;
@@ -17,57 +15,12 @@ mod witness;
 
 /// A trait for HyperPlonk SNARKs.
 /// A HyperPlonk is derived from SumCheck
-pub trait HyperPlonkSNARK<E, PCS>: SumCheck<E::ScalarField>
+pub struct HyperPlonkSNARK<E, PCS>
 where
     E: Pairing,
     E::ScalarField: RawPrimeField,
     PCS: PolynomialCommitmentScheme<E>,
 {
-    type Index;
-    type ProvingKey;
-    type VerifyingKey;
-    type Proof;
-
-    /// Generate the preprocessed polynomials output by the indexer.
-    ///
-    /// Inputs:
-    /// - `index`: HyperPlonk index
-    /// - `pcs_srs`: Polynomial commitment structured reference string
-    /// Outputs:
-    /// - The HyperPlonk proving key, which includes the preprocessed
-    ///   polynomials.
-    /// - The HyperPlonk verifying key, which includes the preprocessed
-    ///   polynomial commitments
-    fn preprocess(
-        index: &Self::Index,
-        pcs_srs: &PCS::SRS,
-    ) -> Result<(Self::ProvingKey, Self::VerifyingKey), HyperPlonkErrors>;
-
-    /// Generate HyperPlonk SNARK proof.
-    ///
-    /// Inputs:
-    /// - `pk`: circuit proving key
-    /// - `pub_input`: online public input
-    /// - `witness`: witness assignment
-    /// Outputs:
-    /// - The HyperPlonk SNARK proof.
-    fn prove(
-        pk: &Self::ProvingKey,
-        pub_input: &[E::ScalarField],
-        witnesses: &[MLE<E::ScalarField>],
-    ) -> Result<Self::Proof, HyperPlonkErrors>;
-
-    /// Verify the HyperPlonk proof.
-    ///
-    /// Inputs:
-    /// - `vk`: verifying key
-    /// - `pub_input`: online public input
-    /// - `proof`: HyperPlonk SNARK proof challenges
-    /// Outputs:
-    /// - Return a boolean on whether the verification is successful
-    fn verify(
-        vk: &Self::VerifyingKey,
-        pub_input: &[E::ScalarField],
-        proof: &Self::Proof,
-    ) -> Result<bool, HyperPlonkErrors>;
+    _pairing: std::marker::PhantomData<E>,
+    _pcs: std::marker::PhantomData<PCS>,
 }

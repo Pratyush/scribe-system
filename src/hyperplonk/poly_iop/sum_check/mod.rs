@@ -4,7 +4,6 @@ use crate::{
         poly_iop::{
             errors::PIOPError,
             structs::{IOPProof, IOPProverState, IOPVerifierState},
-            PolyIOP,
         },
         transcript::IOPTranscript,
     },
@@ -16,44 +15,6 @@ use std::fmt::Debug;
 
 mod prover;
 mod verifier;
-
-/// Trait for doing sum check protocols.
-pub trait SumCheck<F: PrimeField> {
-    type VirtualPolynomial;
-    type VPAuxInfo;
-    type MultilinearExtension;
-
-    type SumCheckProof: Clone + Debug + Default + PartialEq;
-    type Transcript;
-    type SumCheckSubClaim: Clone + Debug + Default + PartialEq;
-
-    /// Extract sum from the proof
-    fn extract_sum(proof: &Self::SumCheckProof) -> F;
-
-    /// Initialize the system with a transcript
-    ///
-    /// This function is optional -- in the case where a SumCheck is
-    /// an building block for a more complex protocol, the transcript
-    /// may be initialized by this complex protocol, and passed to the
-    /// SumCheck prover/verifier.
-    fn init_transcript() -> Self::Transcript;
-
-    /// Generate proof of the sum of polynomial over {0,1}^`num_vars`
-    ///
-    /// The polynomial is represented in the form of a VirtualPolynomial.
-    fn prove(
-        poly: &Self::VirtualPolynomial,
-        transcript: &mut Self::Transcript,
-    ) -> Result<Self::SumCheckProof, PIOPError>;
-
-    /// Verify the claimed sum using the proof
-    fn verify(
-        sum: F,
-        proof: &Self::SumCheckProof,
-        aux_info: &Self::VPAuxInfo,
-        transcript: &mut Self::Transcript,
-    ) -> Result<Self::SumCheckSubClaim, PIOPError>;
-}
 
 /// Trait for sum check protocol prover side APIs.
 pub trait SumCheckProver<F: PrimeField>
@@ -125,32 +86,31 @@ pub struct SumCheckSubClaim<F: PrimeField> {
     pub expected_evaluation: F,
 }
 
-impl<F: RawPrimeField> SumCheck<F> for PolyIOP<F> {
-    type SumCheckProof = IOPProof<F>;
-    type VirtualPolynomial = VirtualPolynomial<F>;
-    type VPAuxInfo = VPAuxInfo<F>;
-    type MultilinearExtension = MLE<F>;
-    type SumCheckSubClaim = SumCheckSubClaim<F>;
-    type Transcript = IOPTranscript<F>;
+pub struct SumCheck<F: PrimeField>(std::marker::PhantomData<F>);
 
-    fn extract_sum(proof: &Self::SumCheckProof) -> F {
+pub type SumCheckProof<F> = IOPProof<F>;
+pub type MultilinearExtension<F> = MLE<F>;
+pub type Transcript<F> = IOPTranscript<F>;
+
+impl<F: RawPrimeField> SumCheck<F> {
+    pub fn extract_sum(proof: &SumCheckProof<F>) -> F {
         let start = start_timer!(|| "extract sum");
         let res = proof.proofs[0].evaluations[0] + proof.proofs[0].evaluations[1];
         end_timer!(start);
         res
     }
 
-    fn init_transcript() -> Self::Transcript {
+    pub fn init_transcript() -> Transcript<F> {
         let start = start_timer!(|| "init transcript");
         let res = IOPTranscript::<F>::new(b"Initializing SumCheck transcript");
         end_timer!(start);
         res
     }
 
-    fn prove(
-        poly: &Self::VirtualPolynomial,
-        transcript: &mut Self::Transcript,
-    ) -> Result<Self::SumCheckProof, PIOPError> {
+    pub fn prove(
+        poly: &VirtualPolynomial<F>,
+        transcript: &mut Transcript<F>,
+    ) -> Result<SumCheckProof<F>, PIOPError> {
         let start = start_timer!(|| "sum check prove");
 
         transcript.append_serializable_element(b"aux info", &poly.aux_info)?;
@@ -178,12 +138,12 @@ impl<F: RawPrimeField> SumCheck<F> for PolyIOP<F> {
         })
     }
 
-    fn verify(
+    pub fn verify(
         claimed_sum: F,
-        proof: &Self::SumCheckProof,
-        aux_info: &Self::VPAuxInfo,
-        transcript: &mut Self::Transcript,
-    ) -> Result<Self::SumCheckSubClaim, PIOPError> {
+        proof: &SumCheckProof<F>,
+        aux_info: &VPAuxInfo<F>,
+        transcript: &mut Transcript<F>,
+    ) -> Result<SumCheckSubClaim<F>, PIOPError> {
         let start = start_timer!(|| "sum check verify");
 
         transcript.append_serializable_element(b"aux info", aux_info)?;
@@ -218,7 +178,9 @@ impl<F: RawPrimeField> SumCheck<F> for PolyIOP<F> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::streams::iterator::BatchedIterator;
+    use crate::{
+        arithmetic::virtual_polynomial::VirtualPolynomial, streams::iterator::BatchedIterator,
+    };
     use ark_bls12_381::Fr;
     use ark_ff::UniformRand;
     use ark_std::{
@@ -236,7 +198,7 @@ mod test {
             0, 0, 0, 0, 0,
         ];
         let mut rng = StdRng::from_seed(seed);
-        let mut transcript = <PolyIOP<Fr> as SumCheck<Fr>>::init_transcript();
+        let mut transcript = SumCheck::<Fr>::init_transcript();
 
         let (poly, asserted_sum) =
             VirtualPolynomial::rand(nv, num_multiplicands_range, num_products, &mut rng)?;
@@ -248,15 +210,10 @@ mod test {
             println!("sum check product eval: {}", eval);
         }
 
-        let proof = <PolyIOP<Fr> as SumCheck<Fr>>::prove(&poly, &mut transcript)?;
+        let proof = SumCheck::prove(&poly, &mut transcript)?;
         let poly_info = poly.aux_info.clone();
-        let mut transcript = <PolyIOP<Fr> as SumCheck<Fr>>::init_transcript();
-        let subclaim = <PolyIOP<Fr> as SumCheck<Fr>>::verify(
-            asserted_sum,
-            &proof,
-            &poly_info,
-            &mut transcript,
-        )?;
+        let mut transcript = SumCheck::<Fr>::init_transcript();
+        let subclaim = SumCheck::verify(asserted_sum, &proof, &poly_info, &mut transcript)?;
 
         let evaluated_point = poly.evaluate(&subclaim.point).unwrap();
         assert!(
@@ -354,14 +311,11 @@ mod test {
     #[test]
     fn test_extract_sum() -> Result<(), PIOPError> {
         let mut rng = test_rng();
-        let mut transcript = <PolyIOP<Fr> as SumCheck<Fr>>::init_transcript();
+        let mut transcript = SumCheck::<Fr>::init_transcript();
         let (poly, asserted_sum) = VirtualPolynomial::<Fr>::rand(8, (3, 4), 3, &mut rng)?;
 
-        let proof = <PolyIOP<Fr> as SumCheck<Fr>>::prove(&poly, &mut transcript)?;
-        assert_eq!(
-            <PolyIOP<Fr> as SumCheck<Fr>>::extract_sum(&proof),
-            asserted_sum
-        );
+        let proof = SumCheck::prove(&poly, &mut transcript)?;
+        assert_eq!(SumCheck::<Fr>::extract_sum(&proof), asserted_sum);
         Ok(())
     }
 
@@ -417,18 +371,13 @@ mod test {
         assert_eq!(prover.poly.mles.len(), 5);
         drop(prover);
 
-        let mut transcript = <PolyIOP<Fr> as SumCheck<Fr>>::init_transcript();
+        let mut transcript = SumCheck::<Fr>::init_transcript();
         let poly_info = poly.aux_info.clone();
-        let proof = <PolyIOP<Fr> as SumCheck<Fr>>::prove(&poly, &mut transcript)?;
-        let asserted_sum = <PolyIOP<Fr> as SumCheck<Fr>>::extract_sum(&proof);
+        let proof = SumCheck::<Fr>::prove(&poly, &mut transcript)?;
+        let asserted_sum = SumCheck::<Fr>::extract_sum(&proof);
 
-        let mut transcript = <PolyIOP<Fr> as SumCheck<Fr>>::init_transcript();
-        let subclaim = <PolyIOP<Fr> as SumCheck<Fr>>::verify(
-            asserted_sum,
-            &proof,
-            &poly_info,
-            &mut transcript,
-        )?;
+        let mut transcript = SumCheck::<Fr>::init_transcript();
+        let subclaim = SumCheck::verify(asserted_sum, &proof, &poly_info, &mut transcript)?;
 
         let evaluated_point = poly.evaluate(&subclaim.point).unwrap();
         assert!(

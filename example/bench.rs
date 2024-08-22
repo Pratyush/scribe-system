@@ -3,14 +3,11 @@ use std::{fs::File, time::Instant};
 use ark_bls12_381::Bls12_381;
 use ark_bls12_381::Fr;
 use ark_serialize::{CanonicalDeserialize, Write};
-use scribe::hyperplonk::full_snark::structs::{HyperPlonkProvingKey, HyperPlonkVerifyingKey};
+use scribe::hyperplonk::full_snark::structs::{ProvingKey, VerifyingKey};
 use scribe::hyperplonk::full_snark::{
     errors::HyperPlonkErrors, mock::MockCircuit, HyperPlonkSNARK,
 };
-use scribe::hyperplonk::{
-    pcs::{multilinear_kzg::MultilinearKzgPCS, PolynomialCommitmentScheme},
-    poly_iop::PolyIOP,
-};
+use scribe::hyperplonk::pcs::multilinear_kzg::MultilinearKzgPCS;
 use scribe::streams::iterator::BatchedIterator;
 use scribe::streams::LOG_BUFFER_SIZE;
 
@@ -41,7 +38,11 @@ fn bench_vanilla_plonk(thread: usize) -> Result<(), HyperPlonkErrors> {
     .unwrap();
 
     let circuit = MockCircuit::<Fr>::deserialize_uncompressed_unchecked(&param_file).unwrap();
-    let pk = HyperPlonkProvingKey::<Bls12_381, MultilinearKzgPCS<Bls12_381>>::deserialize_uncompressed_unchecked(&param_file).unwrap();
+    let pk =
+        ProvingKey::<Bls12_381, MultilinearKzgPCS<Bls12_381>>::deserialize_uncompressed_unchecked(
+            &param_file,
+        )
+        .unwrap();
     println!("print pk");
     println!("{:?}", pk.params);
     println!(
@@ -75,8 +76,8 @@ fn bench_vanilla_plonk(thread: usize) -> Result<(), HyperPlonkErrors> {
 fn bench_mock_circuit_zkp_helper(
     file: &mut File,
     circuit: MockCircuit<Fr>,
-    pk: HyperPlonkProvingKey<Bls12_381, MultilinearKzgPCS<Bls12_381>>,
-    vk: HyperPlonkVerifyingKey<Bls12_381, MultilinearKzgPCS<Bls12_381>>,
+    pk: ProvingKey<Bls12_381, MultilinearKzgPCS<Bls12_381>>,
+    vk: VerifyingKey<Bls12_381, MultilinearKzgPCS<Bls12_381>>,
 ) -> Result<(), HyperPlonkErrors> {
     let nv = circuit.index.num_variables();
     let repetition = if nv < 10 {
@@ -89,11 +90,7 @@ fn bench_mock_circuit_zkp_helper(
     //==========================================================
     // generate a proof
     let start = Instant::now();
-    let proof = <PolyIOP<Fr> as HyperPlonkSNARK<Bls12_381, MultilinearKzgPCS<Bls12_381>>>::prove(
-        &pk,
-        &circuit.public_inputs,
-        &circuit.witnesses,
-    )?;
+    let proof = HyperPlonkSNARK::prove(&pk, &circuit.public_inputs, &circuit.witnesses)?;
     let t = start.elapsed().as_micros();
     println!("proving for {nv} variables: {t} us",);
     file.write_all(format!("{nv} {t}\n").as_ref()).unwrap();

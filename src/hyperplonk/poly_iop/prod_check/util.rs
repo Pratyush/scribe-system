@@ -8,7 +8,7 @@ use crate::{
     },
 };
 use crate::{
-    hyperplonk::poly_iop::{errors::PIOPError, structs::IOPProof, zero_check::ZeroCheck, PolyIOP},
+    hyperplonk::poly_iop::{errors::PIOPError, structs::IOPProof, zero_check::ZeroCheck},
     streams::serialize::RawPrimeField,
 };
 
@@ -139,7 +139,7 @@ pub(super) fn prove_zero_check<F: RawPrimeField>(
     // - alpha * f1(x) * ... * fk(x)]
     q_x.add_mles(fxs.to_vec(), -*alpha)?;
 
-    let iop_proof = <PolyIOP<F> as ZeroCheck<F>>::prove(&q_x, transcript)?;
+    let iop_proof = ZeroCheck::<F>::prove(&q_x, transcript)?;
 
     end_timer!(start);
     Ok((iop_proof, q_x))

@@ -4,7 +4,6 @@ use crate::hyperplonk::{
         errors::PIOPError,
         prod_check::util::{compute_frac_poly, compute_product_poly, prove_zero_check},
         zero_check::ZeroCheck,
-        PolyIOP,
     },
 };
 use crate::{arithmetic::virtual_polynomial::VPAuxInfo, streams::MLE};
@@ -13,6 +12,8 @@ use ark_ec::pairing::Pairing;
 use ark_ff::{One, Zero};
 
 use ark_std::{end_timer, start_timer};
+
+use super::zero_check::{ZeroCheckProof, ZeroCheckSubClaim};
 
 mod util;
 
@@ -43,65 +44,7 @@ mod util;
 /// 2. `generate_challenge` from current transcript (generate alpha)
 /// 3. `verify` to verify the zerocheck proof and generate the subclaim for
 /// polynomial evaluations
-pub trait ProductCheck<E, PCS>: ZeroCheck<E::ScalarField>
-where
-    E: Pairing,
-    E::ScalarField: RawPrimeField,
-    PCS: PolynomialCommitmentScheme<E>,
-{
-    type ProductCheckSubClaim;
-    type ProductCheckProof;
-
-    /// Initialize the system with a transcript
-    ///
-    /// This function is optional -- in the case where a ProductCheck is
-    /// an building block for a more complex protocol, the transcript
-    /// may be initialized by this complex protocol, and passed to the
-    /// ProductCheck prover/verifier.
-    fn init_transcript() -> Self::Transcript;
-
-    /// Proves that two lists of n-variate multilinear polynomials `(f1, f2,
-    /// ..., fk)` and `(g1, ..., gk)` satisfy:
-    ///   \prod_{x \in {0,1}^n} f1(x) * ... * fk(x)
-    /// = \prod_{x \in {0,1}^n} g1(x) * ... * gk(x)
-    ///
-    /// Inputs:
-    /// - fxs: the list of numerator multilinear polynomial
-    /// - gxs: the list of denominator multilinear polynomial
-    /// - transcript: the IOP transcript
-    /// - pk: PCS committing key
-    ///
-    /// Outputs
-    /// - the product check proof
-    /// - the product polynomial (used for testing)
-    /// - the fractional polynomial (used for testing)
-    ///
-    /// Cost: O(N)
-    #[allow(clippy::type_complexity)]
-    fn prove(
-        pcs_param: &PCS::ProverParam,
-        fxs: &[Self::MultilinearExtension],
-        gxs: &[Self::MultilinearExtension],
-        transcript: &mut IOPTranscript<E::ScalarField>,
-    ) -> Result<
-        (
-            Self::ProductCheckProof,
-            Self::MultilinearExtension,
-            Self::MultilinearExtension,
-        ),
-        PIOPError,
-    >;
-
-    /// Verify that for witness multilinear polynomials (f1, ..., fk, g1, ...,
-    /// gk) it holds that
-    ///      `\prod_{x \in {0,1}^n} f1(x) * ... * fk(x)
-    ///     = \prod_{x \in {0,1}^n} g1(x) * ... * gk(x)`
-    fn verify(
-        proof: &Self::ProductCheckProof,
-        aux_info: &VPAuxInfo<E::ScalarField>,
-        transcript: &mut Self::Transcript,
-    ) -> Result<Self::ProductCheckSubClaim, PIOPError>;
-}
+pub struct ProductCheck<E, PCS>(std::marker::PhantomData<(E, PCS)>);
 
 /// A product check subclaim consists of
 /// - A zero check IOP subclaim for the virtual polynomial
@@ -111,9 +54,9 @@ where
 // is independent from the proof. So we should avoid
 // (de)serialize it.
 #[derive(Clone, Debug, Default, PartialEq)]
-pub struct ProductCheckSubClaim<F: RawPrimeField, ZC: ZeroCheck<F>> {
+pub struct ProductCheckSubClaim<F: RawPrimeField> {
     // the SubClaim from the ZeroCheck
-    pub zero_check_sub_claim: ZC::ZeroCheckSubClaim,
+    pub zero_check_sub_claim: ZeroCheckSubClaim<F>,
     // final query which consists of
     // - the vector `(1, ..., 1, 0)` (needs to be reversed because Arkwork's MLE uses big-endian
     //   format for points)
@@ -127,41 +70,35 @@ pub struct ProductCheckSubClaim<F: RawPrimeField, ZC: ZeroCheck<F>> {
 /// - a product polynomial commitment
 /// - a polynomial commitment for the fractional polynomial
 #[derive(Clone, Debug, Default, PartialEq)]
-pub struct ProductCheckProof<
-    E: Pairing,
-    PCS: PolynomialCommitmentScheme<E>,
-    ZC: ZeroCheck<E::ScalarField>,
-> where
+pub struct ProductCheckProof<E: Pairing, PCS: PolynomialCommitmentScheme<E>>
+where
     E::ScalarField: RawPrimeField,
 {
-    pub zero_check_proof: ZC::ZeroCheckProof,
+    pub zero_check_proof: ZeroCheckProof<E::ScalarField>,
     pub prod_x_comm: PCS::Commitment,
     pub frac_comm: PCS::Commitment,
 }
 
-impl<E, PCS> ProductCheck<E, PCS> for PolyIOP<E::ScalarField>
+impl<E, PCS> ProductCheck<E, PCS>
 where
     E: Pairing,
     E::ScalarField: RawPrimeField,
     PCS: PolynomialCommitmentScheme<E, Polynomial = MLE<E::ScalarField>>,
 {
-    type ProductCheckSubClaim = ProductCheckSubClaim<E::ScalarField, Self>;
-    type ProductCheckProof = ProductCheckProof<E, PCS, Self>;
-
-    fn init_transcript() -> Self::Transcript {
+    pub fn init_transcript() -> IOPTranscript<E::ScalarField> {
         IOPTranscript::<E::ScalarField>::new(b"Initializing ProductCheck transcript")
     }
 
-    fn prove(
+    pub fn prove(
         pcs_param: &PCS::ProverParam,
-        fxs: &[Self::MultilinearExtension],
-        gxs: &[Self::MultilinearExtension],
+        fxs: &[MLE<E::ScalarField>],
+        gxs: &[MLE<E::ScalarField>],
         transcript: &mut IOPTranscript<E::ScalarField>,
     ) -> Result<
         (
-            Self::ProductCheckProof,
-            Self::MultilinearExtension,
-            Self::MultilinearExtension,
+            ProductCheckProof<E, PCS>,
+            MLE<E::ScalarField>,
+            MLE<E::ScalarField>,
         ),
         PIOPError,
     > {
@@ -250,11 +187,11 @@ where
         ))
     }
 
-    fn verify(
-        proof: &Self::ProductCheckProof,
+    pub fn verify(
+        proof: &ProductCheckProof<E, PCS>,
         aux_info: &VPAuxInfo<E::ScalarField>,
-        transcript: &mut Self::Transcript,
-    ) -> Result<Self::ProductCheckSubClaim, PIOPError> {
+        transcript: &mut IOPTranscript<E::ScalarField>,
+    ) -> Result<ProductCheckSubClaim<E::ScalarField>, PIOPError> {
         let start = start_timer!(|| "prod_check verify");
 
         // update transcript and generate challenge
@@ -264,11 +201,8 @@ where
 
         // invoke the zero check on the iop_proof
         // the virtual poly info for Q(x)
-        let zero_check_sub_claim = <Self as ZeroCheck<E::ScalarField>>::verify(
-            &proof.zero_check_proof,
-            aux_info,
-            transcript,
-        )?;
+        let zero_check_sub_claim =
+            ZeroCheck::<E::ScalarField>::verify(&proof.zero_check_proof, aux_info, transcript)?;
 
         // the final query is on prod_x
         // little endian version of [1, 1, 1, ..., 1, 0], i.e. the final product, which should be 1 for permu check
@@ -297,7 +231,7 @@ mod test {
     use crate::{
         hyperplonk::{
             pcs::{multilinear_kzg::MultilinearKzgPCS, PolynomialCommitmentScheme},
-            poly_iop::{errors::PIOPError, PolyIOP},
+            poly_iop::errors::PIOPError,
         },
         streams::MLE,
     };
@@ -354,17 +288,13 @@ mod test {
         E::ScalarField: RawPrimeField,
         PCS: PolynomialCommitmentScheme<E, Polynomial = MLE<E::ScalarField>>,
     {
-        let mut transcript = <PolyIOP<E::ScalarField> as ProductCheck<E, PCS>>::init_transcript();
+        let mut transcript = ProductCheck::<E, PCS>::init_transcript();
         transcript.append_message(b"testing", b"initializing transcript for testing")?;
 
-        let (proof, prod_x, frac_poly) = <PolyIOP<E::ScalarField> as ProductCheck<E, PCS>>::prove(
-            pcs_param,
-            fs,
-            gs,
-            &mut transcript,
-        )?;
+        let (proof, prod_x, frac_poly) =
+            ProductCheck::<E, PCS>::prove(pcs_param, fs, gs, &mut transcript)?;
 
-        let mut transcript = <PolyIOP<E::ScalarField> as ProductCheck<E, PCS>>::init_transcript();
+        let mut transcript = ProductCheck::<E, PCS>::init_transcript();
         transcript.append_message(b"testing", b"initializing transcript for testing")?;
 
         // what's aux_info for?
@@ -373,11 +303,7 @@ mod test {
             num_variables: fs[0].num_vars(),
             phantom: PhantomData::default(),
         };
-        let prod_subclaim = <PolyIOP<E::ScalarField> as ProductCheck<E, PCS>>::verify(
-            &proof,
-            &aux_info,
-            &mut transcript,
-        )?;
+        let prod_subclaim = ProductCheck::<E, PCS>::verify(&proof, &aux_info, &mut transcript)?;
         assert_eq!(
             prod_x.evaluate(&prod_subclaim.final_query.0).unwrap(),
             prod_subclaim.final_query.1,
@@ -386,23 +312,15 @@ mod test {
         check_frac_poly::<E>(&frac_poly, fs, gs);
 
         // bad path
-        let mut transcript = <PolyIOP<E::ScalarField> as ProductCheck<E, PCS>>::init_transcript();
+        let mut transcript = ProductCheck::<E, PCS>::init_transcript();
         transcript.append_message(b"testing", b"initializing transcript for testing")?;
 
-        let (bad_proof, _prod_x_bad, frac_poly) = <PolyIOP<E::ScalarField> as ProductCheck<
-            E,
-            PCS,
-        >>::prove(
-            pcs_param, fs, hs, &mut transcript
-        )?;
+        let (bad_proof, _prod_x_bad, frac_poly) =
+            ProductCheck::<E, PCS>::prove(pcs_param, fs, hs, &mut transcript)?;
 
-        let mut transcript = <PolyIOP<E::ScalarField> as ProductCheck<E, PCS>>::init_transcript();
+        let mut transcript = ProductCheck::<E, PCS>::init_transcript();
         transcript.append_message(b"testing", b"initializing transcript for testing")?;
-        let bad_subclaim = <PolyIOP<E::ScalarField> as ProductCheck<E, PCS>>::verify(
-            &bad_proof,
-            &aux_info,
-            &mut transcript,
-        );
+        let bad_subclaim = ProductCheck::<E, PCS>::verify(&bad_proof, &aux_info, &mut transcript);
         assert!(bad_subclaim.is_err());
         // the frac_poly should still be computed correctly
         check_frac_poly::<E>(&frac_poly, &fs, &hs);

@@ -1,7 +1,7 @@
 use crate::hyperplonk::pcs::errors::PCSError;
 use crate::hyperplonk::pcs::structs::Commitment;
 use crate::hyperplonk::pcs::{multilinear_kzg::util::eq_eval, PolynomialCommitmentScheme};
-use crate::hyperplonk::poly_iop::{prelude::SumCheck, structs::IOPProof, PolyIOP};
+use crate::hyperplonk::poly_iop::{prelude::SumCheck, structs::IOPProof};
 use crate::{
     arithmetic::virtual_polynomial::{build_eq_x_r_vec, VPAuxInfo, VirtualPolynomial},
     streams::serialize::RawPrimeField,
@@ -119,10 +119,7 @@ where
     }
     end_timer!(step);
 
-    let proof = match <PolyIOP<E::ScalarField> as SumCheck<E::ScalarField>>::prove(
-        &sum_check_vp,
-        transcript,
-    ) {
+    let proof = match <SumCheck<E::ScalarField>>::prove(&sum_check_vp, transcript) {
         Ok(p) => p,
         Err(_e) => {
             // cannot wrap IOPError with PCSError due to cyclic dependency
@@ -225,7 +222,7 @@ where
         num_variables: num_var,
         phantom: PhantomData,
     };
-    let subclaim = match <PolyIOP<E::ScalarField> as SumCheck<E::ScalarField>>::verify(
+    let subclaim = match <SumCheck<E::ScalarField>>::verify(
         sum,
         &proof.sum_check_proof,
         &aux_info,
