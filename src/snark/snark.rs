@@ -645,8 +645,8 @@ mod tests {
         // 4 wires,
         let gates = CustomizedGates {
             gates: vec![
-                (true, 1, Some(0), vec![0, 0, 0, 0, 0]),
-                (false, 1, None, vec![1]),
+                (1.into(), Some(0), vec![0, 0, 0, 0, 0]),
+                ((-1).into(), None, vec![1]),
             ],
             // gates: vec![(1, Some(0), vec![0]), (-1, None, vec![1])],
         };

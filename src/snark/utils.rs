@@ -182,12 +182,8 @@ pub(crate) fn build_f<F: RawPrimeField>(
 
     let mut res = VirtualPolynomial::<F>::new(num_vars);
 
-    for (sign, coeff, selector, witnesses) in gates.gates.iter() {
-        let coeff_fr = if !sign {
-            -F::from(*coeff)
-        } else {
-            F::from(*coeff)
-        };
+    for (coeff, selector, witnesses) in gates.gates.iter() {
+        let coeff_fr = coeff.into_fp();
         let mut mle_list = vec![];
         if let Some(s) = *selector {
             mle_list.push(selector_mles[s].clone())
@@ -207,12 +203,8 @@ pub(crate) fn eval_f<F: PrimeField>(
     witness_evals: &[F],
 ) -> Result<F, HyperPlonkErrors> {
     let mut res = F::zero();
-    for (sign, coeff, selector, witnesses) in gates.gates.iter() {
-        let mut cur_value = if !sign {
-            -F::from(*coeff)
-        } else {
-            F::from(*coeff)
-        };
+    for (coeff, selector, witnesses) in gates.gates.iter() {
+        let mut cur_value: F = coeff.into_fp();
         cur_value *= match selector {
             Some(s) => selector_evals[*s],
             None => F::one(),
@@ -310,8 +302,8 @@ mod test {
         // ]
         let gates = CustomizedGates {
             gates: vec![
-                (true, 1, Some(0), vec![0, 0, 0, 0, 0]),
-                (false, 1, None, vec![1]),
+                (1.into(), Some(0), vec![0, 0, 0, 0, 0]),
+                ((-1).into(), None, vec![1]),
             ],
         };
         let f = build_f(&gates, num_vars, &[ql.clone()], &[w1.clone(), w2.clone()])?;

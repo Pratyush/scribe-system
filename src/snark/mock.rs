@@ -61,15 +61,8 @@ impl<F: RawPrimeField> MockCircuit<F> {
         gate.gates
             .iter()
             .enumerate()
-            .for_each(|(index, (sign, coeff, q, wit))| {
-                let mut cur_monomial = MLE::constant(
-                    if !sign {
-                        -F::from(*coeff)
-                    } else {
-                        F::from(*coeff)
-                    },
-                    nv,
-                );
+            .for_each(|(index, (coeff, q, wit))| {
+                let mut cur_monomial = MLE::constant(coeff.into_fp(), nv);
 
                 for wit_index in wit.iter() {
                     cur_monomial *= &witnesses[*wit_index];
@@ -118,15 +111,8 @@ impl<F: RawPrimeField> MockCircuit<F> {
     pub fn is_satisfied(&self) -> bool {
         let nv = self.num_variables();
         let mut cur = MLE::constant(F::zero(), nv);
-        for (sign, coeff, q, wit) in self.index.params.gate_func.gates.iter() {
-            let mut cur_monomial = MLE::constant(
-                if !sign {
-                    -F::from(*coeff)
-                } else {
-                    F::from(*coeff)
-                },
-                nv,
-            );
+        for (coeff, q, wit) in self.index.params.gate_func.gates.iter() {
+            let mut cur_monomial = MLE::constant(coeff.into_fp(), nv);
             match q {
                 Some(p) => cur_monomial.mul_assign(&self.index.selectors[*p]),
                 _ => (),
