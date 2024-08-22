@@ -1,7 +1,7 @@
 use crate::pc::errors::PCSError;
 use crate::pc::structs::Commitment;
 use crate::pc::{multilinear_kzg::util::eq_eval, PolynomialCommitmentScheme};
-use crate::poly_iop::{prelude::SumCheck, structs::IOPProof};
+use crate::piop::{prelude::SumCheck, structs::IOPProof};
 use crate::{
     arithmetic::virtual_polynomial::{build_eq_x_r_vec, VPAuxInfo, VirtualPolynomial},
     streams::serialize::RawPrimeField,

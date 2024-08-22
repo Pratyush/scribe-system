@@ -1,6 +1,6 @@
 use crate::streams::iterator::BatchedIterator;
 use crate::streams::MLE;
-use crate::{poly_iop::errors::PIOPError, streams::serialize::RawPrimeField};
+use crate::{piop::errors::PIOPError, streams::serialize::RawPrimeField};
 
 use ark_std::{end_timer, start_timer};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};

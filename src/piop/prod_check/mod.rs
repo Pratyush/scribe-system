@@ -1,7 +1,7 @@
 use crate::{arithmetic::virtual_polynomial::VPAuxInfo, streams::MLE};
 use crate::{
     pc::PolynomialCommitmentScheme,
-    poly_iop::{
+    piop::{
         errors::PIOPError,
         prod_check::util::{compute_frac_poly, compute_product_poly, prove_zero_check},
         zero_check::ZeroCheck,

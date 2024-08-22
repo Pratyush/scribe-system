@@ -1,4 +1,4 @@
-pub use crate::poly_iop::{
+pub use crate::piop::{
     errors::PIOPError,
     // perm_check::PermutationCheck,
     // structs::IOPProof,

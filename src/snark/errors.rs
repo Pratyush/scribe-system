@@ -1,6 +1,6 @@
 use crate::arithmetic::errors::ArithError;
 use crate::pc::errors::PCSError;
-use crate::poly_iop::errors::PIOPError;
+use crate::piop::errors::PIOPError;
 use crate::transcript::TranscriptError;
 use ark_serialize::SerializationError;
 use ark_std::string::String;

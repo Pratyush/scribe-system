@@ -4,7 +4,7 @@ use crate::{
     streams::iterator::{zip_many, BatchedIterator},
 };
 use crate::{
-    poly_iop::{
+    piop::{
         errors::PIOPError,
         structs::{IOPProverMessage, IOPProverState},
     },

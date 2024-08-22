@@ -1,4 +1,4 @@
-use crate::poly_iop::{perm_check_original::PermutationProof, zero_check::ZeroCheckProof};
+use crate::piop::{perm_check_original::PermutationProof, zero_check::ZeroCheckProof};
 use crate::streams::serialize::RawPrimeField;
 use crate::streams::MLE;
 use crate::{pc::PolynomialCommitmentScheme, snark::custom_gate::CustomizedGates};

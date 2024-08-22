@@ -4,7 +4,7 @@ use crate::transcript::IOPTranscript;
 use crate::{arithmetic::virtual_polynomial::eq_eval, streams::serialize::RawPrimeField};
 use crate::{
     arithmetic::virtual_polynomial::{VPAuxInfo, VirtualPolynomial},
-    poly_iop::{errors::PIOPError, sum_check::SumCheck},
+    piop::{errors::PIOPError, sum_check::SumCheck},
 };
 use ark_ff::PrimeField;
 use ark_std::{end_timer, start_timer};
@@ -104,7 +104,7 @@ mod test {
 
     use super::ZeroCheck;
     use crate::arithmetic::virtual_polynomial::VirtualPolynomial;
-    use crate::poly_iop::errors::PIOPError;
+    use crate::piop::errors::PIOPError;
     use ark_bls12_381::Fr;
     use ark_std::rand::rngs::StdRng;
     use ark_std::rand::SeedableRng;

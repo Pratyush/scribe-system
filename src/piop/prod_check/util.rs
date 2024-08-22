@@ -8,7 +8,7 @@ use crate::{
     },
 };
 use crate::{
-    poly_iop::{errors::PIOPError, structs::IOPProof, zero_check::ZeroCheck},
+    piop::{errors::PIOPError, structs::IOPProof, zero_check::ZeroCheck},
     streams::serialize::RawPrimeField,
 };
 

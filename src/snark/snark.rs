@@ -5,8 +5,8 @@ use crate::pc::structs::Commitment;
 use crate::pc::PolynomialCommitmentScheme;
 use crate::snark::utils::PcsAccumulator;
 
-use crate::poly_iop::perm_check_original::PermutationCheck;
-use crate::poly_iop::prelude::ZeroCheck;
+use crate::piop::perm_check_original::PermutationCheck;
+use crate::piop::prelude::ZeroCheck;
 use crate::snark::{
     errors::HyperPlonkErrors,
     structs::{Index, Proof, ProvingKey, VerifyingKey},
