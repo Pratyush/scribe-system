@@ -8,7 +8,7 @@ use crate::{
 };
 use ark_ec::pairing::Pairing;
 use ark_ff::PrimeField;
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Valid};
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::log2;
 
 use super::prelude::HyperPlonkErrors;
@@ -124,7 +124,7 @@ impl<F: RawPrimeField> HyperPlonkIndex<F> {
 ///   - the preprocessed polynomials output by the indexer
 ///   - the commitment to the selectors and permutations
 ///   - the parameters for polynomial commitment
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, CanonicalDeserialize, CanonicalSerialize)]
 pub struct HyperPlonkProvingKey<E: Pairing, PCS: PolynomialCommitmentScheme<E>>
 where
     E::ScalarField: RawPrimeField,
@@ -141,83 +141,6 @@ where
     pub permutation_commitments: Vec<PCS::Commitment>,
     /// The parameters for PCS commitment
     pub pcs_param: PCS::ProverParam,
-}
-
-impl<E: Pairing, PCS: PolynomialCommitmentScheme<E>> CanonicalDeserialize
-    for HyperPlonkProvingKey<E, PCS>
-where
-    E::ScalarField: RawPrimeField,
-{
-    fn deserialize_with_mode<R: std::io::Read>(
-        mut reader: R,
-        compress: ark_serialize::Compress,
-        validate: ark_serialize::Validate,
-    ) -> Result<Self, ark_serialize::SerializationError> {
-        let params = HyperPlonkParams::deserialize_with_mode(&mut reader, compress, validate)?;
-        let permutation_oracles =
-            Vec::<MLE<E::ScalarField>>::deserialize_with_mode(&mut reader, compress, validate)?;
-        let selector_oracles =
-            Vec::<MLE<E::ScalarField>>::deserialize_with_mode(&mut reader, compress, validate)?;
-        let selector_commitments =
-            Vec::<PCS::Commitment>::deserialize_with_mode(&mut reader, compress, validate)?;
-        let permutation_commitments =
-            Vec::<PCS::Commitment>::deserialize_with_mode(&mut reader, compress, validate)?;
-        let pcs_param = PCS::ProverParam::deserialize_with_mode(&mut reader, compress, validate)?;
-        Ok(Self {
-            params,
-            permutation_oracles,
-            selector_oracles,
-            selector_commitments,
-            permutation_commitments,
-            pcs_param,
-        })
-    }
-}
-
-impl<E: Pairing, PCS: PolynomialCommitmentScheme<E>> Valid for HyperPlonkProvingKey<E, PCS>
-where
-    E::ScalarField: RawPrimeField,
-{
-    fn batch_check<'a>(
-        _batch: impl Iterator<Item = &'a Self> + Send,
-    ) -> Result<(), ark_serialize::SerializationError>
-    where
-        Self: 'a,
-    {
-        unimplemented!()
-    }
-
-    fn check(&self) -> Result<(), ark_serialize::SerializationError> {
-        unimplemented!()
-    }
-}
-
-impl<E: Pairing, PCS: PolynomialCommitmentScheme<E>> CanonicalSerialize
-    for HyperPlonkProvingKey<E, PCS>
-where
-    E::ScalarField: RawPrimeField,
-{
-    fn serialize_with_mode<W: std::io::Write>(
-        &self,
-        mut writer: W,
-        compress: ark_serialize::Compress,
-    ) -> Result<(), ark_serialize::SerializationError> {
-        self.params.serialize_with_mode(&mut writer, compress)?;
-        self.permutation_oracles
-            .serialize_with_mode(&mut writer, compress)?;
-        self.selector_oracles
-            .serialize_with_mode(&mut writer, compress)?;
-        self.selector_commitments
-            .serialize_with_mode(&mut writer, compress)?;
-        self.permutation_commitments
-            .serialize_with_mode(&mut writer, compress)?;
-        self.pcs_param.serialize_with_mode(&mut writer, compress)?;
-        Ok(())
-    }
-
-    fn serialized_size(&self, compress: ark_serialize::Compress) -> usize {
-        unimplemented!()
-    }
 }
 
 /// The HyperPlonk verifying key, consists of the following:
@@ -249,16 +172,10 @@ mod test {
     use crate::hyperplonk::pcs::multilinear_kzg::MultilinearKzgPCS;
     use crate::hyperplonk::pcs::PolynomialCommitmentScheme;
     use crate::hyperplonk::poly_iop::PolyIOP;
-    use crate::streams::iterator::BatchedIterator;
     use ark_bls12_381::Bls12_381;
     use ark_bls12_381::Fr;
     use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
     use ark_std::test_rng;
-
-    const SUPPORTED_SIZE: usize = 22;
-    const MIN_NUM_VARS: usize = 10;
-    const MAX_NUM_VARS: usize = 22;
-    const CUSTOM_DEGREE: [usize; 4] = [1, 2, 4, 8];
 
     #[test]
     fn test_pk_serialization() -> Result<(), HyperPlonkErrors> {
@@ -274,12 +191,8 @@ mod test {
             .build()
             .unwrap();
 
-        let (pk, vk) = pool
-            .install(|| {
-                <PolyIOP<Fr> as HyperPlonkSNARK<Bls12_381, MultilinearKzgPCS<_>>>::preprocess(
-                    &index, &srs,
-                )
-            })
+        let (pk, _): (HyperPlonkProvingKey<_, MultilinearKzgPCS<Bls12_381>>, _) = pool
+            .install(|| PolyIOP::preprocess(&index, &srs))
             .unwrap();
 
         let file = File::create("pk.serialization.test").unwrap();
@@ -287,13 +200,8 @@ mod test {
 
         let file_2 = File::open("pk.serialization.test").unwrap();
         let pk_2 = HyperPlonkProvingKey::<Bls12_381, MultilinearKzgPCS<Bls12_381>>::deserialize_uncompressed_unchecked(&file_2).unwrap();
-        println!("{:?}", pk_2.params);
-        pk_2.permutation_oracles
-            .iter()
-            .for_each(|perm| println!("perm oracle: {:?}", perm.evals().iter().to_vec()));
-        pk_2.selector_oracles
-            .iter()
-            .for_each(|perm| println!("selector oracle: {:?}", perm.evals().iter().to_vec()));
+        pk_2.permutation_oracles.iter().for_each(|p| println!("perm oracle: {p}"));
+        pk_2.selector_oracles.iter().for_each(|s| println!("selector oracle: {s}"));
 
         Ok(())
     }

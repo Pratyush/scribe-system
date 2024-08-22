@@ -772,7 +772,7 @@ mod tests {
         let file_vec2 = FileVec::<Fr>::deserialize_uncompressed_unchecked(&mut f).unwrap();
 
         match (&file_vec, &file_vec2) {
-            (FileVec::Buffer { buffer: b1 }, FileVec::Buffer { buffer: b2 }) => {
+            (FileVec::Buffer { .. }, FileVec::Buffer { .. }) => {
                 panic!("should both be File enums"); // size is both greater than BUFFER_SIZE, so should be File
             }
             (FileVec::File { .. }, FileVec::File { .. }) => {

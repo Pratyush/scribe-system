@@ -2,7 +2,7 @@ use std::fs::OpenOptions;
 
 use ark_bls12_381::Bls12_381;
 use ark_bls12_381::Fr;
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Write};
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::test_rng;
 use scribe::hyperplonk::full_snark::custom_gate::CustomizedGates;
 use scribe::hyperplonk::full_snark::structs::{HyperPlonkProvingKey, HyperPlonkVerifyingKey};
@@ -11,7 +11,6 @@ use scribe::hyperplonk::{
     pcs::{multilinear_kzg::MultilinearKzgPCS, PolynomialCommitmentScheme},
     poly_iop::PolyIOP,
 };
-use scribe::streams::iterator::BatchedIterator;
 
 const SUPPORTED_SIZE: usize = 6;
 const MIN_NUM_VARS: usize = 4;

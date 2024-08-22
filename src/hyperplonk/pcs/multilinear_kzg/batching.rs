@@ -263,7 +263,6 @@ mod tests {
     use crate::hyperplonk::pcs::StructuredReferenceString;
     use ark_bls12_381::Bls12_381 as E;
     use ark_ec::pairing::Pairing;
-    use ark_poly::MultilinearExtension;
     use ark_std::{rand::Rng, test_rng, vec::Vec, UniformRand};
 
     type Fr = <E as Pairing>::ScalarField;

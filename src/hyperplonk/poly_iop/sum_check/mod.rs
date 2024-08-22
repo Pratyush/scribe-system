@@ -158,7 +158,7 @@ impl<F: RawPrimeField> SumCheck<F> for PolyIOP<F> {
         let mut prover_state = IOPProverState::prover_init(poly)?;
         let mut challenge = None;
         let mut prover_msgs = Vec::with_capacity(poly.aux_info.num_variables);
-        for i in 0..poly.aux_info.num_variables {
+        for _i in 0..poly.aux_info.num_variables {
             let prover_msg =
                 IOPProverState::prove_round_and_update_state(&mut prover_state, &challenge)?;
 

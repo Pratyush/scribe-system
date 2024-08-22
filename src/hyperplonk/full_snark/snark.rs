@@ -171,13 +171,6 @@ where
         // =======================================================================
         let step = start_timer!(|| "commit witnesses");
 
-        let num_witnesses = witnesses.len();
-        let num_threads = rayon::current_num_threads();
-        let threads_per_witness = if num_witnesses < num_threads {
-            1
-        } else {
-            num_witnesses / num_threads
-        };
         let witness_commits = witnesses
             .par_iter()
             .map(|x| PCS::commit(&pk.pcs_param, x).unwrap())

@@ -364,7 +364,7 @@ impl<F: RawField + Valid> Valid for MLE<F> {
     }
 
     fn batch_check<'a>(
-        batch: impl Iterator<Item = &'a Self> + Send,
+        _: impl Iterator<Item = &'a Self> + Send,
     ) -> Result<(), ark_serialize::SerializationError>
     where
         Self: 'a,

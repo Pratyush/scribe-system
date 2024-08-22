@@ -264,45 +264,11 @@ pub(crate) fn eval_perm_gate<F: PrimeField>(
     Ok(res)
 }
 
-pub(crate) fn exec_in_pool_with_num_threads<F: FnOnce() -> R + Send, R: Send>(
-    f: F,
-    num_threads: usize,
-) -> R {
-    let pool = rayon::ThreadPoolBuilder::new()
-        .num_threads(num_threads)
-        .build()
-        .unwrap();
-    pool.install(f)
-}
-
-pub fn memory_traces() {
-    #[cfg(all(feature = "print-trace", target_os = "linux"))]
-    {
-        let page_size = procfs::page_size();
-        let mut previous_memory = 0u64;
-        ark_std::thread::spawn(move || loop {
-            use procfs::process::Process;
-            let me = Process::myself().unwrap();
-            let me_stat = me.stat().unwrap();
-            let memory_used = me_stat.vsize;
-
-            // if the memory changed of more than 10kibibytes from last clock tick,
-            // then log it.
-            if (memory_used - previous_memory) > 10 << 10 {
-                log::debug!("memory (statm.data): {}B", memory_used);
-                previous_memory = memory_used;
-            }
-            // sleep for 10 seconds
-            ark_std::thread::sleep(std::time::Duration::from_secs(10))
-        });
-    }
-}
-
 #[cfg(test)]
 mod test {
     use super::*;
     use ark_bls12_381::Fr;
-    use ark_poly::MultilinearExtension;
+
     #[test]
     fn test_build_gate() -> Result<(), HyperPlonkErrors> {
         test_build_gate_helper::<Fr>()

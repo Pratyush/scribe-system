@@ -148,7 +148,6 @@ mod test {
     use std::fs::File;
 
     use super::*;
-    use crate::hyperplonk::full_snark::utils::memory_traces;
     use crate::hyperplonk::full_snark::{errors::HyperPlonkErrors, HyperPlonkSNARK};
     use crate::hyperplonk::pcs::multilinear_kzg::srs::MultilinearUniversalParams;
     use crate::hyperplonk::pcs::multilinear_kzg::MultilinearKzgPCS;
@@ -218,9 +217,6 @@ mod test {
 
     #[test]
     fn test_mock_circuit_zkp() -> Result<(), HyperPlonkErrors> {
-        env_logger::init();
-        memory_traces();
-
         let mut rng = test_rng();
         let pcs_srs =
             MultilinearKzgPCS::<Bls12_381>::gen_srs_for_testing(&mut rng, SUPPORTED_SIZE)?;
