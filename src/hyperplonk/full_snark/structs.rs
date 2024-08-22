@@ -191,17 +191,20 @@ mod test {
             .build()
             .unwrap();
 
-        let (pk, _): (HyperPlonkProvingKey<_, MultilinearKzgPCS<Bls12_381>>, _) = pool
-            .install(|| PolyIOP::preprocess(&index, &srs))
-            .unwrap();
+        let (pk, _): (HyperPlonkProvingKey<_, MultilinearKzgPCS<Bls12_381>>, _) =
+            pool.install(|| PolyIOP::preprocess(&index, &srs)).unwrap();
 
         let file = File::create("pk.serialization.test").unwrap();
         pk.serialize_uncompressed(&file).unwrap();
 
         let file_2 = File::open("pk.serialization.test").unwrap();
         let pk_2 = HyperPlonkProvingKey::<Bls12_381, MultilinearKzgPCS<Bls12_381>>::deserialize_uncompressed_unchecked(&file_2).unwrap();
-        pk_2.permutation_oracles.iter().for_each(|p| println!("perm oracle: {p}"));
-        pk_2.selector_oracles.iter().for_each(|s| println!("selector oracle: {s}"));
+        pk_2.permutation_oracles
+            .iter()
+            .for_each(|p| println!("perm oracle: {p}"));
+        pk_2.selector_oracles
+            .iter()
+            .for_each(|s| println!("selector oracle: {s}"));
 
         Ok(())
     }
