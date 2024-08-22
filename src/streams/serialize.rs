@@ -37,7 +37,7 @@ pub trait SerializeRaw: Sized {
             }
             buffer
         }));
-        file.write_all(&work_buffer)?;
+        file.write_all(work_buffer)?;
         Ok(())
     }
 }
@@ -152,7 +152,7 @@ macro_rules! impl_uint {
         impl SerializeRaw for $type {
             #[inline(always)]
             fn serialize_raw<W: Write>(&self, mut writer: W) -> Result<(), io::Error> {
-                Ok(writer.write_all(&self.to_le_bytes())?)
+                writer.write_all(&self.to_le_bytes())
             }
         }
 
@@ -176,8 +176,7 @@ impl SerializeRaw for bool {
     const SIZE: usize = 1;
     #[inline(always)]
     fn serialize_raw<W: Write>(&self, mut writer: W) -> Result<(), io::Error> {
-        writer.write(&[*self as u8])?;
-        Ok(())
+        writer.write_all(&[*self as u8])
     }
 }
 
@@ -194,7 +193,7 @@ impl SerializeRaw for usize {
     const SIZE: usize = core::mem::size_of::<u64>();
     #[inline(always)]
     fn serialize_raw<W: Write>(&self, mut writer: W) -> Result<(), io::Error> {
-        Ok(writer.write_all(&(*self as u64).to_le_bytes())?)
+        writer.write_all(&(*self as u64).to_le_bytes())
     }
 }
 
@@ -223,9 +222,9 @@ impl<T: DeserializeRaw, const N: usize> DeserializeRaw for [T; N] {
     #[inline(always)]
     fn deserialize_raw<R: Read>(mut reader: R) -> Result<Self, io::Error> {
         let mut array = [(); N].map(|_| MaybeUninit::uninit());
-        for i in 0..N {
+        for a in array.iter_mut().take(N) {
             let item = T::deserialize_raw(&mut reader)?;
-            array[i] = MaybeUninit::new(item);
+            *a = MaybeUninit::new(item);
         }
         Ok(array.map(|item| unsafe { item.assume_init() }))
     }

@@ -152,7 +152,7 @@ where
         polynomial: &Self::Polynomial,
         point: &Self::Point,
     ) -> Result<(Self::Proof, Self::Evaluation), PCSError> {
-        open_internal(prover_param.borrow(), &polynomial, point)
+        open_internal(prover_param.borrow(), polynomial, point)
     }
 
     // // this is the multi poly single point version

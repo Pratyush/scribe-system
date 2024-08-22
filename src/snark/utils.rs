@@ -78,7 +78,7 @@ where
                     .num_threads(1)
                     .build()
                     .unwrap();
-                pool.install(|| poly.evaluate(&point).unwrap())
+                pool.install(|| poly.evaluate(point).unwrap())
             })
             .collect::<Vec<_>>();
         Ok(PC::multi_open(

@@ -97,13 +97,14 @@ where
     /// - `pk`: circuit proving key
     /// - `pub_input`: online public input of length 2^\ell
     /// - `witness`: witness assignment of length 2^n
+    ///
     /// Outputs:
     /// - The HyperPlonk SNARK proof.
     ///
     /// Steps:
     ///
     /// 1. Commit Witness polynomials `w_i(x)` and append commitment to
-    /// transcript
+    ///    transcript
     ///
     /// 2. Run ZeroCheck on
     ///
@@ -117,7 +118,7 @@ where
     /// in vanilla plonk, and obtain a ZeroCheckSubClaim
     ///
     /// 3. Run permutation check on `\{w_i(x)\}` and `permutation_oracle`, and
-    /// obtain a PermCheckSubClaim.
+    ///    obtain a PermCheckSubClaim.
     ///
     /// 4. Generate evaluations and corresponding proofs
     /// - 4.1. (deferred) batch opening prod(x) at
@@ -193,7 +194,7 @@ where
             &pk.params.gate_func,
             pk.params.num_variables(),
             &pk.selector_oracles,
-            &witnesses,
+            witnesses,
         )?;
 
         let zero_check_proof = <ZeroCheck<E::ScalarField>>::prove(&fx, &mut transcript)?;
@@ -207,8 +208,8 @@ where
 
         let (perm_check_proof, prod_x, frac_poly) = <PermutationCheck<E, PC>>::prove(
             &pk.pcs_param,
-            &witnesses,
-            &witnesses,
+            witnesses,
+            witnesses,
             &pk.permutation_oracles,
             &mut transcript,
         )?;
@@ -357,6 +358,7 @@ where
     /// - `vk`: verification key
     /// - `pub_input`: online public input
     /// - `proof`: HyperPlonk SNARK proof
+    ///
     /// Outputs:
     /// - Return a boolean on whether the verification is successful
     ///
@@ -468,7 +470,7 @@ where
             // Prod(x) has a max degree of witnesses.len() + 1
             max_degree: proof.witness_commits.len() + 1,
             num_variables: num_vars,
-            phantom: PhantomData::default(),
+            phantom: PhantomData,
         };
         let perm_check_sub_claim = <PermutationCheck<E, PC>>::verify(
             &proof.perm_check_proof,

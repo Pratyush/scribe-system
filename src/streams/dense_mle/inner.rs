@@ -127,7 +127,7 @@ impl<F: RawField> Inner<F> {
 
     #[inline(always)]
     pub fn decrement_num_vars(&mut self) {
-        if self.num_vars <= 0 {
+        if self.num_vars == 0 {
             panic!("Cannot decrement num_vars below 0");
         }
         self.num_vars -= 1;
@@ -162,16 +162,14 @@ impl<F: RawField> Inner<F> {
             "invalid size of partial point"
         );
 
-        let mut result = None;
+        let mut result: Option<Self> = None;
 
         for &r in partial_point {
             // Decrements num_vars internally.
-            if result.is_none() {
-                result = Some(self.fold_odd_even(|even, odd| *even + r * (*odd - even)));
+            if let Some(s) = result.as_mut() {
+                s.fold_odd_even_in_place(|even, odd| *even + r * (*odd - even))
             } else {
-                result
-                    .as_mut()
-                    .map(|s| s.fold_odd_even_in_place(|even, odd| *even + r * (*odd - even)));
+                result = Some(self.fold_odd_even(|even, odd| *even + r * (*odd - even)));
             }
         }
         result.unwrap_or_else(|| self.deep_copy())
@@ -216,7 +214,7 @@ impl<F: RawField> Inner<F> {
                     .to_file_vec();
             },
             FileVec::Buffer { ref mut buffer } => {
-                let new_buffer = std::mem::replace(buffer, Vec::new());
+                let new_buffer = std::mem::take(buffer);
                 *buffer = new_buffer
                     .par_chunks(2)
                     .map(|chunk| f(&chunk[0], &chunk[1]))
@@ -246,8 +244,7 @@ impl<F: RawField> Inner<F> {
     /// Modifies self by replacing evaluations over the hypercube with their inverse.
     #[inline]
     pub fn invert_in_place(&mut self) {
-        self.evals
-            .batched_for_each(|mut chunk| batch_inversion(&mut chunk));
+        self.evals.batched_for_each(|chunk| batch_inversion(chunk));
     }
 
     /// Creates a new polynomial whose evaluations over the hypercube are
@@ -262,7 +259,7 @@ impl<F: RawField> Inner<F> {
     /// Creates a deep copy of the polynomial by copying the evaluations to a new stream.
     #[inline]
     pub fn deep_copy(&self) -> Self {
-        Self::from_evals(self.evals.deep_copy().into(), self.num_vars)
+        Self::from_evals(self.evals.deep_copy(), self.num_vars)
     }
 
     /// Sample `degree` random polynomials, and returns the sum of their Hadamard product.
@@ -368,7 +365,7 @@ impl<'a, F: RawField> MulAssign<(F, &'a Self)> for Inner<F> {
     }
 }
 
-impl<'a, F: RawField> MulAssign<F> for Inner<F> {
+impl<F: RawField> MulAssign<F> for Inner<F> {
     #[inline(always)]
     fn mul_assign(&mut self, f: F) {
         if !f.is_one() {
@@ -418,7 +415,7 @@ impl<F: RawField> SubAssign<(F, Self)> for Inner<F> {
     #[inline(always)]
     fn sub_assign(&mut self, (f, other): (F, Self)) {
         if f.is_one() {
-            *self += other;
+            *self -= other;
         } else {
             self.evals
                 .zipped_for_each(other.evals.iter(), |a, b| *a -= f * b);

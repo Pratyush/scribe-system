@@ -54,6 +54,7 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
             .read(true)
             .write(true)
             .create(true)
+            .truncate(true)
             .open(&path)
             .expect("failed to open file");
         Self::new_file(file, path)
@@ -99,7 +100,7 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
     {
         match self {
             Self::File { path, .. } => {
-                let file_2 = File::open(&path).unwrap();
+                let file_2 = File::open(path).unwrap();
                 let mut fv = FileVec::File {
                     file: file_2,
                     path: path.clone(),
@@ -114,7 +115,7 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
     }
 
     #[inline(always)]
-    pub fn iter<'a>(&'a self) -> Iter<'a, T>
+    pub fn iter(&self) -> Iter<'_, T>
     where
         T: Clone,
     {
@@ -122,7 +123,7 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
             Self::File { path, .. } => {
                 let file = OpenOptions::new()
                     .read(true)
-                    .open(&path)
+                    .open(path)
                     .expect(&format!("failed to open file, {}", path.to_str().unwrap()));
                 Iter::new_file(file)
             },
@@ -147,10 +148,7 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
     }
 
     #[inline(always)]
-    pub fn iter_chunk_mapped<'a, const N: usize, F, U>(
-        &'a self,
-        f: F,
-    ) -> IterChunkMapped<'a, T, U, F, N>
+    pub fn iter_chunk_mapped<const N: usize, F, U>(&self, f: F) -> IterChunkMapped<'_, T, U, F, N>
     where
         T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy,
         F: for<'b> Fn(&[T]) -> U + Sync + Send,
@@ -160,7 +158,7 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
             Self::File { path, .. } => {
                 let file = OpenOptions::new()
                     .read(true)
-                    .open(&path)
+                    .open(path)
                     .expect(&format!("failed to open file, {}", path.to_str().unwrap()));
                 IterChunkMapped::new_file(file, f)
             },
@@ -176,7 +174,7 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
             Self::File { path, .. } => {
                 let file = OpenOptions::new()
                     .read(true)
-                    .open(&path)
+                    .open(path)
                     .expect(&format!("failed to open file, {}", path.to_str().unwrap()));
                 ArrayChunks::new_file(file)
             },
@@ -196,7 +194,7 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
                 iter
             },
             Self::Buffer { buffer } => {
-                let buffer = core::mem::replace(buffer, Vec::new());
+                let buffer = core::mem::take(buffer);
                 IntoIter::new_buffer(buffer)
             },
         }
@@ -326,10 +324,10 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
         })
     }
 
-    pub fn reinterpret_type<U: SerializeRaw + DeserializeRaw>(mut self) -> FileVec<U>
+    pub fn reinterpret_type<U>(mut self) -> FileVec<U>
     where
         T: Send + Sync + 'static,
-        U: Send + Sync + 'static,
+        U: SerializeRaw + DeserializeRaw + Send + Sync + 'static,
     {
         assert_eq!(T::SIZE % U::SIZE, 0);
         match &mut self {
@@ -544,13 +542,10 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
         I::Batch: IndexedParallelIterator,
     {
         process_file!(self, |buffer: &mut Vec<T>| {
-            let next_batch = other.next_batch();
-            if next_batch.is_none() {
-                return None;
-            }
+            let next_batch = other.next_batch()?;
             buffer
                 .par_iter_mut()
-                .zip(next_batch.unwrap())
+                .zip(next_batch)
                 .for_each(|(t, u)| f(t, u));
             Some(())
         })
@@ -621,7 +616,7 @@ impl<
             Self::File { path, .. } => {
                 let mut file = OpenOptions::new()
                     .read(true)
-                    .open(&path)
+                    .open(path)
                     .expect(&format!("failed to open file, {}", path.to_str().unwrap()));
                 let size = T::SIZE;
                 let mut final_result = vec![];

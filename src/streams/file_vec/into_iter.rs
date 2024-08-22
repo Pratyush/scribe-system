@@ -55,13 +55,9 @@ impl<T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy> BatchedIte
             },
             IntoIter::Buffer { buffer } => {
                 if buffer.is_empty() {
-                    return None;
+                    None
                 } else {
-                    Some(
-                        std::mem::replace(buffer, Vec::new())
-                            .into_par_iter()
-                            .with_min_len(1 << 7),
-                    )
+                    Some(std::mem::take(buffer).into_par_iter().with_min_len(1 << 7))
                 }
             },
         }

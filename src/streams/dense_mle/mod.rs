@@ -271,7 +271,7 @@ impl<F: RawField> AddAssign<Self> for MLE<F> {
 impl<'a, F: RawField> AddAssign<&'a Self> for MLE<F> {
     #[inline(always)]
     fn add_assign(&mut self, other: &'a Self) {
-        self.map_in_place_2(&other, |inner, other| inner.add_assign(other));
+        self.map_in_place_2(other, |inner, other| inner.add_assign(other));
     }
 }
 
@@ -285,7 +285,7 @@ impl<F: RawField> SubAssign<Self> for MLE<F> {
 impl<'a, F: RawField> SubAssign<&'a Self> for MLE<F> {
     #[inline(always)]
     fn sub_assign(&mut self, other: &'a Self) {
-        self.map_in_place_2(&other, |inner, other| inner.sub_assign(other));
+        self.map_in_place_2(other, |inner, other| inner.sub_assign(other));
     }
 }
 
@@ -299,7 +299,7 @@ impl<F: RawField> AddAssign<(F, Self)> for MLE<F> {
 impl<'a, F: RawField> AddAssign<(F, &'a Self)> for MLE<F> {
     #[inline(always)]
     fn add_assign(&mut self, (f, other): (F, &'a Self)) {
-        self.map_in_place_2(&other, |inner, other| inner.add_assign((f, other)));
+        self.map_in_place_2(other, |inner, other| inner.add_assign((f, other)));
     }
 }
 
@@ -313,7 +313,7 @@ impl<F: RawField> SubAssign<(F, Self)> for MLE<F> {
 impl<'a, F: RawField> SubAssign<(F, &'a Self)> for MLE<F> {
     #[inline(always)]
     fn sub_assign(&mut self, (f, other): (F, &'a Self)) {
-        self.map_in_place_2(&other, |inner, other| inner.sub_assign((f, other)));
+        self.map_in_place_2(other, |inner, other| inner.sub_assign((f, other)));
     }
 }
 

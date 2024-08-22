@@ -106,7 +106,7 @@ pub(super) fn prove_zero_check<F: RawPrimeField>(
         .for_each(|e| println!("prod_x eval: {}", e));
 
     let (p1, p2): (FileVec<F>, FileVec<F>) = chain_many(
-        vec![frac_poly, prod_x]
+        [frac_poly, prod_x]
             .iter()
             .map(|mle| (*mle).evals().iter().array_chunks()),
     )

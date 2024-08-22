@@ -31,7 +31,7 @@ impl<F: PrimeField> IOPTranscript<F> {
         Self {
             transcript: Transcript::new(label),
             is_empty: true,
-            phantom: PhantomData::default(),
+            phantom: PhantomData,
         }
     }
 

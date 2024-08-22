@@ -39,16 +39,19 @@ fn main() {
     let circuit_file = OpenOptions::new()
         .write(true)
         .create(true)
+        .truncate(true)
         .open(&circuit_filename)
         .unwrap();
     let pk_file = OpenOptions::new()
         .write(true)
         .create(true)
+        .truncate(true)
         .open(&pk_filename)
         .unwrap();
     let vk_file = OpenOptions::new()
         .write(true)
         .create(true)
+        .truncate(true)
         .open(&vk_filename)
         .unwrap();
 

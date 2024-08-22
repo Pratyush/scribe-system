@@ -146,7 +146,7 @@ where
         let scalar_bits = E::ScalarField::MODULUS_BIT_SIZE as usize;
 
         let mut eq: LinkedList<DenseMultilinearExtension<E::ScalarField>> =
-            LinkedList::from_iter(eq_extension(&t).into_iter());
+            LinkedList::from_iter(eq_extension(&t));
         let mut eq_arr = LinkedList::new();
         let mut base = eq.pop_back().unwrap().evaluations;
 

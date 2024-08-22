@@ -77,7 +77,7 @@ where
                     None
                 } else {
                     Some(
-                        std::mem::replace(buffer, Vec::new())
+                        std::mem::take(buffer)
                             .par_chunks(N)
                             .map(|chunk| <[T; N]>::try_from(chunk).unwrap())
                             .with_min_len(1 << 7)

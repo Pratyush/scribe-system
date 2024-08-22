@@ -69,10 +69,9 @@ impl<F: RawPrimeField> MockCircuit<F> {
                 }
 
                 if index != num_selectors - 1 {
-                    match q {
-                        Some(p) => cur_monomial *= &selectors[*p],
-                        _ => (),
-                    };
+                    if let Some(p) = q {
+                        cur_monomial *= &selectors[*p];
+                    }
                     last_selector.add_assign(cur_monomial);
                 } else {
                     cur_monomial.invert_in_place();
@@ -113,10 +112,9 @@ impl<F: RawPrimeField> MockCircuit<F> {
         let mut cur = MLE::constant(F::zero(), nv);
         for (coeff, q, wit) in self.index.params.gate_func.gates.iter() {
             let mut cur_monomial = MLE::constant(coeff.into_fp(), nv);
-            match q {
-                Some(p) => cur_monomial.mul_assign(&self.index.selectors[*p]),
-                _ => (),
-            };
+            if let Some(p) = q {
+                cur_monomial.mul_assign(&self.index.selectors[*p])
+            }
             for wit_index in wit.iter() {
                 cur_monomial.mul_assign(&self.witnesses[*wit_index]);
             }

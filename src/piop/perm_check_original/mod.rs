@@ -123,8 +123,7 @@ where
         // generate challenge `beta` and `gamma` from current transcript
         let beta = transcript.get_and_append_challenge(b"beta")?;
         let gamma = transcript.get_and_append_challenge(b"gamma")?;
-        let (numerators, denominators) =
-            computer_nums_and_denoms(&beta, &gamma, &fxs, &gxs, &perms)?;
+        let (numerators, denominators) = computer_nums_and_denoms(&beta, &gamma, fxs, gxs, perms)?;
 
         // invoke product check on numerator and denominator
         let (proof, prod_poly, frac_poly) =
