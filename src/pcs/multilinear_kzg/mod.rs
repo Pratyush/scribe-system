@@ -3,8 +3,8 @@ pub mod srs;
 pub(crate) mod util;
 use crate::pcs::StructuredReferenceString;
 use crate::pcs::{structs::Commitment, PCSError, PolynomialCommitmentScheme};
-use crate::transcript::IOPTranscript;
 use crate::streams::{iterator::BatchedIterator, MLE};
+use crate::transcript::IOPTranscript;
 use crate::{
     pcs::multilinear_kzg::batching::multi_open_internal,
     streams::serialize::{RawAffine, RawPrimeField},

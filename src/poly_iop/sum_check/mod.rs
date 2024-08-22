@@ -1,5 +1,6 @@
 use crate::{
     arithmetic::virtual_polynomial::{VPAuxInfo, VirtualPolynomial},
+    streams::{serialize::RawPrimeField, MLE},
     {
         poly_iop::{
             errors::PIOPError,
@@ -7,7 +8,6 @@ use crate::{
         },
         transcript::IOPTranscript,
     },
-    streams::{serialize::RawPrimeField, MLE},
 };
 use ark_ff::PrimeField;
 use ark_std::{end_timer, start_timer};

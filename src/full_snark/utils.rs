@@ -3,10 +3,10 @@ use crate::full_snark::{
 };
 use crate::pcs::structs::Commitment;
 use crate::pcs::PolynomialCommitmentScheme;
-use crate::transcript::IOPTranscript;
 use crate::streams::file_vec::FileVec;
 use crate::streams::iterator::BatchedIterator;
 use crate::streams::MLE;
+use crate::transcript::IOPTranscript;
 use crate::{arithmetic::virtual_polynomial::VirtualPolynomial, streams::serialize::RawPrimeField};
 use ark_ec::pairing::Pairing;
 use ark_ff::PrimeField;

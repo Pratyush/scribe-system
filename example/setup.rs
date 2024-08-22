@@ -4,10 +4,10 @@ use ark_bls12_381::Bls12_381;
 use ark_bls12_381::Fr;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::test_rng;
-use scribe::hyperplonk::full_snark::custom_gate::CustomizedGates;
-use scribe::hyperplonk::full_snark::structs::{ProvingKey, VerifyingKey};
-use scribe::hyperplonk::full_snark::{mock::MockCircuit, HyperPlonkSNARK};
-use scribe::hyperplonk::pcs::{multilinear_kzg::MultilinearKzgPCS, PolynomialCommitmentScheme};
+use scribe::full_snark::custom_gate::CustomizedGates;
+use scribe::full_snark::structs::{ProvingKey, VerifyingKey};
+use scribe::full_snark::{mock::MockCircuit, HyperPlonkSNARK};
+use scribe::pcs::{multilinear_kzg::MultilinearKzgPCS, PolynomialCommitmentScheme};
 
 const SUPPORTED_SIZE: usize = 6;
 const MIN_NUM_VARS: usize = 4;

@@ -7,7 +7,7 @@ use crate::{
         poly_iop::{errors::PIOPError, prod_check::ProductCheck},
     },
 };
-use crate::{transcript::IOPTranscript, streams::serialize::RawPrimeField};
+use crate::{streams::serialize::RawPrimeField, transcript::IOPTranscript};
 use ark_ec::pairing::Pairing;
 use ark_std::{end_timer, start_timer};
 

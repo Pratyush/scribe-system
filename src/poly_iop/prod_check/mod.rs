@@ -1,3 +1,4 @@
+use crate::{arithmetic::virtual_polynomial::VPAuxInfo, streams::MLE};
 use crate::{
     pcs::PolynomialCommitmentScheme,
     poly_iop::{
@@ -6,8 +7,7 @@ use crate::{
         zero_check::ZeroCheck,
     },
 };
-use crate::{arithmetic::virtual_polynomial::VPAuxInfo, streams::MLE};
-use crate::{transcript::IOPTranscript, streams::serialize::RawPrimeField};
+use crate::{streams::serialize::RawPrimeField, transcript::IOPTranscript};
 use ark_ec::pairing::Pairing;
 use ark_ff::{One, Zero};
 
@@ -229,11 +229,11 @@ mod test {
     use crate::streams::iterator::BatchedIterator;
     use crate::{arithmetic::virtual_polynomial::VPAuxInfo, streams::serialize::RawPrimeField};
     use crate::{
+        streams::MLE,
         {
             pcs::{multilinear_kzg::MultilinearKzgPCS, PolynomialCommitmentScheme},
             poly_iop::errors::PIOPError,
         },
-        streams::MLE,
     };
     use ark_bls12_381::{Bls12_381, Fr};
     use ark_ec::pairing::Pairing;

@@ -13,8 +13,8 @@ use crate::full_snark::{
 };
 use crate::poly_iop::perm_check_original::PermutationCheck;
 use crate::poly_iop::prelude::ZeroCheck;
-use crate::transcript::IOPTranscript;
 use crate::streams::{serialize::RawPrimeField, MLE};
+use crate::transcript::IOPTranscript;
 use ark_ec::pairing::Pairing;
 
 use ark_std::{end_timer, log2, start_timer, One, Zero};

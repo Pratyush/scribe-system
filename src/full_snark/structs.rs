@@ -1,11 +1,7 @@
-use crate::poly_iop::{
-    perm_check_original::PermutationProof, zero_check::ZeroCheckProof,
-};
-use crate::{
-    full_snark::custom_gate::CustomizedGates, pcs::PolynomialCommitmentScheme,
-};
+use crate::poly_iop::{perm_check_original::PermutationProof, zero_check::ZeroCheckProof};
 use crate::streams::serialize::RawPrimeField;
 use crate::streams::MLE;
+use crate::{full_snark::custom_gate::CustomizedGates, pcs::PolynomialCommitmentScheme};
 use ark_ec::pairing::Pairing;
 use ark_ff::PrimeField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};

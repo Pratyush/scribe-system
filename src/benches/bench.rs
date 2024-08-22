@@ -11,9 +11,7 @@ use ark_bls12_381::Fr;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Write};
 use ark_std::test_rng;
 use scribe::full_snark::custom_gate::CustomizedGates;
-use scribe::full_snark::{
-    errors::HyperPlonkErrors, mock::MockCircuit, HyperPlonkSNARK,
-};
+use scribe::full_snark::{errors::HyperPlonkErrors, mock::MockCircuit, HyperPlonkSNARK};
 use scribe::pcs::{
     multilinear_kzg::{srs::MultilinearUniversalParams, MultilinearKzgPCS},
     PolynomialCommitmentScheme,

@@ -49,8 +49,8 @@ print-trace = [
 ] 
 
 [[bench]]
-name = "hyperplonk-benches"
-path = "src/hyperplonk/benches/bench.rs"
+name = "scribe-benches"
+path = "src/benches/bench.rs"
 harness = false
 
 [[bench]]
