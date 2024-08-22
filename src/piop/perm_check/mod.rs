@@ -1,7 +1,7 @@
 use crate::{
     {
         arithmetic::virtual_polynomial::{VPAuxInfo, VirtualPolynomial},
-        poly_iop::{errors::PIOPError, PolyIOP},
+        piop::{errors::PIOPError, PolyIOP},
         transcript::IOPTranscript,
     },
     read_write::ReadWriteStream,
@@ -408,7 +408,7 @@ where
 //     use crate::{
 //         // pc::{prelude::MultilinearKzgPCS, PolynomialCommitmentScheme},
 //         arithmetic::virtual_polynomial::VirtualPolynomial,
-//         poly_iop::{errors::PolyIOPErrors, PolyIOP},
+//         piop::{errors::PolyIOPErrors, PolyIOP},
 //     };
 //     use crate::read_write::{identity_permutation_mles, random_permutation_mles};
 

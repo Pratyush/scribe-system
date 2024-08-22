@@ -227,7 +227,7 @@ impl<F: RawField> MulAssign<Self> for MLE<F> {
 impl<'a, F: RawField> MulAssign<&'a Self> for MLE<F> {
     #[inline(always)]
     fn mul_assign(&mut self, other: &'a Self) {
-        self.map_in_place_2(&other, |inner, other| inner.mul_assign(other));
+        self.map_in_place_2(other, |inner, other| inner.mul_assign(other));
     }
 }
 
@@ -241,7 +241,7 @@ impl<F: RawField> MulAssign<(F, Self)> for MLE<F> {
 impl<'a, F: RawField> MulAssign<(F, &'a Self)> for MLE<F> {
     #[inline(always)]
     fn mul_assign(&mut self, (f, other): (F, &'a Self)) {
-        self.map_in_place_2(&other, |inner, other| inner.mul_assign((f, other)));
+        self.map_in_place_2(other, |inner, other| inner.mul_assign((f, other)));
     }
 }
 

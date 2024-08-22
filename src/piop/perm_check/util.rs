@@ -1,5 +1,5 @@
 use crate::{
-    poly_iop::errors::PIOPError,
+    piop::errors::PIOPError,
     read_write::{DenseMLPolyStream, ReadWriteStream},
 };
 use ark_ff::fields::batch_inversion;

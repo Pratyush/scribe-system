@@ -120,36 +120,11 @@ where
             }
         }
 
-        println!("printed product check");
-        fxs.iter().for_each(|fx| {
-            println!("fx");
-            fx.evals()
-                .deep_copy()
-                .for_each(|e| println!("fx eval: {}", e))
-        });
-
-        gxs.iter().for_each(|fx| {
-            println!("gx");
-            fx.evals()
-                .deep_copy()
-                .for_each(|e| println!("gx eval: {}", e))
-        });
-
         // compute the fractional polynomial frac_p s.t.
         // frac_p(x) = f1(x) * ... * fk(x) / (g1(x) * ... * gk(x))
         let frac_poly = compute_frac_poly(fxs, gxs)?;
         // compute the product polynomial
         let prod_x = compute_product_poly(&frac_poly)?;
-
-        println!("printed product check");
-        frac_poly
-            .evals()
-            .deep_copy()
-            .for_each(|e| println!("frac_poly eval: {}", e));
-        prod_x
-            .evals()
-            .deep_copy()
-            .for_each(|e| println!("prod_x eval: {}", e));
 
         // generate challenge
         let (frac_comm, prod_x_comm) = rayon::join(
@@ -159,17 +134,6 @@ where
         transcript.append_serializable_element(b"frac(x)", &frac_comm)?;
         transcript.append_serializable_element(b"prod(x)", &prod_x_comm)?;
         let alpha = transcript.get_and_append_challenge(b"alpha")?;
-
-        // build the zero-check proof
-        println!("printed product check");
-        frac_poly
-            .evals()
-            .deep_copy()
-            .for_each(|e| println!("frac_poly eval: {}", e));
-        prod_x
-            .evals()
-            .deep_copy()
-            .for_each(|e| println!("prod_x eval: {}", e));
 
         let (zero_check_proof, _) =
             prove_zero_check(fxs, gxs, &frac_poly, &prod_x, &alpha, transcript)?;
@@ -232,7 +196,7 @@ mod test {
         streams::MLE,
         {
             pc::{multilinear_kzg::MultilinearKzgPCS, PolynomialCommitmentScheme},
-            poly_iop::errors::PIOPError,
+            piop::errors::PIOPError,
         },
     };
     use ark_bls12_381::{Bls12_381, Fr};

@@ -446,7 +446,7 @@ mod tests {
     use ark_bls12_381::Fr;
     use ark_ff::Field;
     use ark_poly::{DenseMultilinearExtension, MultilinearExtension};
-    use ark_std::UniformRand;
+    use ark_std::{cfg_iter_mut, UniformRand};
     use rayon::prelude::*;
 
     use crate::streams::{
@@ -503,8 +503,7 @@ mod tests {
     fn fix_one_variable_helper<F: Field>(data: &[F], nv: usize, point: &F) -> Vec<F> {
         let mut res = vec![F::zero(); 1 << (nv - 1)];
 
-        #[cfg(feature = "parallel")]
-        res.par_iter_mut().enumerate().for_each(|(i, x)| {
+        cfg_iter_mut!(res).enumerate().for_each(|(i, x)| {
             *x = data[i << 1] + (data[(i << 1) + 1] - data[i << 1]) * point;
         });
 
