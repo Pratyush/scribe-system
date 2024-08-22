@@ -307,9 +307,9 @@ where
         .zip(prover_param.powers_of_g[ignored..ignored + nv].iter())
         .enumerate()
     {
-        let ith_round = start_timer!(|| format!("{}-th round", i));
+        let ith_round = start_timer!(|| format!("{i}-th round"));
 
-        let ith_round_eval = start_timer!(|| format!("{}-th round eval", i));
+        let ith_round_eval = start_timer!(|| format!("{i}-th round eval"));
 
         // TODO: confirm that FileVec in prior round's q and r are auto dropped via the Drop trait once q and r are assigned new FileVec
         (q, r) = f
