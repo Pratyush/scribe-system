@@ -134,18 +134,24 @@ where
         println!("print perm check");
 
         fxs.iter().for_each(|fx| {
-            println!("fx"); 
-            fx.evals().deep_copy().for_each(|e| println!("fx eval: {}", e))
+            println!("fx");
+            fx.evals()
+                .deep_copy()
+                .for_each(|e| println!("fx eval: {}", e))
         });
 
         gxs.iter().for_each(|fx| {
-            println!("gx"); 
-            fx.evals().deep_copy().for_each(|e| println!("gx eval: {}", e))
+            println!("gx");
+            fx.evals()
+                .deep_copy()
+                .for_each(|e| println!("gx eval: {}", e))
         });
 
         perms.iter().for_each(|fx| {
-            println!("perm"); 
-            fx.evals().deep_copy().for_each(|e| println!("perm eval: {}", e))
+            println!("perm");
+            fx.evals()
+                .deep_copy()
+                .for_each(|e| println!("perm eval: {}", e))
         });
 
         let num_vars = fxs[0].num_vars();

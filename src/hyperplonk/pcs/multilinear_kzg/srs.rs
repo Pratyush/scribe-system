@@ -243,11 +243,11 @@ where
                 .map(|degree| {
                     let mut rand_g1 = E::G1::rand(rng).into_affine();
                     FileVec::from_iter((0..(1 << degree)).map(|i| {
-                            if (i % (1 << 10)) == 0 {
-                                rand_g1 = E::G1::rand(rng).into_affine();
-                            }
-                            rand_g1
-                        }))
+                        if (i % (1 << 10)) == 0 {
+                            rand_g1 = E::G1::rand(rng).into_affine();
+                        }
+                        rand_g1
+                    }))
                 })
                 .collect(),
         };
@@ -305,12 +305,15 @@ mod tests {
     #[test]
     fn test_file_vec_serialization() {
         let mut rng = test_rng();
-        let evaluations = FileVec::from_iter((0..16)
-            .map(|_| <Bls12<ark_bls12_381::Config> as ark_ec::pairing::Pairing>::G1::rand(&mut rng).into_affine()));
-        
-        let evaluations_2 = 
-            FileVec::from_iter((0..16)
-            .map(|_| <Bls12<ark_bls12_381::Config> as ark_ec::pairing::Pairing>::G1::rand(&mut rng).into_affine()));
+        let evaluations = FileVec::from_iter((0..16).map(|_| {
+            <Bls12<ark_bls12_381::Config> as ark_ec::pairing::Pairing>::G1::rand(&mut rng)
+                .into_affine()
+        }));
+
+        let evaluations_2 = FileVec::from_iter((0..16).map(|_| {
+            <Bls12<ark_bls12_381::Config> as ark_ec::pairing::Pairing>::G1::rand(&mut rng)
+                .into_affine()
+        }));
 
         let evaluations_vec = vec![evaluations, evaluations_2];
 
@@ -318,22 +321,29 @@ mod tests {
         evaluations_vec.serialize_uncompressed(&mut f).unwrap();
 
         let mut f2 = File::open("evaluations.serialization.test").unwrap();
-        let evaluations_deserialized = Vec::<FileVec::<<Bls12_381 as ark_ec::pairing::Pairing>::G1Affine>>::deserialize_uncompressed_unchecked(&mut f2).unwrap();
+        let evaluations_deserialized = Vec::<
+            FileVec<<Bls12_381 as ark_ec::pairing::Pairing>::G1Affine>,
+        >::deserialize_uncompressed_unchecked(&mut f2)
+        .unwrap();
         assert_eq!(evaluations_vec, evaluations_deserialized);
 
         let prover_param: MultilinearProverParam<E> = MultilinearProverParam {
             num_vars: 4,
             powers_of_g: evaluations_vec,
             g: <Bls12_381 as ark_ec::pairing::Pairing>::G1::rand(&mut rng).into_affine(),
-            h: <Bls12_381 as ark_ec::pairing::Pairing>::G2::rand(&mut rng).into_affine()
+            h: <Bls12_381 as ark_ec::pairing::Pairing>::G2::rand(&mut rng).into_affine(),
         };
 
         let mut f3 = File::create("prover_param.serialization.test").unwrap();
         prover_param.serialize_uncompressed(&mut f3).unwrap();
 
         let mut f4 = File::open("prover_param.serialization.test").unwrap();
-        let prover_param_deserailized = MultilinearProverParam::<E>::deserialize_uncompressed_unchecked(&mut f4).unwrap();
-        assert_eq!(prover_param.powers_of_g, prover_param_deserailized.powers_of_g);
+        let prover_param_deserailized =
+            MultilinearProverParam::<E>::deserialize_uncompressed_unchecked(&mut f4).unwrap();
+        assert_eq!(
+            prover_param.powers_of_g,
+            prover_param_deserailized.powers_of_g
+        );
     }
 
     #[test]

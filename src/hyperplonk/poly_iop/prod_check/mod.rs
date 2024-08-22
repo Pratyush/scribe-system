@@ -185,13 +185,17 @@ where
 
         println!("printed product check");
         fxs.iter().for_each(|fx| {
-            println!("fx"); 
-            fx.evals().deep_copy().for_each(|e| println!("fx eval: {}", e))
+            println!("fx");
+            fx.evals()
+                .deep_copy()
+                .for_each(|e| println!("fx eval: {}", e))
         });
 
         gxs.iter().for_each(|fx| {
-            println!("gx"); 
-            fx.evals().deep_copy().for_each(|e| println!("gx eval: {}", e))
+            println!("gx");
+            fx.evals()
+                .deep_copy()
+                .for_each(|e| println!("gx eval: {}", e))
         });
 
         // compute the fractional polynomial frac_p s.t.
@@ -201,9 +205,14 @@ where
         let prod_x = compute_product_poly(&frac_poly)?;
 
         println!("printed product check");
-        frac_poly.evals().deep_copy().for_each(|e| println!("frac_poly eval: {}", e));
-        prod_x.evals().deep_copy().for_each(|e| println!("prod_x eval: {}", e));
-        
+        frac_poly
+            .evals()
+            .deep_copy()
+            .for_each(|e| println!("frac_poly eval: {}", e));
+        prod_x
+            .evals()
+            .deep_copy()
+            .for_each(|e| println!("prod_x eval: {}", e));
 
         // generate challenge
         let (frac_comm, prod_x_comm) = rayon::join(
@@ -216,9 +225,14 @@ where
 
         // build the zero-check proof
         println!("printed product check");
-        frac_poly.evals().deep_copy().for_each(|e| println!("frac_poly eval: {}", e));
-        prod_x.evals().deep_copy().for_each(|e| println!("prod_x eval: {}", e));
-        
+        frac_poly
+            .evals()
+            .deep_copy()
+            .for_each(|e| println!("frac_poly eval: {}", e));
+        prod_x
+            .evals()
+            .deep_copy()
+            .for_each(|e| println!("prod_x eval: {}", e));
 
         let (zero_check_proof, _) =
             prove_zero_check(fxs, gxs, &frac_poly, &prod_x, &alpha, transcript)?;

@@ -26,8 +26,8 @@ use ark_std::cmp::max;
 #[derive(Clone, Debug, Default, PartialEq, Eq, CanonicalDeserialize, CanonicalSerialize)]
 pub struct CustomizedGates {
     pub(crate) gates: Vec<(bool, u64, Option<usize>, Vec<usize>)>, // true for pos, false for neg
-    // had to add a bool to keep track of sign, because we cannot implement CanonicalDeserialize and CanonicalSerialize traits for i64
-    // as Rust forbids implementing an outside trait for an outside type
+                                                                   // had to add a bool to keep track of sign, because we cannot implement CanonicalDeserialize and CanonicalSerialize traits for i64
+                                                                   // as Rust forbids implementing an outside trait for an outside type
 }
 
 impl CustomizedGates {

@@ -1,5 +1,7 @@
 use std::{
-    fmt::Display, ops::{AddAssign, Mul, MulAssign, SubAssign}, path::Path
+    fmt::Display,
+    ops::{AddAssign, Mul, MulAssign, SubAssign},
+    path::Path,
 };
 
 use ark_ff::batch_inversion;

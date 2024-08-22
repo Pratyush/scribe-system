@@ -5,10 +5,10 @@ use ark_bls12_381::Fr;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Write};
 use ark_std::test_rng;
 use scribe::hyperplonk::full_snark::custom_gate::CustomizedGates;
+use scribe::hyperplonk::full_snark::structs::{HyperPlonkProvingKey, HyperPlonkVerifyingKey};
 use scribe::hyperplonk::full_snark::{
     errors::HyperPlonkErrors, mock::MockCircuit, HyperPlonkSNARK,
 };
-use scribe::streams::iterator::BatchedIterator;
 use scribe::hyperplonk::{
     pcs::{
         multilinear_kzg::{srs::MultilinearUniversalParams, MultilinearKzgPCS},
@@ -16,8 +16,8 @@ use scribe::hyperplonk::{
     },
     poly_iop::PolyIOP,
 };
+use scribe::streams::iterator::BatchedIterator;
 use scribe::streams::LOG_BUFFER_SIZE;
-use scribe::hyperplonk::full_snark::structs::{HyperPlonkProvingKey, HyperPlonkVerifyingKey};
 
 const SUPPORTED_SIZE: usize = 6;
 const MIN_NUM_VARS: usize = 4;
@@ -33,23 +33,30 @@ pub fn main() {
     println!();
 }
 
-fn bench_vanilla_plonk(
-    thread: usize,
-) -> Result<(), HyperPlonkErrors> {
+fn bench_vanilla_plonk(thread: usize) -> Result<(), HyperPlonkErrors> {
     let filename = format!(
         "vanilla threads {} log buffer {}.txt",
         thread, LOG_BUFFER_SIZE
     );
     let mut log_file = File::create(filename).unwrap();
-    let param_file = File::open(format!("circuit_pk_vk_{}_to_{}.params", MIN_NUM_VARS, MAX_NUM_VARS)).unwrap();
-    
+    let param_file = File::open(format!(
+        "circuit_pk_vk_{}_to_{}.params",
+        MIN_NUM_VARS, MAX_NUM_VARS
+    ))
+    .unwrap();
+
     let circuit = MockCircuit::<Fr>::deserialize_uncompressed_unchecked(&param_file).unwrap();
     let pk = HyperPlonkProvingKey::<Bls12_381, MultilinearKzgPCS<Bls12_381>>::deserialize_uncompressed_unchecked(&param_file).unwrap();
     println!("print pk");
     println!("{:?}", pk.params);
-    println!("perm oracles: {:?}", pk.permutation_oracles.iter().for_each(|perm| println!("perm {:?}", perm.evals().iter().to_vec())));
+    println!(
+        "perm oracles: {:?}",
+        pk.permutation_oracles
+            .iter()
+            .for_each(|perm| println!("perm {:?}", perm.evals().iter().to_vec()))
+    );
     println!("selector oracles: {:?}", pk.selector_oracles);
-    
+
     // for nv in MIN_NUM_VARS..=MAX_NUM_VARS {
     //     let circuit = MockCircuit::<Fr>::deserialize_uncompressed_unchecked(&mut param_file).unwrap();
     //     assert_eq!(circuit.index.num_variables(), nv);

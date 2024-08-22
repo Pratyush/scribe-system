@@ -41,11 +41,13 @@ fn main() -> Result<(), HyperPlonkErrors> {
         match read_srs() {
             Ok(p) => p,
             Err(_e) => {
-                let srs =
-                    MultilinearKzgPCS::<Bls12_381>::gen_fake_srs_for_testing(&mut rng, SUPPORTED_SIZE)?;
+                let srs = MultilinearKzgPCS::<Bls12_381>::gen_fake_srs_for_testing(
+                    &mut rng,
+                    SUPPORTED_SIZE,
+                )?;
                 write_srs(&srs);
                 srs
-            },
+            }
         }
     };
     let pool = rayon::ThreadPoolBuilder::new()

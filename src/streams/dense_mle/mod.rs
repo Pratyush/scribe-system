@@ -1,6 +1,10 @@
 mod inner;
 use std::{
-    fmt::{Debug, Display}, io::Write, ops::{AddAssign, Mul, MulAssign, SubAssign}, path::Path, sync::Arc
+    fmt::{Debug, Display},
+    io::Write,
+    ops::{AddAssign, Mul, MulAssign, SubAssign},
+    path::Path,
+    sync::Arc,
 };
 
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Valid};
@@ -336,7 +340,6 @@ impl<F: RawField> CanonicalSerialize for MLE<F> {
     }
 }
 
-
 // deserialize:
 // read the length first
 // if length greater than buffer size, it's a file
@@ -370,9 +373,6 @@ impl<F: RawField + Valid> Valid for MLE<F> {
     }
 }
 
-
-
-
 /// A helper function to build eq(x, r) recursively.
 #[inline]
 fn eq_x_r_helper<F: RawField>(r: &[F]) -> Result<FileVec<F>, ArithError> {
@@ -400,15 +400,15 @@ mod test {
     use std::fs::File;
 
     use super::MLE;
+    use crate::streams::iterator::BatchedIterator;
     use crate::{
         arithmetic::virtual_polynomial::build_eq_x_r_vec,
         streams::{file_vec::FileVec, LOG_BUFFER_SIZE},
     };
     use ark_bls12_381::Fr;
+    use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
     use ark_std::test_rng;
     use ark_std::UniformRand;
-    use ark_serialize::{CanonicalSerialize, CanonicalDeserialize};
-    use crate::streams::iterator::BatchedIterator;
 
     #[test]
     fn multi_eq_x_r() {

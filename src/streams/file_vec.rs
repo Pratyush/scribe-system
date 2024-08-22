@@ -607,8 +607,9 @@ impl<T: SerializeRaw + DeserializeRaw + Eq> Eq for FileVec<T> {}
 // serialize:
 // File: use our local serialization to read the entire file to a Vec<T>, and call T::serialize_uncompressed on Vec<T>
 // Buffer: call T::serialize_uncompressed directly on the inner content (automatically writes length first)
-impl<T: SerializeRaw + DeserializeRaw + Valid + Sync + Send + CanonicalSerialize + Debug + Display>
-    CanonicalSerialize for FileVec<T>
+impl<
+        T: SerializeRaw + DeserializeRaw + Valid + Sync + Send + CanonicalSerialize + Debug + Display,
+    > CanonicalSerialize for FileVec<T>
 {
     fn serialize_with_mode<W: Write>(
         &self,
@@ -694,7 +695,7 @@ impl<T: SerializeRaw + DeserializeRaw + Valid + Sync + Send + CanonicalDeseriali
                 buffer.clear();
                 work_buffer.clear();
             }
-            
+
             Ok(FileVec::new_file(file, path))
         } else {
             for _ in 0..size {
@@ -746,7 +747,6 @@ impl<T: SerializeRaw + DeserializeRaw + Display> Display for FileVec<T> {
         }
     }
 }
-   
 
 #[cfg(test)]
 mod tests {

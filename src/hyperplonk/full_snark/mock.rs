@@ -280,10 +280,21 @@ mod test {
         let circuit_2 = MockCircuit::<Fr>::deserialize_uncompressed_unchecked(&buf_2).unwrap();
 
         println!("pub inputs: {:?}", circuit_2.public_inputs);
-        circuit_2.witnesses.iter().for_each(|perm| println!("witness: {:?}", perm.evals().iter().to_vec()));
+        circuit_2
+            .witnesses
+            .iter()
+            .for_each(|perm| println!("witness: {:?}", perm.evals().iter().to_vec()));
         println!("params: {:?}", circuit_2.index.params);
-        circuit_2.index.permutation.iter().for_each(|perm| println!("perm oracle: {:?}", perm.evals().iter().to_vec()));
-        circuit_2.index.selectors.iter().for_each(|perm| println!("selector oracle: {:?}", perm.evals().iter().to_vec()));
+        circuit_2
+            .index
+            .permutation
+            .iter()
+            .for_each(|perm| println!("perm oracle: {:?}", perm.evals().iter().to_vec()));
+        circuit_2
+            .index
+            .selectors
+            .iter()
+            .for_each(|perm| println!("selector oracle: {:?}", perm.evals().iter().to_vec()));
 
         Ok(())
     }

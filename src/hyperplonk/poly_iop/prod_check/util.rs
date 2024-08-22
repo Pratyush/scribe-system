@@ -96,8 +96,14 @@ pub(super) fn prove_zero_check<F: RawPrimeField>(
     let start = start_timer!(|| "zerocheck in product check");
 
     println!("printed zero check");
-    frac_poly.evals().deep_copy().for_each(|e| println!("frac_poly eval: {}", e));
-    prod_x.evals().deep_copy().for_each(|e| println!("prod_x eval: {}", e));
+    frac_poly
+        .evals()
+        .deep_copy()
+        .for_each(|e| println!("frac_poly eval: {}", e));
+    prod_x
+        .evals()
+        .deep_copy()
+        .for_each(|e| println!("prod_x eval: {}", e));
 
     let (p1, p2): (FileVec<F>, FileVec<F>) = chain_many(
         vec![frac_poly, prod_x]
