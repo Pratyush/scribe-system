@@ -2,7 +2,7 @@ use crate::{
     arithmetic::virtual_polynomial::{VPAuxInfo, VirtualPolynomial},
     streams::{serialize::RawPrimeField, MLE},
     {
-        poly_iop::{
+        piop::{
             errors::PIOPError,
             structs::{IOPProof, IOPProverState, IOPVerifierState},
         },

@@ -4,7 +4,7 @@ use crate::{
     arithmetic::virtual_polynomial::VPAuxInfo,
     {
         pc::PolynomialCommitmentScheme,
-        poly_iop::{errors::PIOPError, prod_check::ProductCheck},
+        piop::{errors::PIOPError, prod_check::ProductCheck},
     },
 };
 use crate::{streams::serialize::RawPrimeField, transcript::IOPTranscript};
