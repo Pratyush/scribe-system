@@ -121,7 +121,6 @@ mod test {
     use ark_bls12_381::Fr;
     use ark_std::rand::rngs::StdRng;
     use ark_std::rand::SeedableRng;
-    use ark_std::test_rng;
 
     fn test_zerocheck(
         nv: usize,

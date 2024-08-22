@@ -276,7 +276,7 @@ mod test {
         let mut buf = File::create("mock_circuit.test").unwrap();
         circuit.serialize_uncompressed(&mut buf).unwrap();
 
-        let mut buf_2 = File::open("mock_circuit.test").unwrap();
+        let buf_2 = File::open("mock_circuit.test").unwrap();
         let circuit_2 = MockCircuit::<Fr>::deserialize_uncompressed_unchecked(&buf_2).unwrap();
 
         println!("pub inputs: {:?}", circuit_2.public_inputs);

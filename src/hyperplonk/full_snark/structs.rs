@@ -243,16 +243,16 @@ mod test {
 
     use super::*;
     use crate::hyperplonk::full_snark::mock::MockCircuit;
-    use crate::hyperplonk::full_snark::utils::memory_traces;
+
     use crate::hyperplonk::full_snark::{errors::HyperPlonkErrors, HyperPlonkSNARK};
-    use crate::hyperplonk::pcs::multilinear_kzg::srs::MultilinearUniversalParams;
+
     use crate::hyperplonk::pcs::multilinear_kzg::MultilinearKzgPCS;
     use crate::hyperplonk::pcs::PolynomialCommitmentScheme;
     use crate::hyperplonk::poly_iop::PolyIOP;
     use crate::streams::iterator::BatchedIterator;
     use ark_bls12_381::Bls12_381;
     use ark_bls12_381::Fr;
-    use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Write};
+    use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
     use ark_std::test_rng;
 
     const SUPPORTED_SIZE: usize = 22;

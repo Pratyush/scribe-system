@@ -1,11 +1,9 @@
+use crate::arithmetic::util::gen_eval_point;
 use crate::arithmetic::virtual_polynomial::VPAuxInfo;
 use crate::hyperplonk::full_snark::utils::PcsAccumulator;
 use crate::hyperplonk::pcs::multilinear_kzg::batching::BatchProof;
 use crate::hyperplonk::pcs::structs::Commitment;
 use crate::hyperplonk::pcs::PolynomialCommitmentScheme;
-use crate::{
-    arithmetic::util::gen_eval_point, hyperplonk::full_snark::utils::exec_in_pool_with_num_threads,
-};
 
 use crate::hyperplonk::full_snark::{
     errors::HyperPlonkErrors,

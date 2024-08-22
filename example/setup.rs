@@ -1,5 +1,4 @@
-use std::{f32::MIN, fs::OpenOptions};
-use std::{fs::File, io, time::Instant};
+use std::fs::OpenOptions;
 
 use ark_bls12_381::Bls12_381;
 use ark_bls12_381::Fr;
@@ -7,19 +6,12 @@ use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Write};
 use ark_std::test_rng;
 use scribe::hyperplonk::full_snark::custom_gate::CustomizedGates;
 use scribe::hyperplonk::full_snark::structs::{HyperPlonkProvingKey, HyperPlonkVerifyingKey};
-use scribe::hyperplonk::full_snark::{
-    errors::HyperPlonkErrors, mock::MockCircuit, HyperPlonkSNARK,
-};
-use scribe::hyperplonk::pcs::multilinear_kzg::srs;
+use scribe::hyperplonk::full_snark::{mock::MockCircuit, HyperPlonkSNARK};
 use scribe::hyperplonk::{
-    pcs::{
-        multilinear_kzg::{srs::MultilinearUniversalParams, MultilinearKzgPCS},
-        PolynomialCommitmentScheme,
-    },
+    pcs::{multilinear_kzg::MultilinearKzgPCS, PolynomialCommitmentScheme},
     poly_iop::PolyIOP,
 };
 use scribe::streams::iterator::BatchedIterator;
-use scribe::streams::LOG_BUFFER_SIZE;
 
 const SUPPORTED_SIZE: usize = 6;
 const MIN_NUM_VARS: usize = 4;

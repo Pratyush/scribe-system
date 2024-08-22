@@ -282,11 +282,10 @@ fn remove_dummy_variable<F: Field>(poly: &[F], pad: usize) -> Result<Vec<F>, PCS
 #[cfg(test)]
 mod tests {
     use std::fs::File;
-    use std::ops::Mul;
 
     use super::*;
     use ark_bls12_381::Bls12_381;
-    use ark_bls12_381::Fr;
+
     use ark_ec::bls12::Bls12;
     use ark_std::test_rng;
     use ark_std::UniformRand;

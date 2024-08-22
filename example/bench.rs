@@ -1,19 +1,14 @@
-use std::{fs::File, io, time::Instant};
+use std::{fs::File, time::Instant};
 
 use ark_bls12_381::Bls12_381;
 use ark_bls12_381::Fr;
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Write};
-use ark_std::test_rng;
-use scribe::hyperplonk::full_snark::custom_gate::CustomizedGates;
+use ark_serialize::{CanonicalDeserialize, Write};
 use scribe::hyperplonk::full_snark::structs::{HyperPlonkProvingKey, HyperPlonkVerifyingKey};
 use scribe::hyperplonk::full_snark::{
     errors::HyperPlonkErrors, mock::MockCircuit, HyperPlonkSNARK,
 };
 use scribe::hyperplonk::{
-    pcs::{
-        multilinear_kzg::{srs::MultilinearUniversalParams, MultilinearKzgPCS},
-        PolynomialCommitmentScheme,
-    },
+    pcs::{multilinear_kzg::MultilinearKzgPCS, PolynomialCommitmentScheme},
     poly_iop::PolyIOP,
 };
 use scribe::streams::iterator::BatchedIterator;
@@ -38,7 +33,7 @@ fn bench_vanilla_plonk(thread: usize) -> Result<(), HyperPlonkErrors> {
         "vanilla threads {} log buffer {}.txt",
         thread, LOG_BUFFER_SIZE
     );
-    let mut log_file = File::create(filename).unwrap();
+    let log_file = File::create(filename).unwrap();
     let param_file = File::open(format!(
         "circuit_pk_vk_{}_to_{}.params",
         MIN_NUM_VARS, MAX_NUM_VARS
