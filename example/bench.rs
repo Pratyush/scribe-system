@@ -3,9 +3,9 @@ use std::{fs::File, time::Instant};
 use ark_bls12_381::Bls12_381;
 use ark_bls12_381::Fr;
 use ark_serialize::{CanonicalDeserialize, Write};
-use scribe::full_snark::structs::{ProvingKey, VerifyingKey};
-use scribe::full_snark::{errors::HyperPlonkErrors, mock::MockCircuit, HyperPlonkSNARK};
-use scribe::pcs::multilinear_kzg::MultilinearKzgPCS;
+use scribe::pc::multilinear_kzg::MultilinearKzgPCS;
+use scribe::snark::structs::{ProvingKey, VerifyingKey};
+use scribe::snark::{errors::HyperPlonkErrors, mock::MockCircuit, HyperPlonkSNARK};
 use scribe::streams::iterator::BatchedIterator;
 use scribe::streams::LOG_BUFFER_SIZE;
 

@@ -13,7 +13,7 @@ use errors::PCSError;
 use std::{borrow::Borrow, fmt::Debug, hash::Hash};
 
 /// This trait defines APIs for polynomial commitment schemes.
-/// Note that for our usage of PCS, we do not require the hiding property.
+/// Note that for our usage of PC, we do not require the hiding property.
 pub trait PolynomialCommitmentScheme<E: Pairing> {
     /// Prover parameters
     type ProverParam: Sync + CanonicalDeserialize + CanonicalSerialize;

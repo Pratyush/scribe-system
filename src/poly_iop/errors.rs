@@ -1,10 +1,10 @@
-// use crate::pcs::prelude::PCSError;
+// use crate::pc::prelude::PCSError;
 // use arithmetic::ArithErrors;
 use ark_std::string::String;
 use displaydoc::Display;
 // use transcript::TranscriptError;
 use crate::arithmetic::errors::ArithError;
-use crate::pcs::errors::PCSError;
+use crate::pc::errors::PCSError;
 use crate::transcript::TranscriptError;
 
 /// A `enum` specifying the possible failure modes of the PolyIOP.
@@ -28,7 +28,7 @@ pub enum PIOPError {
     TranscriptError(TranscriptError),
     /// Arithmetic Error: {0}
     ArithmeticError(ArithError),
-    ///PCS error {0}
+    ///PC error {0}
     PCSError(PCSError),
 }
 

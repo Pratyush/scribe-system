@@ -41,7 +41,7 @@ pub trait PermutationCheck<F: PrimeField>: ZeroCheck<F> {
 
     #[allow(clippy::type_complexity)]
     fn prove_plonk(
-        // pcs_param: &PCS::ProverParam,
+        // pcs_param: &PC::ProverParam,
         p: Vec<Self::MultilinearExtension>,
         pi: Vec<Self::MultilinearExtension>,
         index: Vec<Self::MultilinearExtension>,
@@ -58,7 +58,7 @@ pub trait PermutationCheck<F: PrimeField>: ZeroCheck<F> {
 
     #[allow(clippy::type_complexity)]
     fn prove(
-        // pcs_param: &PCS::ProverParam,
+        // pcs_param: &PC::ProverParam,
         p: Self::MultilinearExtension,
         q: Self::MultilinearExtension,
         pi: Self::MultilinearExtension,
@@ -84,7 +84,7 @@ pub trait PermutationCheck<F: PrimeField>: ZeroCheck<F> {
 impl<F: PrimeField> PermutationCheck<F> for PolyIOP<F>
 where
 // E: Pairing,
-// PCS: PolynomialCommitmentScheme<E, Polynomial = Arc<DenseMultilinearExtension<E::ScalarField>>>,
+// PC: PolynomialCommitmentScheme<E, Polynomial = Arc<DenseMultilinearExtension<E::ScalarField>>>,
 {
     type PermutationCheckSubClaim = PermutationCheckSubClaim<F>;
     type PermutationCheckProof = Self::ZeroCheckProof;
@@ -94,7 +94,7 @@ where
     }
 
     fn prove(
-        // pcs_param: &PCS::ProverParam,
+        // pcs_param: &PC::ProverParam,
         p: Self::MultilinearExtension,
         q: Self::MultilinearExtension,
         pi: Self::MultilinearExtension,
@@ -195,7 +195,7 @@ where
     }
 
     fn prove_plonk(
-        // pcs_param: &PCS::ProverParam,
+        // pcs_param: &PC::ProverParam,
         p: Vec<Self::MultilinearExtension>,
         pi: Vec<Self::MultilinearExtension>,
         index: Vec<Self::MultilinearExtension>,
@@ -406,7 +406,7 @@ where
 //     use super::{PermutationCheck, PermutationCheckSubClaim};
 //     use crate::arithmetic::virtual_polynomial::VPAuxInfo;
 //     use crate::{
-//         // pcs::{prelude::MultilinearKzgPCS, PolynomialCommitmentScheme},
+//         // pc::{prelude::MultilinearKzgPCS, PolynomialCommitmentScheme},
 //         arithmetic::virtual_polynomial::VirtualPolynomial,
 //         poly_iop::{errors::PolyIOPErrors, PolyIOP},
 //     };
@@ -432,9 +432,9 @@ where
 
 //     // type Kzg = MultilinearKzgPCS<Bls12_381>;
 
-//     // fn test_permutation_check_helper<E, PCS>(
+//     // fn test_permutation_check_helper<E, PC>(
 //     fn test_permutation_check_helper<F: PrimeField>(
-//         // pcs_param: &PCS::ProverParam,
+//         // pcs_param: &PC::ProverParam,
 //         fxs: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
 //         gxs: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
 //         perms: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
@@ -442,7 +442,7 @@ where
 //     ) -> Result<(), PolyIOPErrors>
 // // where
 //     //     E: Pairing,
-//     //     PCS: PolynomialCommitmentScheme<
+//     //     PC: PolynomialCommitmentScheme<
 //     //         E,
 //     //         Polynomial = Arc<DenseMultilinearExtension<E::ScalarField>>,
 //     //     >,
@@ -677,7 +677,7 @@ where
 //     }
 
 //     fn test_permutation_check_helper_plonk<F: PrimeField>(
-//         // pcs_param: &PCS::ProverParam,
+//         // pcs_param: &PC::ProverParam,
 //         fxs: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
 //         // gxs: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
 //         perms: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,

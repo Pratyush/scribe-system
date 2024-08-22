@@ -249,7 +249,7 @@ mod test {
     // fn test_prove_zero_check() {
     //     let nv = 2;
     //     let mut rng = StdRng::seed_from_u64(42); // Fixed seed for reproducibility
-    //     let mut transcript = <PolyIOP<Fr> as ProductCheck<E, PCS>>::init_transcript();
+    //     let mut transcript = <PolyIOP<Fr> as ProductCheck<E, PC>>::init_transcript();
 
     //     // let srs = MultilinearKzgPCS::<Bls12_381>::gen_srs_for_testing(&mut rng, nv).unwrap();
     //     // let (pcs_param, _) = MultilinearKzgPCS::<Bls12_381>::trim(&srs, None, Some(nv)).unwrap();
@@ -271,8 +271,8 @@ mod test {
     //     let prod_x = compute_product_poly(&frac_poly).unwrap();
 
     //     // // generate challenge
-    //     // let frac_comm = PCS::commit(pcs_param, &frac_poly)?;
-    //     // let prod_x_comm = PCS::commit(pcs_param, &prod_x)?;
+    //     // let frac_comm = PC::commit(pcs_param, &frac_poly)?;
+    //     // let prod_x_comm = PC::commit(pcs_param, &prod_x)?;
     //     let alpha = Fr::from(1u64);
     //     // build the zero-check proof
     //     let (zero_check_proof, _) =

@@ -1,18 +1,18 @@
 use crate::arithmetic::util::gen_eval_point;
 use crate::arithmetic::virtual_polynomial::VPAuxInfo;
-use crate::full_snark::utils::PcsAccumulator;
-use crate::pcs::multilinear_kzg::batching::BatchProof;
-use crate::pcs::structs::Commitment;
-use crate::pcs::PolynomialCommitmentScheme;
+use crate::pc::multilinear_kzg::batching::BatchProof;
+use crate::pc::structs::Commitment;
+use crate::pc::PolynomialCommitmentScheme;
+use crate::snark::utils::PcsAccumulator;
 
-use crate::full_snark::{
+use crate::poly_iop::perm_check_original::PermutationCheck;
+use crate::poly_iop::prelude::ZeroCheck;
+use crate::snark::{
     errors::HyperPlonkErrors,
     structs::{Index, Proof, ProvingKey, VerifyingKey},
     utils::{build_f, eval_f, eval_perm_gate, prover_sanity_check},
     HyperPlonkSNARK,
 };
-use crate::poly_iop::perm_check_original::PermutationCheck;
-use crate::poly_iop::prelude::ZeroCheck;
 use crate::streams::{serialize::RawPrimeField, MLE};
 use crate::transcript::IOPTranscript;
 use ark_ec::pairing::Pairing;
@@ -24,32 +24,32 @@ use rayon::iter::ParallelIterator;
 
 use std::marker::PhantomData;
 
-impl<E, PCS> HyperPlonkSNARK<E, PCS>
+impl<E, PC> HyperPlonkSNARK<E, PC>
 where
     E: Pairing,
     E::ScalarField: RawPrimeField,
-    PCS: PolynomialCommitmentScheme<
+    PC: PolynomialCommitmentScheme<
         E,
         Polynomial = MLE<E::ScalarField>,
         Point = Vec<E::ScalarField>,
         Evaluation = E::ScalarField,
         Commitment = Commitment<E>,
-        BatchProof = BatchProof<E, PCS>,
+        BatchProof = BatchProof<E, PC>,
     >,
 {
     pub fn preprocess(
         index: &Index<E::ScalarField>,
-        pcs_srs: &PCS::SRS,
-    ) -> Result<(ProvingKey<E, PCS>, VerifyingKey<E, PCS>), HyperPlonkErrors> {
+        pcs_srs: &PC::SRS,
+    ) -> Result<(ProvingKey<E, PC>, VerifyingKey<E, PC>), HyperPlonkErrors> {
         let num_vars = index.num_variables();
         let supported_ml_degree = num_vars;
 
         let start = start_timer!(|| format!("hyperplonk preprocessing nv = {}", num_vars));
 
-        // extract PCS prover and verifier keys from SRS
-        let trim_time = start_timer!(|| "trimming PCS SRS");
+        // extract PC prover and verifier keys from SRS
+        let trim_time = start_timer!(|| "trimming PC SRS");
         let (pcs_prover_param, pcs_verifier_param) =
-            PCS::trim(pcs_srs, None, Some(supported_ml_degree))?;
+            PC::trim(pcs_srs, None, Some(supported_ml_degree))?;
         end_timer!(trim_time);
 
         // build permutation oracles
@@ -57,7 +57,7 @@ where
         let permutation_commit_time = start_timer!(|| "commit permutation oracles");
         let permutation_commitments = permutation_oracles
             .iter()
-            .map(|perm_oracle| PCS::commit(&pcs_prover_param, perm_oracle))
+            .map(|perm_oracle| PC::commit(&pcs_prover_param, perm_oracle))
             .collect::<Result<Vec<_>, _>>()?;
         end_timer!(permutation_commit_time);
 
@@ -67,7 +67,7 @@ where
         let selector_commit_time = start_timer!(|| "commit selector oracles");
         let selector_commitments = selector_oracles
             .iter()
-            .map(|poly| PCS::commit(&pcs_prover_param, poly))
+            .map(|poly| PC::commit(&pcs_prover_param, poly))
             .collect::<Result<Vec<_>, _>>()?;
         end_timer!(selector_commit_time);
 
@@ -139,10 +139,10 @@ where
     ///
     /// - 5. deferred batch opening
     pub fn prove(
-        pk: &ProvingKey<E, PCS>,
+        pk: &ProvingKey<E, PC>,
         pub_input: &[E::ScalarField],
         witnesses: &[MLE<E::ScalarField>],
-    ) -> Result<Proof<E, PCS>, HyperPlonkErrors> {
+    ) -> Result<Proof<E, PC>, HyperPlonkErrors> {
         let start =
             start_timer!(|| format!("hyperplonk proving nv = {}", pk.params.num_variables()));
         let mut transcript = IOPTranscript::<E::ScalarField>::new(b"hyperplonk");
@@ -157,7 +157,7 @@ where
 
         // We use accumulators to store the polynomials and their eval points.
         // They are batch opened at a later stage.
-        let mut pcs_acc = PcsAccumulator::<E, PCS>::new(num_vars);
+        let mut pcs_acc = PcsAccumulator::<E, PC>::new(num_vars);
 
         // =======================================================================
         // 1. Commit Witness polynomials `w_i(x)` and append commitment to
@@ -167,7 +167,7 @@ where
 
         let witness_commits = witnesses
             .par_iter()
-            .map(|x| PCS::commit(&pk.pcs_param, x).unwrap())
+            .map(|x| PC::commit(&pk.pcs_param, x).unwrap())
             .collect::<Vec<_>>();
         for w_com in witness_commits.iter() {
             transcript.append_serializable_element(b"w", w_com)?;
@@ -205,7 +205,7 @@ where
         // =======================================================================
         let step = start_timer!(|| "Permutation check on w_i(x)");
 
-        let (perm_check_proof, prod_x, frac_poly) = <PermutationCheck<E, PCS>>::prove(
+        let (perm_check_proof, prod_x, frac_poly) = <PermutationCheck<E, PC>>::prove(
             &pk.pcs_param,
             &witnesses,
             &witnesses,
@@ -262,7 +262,7 @@ where
         .concat();
 
         // prod(x)'s points
-        // note that the polynomial inputs aren't dified or consumed by pcs accumulator
+        // note that the polynomial inputs aren't dified or consumed by pc accumulator
         // copies are used because their originals are already folded in sum checks
         pcs_acc.insert_poly_and_points(&prod_x, &perm_check_proof.prod_x_comm, perm_check_point);
         pcs_acc.insert_poly_and_points(&prod_x, &perm_check_proof.prod_x_comm, &perm_check_point_0);
@@ -337,7 +337,7 @@ where
         end_timer!(start);
 
         Ok(Proof {
-            // PCS commit for witnesses
+            // PC commit for witnesses
             witness_commits,
             // batch_openings,
             batch_openings,
@@ -380,9 +380,9 @@ where
     /// - check zero check evaluations
     /// - public input consistency checks
     pub fn verify(
-        vk: &VerifyingKey<E, PCS>,
+        vk: &VerifyingKey<E, PC>,
         pub_input: &[E::ScalarField],
-        proof: &Proof<E, PCS>,
+        proof: &Proof<E, PC>,
     ) -> Result<bool, HyperPlonkErrors> {
         let start = start_timer!(|| "hyperplonk verification");
 
@@ -470,7 +470,7 @@ where
             num_variables: num_vars,
             phantom: PhantomData::default(),
         };
-        let perm_check_sub_claim = <PermutationCheck<E, PCS>>::verify(
+        let perm_check_sub_claim = <PermutationCheck<E, PC>>::verify(
             &proof.perm_check_proof,
             &perm_check_aux_info,
             &mut transcript,
@@ -598,9 +598,9 @@ where
         end_timer!(pi_step);
 
         end_timer!(step);
-        let step = start_timer!(|| "PCS batch verify");
+        let step = start_timer!(|| "PC batch verify");
         // check proof
-        let res = PCS::batch_verify(
+        let res = PC::batch_verify(
             &vk.pcs_param,
             &comms,
             &points,
@@ -617,9 +617,9 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::pcs::multilinear_kzg::MultilinearKzgPCS;
+    use crate::pc::multilinear_kzg::MultilinearKzgPCS;
     use crate::{
-        full_snark::{custom_gate::CustomizedGates, structs::HyperPlonkParams},
+        snark::{custom_gate::CustomizedGates, structs::HyperPlonkParams},
         streams::serialize::RawAffine,
     };
 

@@ -1,6 +1,6 @@
-use crate::pcs::errors::PCSError;
-use crate::pcs::structs::Commitment;
-use crate::pcs::{multilinear_kzg::util::eq_eval, PolynomialCommitmentScheme};
+use crate::pc::errors::PCSError;
+use crate::pc::structs::Commitment;
+use crate::pc::{multilinear_kzg::util::eq_eval, PolynomialCommitmentScheme};
 use crate::poly_iop::{prelude::SumCheck, structs::IOPProof};
 use crate::{
     arithmetic::virtual_polynomial::{build_eq_x_r_vec, VPAuxInfo, VirtualPolynomial},
@@ -16,17 +16,17 @@ use ark_std::{collections::BTreeMap, marker::PhantomData};
 use ark_std::{end_timer, log2, start_timer, One, Zero};
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct BatchProof<E, PCS>
+pub struct BatchProof<E, PC>
 where
     E: Pairing,
-    PCS: PolynomialCommitmentScheme<E>,
+    PC: PolynomialCommitmentScheme<E>,
 {
     /// A sum check proof proving tilde g's sum
     pub(crate) sum_check_proof: IOPProof<E::ScalarField>,
     /// f_i(point_i)
     pub f_i_eval_at_point_i: Vec<E::ScalarField>,
     /// proof for g'(a_2)
-    pub(crate) g_prime_proof: PCS::Proof,
+    pub(crate) g_prime_proof: PC::Proof,
 }
 
 /// Steps:
@@ -37,17 +37,17 @@ where
 /// 5. run sumcheck on \sum_i=1..k \tilde eq_i * \tilde g_i
 /// 6. build g'(X) = \sum_i=1..k \tilde eq_i(a2) * \tilde g_i(X) where (a2) is
 /// the sumcheck's point 7. open g'(X) at point (a2)
-pub(crate) fn multi_open_internal<E, PCS>(
-    prover_param: &PCS::ProverParam,
-    polynomials: &[PCS::Polynomial],
-    points: &[PCS::Point],
-    evals: &[PCS::Evaluation],
+pub(crate) fn multi_open_internal<E, PC>(
+    prover_param: &PC::ProverParam,
+    polynomials: &[PC::Polynomial],
+    points: &[PC::Point],
+    evals: &[PC::Evaluation],
     transcript: &mut IOPTranscript<E::ScalarField>,
-) -> Result<BatchProof<E, PCS>, PCSError>
+) -> Result<BatchProof<E, PC>, PCSError>
 where
     E: Pairing,
     E::ScalarField: RawPrimeField,
-    PCS: PolynomialCommitmentScheme<
+    PC: PolynomialCommitmentScheme<
         E,
         Polynomial = MLE<E::ScalarField>,
         Point = Vec<E::ScalarField>,
@@ -144,8 +144,8 @@ where
     }
     end_timer!(step);
 
-    let step = start_timer!(|| "pcs open");
-    let (g_prime_proof, _g_prime_eval) = PCS::open(prover_param, &g_prime, a2.to_vec().as_ref())?;
+    let step = start_timer!(|| "pc open");
+    let (g_prime_proof, _g_prime_eval) = PC::open(prover_param, &g_prime, a2.to_vec().as_ref())?;
     // assert_eq!(g_prime_eval, tilde_g_eval);
     end_timer!(step);
 
@@ -165,17 +165,17 @@ where
 /// 2. build g' commitment
 /// 3. ensure \sum_i eq(a2, point_i) * eq(t, <i>) * f_i_evals matches the sum
 /// via SumCheck verification 4. verify commitment
-pub(crate) fn batch_verify_internal<E, PCS>(
-    verifier_param: &PCS::VerifierParam,
+pub(crate) fn batch_verify_internal<E, PC>(
+    verifier_param: &PC::VerifierParam,
     f_i_commitments: &[Commitment<E>],
-    points: &[PCS::Point],
-    proof: &BatchProof<E, PCS>,
+    points: &[PC::Point],
+    proof: &BatchProof<E, PC>,
     transcript: &mut IOPTranscript<E::ScalarField>,
 ) -> Result<bool, PCSError>
 where
     E: Pairing,
     E::ScalarField: RawPrimeField,
-    PCS: PolynomialCommitmentScheme<
+    PC: PolynomialCommitmentScheme<
         E,
         Polynomial = MLE<E::ScalarField>,
         Point = Vec<E::ScalarField>,
@@ -239,7 +239,7 @@ where
     let tilde_g_eval = subclaim.expected_evaluation;
 
     // verify commitment
-    let res = PCS::verify(
+    let res = PC::verify(
         verifier_param,
         &Commitment(g_prime_commit.into_affine()),
         a2.to_vec().as_ref(),
@@ -255,9 +255,9 @@ where
 mod tests {
     use super::*;
     use crate::arithmetic::util::get_batched_nv;
-    use crate::pcs::multilinear_kzg::srs::MultilinearUniversalParams;
-    use crate::pcs::multilinear_kzg::MultilinearKzgPCS;
-    use crate::pcs::StructuredReferenceString;
+    use crate::pc::multilinear_kzg::srs::MultilinearUniversalParams;
+    use crate::pc::multilinear_kzg::MultilinearKzgPCS;
+    use crate::pc::StructuredReferenceString;
     use ark_bls12_381::Bls12_381 as E;
     use ark_ec::pairing::Pairing;
     use ark_std::{rand::Rng, test_rng, vec::Vec, UniformRand};

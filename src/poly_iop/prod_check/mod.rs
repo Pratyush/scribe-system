@@ -1,6 +1,6 @@
 use crate::{arithmetic::virtual_polynomial::VPAuxInfo, streams::MLE};
 use crate::{
-    pcs::PolynomialCommitmentScheme,
+    pc::PolynomialCommitmentScheme,
     poly_iop::{
         errors::PIOPError,
         prod_check::util::{compute_frac_poly, compute_product_poly, prove_zero_check},
@@ -44,7 +44,7 @@ mod util;
 /// 2. `generate_challenge` from current transcript (generate alpha)
 /// 3. `verify` to verify the zerocheck proof and generate the subclaim for
 /// polynomial evaluations
-pub struct ProductCheck<E, PCS>(std::marker::PhantomData<(E, PCS)>);
+pub struct ProductCheck<E, PC>(std::marker::PhantomData<(E, PC)>);
 
 /// A product check subclaim consists of
 /// - A zero check IOP subclaim for the virtual polynomial
@@ -70,33 +70,33 @@ pub struct ProductCheckSubClaim<F: RawPrimeField> {
 /// - a product polynomial commitment
 /// - a polynomial commitment for the fractional polynomial
 #[derive(Clone, Debug, Default, PartialEq)]
-pub struct ProductCheckProof<E: Pairing, PCS: PolynomialCommitmentScheme<E>>
+pub struct ProductCheckProof<E: Pairing, PC: PolynomialCommitmentScheme<E>>
 where
     E::ScalarField: RawPrimeField,
 {
     pub zero_check_proof: ZeroCheckProof<E::ScalarField>,
-    pub prod_x_comm: PCS::Commitment,
-    pub frac_comm: PCS::Commitment,
+    pub prod_x_comm: PC::Commitment,
+    pub frac_comm: PC::Commitment,
 }
 
-impl<E, PCS> ProductCheck<E, PCS>
+impl<E, PC> ProductCheck<E, PC>
 where
     E: Pairing,
     E::ScalarField: RawPrimeField,
-    PCS: PolynomialCommitmentScheme<E, Polynomial = MLE<E::ScalarField>>,
+    PC: PolynomialCommitmentScheme<E, Polynomial = MLE<E::ScalarField>>,
 {
     pub fn init_transcript() -> IOPTranscript<E::ScalarField> {
         IOPTranscript::<E::ScalarField>::new(b"Initializing ProductCheck transcript")
     }
 
     pub fn prove(
-        pcs_param: &PCS::ProverParam,
+        pcs_param: &PC::ProverParam,
         fxs: &[MLE<E::ScalarField>],
         gxs: &[MLE<E::ScalarField>],
         transcript: &mut IOPTranscript<E::ScalarField>,
     ) -> Result<
         (
-            ProductCheckProof<E, PCS>,
+            ProductCheckProof<E, PC>,
             MLE<E::ScalarField>,
             MLE<E::ScalarField>,
         ),
@@ -153,8 +153,8 @@ where
 
         // generate challenge
         let (frac_comm, prod_x_comm) = rayon::join(
-            || PCS::commit(pcs_param, &frac_poly).unwrap(),
-            || PCS::commit(pcs_param, &prod_x).unwrap(),
+            || PC::commit(pcs_param, &frac_poly).unwrap(),
+            || PC::commit(pcs_param, &prod_x).unwrap(),
         );
         transcript.append_serializable_element(b"frac(x)", &frac_comm)?;
         transcript.append_serializable_element(b"prod(x)", &prod_x_comm)?;
@@ -188,7 +188,7 @@ where
     }
 
     pub fn verify(
-        proof: &ProductCheckProof<E, PCS>,
+        proof: &ProductCheckProof<E, PC>,
         aux_info: &VPAuxInfo<E::ScalarField>,
         transcript: &mut IOPTranscript<E::ScalarField>,
     ) -> Result<ProductCheckSubClaim<E::ScalarField>, PIOPError> {
@@ -231,7 +231,7 @@ mod test {
     use crate::{
         streams::MLE,
         {
-            pcs::{multilinear_kzg::MultilinearKzgPCS, PolynomialCommitmentScheme},
+            pc::{multilinear_kzg::MultilinearKzgPCS, PolynomialCommitmentScheme},
             poly_iop::errors::PIOPError,
         },
     };
@@ -277,24 +277,24 @@ mod test {
 
     // fs and gs are guaranteed to have the same product
     // fs and hs doesn't have the same product
-    fn test_product_check_helper<E, PCS>(
+    fn test_product_check_helper<E, PC>(
         fs: &[MLE<E::ScalarField>],
         gs: &[MLE<E::ScalarField>],
         hs: &[MLE<E::ScalarField>],
-        pcs_param: &PCS::ProverParam,
+        pcs_param: &PC::ProverParam,
     ) -> Result<(), PIOPError>
     where
         E: Pairing,
         E::ScalarField: RawPrimeField,
-        PCS: PolynomialCommitmentScheme<E, Polynomial = MLE<E::ScalarField>>,
+        PC: PolynomialCommitmentScheme<E, Polynomial = MLE<E::ScalarField>>,
     {
-        let mut transcript = ProductCheck::<E, PCS>::init_transcript();
+        let mut transcript = ProductCheck::<E, PC>::init_transcript();
         transcript.append_message(b"testing", b"initializing transcript for testing")?;
 
         let (proof, prod_x, frac_poly) =
-            ProductCheck::<E, PCS>::prove(pcs_param, fs, gs, &mut transcript)?;
+            ProductCheck::<E, PC>::prove(pcs_param, fs, gs, &mut transcript)?;
 
-        let mut transcript = ProductCheck::<E, PCS>::init_transcript();
+        let mut transcript = ProductCheck::<E, PC>::init_transcript();
         transcript.append_message(b"testing", b"initializing transcript for testing")?;
 
         // what's aux_info for?
@@ -303,7 +303,7 @@ mod test {
             num_variables: fs[0].num_vars(),
             phantom: PhantomData::default(),
         };
-        let prod_subclaim = ProductCheck::<E, PCS>::verify(&proof, &aux_info, &mut transcript)?;
+        let prod_subclaim = ProductCheck::<E, PC>::verify(&proof, &aux_info, &mut transcript)?;
         assert_eq!(
             prod_x.evaluate(&prod_subclaim.final_query.0).unwrap(),
             prod_subclaim.final_query.1,
@@ -312,15 +312,15 @@ mod test {
         check_frac_poly::<E>(&frac_poly, fs, gs);
 
         // bad path
-        let mut transcript = ProductCheck::<E, PCS>::init_transcript();
+        let mut transcript = ProductCheck::<E, PC>::init_transcript();
         transcript.append_message(b"testing", b"initializing transcript for testing")?;
 
         let (bad_proof, _prod_x_bad, frac_poly) =
-            ProductCheck::<E, PCS>::prove(pcs_param, fs, hs, &mut transcript)?;
+            ProductCheck::<E, PC>::prove(pcs_param, fs, hs, &mut transcript)?;
 
-        let mut transcript = ProductCheck::<E, PCS>::init_transcript();
+        let mut transcript = ProductCheck::<E, PC>::init_transcript();
         transcript.append_message(b"testing", b"initializing transcript for testing")?;
-        let bad_subclaim = ProductCheck::<E, PCS>::verify(&bad_proof, &aux_info, &mut transcript);
+        let bad_subclaim = ProductCheck::<E, PC>::verify(&bad_proof, &aux_info, &mut transcript);
         assert!(bad_subclaim.is_err());
         // the frac_poly should still be computed correctly
         check_frac_poly::<E>(&frac_poly, &fs, &hs);

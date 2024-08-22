@@ -10,12 +10,12 @@ use ark_bls12_381::Bls12_381;
 use ark_bls12_381::Fr;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Write};
 use ark_std::test_rng;
-use scribe::full_snark::custom_gate::CustomizedGates;
-use scribe::full_snark::{errors::HyperPlonkErrors, mock::MockCircuit, HyperPlonkSNARK};
-use scribe::pcs::{
+use scribe::pc::{
     multilinear_kzg::{srs::MultilinearUniversalParams, MultilinearKzgPCS},
     PolynomialCommitmentScheme,
 };
+use scribe::snark::custom_gate::CustomizedGates;
+use scribe::snark::{errors::HyperPlonkErrors, mock::MockCircuit, HyperPlonkSNARK};
 use scribe::streams::LOG_BUFFER_SIZE;
 
 const SUPPORTED_SIZE: usize = 12;

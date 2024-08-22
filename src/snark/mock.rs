@@ -4,7 +4,7 @@ use crate::streams::{iterator::BatchedIterator, serialize::RawPrimeField, MLE};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::{end_timer, log2, start_timer, test_rng};
 
-use crate::full_snark::{
+use crate::snark::{
     custom_gate::CustomizedGates,
     structs::{HyperPlonkParams, Index},
 };
@@ -148,10 +148,10 @@ mod test {
     use std::fs::File;
 
     use super::*;
-    use crate::full_snark::{errors::HyperPlonkErrors, HyperPlonkSNARK};
-    use crate::pcs::multilinear_kzg::srs::MultilinearUniversalParams;
-    use crate::pcs::multilinear_kzg::MultilinearKzgPCS;
-    use crate::pcs::PolynomialCommitmentScheme;
+    use crate::pc::multilinear_kzg::srs::MultilinearUniversalParams;
+    use crate::pc::multilinear_kzg::MultilinearKzgPCS;
+    use crate::pc::PolynomialCommitmentScheme;
+    use crate::snark::{errors::HyperPlonkErrors, HyperPlonkSNARK};
     use ark_bls12_381::Bls12_381;
     use ark_bls12_381::Fr;
     use ark_std::test_rng;

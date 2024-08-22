@@ -1,6 +1,6 @@
 use crate::streams::file_vec::FileVec;
 use crate::{
-    pcs::{errors::PCSError, multilinear_kzg::util::eq_extension, StructuredReferenceString},
+    pc::{errors::PCSError, multilinear_kzg::util::eq_extension, StructuredReferenceString},
     streams::serialize::RawAffine,
 };
 use ark_ec::{pairing::Pairing, scalar_mul::fixed_base::FixedBase, CurveGroup};

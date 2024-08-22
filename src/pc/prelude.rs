@@ -1,4 +1,4 @@
-pub use crate::pcs::{
+pub use crate::pc::{
     errors::PCSError,
     multilinear_kzg::{
         srs::{MultilinearProverParam, MultilinearUniversalParams, MultilinearVerifierParam},

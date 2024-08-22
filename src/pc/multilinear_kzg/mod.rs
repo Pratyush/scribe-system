@@ -1,12 +1,12 @@
 pub(crate) mod batching;
 pub mod srs;
 pub(crate) mod util;
-use crate::pcs::StructuredReferenceString;
-use crate::pcs::{structs::Commitment, PCSError, PolynomialCommitmentScheme};
+use crate::pc::StructuredReferenceString;
+use crate::pc::{structs::Commitment, PCSError, PolynomialCommitmentScheme};
 use crate::streams::{iterator::BatchedIterator, MLE};
 use crate::transcript::IOPTranscript;
 use crate::{
-    pcs::multilinear_kzg::batching::multi_open_internal,
+    pc::multilinear_kzg::batching::multi_open_internal,
     streams::serialize::{RawAffine, RawPrimeField},
 };
 use ark_ec::{

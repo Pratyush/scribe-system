@@ -1,5 +1,5 @@
 use crate::{
-    full_snark::errors::HyperPlonkErrors,
+    snark::errors::HyperPlonkErrors,
     streams::{serialize::RawPrimeField, MLE},
 };
 use ark_ff::PrimeField;

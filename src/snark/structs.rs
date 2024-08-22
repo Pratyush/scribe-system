@@ -1,7 +1,7 @@
 use crate::poly_iop::{perm_check_original::PermutationProof, zero_check::ZeroCheckProof};
 use crate::streams::serialize::RawPrimeField;
 use crate::streams::MLE;
-use crate::{full_snark::custom_gate::CustomizedGates, pcs::PolynomialCommitmentScheme};
+use crate::{pc::PolynomialCommitmentScheme, snark::custom_gate::CustomizedGates};
 use ark_ec::pairing::Pairing;
 use ark_ff::PrimeField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
@@ -15,22 +15,22 @@ use super::prelude::HyperPlonkErrors;
 ///   - the zero-check proof for checking custom gate-satisfiability
 ///   - the permutation-check proof for checking the copy constraints
 #[derive(Clone, Debug, PartialEq)]
-pub struct Proof<E, PCS>
+pub struct Proof<E, PC>
 where
     E: Pairing,
     E::ScalarField: RawPrimeField,
-    PCS: PolynomialCommitmentScheme<E>,
+    PC: PolynomialCommitmentScheme<E>,
 {
-    // PCS commit for witnesses
-    pub witness_commits: Vec<PCS::Commitment>,
-    pub batch_openings: PCS::BatchProof,
+    // PC commit for witnesses
+    pub witness_commits: Vec<PC::Commitment>,
+    pub batch_openings: PC::BatchProof,
     // =======================================================================
     // IOP proofs
     // =======================================================================
     // the custom gate zerocheck proof
     pub zero_check_proof: ZeroCheckProof<E::ScalarField>,
     // the permutation check proof for copy constraints
-    pub perm_check_proof: PermutationProof<E, PCS>,
+    pub perm_check_proof: PermutationProof<E, PC>,
 }
 
 /// The HyperPlonk instance parameters, consists of the following:
@@ -120,7 +120,7 @@ impl<F: RawPrimeField> Index<F> {
 ///   - the commitment to the selectors and permutations
 ///   - the parameters for polynomial commitment
 #[derive(Clone, Debug, Default, PartialEq, CanonicalDeserialize, CanonicalSerialize)]
-pub struct ProvingKey<E: Pairing, PCS: PolynomialCommitmentScheme<E>>
+pub struct ProvingKey<E: Pairing, PC: PolynomialCommitmentScheme<E>>
 where
     E::ScalarField: RawPrimeField,
 {
@@ -131,11 +131,11 @@ where
     /// The preprocessed selector polynomials
     pub selector_oracles: Vec<MLE<E::ScalarField>>,
     /// Commitments to the preprocessed selector polynomials
-    pub selector_commitments: Vec<PCS::Commitment>,
+    pub selector_commitments: Vec<PC::Commitment>,
     /// Commitments to the preprocessed permutation polynomials
-    pub permutation_commitments: Vec<PCS::Commitment>,
-    /// The parameters for PCS commitment
-    pub pcs_param: PCS::ProverParam,
+    pub permutation_commitments: Vec<PC::Commitment>,
+    /// The parameters for PC commitment
+    pub pcs_param: PC::ProverParam,
 }
 
 /// The HyperPlonk verifying key, consists of the following:
@@ -143,16 +143,16 @@ where
 ///   - the commitments to the preprocessed polynomials output by the indexer
 ///   - the parameters for polynomial commitment
 #[derive(Clone, Debug, Default, PartialEq, CanonicalDeserialize, CanonicalSerialize)]
-pub struct VerifyingKey<E: Pairing, PCS: PolynomialCommitmentScheme<E>> {
+pub struct VerifyingKey<E: Pairing, PC: PolynomialCommitmentScheme<E>> {
     /// Hyperplonk instance parameters
     pub params: HyperPlonkParams,
-    /// The parameters for PCS commitment
-    pub pcs_param: PCS::VerifierParam,
+    /// The parameters for PC commitment
+    pub pcs_param: PC::VerifierParam,
     /// A commitment to the preprocessed selector polynomials
-    pub selector_commitments: Vec<PCS::Commitment>,
+    pub selector_commitments: Vec<PC::Commitment>,
     // pub selector: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
     /// Permutation oracles' commitments
-    pub perm_commitments: Vec<PCS::Commitment>,
+    pub perm_commitments: Vec<PC::Commitment>,
 }
 
 #[cfg(test)]
@@ -160,12 +160,12 @@ mod test {
     use std::fs::File;
 
     use super::*;
-    use crate::full_snark::mock::MockCircuit;
+    use crate::snark::mock::MockCircuit;
 
-    use crate::full_snark::{errors::HyperPlonkErrors, HyperPlonkSNARK};
+    use crate::snark::{errors::HyperPlonkErrors, HyperPlonkSNARK};
 
-    use crate::pcs::multilinear_kzg::MultilinearKzgPCS;
-    use crate::pcs::PolynomialCommitmentScheme;
+    use crate::pc::multilinear_kzg::MultilinearKzgPCS;
+    use crate::pc::PolynomialCommitmentScheme;
     use ark_bls12_381::Bls12_381;
     use ark_bls12_381::Fr;
     use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};

@@ -1,12 +1,14 @@
 use crate::arithmetic::errors::ArithError;
+use crate::pc::errors::PCSError;
+use crate::poly_iop::errors::PIOPError;
 use crate::transcript::TranscriptError;
 use ark_serialize::SerializationError;
 use ark_std::string::String;
 use displaydoc::Display;
 
-/// A `enum` specifying the possible failure modes of the PCS.
+/// A `enum` specifying the possible failure modes of hyperplonk.
 #[derive(Display, Debug)]
-pub enum PCSError {
+pub enum HyperPlonkErrors {
     /// Invalid Prover: {0}
     InvalidProver(String),
     /// Invalid Verifier: {0}
@@ -17,26 +19,42 @@ pub enum PCSError {
     InvalidParameters(String),
     /// An error during (de)serialization: {0}
     SerializationError(SerializationError),
+    /// PolyIOP error {0}
+    PolyIOPErrors(PIOPError),
+    /// PC error {0}
+    PCSErrors(PCSError),
     /// Transcript error {0}
     TranscriptError(TranscriptError),
-    /// ArithErrors error {0}
-    ArithErrors(ArithError),
+    /// Arithmetic Error: {0}
+    ArithmeticErrors(ArithError),
 }
 
-impl From<SerializationError> for PCSError {
+impl From<SerializationError> for HyperPlonkErrors {
     fn from(e: ark_serialize::SerializationError) -> Self {
         Self::SerializationError(e)
     }
 }
 
-impl From<TranscriptError> for PCSError {
+impl From<PIOPError> for HyperPlonkErrors {
+    fn from(e: PIOPError) -> Self {
+        Self::PolyIOPErrors(e)
+    }
+}
+
+impl From<PCSError> for HyperPlonkErrors {
+    fn from(e: PCSError) -> Self {
+        Self::PCSErrors(e)
+    }
+}
+
+impl From<TranscriptError> for HyperPlonkErrors {
     fn from(e: TranscriptError) -> Self {
         Self::TranscriptError(e)
     }
 }
 
-impl From<ArithError> for PCSError {
+impl From<ArithError> for HyperPlonkErrors {
     fn from(e: ArithError) -> Self {
-        Self::ArithErrors(e)
+        Self::ArithmeticErrors(e)
     }
 }

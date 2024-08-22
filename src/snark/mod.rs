@@ -1,7 +1,7 @@
 use crate::streams::serialize::RawPrimeField;
 use ark_ec::pairing::Pairing;
 
-use super::pcs::PolynomialCommitmentScheme;
+use super::pc::PolynomialCommitmentScheme;
 
 pub mod custom_gate;
 pub mod errors;
@@ -15,12 +15,12 @@ mod witness;
 
 /// A trait for HyperPlonk SNARKs.
 /// A HyperPlonk is derived from SumCheck
-pub struct HyperPlonkSNARK<E, PCS>
+pub struct HyperPlonkSNARK<E, PC>
 where
     E: Pairing,
     E::ScalarField: RawPrimeField,
-    PCS: PolynomialCommitmentScheme<E>,
+    PC: PolynomialCommitmentScheme<E>,
 {
     _pairing: std::marker::PhantomData<E>,
-    _pcs: std::marker::PhantomData<PCS>,
+    _pcs: std::marker::PhantomData<PC>,
 }

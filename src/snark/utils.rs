@@ -1,8 +1,8 @@
-use crate::full_snark::{
+use crate::pc::structs::Commitment;
+use crate::pc::PolynomialCommitmentScheme;
+use crate::snark::{
     custom_gate::CustomizedGates, errors::HyperPlonkErrors, structs::HyperPlonkParams,
 };
-use crate::pcs::structs::Commitment;
-use crate::pcs::PolynomialCommitmentScheme;
 use crate::streams::file_vec::FileVec;
 use crate::streams::iterator::BatchedIterator;
 use crate::streams::MLE;
@@ -18,18 +18,18 @@ use std::borrow::Borrow;
 /// An accumulator structure that holds a polynomial and
 /// its opening points
 #[derive(Debug)]
-pub(super) struct PcsAccumulator<E: Pairing, PCS: PolynomialCommitmentScheme<E>> {
+pub(super) struct PcsAccumulator<E: Pairing, PC: PolynomialCommitmentScheme<E>> {
     pub(crate) num_var: usize,
-    pub(crate) polynomials: Vec<PCS::Polynomial>,
-    pub(crate) commitments: Vec<PCS::Commitment>,
-    pub(crate) points: Vec<PCS::Point>,
+    pub(crate) polynomials: Vec<PC::Polynomial>,
+    pub(crate) commitments: Vec<PC::Commitment>,
+    pub(crate) points: Vec<PC::Point>,
 }
 
-impl<E, PCS> PcsAccumulator<E, PCS>
+impl<E, PC> PcsAccumulator<E, PC>
 where
     E: Pairing,
     E::ScalarField: RawPrimeField,
-    PCS: PolynomialCommitmentScheme<
+    PC: PolynomialCommitmentScheme<
         E,
         Polynomial = MLE<E::ScalarField>,
         Point = Vec<E::ScalarField>,
@@ -50,9 +50,9 @@ where
     /// Push a new evaluation point into the accumulator
     pub(super) fn insert_poly_and_points(
         &mut self,
-        poly: &PCS::Polynomial,
-        commit: &PCS::Commitment,
-        point: &PCS::Point,
+        poly: &PC::Polynomial,
+        commit: &PC::Commitment,
+        point: &PC::Point,
     ) {
         assert!(poly.num_vars() == point.len());
         assert!(poly.num_vars() == self.num_var);
@@ -63,12 +63,12 @@ where
     }
 
     /// Batch open all the points over a merged polynomial.
-    /// A simple wrapper of PCS::multi_open
+    /// A simple wrapper of PC::multi_open
     pub(super) fn multi_open(
         &self,
-        prover_param: impl Borrow<PCS::ProverParam>,
+        prover_param: impl Borrow<PC::ProverParam>,
         transcript: &mut IOPTranscript<E::ScalarField>,
-    ) -> Result<PCS::BatchProof, HyperPlonkErrors> {
+    ) -> Result<PC::BatchProof, HyperPlonkErrors> {
         let evals = self
             .polynomials
             .par_iter()
@@ -81,7 +81,7 @@ where
                 pool.install(|| poly.evaluate(&point).unwrap())
             })
             .collect::<Vec<_>>();
-        Ok(PCS::multi_open(
+        Ok(PC::multi_open(
             prover_param.borrow(),
             self.polynomials.as_ref(),
             self.points.as_ref(),
