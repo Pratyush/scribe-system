@@ -1,6 +1,6 @@
 use std::{
     ffi::OsStr,
-    fmt::Debug,
+    fmt::{Debug, Display},
     fs::{File, OpenOptions},
     hash::{Hash, Hasher},
     io::{BufWriter, Seek, Write},
@@ -607,7 +607,7 @@ impl<T: SerializeRaw + DeserializeRaw + Eq> Eq for FileVec<T> {}
 // serialize:
 // File: use our local serialization to read the entire file to a Vec<T>, and call T::serialize_uncompressed on Vec<T>
 // Buffer: call T::serialize_uncompressed directly on the inner content (automatically writes length first)
-impl<T: SerializeRaw + DeserializeRaw + Valid + Sync + Send + CanonicalSerialize + Debug>
+impl<T: SerializeRaw + DeserializeRaw + Valid + Sync + Send + CanonicalSerialize + Debug + Display>
     CanonicalSerialize for FileVec<T>
 {
     fn serialize_with_mode<W: Write>(
@@ -616,10 +616,12 @@ impl<T: SerializeRaw + DeserializeRaw + Valid + Sync + Send + CanonicalSerialize
         _compress: ark_serialize::Compress,
     ) -> Result<(), ark_serialize::SerializationError> {
         match self {
-            Self::Buffer { buffer } => {
-                println!("Here in serializing buffer");
-                buffer.serialize_uncompressed(&mut writer)},
-            Self::File { path, file } => {
+            Self::Buffer { buffer } => buffer.serialize_uncompressed(&mut writer),
+            Self::File { path, .. } => {
+                let mut file = OpenOptions::new()
+                    .read(true)
+                    .open(&path)
+                    .expect(&format!("failed to open file, {}", path.to_str().unwrap()));
                 let size = T::SIZE;
                 let mut final_result = vec![];
                 let mut work_buffer = vec![0u8; size * BUFFER_SIZE];
@@ -630,7 +632,7 @@ impl<T: SerializeRaw + DeserializeRaw + Valid + Sync + Send + CanonicalSerialize
                         &mut result_buffer,
                         &mut work_buffer,
                         BUFFER_SIZE,
-                        file,
+                        &mut file,
                     )
                     .unwrap();
 
@@ -646,7 +648,6 @@ impl<T: SerializeRaw + DeserializeRaw + Valid + Sync + Send + CanonicalSerialize
                 }
 
                 // size of final_result vec (not byte size) should be serialized as a u64 as a part of this API
-                dbg!(final_result.len());
                 final_result.serialize_uncompressed(&mut writer)
             }
         }
@@ -674,7 +675,6 @@ impl<T: SerializeRaw + DeserializeRaw + Valid + Sync + Send + CanonicalDeseriali
         _validate: ark_serialize::Validate,
     ) -> Result<Self, ark_serialize::SerializationError> {
         let size = usize::deserialize_uncompressed_unchecked(&mut reader)?;
-        dbg!(size);
         let mut buffer = Vec::with_capacity(BUFFER_SIZE);
         if size > BUFFER_SIZE {
             let (mut file, path) = NamedTempFile::new()
@@ -713,7 +713,7 @@ impl<T: SerializeRaw + DeserializeRaw + Valid> Valid for FileVec<T> {
     }
 
     fn batch_check<'a>(
-        batch: impl Iterator<Item = &'a Self> + Send,
+        _batch: impl Iterator<Item = &'a Self> + Send,
     ) -> Result<(), ark_serialize::SerializationError>
     where
         Self: 'a,
@@ -721,6 +721,32 @@ impl<T: SerializeRaw + DeserializeRaw + Valid> Valid for FileVec<T> {
         unimplemented!()
     }
 }
+
+impl<T: SerializeRaw + DeserializeRaw + Display> Display for FileVec<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::File { path, .. } => {
+                writeln!(f, "FileVec at {}: [", path.display())?;
+                let file = std::fs::File::open(path).map_err(|_| std::fmt::Error)?;
+                let mut reader = std::io::BufReader::new(file);
+                while let Ok(item) = T::deserialize_raw(&mut reader) {
+                    writeln!(f, "  {},", item)?;
+                }
+                writeln!(f, "]")?;
+                Ok(())
+            }
+            Self::Buffer { buffer } => {
+                writeln!(f, "FileVec: [")?;
+                for item in buffer {
+                    writeln!(f, "  {},", item)?;
+                }
+                writeln!(f, "]")?;
+                Ok(())
+            }
+        }
+    }
+}
+   
 
 #[cfg(test)]
 mod tests {

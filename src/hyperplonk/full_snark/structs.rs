@@ -8,7 +8,7 @@ use crate::{
 };
 use ark_ec::pairing::Pairing;
 use ark_ff::PrimeField;
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Valid};
 use ark_std::log2;
 
 use super::prelude::HyperPlonkErrors;
@@ -124,8 +124,7 @@ impl<F: RawPrimeField> HyperPlonkIndex<F> {
 ///   - the preprocessed polynomials output by the indexer
 ///   - the commitment to the selectors and permutations
 ///   - the parameters for polynomial commitment
-#[derive(Clone, Debug, Default, PartialEq, CanonicalDeserialize, CanonicalSerialize)]
-// pub struct HyperPlonkProvingKey<E: Pairing, PCS: PolynomialCommitmentScheme<E>> {
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct HyperPlonkProvingKey<E: Pairing, PCS: PolynomialCommitmentScheme<E>>
 where
     E::ScalarField: RawPrimeField,
@@ -144,12 +143,78 @@ where
     pub pcs_param: PCS::ProverParam,
 }
 
+impl<E: Pairing, PCS: PolynomialCommitmentScheme<E>> CanonicalDeserialize for HyperPlonkProvingKey<E, PCS>
+where
+    E::ScalarField: RawPrimeField,
+{
+    fn deserialize_with_mode<R: std::io::Read>(
+        mut reader: R,
+        compress: ark_serialize::Compress,
+        validate: ark_serialize::Validate,
+    ) -> Result<Self, ark_serialize::SerializationError> {
+        let params = HyperPlonkParams::deserialize_with_mode(&mut reader, compress, validate)?;
+        let permutation_oracles = Vec::<MLE<E::ScalarField>>::deserialize_with_mode(&mut reader, compress, validate)?;
+        let selector_oracles = Vec::<MLE<E::ScalarField>>::deserialize_with_mode(&mut reader, compress, validate)?;
+        let selector_commitments = Vec::<PCS::Commitment>::deserialize_with_mode(&mut reader, compress, validate)?;
+        let permutation_commitments = Vec::<PCS::Commitment>::deserialize_with_mode(&mut reader, compress, validate)?;
+        let pcs_param = PCS::ProverParam::deserialize_with_mode(&mut reader, compress, validate)?;
+        Ok(Self {
+            params,
+            permutation_oracles,
+            selector_oracles,
+            selector_commitments,
+            permutation_commitments,
+            pcs_param,
+        })
+    }
+}
+
+impl<E: Pairing, PCS: PolynomialCommitmentScheme<E>> Valid for HyperPlonkProvingKey<E, PCS>
+where
+    E::ScalarField: RawPrimeField,
+{
+    fn batch_check<'a>(
+        _batch: impl Iterator<Item = &'a Self> + Send,
+    ) -> Result<(), ark_serialize::SerializationError>
+    where
+        Self: 'a, 
+    {
+        unimplemented!()
+    }
+
+    fn check(&self) -> Result<(), ark_serialize::SerializationError> {
+        unimplemented!()
+    }
+}
+
+impl<E: Pairing, PCS: PolynomialCommitmentScheme<E>> CanonicalSerialize for HyperPlonkProvingKey<E, PCS>
+where
+    E::ScalarField: RawPrimeField,
+{
+    fn serialize_with_mode<W: std::io::Write>(
+        &self,
+        mut writer: W,
+        compress: ark_serialize::Compress,
+    ) -> Result<(), ark_serialize::SerializationError> {
+        self.params.serialize_with_mode(&mut writer, compress)?;
+        self.permutation_oracles.serialize_with_mode(&mut writer, compress)?;
+        self.selector_oracles.serialize_with_mode(&mut writer, compress)?;
+        self.selector_commitments.serialize_with_mode(&mut writer, compress)?;
+        self.permutation_commitments.serialize_with_mode(&mut writer, compress)?;
+        self.pcs_param.serialize_with_mode(&mut writer, compress)?;
+        Ok(())
+    }
+
+    fn serialized_size(&self, compress: ark_serialize::Compress) -> usize {
+        unimplemented!()
+    }
+}
+
 /// The HyperPlonk verifying key, consists of the following:
 ///   - the hyperplonk instance parameters
 ///   - the commitments to the preprocessed polynomials output by the indexer
 ///   - the parameters for polynomial commitment
 #[derive(Clone, Debug, Default, PartialEq, CanonicalDeserialize, CanonicalSerialize)]
-// pub struct HyperPlonkVerifyingKey<E: Pairing, PCS: PolynomialCommitmentScheme<E>> {
 pub struct HyperPlonkVerifyingKey<E: Pairing, PCS: PolynomialCommitmentScheme<E>> {
     /// Hyperplonk instance parameters
     pub params: HyperPlonkParams,

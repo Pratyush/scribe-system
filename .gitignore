@@ -12,3 +12,4 @@ Cargo.lock
 *.txt
 *.params
 *.test
+.DS_STORE

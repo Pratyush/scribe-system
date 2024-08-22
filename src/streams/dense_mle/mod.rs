@@ -1,6 +1,6 @@
 mod inner;
 use std::{
-    io::Write, ops::{AddAssign, Mul, MulAssign, SubAssign}, path::Path, sync::Arc
+    fmt::{Debug, Display}, io::Write, ops::{AddAssign, Mul, MulAssign, SubAssign}, path::Path, sync::Arc
 };
 
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Valid};
@@ -13,63 +13,6 @@ use super::{file_vec::FileVec, iterator::BatchedIterator, serialize::RawField, L
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct MLE<F: RawField>(Arc<Inner<F>>);
-
-// serialize:
-// File: use our local serialization to read the entire file to a Vec<T>, and call T::serialize_uncompressed on Vec<T>
-// Buffer: call T::serialize_uncompressed directly on the inner content (automatically writes length first)
-impl<F: RawField>
-    CanonicalSerialize for MLE<F>
-{
-    fn serialize_with_mode<W: Write>(
-        &self,
-        mut writer: W,
-        _compress: ark_serialize::Compress,
-    ) -> Result<(), ark_serialize::SerializationError> {
-        (*self.0).serialize_uncompressed(&mut writer)
-    }
-
-    fn serialized_size(&self, _compress: ark_serialize::Compress) -> usize {
-        todo!()
-    }
-}
-
-
-// deserialize:
-// read the length first
-// if length greater than buffer size, it's a file
-//        a. create a new file
-//        b. read a batch of T at a time using canonicaldeserialize (call T::deserialize_uncompressed_unchecked from Canonical)
-//        c. use SerializeRaw to write each T to the File
-// if the length less than buffer size, it's a buffer
-//        a. read one buffer batch and return it directly (just a Vec) Vec<T>::deserialize_uncompressed_unchecked
-impl<F: RawField>
-    CanonicalDeserialize for MLE<F>
-{
-    fn deserialize_with_mode<R: ark_serialize::Read>(
-        mut reader: R,
-        _compress: ark_serialize::Compress,
-        _validate: ark_serialize::Validate,
-    ) -> Result<Self, ark_serialize::SerializationError> {
-        let inner = Inner::<F>::deserialize_uncompressed_unchecked(&mut reader).unwrap();
-        Ok(Self::from_inner(inner))
-    }
-}
-
-impl<F: RawField + Valid> Valid for MLE<F> {
-    fn check(&self) -> Result<(), ark_serialize::SerializationError> {
-        unimplemented!()
-    }
-
-    fn batch_check<'a>(
-        batch: impl Iterator<Item = &'a Self> + Send,
-    ) -> Result<(), ark_serialize::SerializationError>
-    where
-        Self: 'a,
-    {
-        unimplemented!()
-    }
-}
-
 
 impl<F: RawField> MLE<F> {
     #[inline(always)]
@@ -369,6 +312,66 @@ impl<'a, F: RawField> SubAssign<(F, &'a Self)> for MLE<F> {
         self.map_in_place_2(&other, |inner, other| inner.sub_assign((f, other)));
     }
 }
+
+impl<F: RawField> Display for MLE<F> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        <Inner<F> as Display>::fmt(&*self.0, f)
+    }
+}
+
+// serialize:
+// File: use our local serialization to read the entire file to a Vec<T>, and call T::serialize_uncompressed on Vec<T>
+// Buffer: call T::serialize_uncompressed directly on the inner content (automatically writes length first)
+impl<F: RawField> CanonicalSerialize for MLE<F> {
+    fn serialize_with_mode<W: Write>(
+        &self,
+        mut writer: W,
+        compress: ark_serialize::Compress,
+    ) -> Result<(), ark_serialize::SerializationError> {
+        (*self.0).serialize_with_mode(&mut writer, compress)
+    }
+
+    fn serialized_size(&self, _compress: ark_serialize::Compress) -> usize {
+        todo!()
+    }
+}
+
+
+// deserialize:
+// read the length first
+// if length greater than buffer size, it's a file
+//        a. create a new file
+//        b. read a batch of T at a time using canonicaldeserialize (call T::deserialize_uncompressed_unchecked from Canonical)
+//        c. use SerializeRaw to write each T to the File
+// if the length less than buffer size, it's a buffer
+//        a. read one buffer batch and return it directly (just a Vec) Vec<T>::deserialize_uncompressed_unchecked
+impl<F: RawField> CanonicalDeserialize for MLE<F> {
+    fn deserialize_with_mode<R: ark_serialize::Read>(
+        mut reader: R,
+        compress: ark_serialize::Compress,
+        validate: ark_serialize::Validate,
+    ) -> Result<Self, ark_serialize::SerializationError> {
+        Inner::<F>::deserialize_with_mode(&mut reader, compress, validate).map(Self::from_inner)
+    }
+}
+
+impl<F: RawField + Valid> Valid for MLE<F> {
+    fn check(&self) -> Result<(), ark_serialize::SerializationError> {
+        unimplemented!()
+    }
+
+    fn batch_check<'a>(
+        batch: impl Iterator<Item = &'a Self> + Send,
+    ) -> Result<(), ark_serialize::SerializationError>
+    where
+        Self: 'a,
+    {
+        unimplemented!()
+    }
+}
+
+
+
 
 /// A helper function to build eq(x, r) recursively.
 #[inline]

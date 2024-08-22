@@ -1,6 +1,5 @@
 use std::{
-    ops::{AddAssign, Mul, MulAssign, SubAssign},
-    path::Path,
+    fmt::Display, ops::{AddAssign, Mul, MulAssign, SubAssign}, path::Path
 };
 
 use ark_ff::batch_inversion;
@@ -434,6 +433,12 @@ impl<'a, F: RawField> SubAssign<(F, &'a Self)> for Inner<F> {
             self.evals
                 .zipped_for_each(other.evals.iter(), |a, b| *a -= f * b);
         }
+    }
+}
+
+impl<F: RawField> Display for Inner<F> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.evals.fmt(f)
     }
 }
 
