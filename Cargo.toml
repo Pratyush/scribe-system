@@ -1,78 +1,46 @@
-[package]
-name = "scribe"
+[workspace]
+members = [
+    "bench-lib",
+    "scribe-snark",
+]
+resolver = "2"
+
+[workspace.package]
 version = "0.1.0"
+authors = [ "scribe authors" ]
+categories = ["cryptography"]
+include = ["Cargo.toml", "src", "README.md", "LICENSE-APACHE", "LICENSE-MIT"]
+license = "MIT OR Apache-2.0"
 edition = "2021"
+rust-version = "1.75"
 
-[dependencies]
-ark-ec = { version = "^0.4.0", default-features = false }
-ark-ff = { version = "^0.4.0", default-features = false }
-ark-std = { version = "^0.4.0", default-features = false }
-ark-poly = { version = "^0.4.0", default-features = false }
-ark-serialize = {version = "0.4.0", features = ["derive"]}
-tempfile = "3.3.0"
-merlin = "3.0.0"
-smallvec = "1.6"
-rayon = { version = "1.5.2", default-features = false, optional = true }
-displaydoc = "0.2.0"
-derivative = { version = "2", features = ["use_core"] }
-ark-bls12-381 = { version = "0.4.0", default-features = false, features = [ "curve" ] }
+# [workspace.metadata.docs.rs]
+# rustdoc-args = [ "--html-in-header katex-header.html" ]
 
-[target.'cfg(target_os = "linux")'.dependencies]
-procfs = { version = "0.16"}
-libc = { version = "0.2.101"}
-log = { version = "0.4.14"}
-
-[dev-dependencies]
-env_logger = "0.11"
-criterion = { version = "0.5" }
+[workspace.metadata.release]
+dependent-version = "fix"
 
 [profile.release]
-debug-assertions = false
-lto = true
+opt-level = 3
+lto = "thin"
+incremental = true
+panic = 'abort'
 
 [profile.bench]
+opt-level = 3
+debug = false
+rpath = false
+lto = "thin"
+incremental = true
 debug-assertions = false
+
+[profile.dev]
+opt-level = 0
+panic = 'abort'
+
+[profile.test]
+opt-level = 3
+lto = "thin"
+incremental = true
+debug-assertions = true
 debug = true
-lto = true
-
-[features]
-default = ["parallel"]
-parallel = [ 
-    "rayon",
-    "ark-std/parallel", 
-    "ark-ff/parallel",  
-    "ark-ec/parallel",  
-    "ark-poly/parallel" 
-]
-print-trace = [ 
-    "ark-std/print-trace",
-] 
-
-[[bench]]
-name = "file_vec"
-path = "benches/file_vec.rs"
-harness = false
-
-[[bench]]
-name = "iter"
-path = "benches/iter.rs"
-harness = false
-
-[[bench]]
-name = "serialize"
-path = "benches/serialize.rs"
-harness = false
-
-
-[[bench]]
-name = "mle"
-path = "benches/mle.rs"
-harness = false
-
-[[example]]
-name = "setup"
-path = "example/setup.rs"
-
-[[example]]
-name = "prover"
-path = "example/prover.rs"

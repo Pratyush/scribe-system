@@ -1,0 +1,68 @@
+[package]
+name = "scribe"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ark-ec = { version = "^0.4.0", default-features = false }
+ark-ff = { version = "^0.4.0", default-features = false }
+ark-std = { version = "^0.4.0", default-features = false }
+ark-poly = { version = "^0.4.0", default-features = false }
+ark-serialize = {version = "0.4.0", features = ["derive"]}
+tempfile = "3.3.0"
+merlin = "3.0.0"
+smallvec = "1.6"
+rayon = { version = "1.5.2", default-features = false, optional = true }
+displaydoc = "0.2.0"
+derivative = { version = "2", features = ["use_core"] }
+ark-bls12-381 = { version = "0.4.0", default-features = false, features = [ "curve" ] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+procfs = { version = "0.16"}
+libc = { version = "0.2.101"}
+log = { version = "0.4.14"}
+
+[dev-dependencies]
+env_logger = "0.11"
+criterion = { version = "0.5" }
+
+[features]
+default = ["parallel"]
+parallel = [ 
+    "rayon",
+    "ark-std/parallel", 
+    "ark-ff/parallel",  
+    "ark-ec/parallel",  
+    "ark-poly/parallel" 
+]
+print-trace = [ 
+    "ark-std/print-trace",
+] 
+
+[[bench]]
+name = "file_vec"
+path = "benches/file_vec.rs"
+harness = false
+
+[[bench]]
+name = "iter"
+path = "benches/iter.rs"
+harness = false
+
+[[bench]]
+name = "serialize"
+path = "benches/serialize.rs"
+harness = false
+
+[[bench]]
+name = "mle"
+path = "benches/mle.rs"
+harness = false
+
+[[example]]
+name = "setup"
+path = "example/setup.rs"
+
+[[example]]
+name = "prover"
+path = "example/prover.rs"

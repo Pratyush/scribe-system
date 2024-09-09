@@ -302,14 +302,14 @@ where
 
     let mut proofs = Vec::new();
 
-    for (i, (&point_at_k, gi)) in point
+    for (_i, (&point_at_k, gi)) in point
         .iter()
         .zip(prover_param.powers_of_g[ignored..ignored + nv].iter())
         .enumerate()
     {
-        let ith_round = start_timer!(|| format!("{i}-th round"));
+        let ith_round = start_timer!(|| format!("{_i}-th round"));
 
-        let ith_round_eval = start_timer!(|| format!("{i}-th round eval"));
+        let ith_round_eval = start_timer!(|| format!("{_i}-th round eval"));
 
         // TODO: confirm that FileVec in prior round's q and r are auto dropped via the Drop trait once q and r are assigned new FileVec
         (q, r) = f
@@ -325,7 +325,7 @@ where
         end_timer!(ith_round_eval);
 
         let msm_timer =
-            start_timer!(|| format!("msm of size {} at round {}", 1 << (nv - 1 - i), i));
+            start_timer!(|| format!("msm of size {} at round {}", 1 << (nv - 1 - _i), _i));
 
         // let commitment = PST13::commit(prover_param, &MLE::from_evals(q, nv - 1 - i))?;
 

@@ -45,7 +45,7 @@ struct ContentView: View {
             print("TMPDIR: \(tmpDir)")
         } else {
             print("TMPDIR is not set")
-        }
+        }f
         withAnimation {
             let newItem = Item(timestamp: Date())
             modelContext.insert(newItem)
