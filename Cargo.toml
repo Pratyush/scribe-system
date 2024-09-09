@@ -1,6 +1,6 @@
 [workspace]
 members = [
-    "bench-lib",
+    "bench-utils",
     "scribe-snark",
 ]
 resolver = "2"

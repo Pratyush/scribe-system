@@ -58,11 +58,3 @@ harness = false
 name = "mle"
 path = "benches/mle.rs"
 harness = false
-
-[[example]]
-name = "setup"
-path = "example/setup.rs"
-
-[[example]]
-name = "prover"
-path = "example/prover.rs"
