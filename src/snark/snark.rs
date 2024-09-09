@@ -8,10 +8,10 @@ use crate::snark::utils::PcsAccumulator;
 use crate::piop::perm_check_original::PermutationCheck;
 use crate::piop::prelude::ZeroCheck;
 use crate::snark::{
-    errors::HyperPlonkErrors,
+    errors::ScribeErrors,
     structs::{Index, Proof, ProvingKey, VerifyingKey},
     utils::{build_f, eval_f, eval_perm_gate, prover_sanity_check},
-    HyperPlonkSNARK,
+    Scribe,
 };
 use crate::streams::{serialize::RawPrimeField, MLE};
 use crate::transcript::IOPTranscript;
@@ -24,7 +24,7 @@ use rayon::iter::ParallelIterator;
 
 use std::marker::PhantomData;
 
-impl<E, PC> HyperPlonkSNARK<E, PC>
+impl<E, PC> Scribe<E, PC>
 where
     E: Pairing,
     E::ScalarField: RawPrimeField,
@@ -40,11 +40,11 @@ where
     pub fn preprocess(
         index: &Index<E::ScalarField>,
         pcs_srs: &PC::SRS,
-    ) -> Result<(ProvingKey<E, PC>, VerifyingKey<E, PC>), HyperPlonkErrors> {
+    ) -> Result<(ProvingKey<E, PC>, VerifyingKey<E, PC>), ScribeErrors> {
         let num_vars = index.num_variables();
         let supported_ml_degree = num_vars;
 
-        let start = start_timer!(|| format!("hyperplonk preprocessing nv = {}", num_vars));
+        let start = start_timer!(|| format!("scribe preprocessing nv = {}", num_vars));
 
         // extract PC prover and verifier keys from SRS
         let trim_time = start_timer!(|| "trimming PC SRS");
@@ -91,7 +91,7 @@ where
         ))
     }
 
-    /// Generate HyperPlonk SNARK proof.
+    /// Generate Scribe SNARK proof.
     ///
     /// Inputs:
     /// - `pk`: circuit proving key
@@ -99,7 +99,7 @@ where
     /// - `witness`: witness assignment of length 2^n
     ///
     /// Outputs:
-    /// - The HyperPlonk SNARK proof.
+    /// - The Scribe SNARK proof.
     ///
     /// Steps:
     ///
@@ -143,10 +143,9 @@ where
         pk: &ProvingKey<E, PC>,
         pub_input: &[E::ScalarField],
         witnesses: &[MLE<E::ScalarField>],
-    ) -> Result<Proof<E, PC>, HyperPlonkErrors> {
-        let start =
-            start_timer!(|| format!("hyperplonk proving nv = {}", pk.params.num_variables()));
-        let mut transcript = IOPTranscript::<E::ScalarField>::new(b"hyperplonk");
+    ) -> Result<Proof<E, PC>, ScribeErrors> {
+        let start = start_timer!(|| format!("scribe proving nv = {}", pk.params.num_variables()));
+        let mut transcript = IOPTranscript::<E::ScalarField>::new(b"scribe");
 
         prover_sanity_check(&pk.params, pub_input, witnesses.to_vec())?;
 
@@ -352,12 +351,12 @@ where
         })
     }
 
-    /// Verify the HyperPlonk proof.
+    /// Verify the Scribe proof.
     ///
     /// Inputs:
     /// - `vk`: verification key
     /// - `pub_input`: online public input
-    /// - `proof`: HyperPlonk SNARK proof
+    /// - `proof`: Scribe SNARK proof
     ///
     /// Outputs:
     /// - Return a boolean on whether the verification is successful
@@ -385,10 +384,10 @@ where
         vk: &VerifyingKey<E, PC>,
         pub_input: &[E::ScalarField],
         proof: &Proof<E, PC>,
-    ) -> Result<bool, HyperPlonkErrors> {
-        let start = start_timer!(|| "hyperplonk verification");
+    ) -> Result<bool, ScribeErrors> {
+        let start = start_timer!(|| "scribe verification");
 
-        let mut transcript = IOPTranscript::<E::ScalarField>::new(b"hyperplonk");
+        let mut transcript = IOPTranscript::<E::ScalarField>::new(b"scribe");
 
         let num_selectors = vk.params.num_selector_columns();
         let num_witnesses = vk.params.num_witness_columns();
@@ -402,7 +401,7 @@ where
         // =======================================================================
         // public input length
         if pub_input.len() != vk.params.num_pub_input {
-            return Err(HyperPlonkErrors::InvalidProver(format!(
+            return Err(ScribeErrors::InvalidProver(format!(
                 "Public input length is not correct: got {}, expect {}",
                 pub_input.len(),
                 1 << ell
@@ -454,7 +453,7 @@ where
         // check zero check subclaim
         let f_eval = eval_f(&vk.params.gate_func, selector_evals, witness_gate_evals)?;
         if f_eval != zero_check_sub_claim.expected_evaluation {
-            return Err(HyperPlonkErrors::InvalidProof(
+            return Err(ScribeErrors::InvalidProof(
                 "zero check evaluation failed".to_string(),
             ));
         }
@@ -510,7 +509,7 @@ where
                 .zero_check_sub_claim
                 .expected_evaluation
         {
-            return Err(HyperPlonkErrors::InvalidVerifier(
+            return Err(ScribeErrors::InvalidVerifier(
                 "evaluation failed".to_string(),
             ));
         }
@@ -587,7 +586,7 @@ where
         let pi_poly = MLE::from_evals_vec(pub_input.to_vec(), ell);
         let expect_pi_eval = pi_poly.evaluate(&r_pi[..]).unwrap();
         if expect_pi_eval != *pi_eval {
-            return Err(HyperPlonkErrors::InvalidProver(format!(
+            return Err(ScribeErrors::InvalidProver(format!(
                 "Public input eval mismatch: got {}, expect {}",
                 pi_eval, expect_pi_eval,
             )));
@@ -619,9 +618,9 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::pc::multilinear_kzg::MultilinearKzgPCS;
+    use crate::pc::multilinear_kzg::PST13;
     use crate::{
-        snark::{custom_gate::CustomizedGates, structs::HyperPlonkParams},
+        snark::{custom_gate::CustomizedGates, structs::ScribeParams},
         streams::serialize::RawAffine,
     };
 
@@ -631,7 +630,7 @@ mod tests {
     use ark_std::One;
 
     #[test]
-    fn test_hyperplonk_e2e() -> Result<(), HyperPlonkErrors> {
+    fn test_scribe_e2e() -> Result<(), ScribeErrors> {
         // Example:
         //     q_L(X) * W_1(X)^5 - W_2(X) = 0
         // is represented as
@@ -652,12 +651,10 @@ mod tests {
             ],
             // gates: vec![(1, Some(0), vec![0]), (-1, None, vec![1])],
         };
-        test_hyperplonk_helper::<Bls12_381>(gates)
+        test_scribe_helper::<Bls12_381>(gates)
     }
 
-    fn test_hyperplonk_helper<E: Pairing>(
-        gate_func: CustomizedGates,
-    ) -> Result<(), HyperPlonkErrors>
+    fn test_scribe_helper<E: Pairing>(gate_func: CustomizedGates) -> Result<(), ScribeErrors>
     where
         E::ScalarField: RawPrimeField,
         E::G1Affine: RawAffine,
@@ -668,7 +665,7 @@ mod tests {
                 0, 0, 0, 0, 0, 0,
             ];
             let mut rng = StdRng::from_seed(seed);
-            let pcs_srs = MultilinearKzgPCS::<E>::gen_srs_for_testing(&mut rng, 10)?;
+            let pcs_srs = PST13::<E>::gen_srs_for_testing(&mut rng, 10)?;
 
             let num_constraints = 4;
             let num_pub_input = 4;
@@ -676,7 +673,7 @@ mod tests {
             let _num_witnesses = 2;
 
             // generate index
-            let params = HyperPlonkParams {
+            let params = ScribeParams {
                 num_constraints,
                 num_pub_input,
                 gate_func: gate_func.clone(),
@@ -718,8 +715,7 @@ mod tests {
             };
 
             // generate pk and vks
-            let (pk, vk) =
-                <HyperPlonkSNARK<E, MultilinearKzgPCS<E>>>::preprocess(&index, &pcs_srs)?;
+            let (pk, vk) = <Scribe<E, PST13<E>>>::preprocess(&index, &pcs_srs)?;
 
             // w1 := [1, 1, 2, 3]
             let w1 = MLE::from_evals_vec(
@@ -757,9 +753,9 @@ mod tests {
             ];
 
             // generate a proof and verify
-            let proof = <HyperPlonkSNARK<E, MultilinearKzgPCS<E>>>::prove(&pk, &pi, &[w1, w2])?;
+            let proof = <Scribe<E, PST13<E>>>::prove(&pk, &pi, &[w1, w2])?;
 
-            let _verify = <HyperPlonkSNARK<E, MultilinearKzgPCS<E>>>::verify(&vk, &pi, &proof)?;
+            let _verify = <Scribe<E, PST13<E>>>::verify(&vk, &pi, &proof)?;
 
             assert!(_verify);
         }
@@ -771,7 +767,7 @@ mod tests {
                 0, 0, 0, 0, 0, 0,
             ];
             let mut rng = StdRng::from_seed(seed);
-            let pcs_srs = MultilinearKzgPCS::<E>::gen_srs_for_testing(&mut rng, 10)?;
+            let pcs_srs = PST13::<E>::gen_srs_for_testing(&mut rng, 10)?;
 
             let num_constraints = 4;
             let num_pub_input = 4;
@@ -779,7 +775,7 @@ mod tests {
             let _num_witnesses = 2;
 
             // generate index
-            let params = HyperPlonkParams {
+            let params = ScribeParams {
                 num_constraints,
                 num_pub_input,
                 gate_func,
@@ -823,8 +819,7 @@ mod tests {
             };
 
             // generate pk and vks
-            let (pk, bad_vk) =
-                <HyperPlonkSNARK<E, MultilinearKzgPCS<E>>>::preprocess(&bad_index, &pcs_srs)?;
+            let (pk, bad_vk) = <Scribe<E, PST13<E>>>::preprocess(&bad_index, &pcs_srs)?;
 
             // w1 := [1, 1, 2, 3]
             let w1 = MLE::from_evals_vec(
@@ -855,11 +850,9 @@ mod tests {
             ];
 
             // generate a proof and verify
-            let proof = <HyperPlonkSNARK<E, MultilinearKzgPCS<E>>>::prove(&pk, &pi, &[w1, w2])?;
+            let proof = <Scribe<E, PST13<E>>>::prove(&pk, &pi, &[w1, w2])?;
 
-            assert!(
-                <HyperPlonkSNARK<E, MultilinearKzgPCS<E>>>::verify(&bad_vk, &pi, &proof,).is_err()
-            );
+            assert!(<Scribe<E, PST13<E>>>::verify(&bad_vk, &pi, &proof,).is_err());
         }
 
         Ok(())

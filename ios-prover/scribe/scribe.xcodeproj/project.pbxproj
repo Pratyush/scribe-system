@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A245B4B92C8E77B400C65E54 /* TmpDir.swift in Sources */ = {isa = PBXBuildFile; fileRef = A245B4B82C8E77B400C65E54 /* TmpDir.swift */; };
 		A27183382C65E99B004F15AF /* scribeApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A27183372C65E99B004F15AF /* scribeApp.swift */; };
 		A271833A2C65E99B004F15AF /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A27183392C65E99B004F15AF /* ContentView.swift */; };
 		A271833C2C65E99B004F15AF /* Item.swift in Sources */ = {isa = PBXBuildFile; fileRef = A271833B2C65E99B004F15AF /* Item.swift */; };
@@ -15,6 +16,8 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		A245B4B72C8E72D100C65E54 /* Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Header.h; sourceTree = "<group>"; };
+		A245B4B82C8E77B400C65E54 /* TmpDir.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TmpDir.swift; sourceTree = "<group>"; };
 		A27183342C65E99B004F15AF /* scribe.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = scribe.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A27183372C65E99B004F15AF /* scribeApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = scribeApp.swift; sourceTree = "<group>"; };
 		A27183392C65E99B004F15AF /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -54,6 +57,8 @@
 			isa = PBXGroup;
 			children = (
 				A27183372C65E99B004F15AF /* scribeApp.swift */,
+				A245B4B82C8E77B400C65E54 /* TmpDir.swift */,
+				A245B4B72C8E72D100C65E54 /* Header.h */,
 				A27183392C65E99B004F15AF /* ContentView.swift */,
 				A271833B2C65E99B004F15AF /* Item.swift */,
 				A271833D2C65E99C004F15AF /* Assets.xcassets */,
@@ -143,6 +148,7 @@
 				A271833A2C65E99B004F15AF /* ContentView.swift in Sources */,
 				A271833C2C65E99B004F15AF /* Item.swift in Sources */,
 				A27183382C65E99B004F15AF /* scribeApp.swift in Sources */,
+				A245B4B92C8E77B400C65E54 /* TmpDir.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -276,6 +282,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"scribe/Preview Content\"";
+				DEVELOPMENT_TEAM = J25MPRWS8K;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -304,6 +311,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"scribe/Preview Content\"";
+				DEVELOPMENT_TEAM = J25MPRWS8K;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;

@@ -7,9 +7,9 @@ use ark_ff::PrimeField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::log2;
 
-use super::prelude::HyperPlonkErrors;
+use super::prelude::ScribeErrors;
 
-/// The proof for the HyperPlonk PolyIOP, consists of the following:
+/// The proof for the Scribe PolyIOP, consists of the following:
 ///   - the commitments to all witness MLEs
 ///   - a batch opening to all the MLEs at certain index
 ///   - the zero-check proof for checking custom gate-satisfiability
@@ -33,12 +33,12 @@ where
     pub perm_check_proof: PermutationProof<E, PC>,
 }
 
-/// The HyperPlonk instance parameters, consists of the following:
+/// The Scribe instance parameters, consists of the following:
 ///   - the number of constraints
 ///   - number of public input columns
 ///   - the customized gate function
 #[derive(Clone, Debug, Default, PartialEq, Eq, CanonicalDeserialize, CanonicalSerialize)]
-pub struct HyperPlonkParams {
+pub struct ScribeParams {
     /// the number of constraints
     pub num_constraints: usize,
     /// number of public input
@@ -49,7 +49,7 @@ pub struct HyperPlonkParams {
     pub gate_func: CustomizedGates,
 }
 
-impl HyperPlonkParams {
+impl ScribeParams {
     /// Number of variables in a multilinear system
     pub fn num_variables(&self) -> usize {
         log2(self.num_constraints) as usize
@@ -66,10 +66,10 @@ impl HyperPlonkParams {
     }
 
     /// evaluate the identical polynomial
-    pub fn eval_id_oracle<F: PrimeField>(&self, point: &[F]) -> Result<F, HyperPlonkErrors> {
+    pub fn eval_id_oracle<F: PrimeField>(&self, point: &[F]) -> Result<F, ScribeErrors> {
         let len = self.num_variables() + (log2(self.num_witness_columns()) as usize);
         if point.len() != len {
-            return Err(HyperPlonkErrors::InvalidParameters(format!(
+            return Err(ScribeErrors::InvalidParameters(format!(
                 "ID oracle point length = {}, expected {}",
                 point.len(),
                 len,
@@ -86,13 +86,13 @@ impl HyperPlonkParams {
     }
 }
 
-/// The HyperPlonk index, consists of the following:
-///   - HyperPlonk parameters
+/// The Scribe index, consists of the following:
+///   - Scribe parameters
 ///   - the wire permutation
 ///   - the selector vectors
 #[derive(Clone, Debug, Default, Eq, PartialEq, CanonicalDeserialize, CanonicalSerialize)]
 pub struct Index<F: RawPrimeField> {
-    pub params: HyperPlonkParams,
+    pub params: ScribeParams,
     pub permutation: Vec<MLE<F>>,
     pub selectors: Vec<MLE<F>>,
 }
@@ -114,8 +114,8 @@ impl<F: RawPrimeField> Index<F> {
     }
 }
 
-/// The HyperPlonk proving key, consists of the following:
-///   - the hyperplonk instance parameters
+/// The Scribe proving key, consists of the following:
+///   - the scribe instance parameters
 ///   - the preprocessed polynomials output by the indexer
 ///   - the commitment to the selectors and permutations
 ///   - the parameters for polynomial commitment
@@ -124,8 +124,8 @@ pub struct ProvingKey<E: Pairing, PC: PolynomialCommitmentScheme<E>>
 where
     E::ScalarField: RawPrimeField,
 {
-    /// Hyperplonk instance parameters
-    pub params: HyperPlonkParams,
+    /// scribe instance parameters
+    pub params: ScribeParams,
     /// The preprocessed permutation polynomials
     pub permutation_oracles: Vec<MLE<E::ScalarField>>,
     /// The preprocessed selector polynomials
@@ -138,14 +138,14 @@ where
     pub pcs_param: PC::ProverParam,
 }
 
-/// The HyperPlonk verifying key, consists of the following:
-///   - the hyperplonk instance parameters
+/// The Scribe verifying key, consists of the following:
+///   - the scribe instance parameters
 ///   - the commitments to the preprocessed polynomials output by the indexer
 ///   - the parameters for polynomial commitment
 #[derive(Clone, Debug, Default, PartialEq, CanonicalDeserialize, CanonicalSerialize)]
 pub struct VerifyingKey<E: Pairing, PC: PolynomialCommitmentScheme<E>> {
-    /// Hyperplonk instance parameters
-    pub params: HyperPlonkParams,
+    /// scribe instance parameters
+    pub params: ScribeParams,
     /// The parameters for PC commitment
     pub pcs_param: PC::VerifierParam,
     /// A commitment to the preprocessed selector polynomials
@@ -162,9 +162,9 @@ mod test {
     use super::*;
     use crate::snark::mock::MockCircuit;
 
-    use crate::snark::{errors::HyperPlonkErrors, HyperPlonkSNARK};
+    use crate::snark::{errors::ScribeErrors, Scribe};
 
-    use crate::pc::multilinear_kzg::MultilinearKzgPCS;
+    use crate::pc::multilinear_kzg::PST13;
     use crate::pc::PolynomialCommitmentScheme;
     use ark_bls12_381::Bls12_381;
     use ark_bls12_381::Fr;
@@ -172,9 +172,9 @@ mod test {
     use ark_std::test_rng;
 
     #[test]
-    fn test_pk_serialization() -> Result<(), HyperPlonkErrors> {
+    fn test_pk_serialization() -> Result<(), ScribeErrors> {
         let mut rng = test_rng();
-        let srs = MultilinearKzgPCS::<Bls12_381>::gen_fake_srs_for_testing(&mut rng, 6).unwrap();
+        let srs = PST13::<Bls12_381>::gen_fake_srs_for_testing(&mut rng, 6).unwrap();
 
         let vanilla_gate = CustomizedGates::vanilla_plonk_gate();
         let circuit = MockCircuit::<Fr>::new(1 << 6, &vanilla_gate);
@@ -185,15 +185,16 @@ mod test {
             .build()
             .unwrap();
 
-        let (pk, _): (ProvingKey<_, MultilinearKzgPCS<Bls12_381>>, _) = pool
-            .install(|| HyperPlonkSNARK::preprocess(&index, &srs))
-            .unwrap();
+        let (pk, _): (ProvingKey<_, PST13<Bls12_381>>, _) =
+            pool.install(|| Scribe::preprocess(&index, &srs)).unwrap();
 
         let file = File::create("pk.serialization.test").unwrap();
         pk.serialize_uncompressed(&file).unwrap();
 
         let file_2 = File::open("pk.serialization.test").unwrap();
-        let pk_2 = ProvingKey::<Bls12_381, MultilinearKzgPCS<Bls12_381>>::deserialize_uncompressed_unchecked(&file_2).unwrap();
+        let pk_2 =
+            ProvingKey::<Bls12_381, PST13<Bls12_381>>::deserialize_uncompressed_unchecked(&file_2)
+                .unwrap();
         pk_2.permutation_oracles
             .iter()
             .for_each(|p| println!("perm oracle: {p}"));

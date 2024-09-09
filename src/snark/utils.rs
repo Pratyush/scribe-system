@@ -1,8 +1,6 @@
 use crate::pc::structs::Commitment;
 use crate::pc::PolynomialCommitmentScheme;
-use crate::snark::{
-    custom_gate::CustomizedGates, errors::HyperPlonkErrors, structs::HyperPlonkParams,
-};
+use crate::snark::{custom_gate::CustomizedGates, errors::ScribeErrors, structs::ScribeParams};
 use crate::streams::file_vec::FileVec;
 use crate::streams::iterator::BatchedIterator;
 use crate::streams::MLE;
@@ -68,7 +66,7 @@ where
         &self,
         prover_param: impl Borrow<PC::ProverParam>,
         transcript: &mut IOPTranscript<E::ScalarField>,
-    ) -> Result<PC::BatchProof, HyperPlonkErrors> {
+    ) -> Result<PC::BatchProof, ScribeErrors> {
         let evals = self
             .polynomials
             .par_iter()
@@ -91,15 +89,15 @@ where
     }
 }
 
-/// Sanity-check for HyperPlonk SNARK proving
+/// Sanity-check for Scribe SNARK proving
 pub(crate) fn prover_sanity_check<F: RawPrimeField + CanonicalDeserialize + CanonicalSerialize>(
-    params: &HyperPlonkParams,
+    params: &ScribeParams,
     pub_input: &[F],
     witnesses: Vec<MLE<F>>,
-) -> Result<(), HyperPlonkErrors> {
+) -> Result<(), ScribeErrors> {
     // public input length must be no greater than num_constraints
     if pub_input.len() > params.num_constraints {
-        return Err(HyperPlonkErrors::InvalidProver(format!(
+        return Err(ScribeErrors::InvalidProver(format!(
             "Public input length {} is greater than num constraits {}",
             pub_input.len(),
             params.num_pub_input
@@ -108,14 +106,14 @@ pub(crate) fn prover_sanity_check<F: RawPrimeField + CanonicalDeserialize + Cano
 
     // public input length
     if pub_input.len() != params.num_pub_input {
-        return Err(HyperPlonkErrors::InvalidProver(format!(
+        return Err(ScribeErrors::InvalidProver(format!(
             "Public input length is not correct: got {}, expect {}",
             pub_input.len(),
             params.num_pub_input
         )));
     }
     if !pub_input.len().is_power_of_two() {
-        return Err(HyperPlonkErrors::InvalidProver(format!(
+        return Err(ScribeErrors::InvalidProver(format!(
             "Public input length is not power of two: got {}",
             pub_input.len(),
         )));
@@ -124,7 +122,7 @@ pub(crate) fn prover_sanity_check<F: RawPrimeField + CanonicalDeserialize + Cano
     // witnesses length
     for (i, w) in witnesses.iter().enumerate() {
         if 1 << w.num_vars() != params.num_constraints {
-            return Err(HyperPlonkErrors::InvalidProver(format!(
+            return Err(ScribeErrors::InvalidProver(format!(
                 "{}-th witness length is not correct: got {}, expect {}",
                 i,
                 1 << w.num_vars(),
@@ -156,13 +154,13 @@ pub(crate) fn build_f<F: RawPrimeField>(
     num_vars: usize,
     selector_mles: &[MLE<F>],
     witness_mles: &[MLE<F>],
-) -> Result<VirtualPolynomial<F>, HyperPlonkErrors> {
+) -> Result<VirtualPolynomial<F>, ScribeErrors> {
     // TODO: check that selector and witness lengths match what is in
     // the gate definition
 
     for selector_mle in selector_mles.iter() {
         if selector_mle.num_vars() != num_vars {
-            return Err(HyperPlonkErrors::InvalidParameters(format!(
+            return Err(ScribeErrors::InvalidParameters(format!(
                 "selector has different number of vars: {} vs {}",
                 selector_mle.num_vars(),
                 num_vars
@@ -172,7 +170,7 @@ pub(crate) fn build_f<F: RawPrimeField>(
 
     for witness_mle in witness_mles.iter() {
         if witness_mle.num_vars() != num_vars {
-            return Err(HyperPlonkErrors::InvalidParameters(format!(
+            return Err(ScribeErrors::InvalidParameters(format!(
                 "selector has different number of vars: {} vs {}",
                 witness_mle.num_vars(),
                 num_vars
@@ -201,7 +199,7 @@ pub(crate) fn eval_f<F: PrimeField>(
     gates: &CustomizedGates,
     selector_evals: &[F],
     witness_evals: &[F],
-) -> Result<F, HyperPlonkErrors> {
+) -> Result<F, ScribeErrors> {
     let mut res = F::zero();
     for (coeff, selector, witnesses) in gates.gates.iter() {
         let mut cur_value: F = coeff.into_fp();
@@ -240,7 +238,7 @@ pub(crate) fn eval_perm_gate<F: PrimeField>(
     beta: F,
     gamma: F,
     x1: F,
-) -> Result<F, HyperPlonkErrors> {
+) -> Result<F, ScribeErrors> {
     let p1_eval = frac_evals[1] + x1 * (prod_evals[1] - frac_evals[1]);
     let p2_eval = frac_evals[2] + x1 * (prod_evals[2] - frac_evals[2]);
     let mut f_prod_eval = F::one();
@@ -262,11 +260,11 @@ mod test {
     use ark_bls12_381::Fr;
 
     #[test]
-    fn test_build_gate() -> Result<(), HyperPlonkErrors> {
+    fn test_build_gate() -> Result<(), ScribeErrors> {
         test_build_gate_helper::<Fr>()
     }
 
-    fn test_build_gate_helper<F: RawPrimeField>() -> Result<(), HyperPlonkErrors> {
+    fn test_build_gate_helper<F: RawPrimeField>() -> Result<(), ScribeErrors> {
         let num_vars = 2;
 
         // ql = 3x1x2 + 2x2 whose evaluations are

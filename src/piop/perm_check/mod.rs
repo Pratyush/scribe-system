@@ -406,7 +406,7 @@ where
 //     use super::{PermutationCheck, PermutationCheckSubClaim};
 //     use crate::arithmetic::virtual_polynomial::VPAuxInfo;
 //     use crate::{
-//         // pc::{prelude::MultilinearKzgPCS, PolynomialCommitmentScheme},
+//         // pc::{prelude::PST13, PolynomialCommitmentScheme},
 //         arithmetic::virtual_polynomial::VirtualPolynomial,
 //         piop::{errors::PolyIOPErrors, PolyIOP},
 //     };
@@ -430,7 +430,7 @@ where
 //     use ark_ff::Field;
 //     use std::str::FromStr;
 
-//     // type Kzg = MultilinearKzgPCS<Bls12_381>;
+//     // type Kzg = PST13<Bls12_381>;
 
 //     // fn test_permutation_check_helper<E, PC>(
 //     fn test_permutation_check_helper<F: PrimeField>(
@@ -560,8 +560,8 @@ where
 //             0, 0, 0, 0, 0,
 //         ];
 
-//         // let srs = MultilinearKzgPCS::<Bls12_381>::gen_srs_for_testing(&mut rng, nv)?;
-//         // let (pcs_param, _) = MultilinearKzgPCS::<Bls12_381>::trim(&srs, None, Some(nv))?;
+//         // let srs = PST13::<Bls12_381>::gen_srs_for_testing(&mut rng, nv)?;
+//         // let (pcs_param, _) = PST13::<Bls12_381>::trim(&srs, None, Some(nv))?;
 
 //         {
 //             let mut rng = StdRng::from_seed(seed);
@@ -790,8 +790,8 @@ where
 //             0, 0, 0, 0, 0,
 //         ];
 
-//         // let srs = MultilinearKzgPCS::<Bls12_381>::gen_srs_for_testing(&mut rng, nv)?;
-//         // let (pcs_param, _) = MultilinearKzgPCS::<Bls12_381>::trim(&srs, None, Some(nv))?;
+//         // let srs = PST13::<Bls12_381>::gen_srs_for_testing(&mut rng, nv)?;
+//         // let (pcs_param, _) = PST13::<Bls12_381>::trim(&srs, None, Some(nv))?;
 
 //         {
 //             let mut rng = StdRng::from_seed(seed);

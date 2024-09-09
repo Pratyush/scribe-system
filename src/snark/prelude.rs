@@ -1,4 +1,4 @@
 pub use crate::snark::{
-    custom_gate::CustomizedGates, errors::HyperPlonkErrors, selectors::SelectorColumn,
-    witness::WitnessColumn, HyperPlonkSNARK,
+    custom_gate::CustomizedGates, errors::ScribeErrors, selectors::SelectorColumn,
+    witness::WitnessColumn, Scribe,
 };

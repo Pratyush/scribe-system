@@ -1,5 +1,5 @@
 use crate::{
-    snark::errors::HyperPlonkErrors,
+    snark::errors::ScribeErrors,
     streams::{serialize::RawPrimeField, MLE},
 };
 use ark_ff::PrimeField;
@@ -26,11 +26,9 @@ impl<F: PrimeField> WitnessColumn<F> {
     }
 
     /// Build witness columns from rows
-    pub fn from_witness_rows(
-        witness_rows: &[WitnessRow<F>],
-    ) -> Result<Vec<Self>, HyperPlonkErrors> {
+    pub fn from_witness_rows(witness_rows: &[WitnessRow<F>]) -> Result<Vec<Self>, ScribeErrors> {
         if witness_rows.is_empty() {
-            return Err(HyperPlonkErrors::InvalidParameters(
+            return Err(ScribeErrors::InvalidParameters(
                 "empty witness rows".to_string(),
             ));
         }

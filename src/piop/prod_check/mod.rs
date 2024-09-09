@@ -195,7 +195,7 @@ mod test {
     use crate::{
         streams::MLE,
         {
-            pc::{multilinear_kzg::MultilinearKzgPCS, PolynomialCommitmentScheme},
+            pc::{multilinear_kzg::PST13, PolynomialCommitmentScheme},
             piop::errors::PIOPError,
         },
     };
@@ -321,12 +321,10 @@ mod test {
         let gs = vec![g1, g2];
         let hs = vec![h1, h2];
 
-        let srs = MultilinearKzgPCS::<Bls12_381>::gen_srs_for_testing(&mut rng, nv)?;
-        let (pcs_param, _) = MultilinearKzgPCS::<Bls12_381>::trim(&srs, None, Some(nv))?;
+        let srs = PST13::<Bls12_381>::gen_srs_for_testing(&mut rng, nv)?;
+        let (pcs_param, _) = PST13::<Bls12_381>::trim(&srs, None, Some(nv))?;
 
-        test_product_check_helper::<Bls12_381, MultilinearKzgPCS<Bls12_381>>(
-            &fs, &gs, &hs, &pcs_param,
-        )?;
+        test_product_check_helper::<Bls12_381, PST13<Bls12_381>>(&fs, &gs, &hs, &pcs_param)?;
 
         Ok(())
     }

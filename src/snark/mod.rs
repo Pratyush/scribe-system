@@ -13,9 +13,9 @@ pub mod structs;
 pub mod utils;
 mod witness;
 
-/// A trait for HyperPlonk SNARKs.
-/// A HyperPlonk is derived from SumCheck
-pub struct HyperPlonkSNARK<E, PC>
+/// A trait for Scribe SNARKs.
+/// A Scribe is derived from SumCheck
+pub struct Scribe<E, PC>
 where
     E: Pairing,
     E::ScalarField: RawPrimeField,

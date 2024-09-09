@@ -138,7 +138,7 @@ mod test {
     use crate::{
         arithmetic::virtual_polynomial::VPAuxInfo,
         {
-            pc::{multilinear_kzg::MultilinearKzgPCS, PolynomialCommitmentScheme},
+            pc::{multilinear_kzg::PST13, PolynomialCommitmentScheme},
             piop::errors::PIOPError,
         },
     };
@@ -147,7 +147,7 @@ mod test {
     use ark_std::test_rng;
     use std::marker::PhantomData;
 
-    type Kzg = MultilinearKzgPCS<Bls12_381>;
+    type Kzg = PST13<Bls12_381>;
 
     fn test_permutation_check_helper<E, PC>(
         pcs_param: &PC::ProverParam,
@@ -196,8 +196,8 @@ mod test {
     fn test_permutation_check(nv: usize) -> Result<(), PIOPError> {
         let mut rng = test_rng();
 
-        let srs = MultilinearKzgPCS::<Bls12_381>::gen_srs_for_testing(&mut rng, nv)?;
-        let (pcs_param, _) = MultilinearKzgPCS::<Bls12_381>::trim(&srs, None, Some(nv))?;
+        let srs = PST13::<Bls12_381>::gen_srs_for_testing(&mut rng, nv)?;
+        let (pcs_param, _) = PST13::<Bls12_381>::trim(&srs, None, Some(nv))?;
         let id_perms = MLE::identity_permutation_mles(nv, 2);
 
         {

@@ -256,7 +256,7 @@ mod tests {
     use super::*;
     use crate::arithmetic::util::get_batched_nv;
     use crate::pc::multilinear_kzg::srs::MultilinearUniversalParams;
-    use crate::pc::multilinear_kzg::MultilinearKzgPCS;
+    use crate::pc::multilinear_kzg::PST13;
     use crate::pc::StructuredReferenceString;
     use ark_bls12_381::Bls12_381 as E;
     use ark_ec::pairing::Pairing;
@@ -288,24 +288,19 @@ mod tests {
 
         let commitments = polys
             .iter()
-            .map(|poly| MultilinearKzgPCS::commit(&ml_ck, poly).unwrap())
+            .map(|poly| PST13::commit(&ml_ck, poly).unwrap())
             .collect::<Vec<_>>();
 
         let mut transcript = IOPTranscript::new("test transcript".as_ref());
         transcript.append_field_element("init".as_ref(), &Fr::zero())?;
 
-        let batch_proof = multi_open_internal::<E, MultilinearKzgPCS<E>>(
-            &ml_ck,
-            polys,
-            &points,
-            &evals,
-            &mut transcript,
-        )?;
+        let batch_proof =
+            multi_open_internal::<E, PST13<E>>(&ml_ck, polys, &points, &evals, &mut transcript)?;
 
         // good path
         let mut transcript = IOPTranscript::new("test transcript".as_ref());
         transcript.append_field_element("init".as_ref(), &Fr::zero())?;
-        assert!(batch_verify_internal::<E, MultilinearKzgPCS<E>>(
+        assert!(batch_verify_internal::<E, PST13<E>>(
             &ml_vk,
             &commitments,
             &points,

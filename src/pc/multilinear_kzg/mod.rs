@@ -27,7 +27,7 @@ use std::ops::Mul;
 use self::batching::{batch_verify_internal, BatchProof};
 
 /// KZG Polynomial Commitment Scheme on multilinear polynomials.
-pub struct MultilinearKzgPCS<E: Pairing> {
+pub struct PST13<E: Pairing> {
     #[doc(hidden)]
     phantom: PhantomData<E>,
 }
@@ -39,7 +39,7 @@ pub struct MultilinearKzgProof<E: Pairing> {
     pub proofs: Vec<E::G1Affine>,
 }
 
-impl<E: Pairing> PolynomialCommitmentScheme<E> for MultilinearKzgPCS<E>
+impl<E: Pairing> PolynomialCommitmentScheme<E> for PST13<E>
 where
     E::G1Affine: RawAffine,
     E::ScalarField: RawPrimeField,
@@ -327,7 +327,7 @@ where
         let msm_timer =
             start_timer!(|| format!("msm of size {} at round {}", 1 << (nv - 1 - i), i));
 
-        // let commitment = MultilinearKzgPCS::commit(prover_param, &MLE::from_evals(q, nv - 1 - i))?;
+        // let commitment = PST13::commit(prover_param, &MLE::from_evals(q, nv - 1 - i))?;
 
         let commitment = {
             let mut scalars = q.iter();
@@ -443,19 +443,15 @@ mod tests {
     ) -> Result<(), PCSError> {
         let nv = poly.num_vars();
         assert_ne!(nv, 0);
-        let (ck, vk) = MultilinearKzgPCS::trim(params, None, Some(nv))?;
+        let (ck, vk) = PST13::trim(params, None, Some(nv))?;
         let point: Vec<_> = (0..nv).map(|_| Fr::rand(rng)).collect();
-        let com = MultilinearKzgPCS::commit(&ck, poly)?;
-        let (proof, value) = MultilinearKzgPCS::open(&ck, poly, &point)?;
+        let com = PST13::commit(&ck, poly)?;
+        let (proof, value) = PST13::open(&ck, poly, &point)?;
 
-        assert!(MultilinearKzgPCS::verify(
-            &vk, &com, &point, &value, &proof
-        )?);
+        assert!(PST13::verify(&vk, &com, &point, &value, &proof)?);
 
         let value = Fr::rand(rng);
-        assert!(!MultilinearKzgPCS::verify(
-            &vk, &com, &point, &value, &proof
-        )?);
+        assert!(!PST13::verify(&vk, &com, &point, &value, &proof)?);
 
         Ok(())
     }
@@ -464,7 +460,7 @@ mod tests {
     fn test_single_commit() -> Result<(), PCSError> {
         let mut rng = test_rng();
 
-        let params = MultilinearKzgPCS::<E>::gen_srs_for_testing(&mut rng, 10)?;
+        let params = PST13::<E>::gen_srs_for_testing(&mut rng, 10)?;
 
         // normal polynomials
         let poly1 = MLE::rand(8, &mut rng);
@@ -482,6 +478,6 @@ mod tests {
         let mut rng = test_rng();
 
         // normal polynomials
-        assert!(MultilinearKzgPCS::<E>::gen_srs_for_testing(&mut rng, 0).is_err());
+        assert!(PST13::<E>::gen_srs_for_testing(&mut rng, 0).is_err());
     }
 }

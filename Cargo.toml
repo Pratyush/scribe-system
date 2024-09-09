@@ -49,11 +49,6 @@ print-trace = [
 ] 
 
 [[bench]]
-name = "scribe-benches"
-path = "src/benches/bench.rs"
-harness = false
-
-[[bench]]
 name = "file_vec"
 path = "benches/file_vec.rs"
 harness = false
@@ -74,10 +69,10 @@ name = "mle"
 path = "benches/mle.rs"
 harness = false
 
-[[bin]]
+[[example]]
 name = "setup"
 path = "example/setup.rs"
 
-[[bin]]
-name = "bench"
-path = "example/bench.rs"
+[[example]]
+name = "prover"
+path = "example/prover.rs"

@@ -19,7 +19,8 @@ struct ContentView: View {
                     NavigationLink {
                         Text("Item at \(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))")
                     } label: {
-                        Text(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))
+                        Text(NSTemporaryDirectory())
+                        // Text(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))
                     }
                 }
                 .onDelete(perform: deleteItems)
@@ -40,6 +41,11 @@ struct ContentView: View {
     }
 
     private func addItem() {
+        if let tmpDir = ProcessInfo.processInfo.environment["TMPDIR"] {
+            print("TMPDIR: \(tmpDir)")
+        } else {
+            print("TMPDIR is not set")
+        }
         withAnimation {
             let newItem = Item(timestamp: Date())
             modelContext.insert(newItem)

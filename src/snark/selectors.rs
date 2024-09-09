@@ -1,5 +1,5 @@
 use crate::{
-    snark::errors::HyperPlonkErrors,
+    snark::errors::ScribeErrors,
     streams::{serialize::RawPrimeField, MLE},
 };
 use ark_ff::PrimeField;
@@ -26,11 +26,9 @@ impl<F: PrimeField> SelectorColumn<F> {
     }
 
     /// Build selector columns from rows
-    pub fn from_selector_rows(
-        selector_rows: &[SelectorRow<F>],
-    ) -> Result<Vec<Self>, HyperPlonkErrors> {
+    pub fn from_selector_rows(selector_rows: &[SelectorRow<F>]) -> Result<Vec<Self>, ScribeErrors> {
         if selector_rows.is_empty() {
-            return Err(HyperPlonkErrors::InvalidParameters(
+            return Err(ScribeErrors::InvalidParameters(
                 "empty witness rows".to_string(),
             ));
         }

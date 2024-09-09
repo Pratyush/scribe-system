@@ -241,8 +241,8 @@ mod test {
     //     let mut rng = StdRng::seed_from_u64(42); // Fixed seed for reproducibility
     //     let mut transcript = <PolyIOP<Fr> as ProductCheck<E, PC>>::init_transcript();
 
-    //     // let srs = MultilinearKzgPCS::<Bls12_381>::gen_srs_for_testing(&mut rng, nv).unwrap();
-    //     // let (pcs_param, _) = MultilinearKzgPCS::<Bls12_381>::trim(&srs, None, Some(nv)).unwrap();
+    //     // let srs = PST13::<Bls12_381>::gen_srs_for_testing(&mut rng, nv).unwrap();
+    //     // let (pcs_param, _) = PST13::<Bls12_381>::trim(&srs, None, Some(nv)).unwrap();
 
     //     // create fxs
     //     let f1 = vec![Fr::from(1u64), Fr::from(2u64), Fr::from(3u64), Fr::from(4u64)];

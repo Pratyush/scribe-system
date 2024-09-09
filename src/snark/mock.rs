@@ -6,7 +6,7 @@ use ark_std::{end_timer, log2, start_timer, test_rng};
 
 use crate::snark::{
     custom_gate::CustomizedGates,
-    structs::{HyperPlonkParams, Index},
+    structs::{Index, ScribeParams},
 };
 
 #[derive(CanonicalDeserialize, CanonicalSerialize)]
@@ -85,7 +85,7 @@ impl<F: RawPrimeField> MockCircuit<F> {
         let mut public_inputs = witnesses[0].evals().iter().to_vec();
         public_inputs.truncate(pub_input_len);
 
-        let params = HyperPlonkParams {
+        let params = ScribeParams {
             num_constraints,
             num_pub_input: pub_input_len,
             gate_func: gate.clone(),
@@ -133,9 +133,9 @@ mod test {
 
     use super::*;
     use crate::pc::multilinear_kzg::srs::MultilinearUniversalParams;
-    use crate::pc::multilinear_kzg::MultilinearKzgPCS;
+    use crate::pc::multilinear_kzg::PST13;
     use crate::pc::PolynomialCommitmentScheme;
-    use crate::snark::{errors::HyperPlonkErrors, HyperPlonkSNARK};
+    use crate::snark::{errors::ScribeErrors, Scribe};
     use ark_bls12_381::Bls12_381;
     use ark_bls12_381::Fr;
     use ark_std::test_rng;
@@ -170,36 +170,30 @@ mod test {
         nv: usize,
         gate: &CustomizedGates,
         pcs_srs: &MultilinearUniversalParams<Bls12_381>,
-    ) -> Result<(), HyperPlonkErrors> {
+    ) -> Result<(), ScribeErrors> {
         let circuit = MockCircuit::<Fr>::new(1 << nv, gate);
         assert!(circuit.is_satisfied());
 
         let index = circuit.index;
         // generate pk and vks
-        let (pk, vk) = <HyperPlonkSNARK<Bls12_381, MultilinearKzgPCS<Bls12_381>>>::preprocess(
-            &index, pcs_srs,
-        )?;
+        let (pk, vk) = <Scribe<Bls12_381, PST13<Bls12_381>>>::preprocess(&index, pcs_srs)?;
         // generate a proof and verify
-        let proof = <HyperPlonkSNARK<Bls12_381, MultilinearKzgPCS<Bls12_381>>>::prove(
+        let proof = <Scribe<Bls12_381, PST13<Bls12_381>>>::prove(
             &pk,
             &circuit.public_inputs,
             &circuit.witnesses,
         )?;
 
-        let verify = <HyperPlonkSNARK<Bls12_381, MultilinearKzgPCS<Bls12_381>>>::verify(
-            &vk,
-            &circuit.public_inputs,
-            &proof,
-        )?;
+        let verify =
+            <Scribe<Bls12_381, PST13<Bls12_381>>>::verify(&vk, &circuit.public_inputs, &proof)?;
         assert!(verify);
         Ok(())
     }
 
     #[test]
-    fn test_mock_circuit_zkp() -> Result<(), HyperPlonkErrors> {
+    fn test_mock_circuit_zkp() -> Result<(), ScribeErrors> {
         let mut rng = test_rng();
-        let pcs_srs =
-            MultilinearKzgPCS::<Bls12_381>::gen_srs_for_testing(&mut rng, SUPPORTED_SIZE)?;
+        let pcs_srs = PST13::<Bls12_381>::gen_srs_for_testing(&mut rng, SUPPORTED_SIZE)?;
         for nv in MIN_NUM_VARS..MAX_NUM_VARS {
             let vanilla_gate = CustomizedGates::vanilla_plonk_gate();
             test_mock_circuit_zkp_helper(nv, &vanilla_gate, &pcs_srs)?;
@@ -220,10 +214,9 @@ mod test {
     }
 
     #[test]
-    fn test_mock_circuit_e2e() -> Result<(), HyperPlonkErrors> {
+    fn test_mock_circuit_e2e() -> Result<(), ScribeErrors> {
         let mut rng = test_rng();
-        let pcs_srs =
-            MultilinearKzgPCS::<Bls12_381>::gen_srs_for_testing(&mut rng, SUPPORTED_SIZE)?;
+        let pcs_srs = PST13::<Bls12_381>::gen_srs_for_testing(&mut rng, SUPPORTED_SIZE)?;
         let nv = MAX_NUM_VARS;
 
         let turboplonk_gate = CustomizedGates::jellyfish_turbo_plonk_gate();
@@ -233,10 +226,9 @@ mod test {
     }
 
     #[test]
-    fn test_mock_long_selector_e2e() -> Result<(), HyperPlonkErrors> {
+    fn test_mock_long_selector_e2e() -> Result<(), ScribeErrors> {
         let mut rng = test_rng();
-        let pcs_srs =
-            MultilinearKzgPCS::<Bls12_381>::gen_srs_for_testing(&mut rng, SUPPORTED_SIZE)?;
+        let pcs_srs = PST13::<Bls12_381>::gen_srs_for_testing(&mut rng, SUPPORTED_SIZE)?;
         let nv = MAX_NUM_VARS;
 
         let long_selector_gate = CustomizedGates::super_long_selector_gate();
@@ -246,7 +238,7 @@ mod test {
     }
 
     #[test]
-    fn test_mock_circuit_serialization() -> Result<(), HyperPlonkErrors> {
+    fn test_mock_circuit_serialization() -> Result<(), ScribeErrors> {
         let vanilla_gate = CustomizedGates::vanilla_plonk_gate();
         let circuit = MockCircuit::<Fr>::new(1 << 6, &vanilla_gate);
         let mut buf = File::create("mock_circuit.test").unwrap();
