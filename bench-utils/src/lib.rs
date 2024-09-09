@@ -70,20 +70,31 @@ pub fn setup(min_num_vars: usize, max_num_vars: usize) {
 }
 
 pub fn prover(min_num_vars: usize, max_num_vars: usize) -> Result<(), ScribeErrors> {
-    let mut params = File::open(format!(
-        "circuit_pk_vk_{min_num_vars}_to_{max_num_vars}.params"
-    ))
-    .unwrap();
+    let circuit_filename = format!("circuit_{min_num_vars}_to_{max_num_vars}.params");
+    let pk_filename = format!("pk_{min_num_vars}_to_{max_num_vars}.params");
+    let vk_filename = format!("vk_{min_num_vars}_to_{max_num_vars}.params");
+    let mut circuit_file = OpenOptions::new()
+        .read(true)
+        .open(&circuit_filename)
+        .unwrap();
+    let mut pk_file = OpenOptions::new()
+        .read(true)
+        .open(&pk_filename)
+        .unwrap();
+    let mut vk_file = OpenOptions::new()
+        .read(true)
+        .open(&vk_filename)
+        .unwrap();
 
     for nv in min_num_vars..=max_num_vars {
-        let circuit = MockCircuit::<Fr>::deserialize_uncompressed_unchecked(&mut params).unwrap();
+        let circuit = MockCircuit::<Fr>::deserialize_uncompressed_unchecked(&mut circuit_file).unwrap();
         assert_eq!(circuit.index.num_variables(), nv);
         assert!(circuit.is_satisfied());
 
-        let pk = ProvingKey::<Bls12_381, PST13<_>>::deserialize_uncompressed_unchecked(&mut params)
+        let pk = ProvingKey::<Bls12_381, PST13<_>>::deserialize_uncompressed_unchecked(&mut pk_file)
             .unwrap();
         let vk =
-            VerifyingKey::<Bls12_381, PST13<_>>::deserialize_uncompressed_unchecked(&mut params)
+            VerifyingKey::<Bls12_381, PST13<_>>::deserialize_uncompressed_unchecked(&mut vk_file)
                 .unwrap();
         assert_eq!(vk.params.num_variables(), nv);
 
