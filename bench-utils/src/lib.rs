@@ -1,18 +1,17 @@
-use std::{fs::File, time::Instant};
 use std::fs::OpenOptions;
-
+use std::{fs::File, time::Instant};
 
 use ark_bls12_381::Bls12_381;
 use ark_bls12_381::Fr;
 use ark_serialize::CanonicalDeserialize;
-use libc::size_t;
-use scribe::pc::multilinear_kzg::PST13;
-use scribe::snark::structs::{ProvingKey, VerifyingKey};
-use scribe::snark::{errors::ScribeErrors, mock::MockCircuit, Scribe};
 use ark_serialize::CanonicalSerialize;
 use ark_std::test_rng;
+use libc::size_t;
+use scribe::pc::multilinear_kzg::PST13;
 use scribe::pc::PolynomialCommitmentScheme;
 use scribe::snark::custom_gate::CustomizedGates;
+use scribe::snark::structs::{ProvingKey, VerifyingKey};
+use scribe::snark::{errors::ScribeErrors, mock::MockCircuit, Scribe};
 
 pub fn setup(min_num_vars: usize, max_num_vars: usize) {
     // generate and serialize srs
