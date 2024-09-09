@@ -1,5 +1,5 @@
 use std::fs::OpenOptions;
-use std::{fs::File, time::Instant};
+use std::time::Instant;
 
 use ark_bls12_381::Bls12_381;
 use ark_bls12_381::Fr;
@@ -77,22 +77,18 @@ pub fn prover(min_num_vars: usize, max_num_vars: usize) -> Result<(), ScribeErro
         .read(true)
         .open(&circuit_filename)
         .unwrap();
-    let mut pk_file = OpenOptions::new()
-        .read(true)
-        .open(&pk_filename)
-        .unwrap();
-    let mut vk_file = OpenOptions::new()
-        .read(true)
-        .open(&vk_filename)
-        .unwrap();
+    let mut pk_file = OpenOptions::new().read(true).open(&pk_filename).unwrap();
+    let mut vk_file = OpenOptions::new().read(true).open(&vk_filename).unwrap();
 
     for nv in min_num_vars..=max_num_vars {
-        let circuit = MockCircuit::<Fr>::deserialize_uncompressed_unchecked(&mut circuit_file).unwrap();
+        let circuit =
+            MockCircuit::<Fr>::deserialize_uncompressed_unchecked(&mut circuit_file).unwrap();
         assert_eq!(circuit.index.num_variables(), nv);
         assert!(circuit.is_satisfied());
 
-        let pk = ProvingKey::<Bls12_381, PST13<_>>::deserialize_uncompressed_unchecked(&mut pk_file)
-            .unwrap();
+        let pk =
+            ProvingKey::<Bls12_381, PST13<_>>::deserialize_uncompressed_unchecked(&mut pk_file)
+                .unwrap();
         let vk =
             VerifyingKey::<Bls12_381, PST13<_>>::deserialize_uncompressed_unchecked(&mut vk_file)
                 .unwrap();
