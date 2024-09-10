@@ -11,11 +11,22 @@ ark-std = { version = "^0.4", features = ["parallel"] }
 scribe = { path = "../scribe-snark", features = ["parallel"] }
 libc = { version = "^0.2.101" }
 rayon = { version = "^1.5" }
+hp = { git = "https://github.com/EspressoSystems/hyperplonk/", package = "hyperplonk" }
+hp-subroutines = { git = "https://github.com/EspressoSystems/hyperplonk/", package = "subroutines" }
 
 [[example]]
-name = "setup"
-path = "example/setup.rs"
+name = "scribe-setup"
+path = "example/scribe-setup.rs"
 
 [[example]]
-name = "prover"
-path = "example/prover.rs"
+name = "scribe-prover"
+path = "example/scribe-prover.rs"
+
+
+[[example]]
+name = "hp-setup"
+path = "example/hp-setup.rs"
+
+[[example]]
+name = "hp-prover"
+path = "example/hp-prover.rs"

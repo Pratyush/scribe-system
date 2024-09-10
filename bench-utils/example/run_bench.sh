@@ -10,16 +10,13 @@ threads=(1)
 
 # Setup
 # 
-cargo run --release --example setup $1 $2
+cargo run --release --example scribe-setup $1 $2 .
+cargo run --release --example hp-setup $1 $2 .
 
 # Loop over the thread numbers
 for num_threads in "${threads[@]}"
 do
     echo "Running with $num_threads threads"
-    # TODO: run scribe-prover-bench.rs (cargo run --release --example hp-prover)
-    # TODO: if srs file doesn't exist, run our setup.rs (cargo run --release --example scribe-setup)
-    #
-    # Run the command with the current number of threads and log the output
-    # TODO: change this to cargo run --release --example scribe-prover
-    env RAYON_NUM_THREADS=$num_threads cargo run --release --example prover $1 $2  > "scribe-${num_threads}.txt"
+    env RAYON_NUM_THREADS=$num_threads cargo run --release --example scribe-prover $1 $2 . > "scribe-${num_threads}.txt"
+    env RAYON_NUM_THREADS=$num_threads cargo run --release --example hp-prover $1 $2 . > "hp-${num_threads}.txt"
 done
