@@ -158,14 +158,14 @@ impl<F: RawPrimeField> SumCheck<F> {
         for i in 0..aux_info.num_variables {
             let prover_msg = proof.proofs.get(i).expect("proof is incomplete");
             transcript.append_serializable_element(b"prover msg", prover_msg)?;
-            let challenge = IOPVerifierState::verify_round_and_update_state(
+            let _challenge = IOPVerifierState::verify_round_and_update_state(
                 &mut verifier_state,
                 prover_msg,
                 transcript,
             )?;
 
             #[cfg(debug_assertions)]
-            println!("round={}, verifier challenge: {}", i, challenge);
+            println!("round={i}, verifier challenge: {_challenge}");
         }
 
         let res = IOPVerifierState::check_and_generate_subclaim(&verifier_state, &claimed_sum);
