@@ -15,6 +15,7 @@ cargo run --release --example setup $1 $2
 # Loop over the thread numbers
 for num_threads in "${threads[@]}"
 do
+    echo "Running with $num_threads threads"
     # TODO: run scribe-prover-bench.rs (cargo run --release --example hp-prover)
     # TODO: if srs file doesn't exist, run our setup.rs (cargo run --release --example scribe-setup)
     #
