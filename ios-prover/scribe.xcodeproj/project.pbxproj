@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		A245B4B92C8E77B400C65E54 /* TmpDir.swift in Sources */ = {isa = PBXBuildFile; fileRef = A245B4B82C8E77B400C65E54 /* TmpDir.swift */; };
+		A245B4BB2C90201E00C65E54 /* libbench_utils.a in Frameworks */ = {isa = PBXBuildFile; fileRef = A245B4BA2C90201E00C65E54 /* libbench_utils.a */; };
 		A27183382C65E99B004F15AF /* scribeApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A27183372C65E99B004F15AF /* scribeApp.swift */; };
 		A271833A2C65E99B004F15AF /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A27183392C65E99B004F15AF /* ContentView.swift */; };
 		A271833C2C65E99B004F15AF /* Item.swift in Sources */ = {isa = PBXBuildFile; fileRef = A271833B2C65E99B004F15AF /* Item.swift */; };
@@ -17,7 +17,7 @@
 
 /* Begin PBXFileReference section */
 		A245B4B72C8E72D100C65E54 /* Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Header.h; sourceTree = "<group>"; };
-		A245B4B82C8E77B400C65E54 /* TmpDir.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TmpDir.swift; sourceTree = "<group>"; };
+		A245B4BA2C90201E00C65E54 /* libbench_utils.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libbench_utils.a; path = "../../../target/aarch64-apple-ios/release/libbench_utils.a"; sourceTree = "<group>"; };
 		A27183342C65E99B004F15AF /* scribe.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = scribe.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A27183372C65E99B004F15AF /* scribeApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = scribeApp.swift; sourceTree = "<group>"; };
 		A27183392C65E99B004F15AF /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -31,6 +31,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A245B4BB2C90201E00C65E54 /* libbench_utils.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -56,8 +57,8 @@
 		A27183362C65E99B004F15AF /* scribe */ = {
 			isa = PBXGroup;
 			children = (
+				A245B4BA2C90201E00C65E54 /* libbench_utils.a */,
 				A27183372C65E99B004F15AF /* scribeApp.swift */,
-				A245B4B82C8E77B400C65E54 /* TmpDir.swift */,
 				A245B4B72C8E72D100C65E54 /* Header.h */,
 				A27183392C65E99B004F15AF /* ContentView.swift */,
 				A271833B2C65E99B004F15AF /* Item.swift */,
@@ -148,7 +149,6 @@
 				A271833A2C65E99B004F15AF /* ContentView.swift in Sources */,
 				A271833C2C65E99B004F15AF /* Item.swift in Sources */,
 				A27183382C65E99B004F15AF /* scribeApp.swift in Sources */,
-				A245B4B92C8E77B400C65E54 /* TmpDir.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -268,6 +268,7 @@
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				VALIDATE_PRODUCT = YES;
