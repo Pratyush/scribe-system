@@ -1,8 +1,8 @@
 //
 //  ContentView.swift
-//  scribe
+//  mobile-scribe
 //
-//  Created by Pratyush Mishra on 8/8/24.
+//  Created by Pratyush Mishra on 9/10/24.
 //
 
 import SwiftUI
@@ -19,8 +19,7 @@ struct ContentView: View {
                     NavigationLink {
                         Text("Item at \(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))")
                     } label: {
-                        Text(NSTemporaryDirectory())
-                        // Text(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))
+                        Text(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))
                     }
                 }
                 .onDelete(perform: deleteItems)
@@ -41,11 +40,6 @@ struct ContentView: View {
     }
 
     private func addItem() {
-        if let tmpDir = ProcessInfo.processInfo.environment["TMPDIR"] {
-            print("TMPDIR: \(tmpDir)")
-        } else {
-            print("TMPDIR is not set")
-        }
         withAnimation {
             let newItem = Item(timestamp: Date())
             modelContext.insert(newItem)

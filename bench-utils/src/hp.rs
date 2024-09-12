@@ -25,7 +25,7 @@ type VerifyingKey =
     <PolyIOP<Fr> as HyperPlonkSNARK<Bls12_381, MultilinearKzgPCS<Bls12_381>>>::VerifyingKey;
 type HyperPlonk = PolyIOP<Fr>;
 
-pub fn hp_setup(_min_num_vars: usize, max_num_vars: usize, file_dir_path: &Path) {
+pub fn setup(_min_num_vars: usize, max_num_vars: usize, file_dir_path: &Path) {
     // generate and serialize srs
     let mut rng = test_rng();
     let pc_srs = timed!(
@@ -46,7 +46,7 @@ pub fn hp_setup(_min_num_vars: usize, max_num_vars: usize, file_dir_path: &Path)
     );
 }
 
-pub fn hp_prover(
+pub fn prover(
     min_num_vars: usize,
     max_num_vars: usize,
     file_dir_path: &Path,

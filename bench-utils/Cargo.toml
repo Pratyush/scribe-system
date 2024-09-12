@@ -13,6 +13,7 @@ libc = { version = "^0.2.101" }
 rayon = { version = "^1.5" }
 hp = { git = "https://github.com/EspressoSystems/hyperplonk/", package = "hyperplonk" }
 hp-subroutines = { git = "https://github.com/EspressoSystems/hyperplonk/", package = "subroutines" }
+rlimit = { version = "^0.10" }
 
 [lib]
 crate-type = ["staticlib", "rlib"]

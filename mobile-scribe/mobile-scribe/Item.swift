@@ -1,8 +1,8 @@
 //
 //  Item.swift
-//  scribe
+//  mobile-scribe
 //
-//  Created by Pratyush Mishra on 8/8/24.
+//  Created by Pratyush Mishra on 9/10/24.
 //
 
 import Foundation
