@@ -1,8 +1,8 @@
 use crate::arithmetic::util::gen_eval_point;
 use crate::arithmetic::virtual_polynomial::VPAuxInfo;
-use crate::pc::multilinear_kzg::batching::BatchProof;
+use crate::pc::pst13::batching::BatchProof;
 use crate::pc::structs::Commitment;
-use crate::pc::PolynomialCommitmentScheme;
+use crate::pc::PCScheme;
 use crate::snark::utils::PcsAccumulator;
 
 use crate::piop::perm_check_original::PermutationCheck;
@@ -28,7 +28,7 @@ impl<E, PC> Scribe<E, PC>
 where
     E: Pairing,
     E::ScalarField: RawPrimeField,
-    PC: PolynomialCommitmentScheme<
+    PC: PCScheme<
         E,
         Polynomial = MLE<E::ScalarField>,
         Point = Vec<E::ScalarField>,
@@ -80,11 +80,11 @@ where
                 selector_oracles,
                 selector_commitments: selector_commitments.clone(),
                 permutation_commitments: permutation_commitments.clone(),
-                pcs_param: pcs_prover_param,
+                pc_ck: pcs_prover_param,
             },
             VerifyingKey {
                 params: index.params.clone(),
-                pcs_param: pcs_verifier_param,
+                pc_vk: pcs_verifier_param,
                 selector_commitments,
                 perm_commitments: permutation_commitments,
             },
@@ -167,7 +167,7 @@ where
 
         let witness_commits = witnesses
             .par_iter()
-            .map(|x| PC::commit(&pk.pcs_param, x).unwrap())
+            .map(|x| PC::commit(&pk.pc_ck, x).unwrap())
             .collect::<Vec<_>>();
         for w_com in witness_commits.iter() {
             transcript.append_serializable_element(b"w", w_com)?;
@@ -206,7 +206,7 @@ where
         let step = start_timer!(|| "Permutation check on w_i(x)");
 
         let (perm_check_proof, prod_x, frac_poly) = <PermutationCheck<E, PC>>::prove(
-            &pk.pcs_param,
+            &pk.pc_ck,
             witnesses,
             witnesses,
             &pk.permutation_oracles,
@@ -331,7 +331,7 @@ where
         // note that these opening create a rlc of the polynomials in the accumulator
         // so the original polynomials (copies) aren't folded
         // that's why we use for example witnesses rather than witnesses_copy for calculating evaluations
-        let batch_openings = pcs_acc.multi_open(&pk.pcs_param, &mut transcript)?;
+        let batch_openings = pcs_acc.multi_open(&pk.pc_ck, &mut transcript)?;
         end_timer!(step);
 
         end_timer!(start);
@@ -602,7 +602,7 @@ where
         let step = start_timer!(|| "PC batch verify");
         // check proof
         let res = PC::batch_verify(
-            &vk.pcs_param,
+            &vk.pc_vk,
             &comms,
             &points,
             &proof.batch_openings,
@@ -618,9 +618,9 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::pc::multilinear_kzg::PST13;
+    use crate::pc::pst13::PST13;
     use crate::{
-        snark::{custom_gate::CustomizedGates, structs::ScribeParams},
+        snark::{custom_gate::CustomizedGates, structs::ScribeConfig},
         streams::serialize::RawAffine,
     };
 
@@ -673,7 +673,7 @@ mod tests {
             let _num_witnesses = 2;
 
             // generate index
-            let params = ScribeParams {
+            let params = ScribeConfig {
                 num_constraints,
                 num_pub_input,
                 gate_func: gate_func.clone(),
@@ -775,7 +775,7 @@ mod tests {
             let _num_witnesses = 2;
 
             // generate index
-            let params = ScribeParams {
+            let params = ScribeConfig {
                 num_constraints,
                 num_pub_input,
                 gate_func,

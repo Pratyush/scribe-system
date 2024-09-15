@@ -4,5 +4,5 @@ pub use crate::pc::{
         srs::{MultilinearProverParam, MultilinearUniversalParams, MultilinearVerifierParam},
         PST13, MultilinearKzgProof,
     },
-    structs::Commitment, PolynomialCommitmentScheme, StructuredReferenceString,
+    structs::Commitment, PCScheme, StructuredReferenceString,
 };

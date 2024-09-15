@@ -1,5 +1,5 @@
 use crate::arithmetic::errors::ArithError;
-use crate::pc::errors::PCSError;
+use crate::pc::errors::PCError;
 use crate::piop::errors::PIOPError;
 use crate::transcript::TranscriptError;
 use ark_serialize::SerializationError;
@@ -22,7 +22,7 @@ pub enum ScribeErrors {
     /// PolyIOP error {0}
     PolyIOPErrors(PIOPError),
     /// PC error {0}
-    PCSErrors(PCSError),
+    PCSErrors(PCError),
     /// Transcript error {0}
     TranscriptError(TranscriptError),
     /// Arithmetic Error: {0}
@@ -41,8 +41,8 @@ impl From<PIOPError> for ScribeErrors {
     }
 }
 
-impl From<PCSError> for ScribeErrors {
-    fn from(e: PCSError) -> Self {
+impl From<PCError> for ScribeErrors {
+    fn from(e: PCError) -> Self {
         Self::PCSErrors(e)
     }
 }

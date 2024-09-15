@@ -49,9 +49,11 @@ pub fn setup(_min_num_vars: usize, max_num_vars: usize, file_dir_path: &Path) {
 pub fn prover(
     min_num_vars: usize,
     max_num_vars: usize,
+    supported_size: impl Into<Option<usize>>,
     file_dir_path: &Path,
 ) -> Result<(), HyperPlonkErrors> {
-    let srs_filename = file_dir_path.join(format!("hp_srs_{max_num_vars}.params"));
+    let supported_size = supported_size.into().unwrap_or(max_num_vars);
+    let srs_filename = file_dir_path.join(format!("hp_srs_{supported_size}.params"));
     let srs_file = File::open(&srs_filename).unwrap();
     let mut srs_file = std::io::BufReader::new(srs_file);
     let pc_srs =

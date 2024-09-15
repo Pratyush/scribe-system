@@ -19,11 +19,18 @@ pub mod scribe;
 pub extern "C" fn bench_scribe_prover(
     min_num_vars: size_t,
     max_num_vars: size_t,
+    supported_size: size_t,
     file_dir_path: *const c_char,
 ) -> size_t {
     rlimit::increase_nofile_limit(1 << 13).unwrap();
     let file_dir_path = unsafe { CStr::from_ptr(file_dir_path) }.to_str().unwrap();
-    match scribe::prover(min_num_vars, max_num_vars, Path::new(file_dir_path)) {
+    match scribe::prover(
+        min_num_vars,
+        max_num_vars,
+        supported_size,
+        Path::new(file_dir_path),
+        true,
+    ) {
         Ok(_) => 0,
         Err(_) => 1,
     }
@@ -33,10 +40,16 @@ pub extern "C" fn bench_scribe_prover(
 pub extern "C" fn bench_hp_prover(
     min_num_vars: size_t,
     max_num_vars: size_t,
+    supported_size: size_t,
     file_dir_path: *const c_char,
 ) -> size_t {
     let file_dir_path = unsafe { CStr::from_ptr(file_dir_path) }.to_str().unwrap();
-    match hp::prover(min_num_vars, max_num_vars, Path::new(file_dir_path)) {
+    match hp::prover(
+        min_num_vars,
+        max_num_vars,
+        supported_size,
+        Path::new(file_dir_path),
+    ) {
         Ok(_) => 0,
         Err(_) => 1,
     }

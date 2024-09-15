@@ -1,5 +1,5 @@
 pub mod errors;
-pub mod multilinear_kzg;
+pub mod pst13;
 pub mod structs;
 
 // pub mod prelude;
@@ -9,16 +9,16 @@ use ark_ec::pairing::Pairing;
 use ark_ff::Field;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::rand::Rng;
-use errors::PCSError;
+use errors::PCError;
 use std::{borrow::Borrow, fmt::Debug, hash::Hash};
 
 /// This trait defines APIs for polynomial commitment schemes.
 /// Note that for our usage of PC, we do not require the hiding property.
-pub trait PolynomialCommitmentScheme<E: Pairing> {
+pub trait PCScheme<E: Pairing> {
     /// Prover parameters
-    type ProverParam: Sync + CanonicalDeserialize + CanonicalSerialize;
+    type CommitterKey: Sync + CanonicalDeserialize + CanonicalSerialize;
     /// Verifier parameters
-    type VerifierParam: Clone + CanonicalSerialize + CanonicalDeserialize;
+    type VerifierKey: Clone + CanonicalSerialize + CanonicalDeserialize;
     /// Structured reference string
     type SRS: Debug;
     /// Polynomial and its associated types
@@ -51,12 +51,12 @@ pub trait PolynomialCommitmentScheme<E: Pairing> {
     fn gen_srs_for_testing<R: Rng>(
         rng: &mut R,
         supported_size: usize,
-    ) -> Result<Self::SRS, PCSError>;
+    ) -> Result<Self::SRS, PCError>;
 
     fn gen_fake_srs_for_testing<R: Rng>(
         rng: &mut R,
         supported_size: usize,
-    ) -> Result<Self::SRS, PCSError>;
+    ) -> Result<Self::SRS, PCError>;
 
     /// Trim the universal parameters to specialize the public parameters.
     /// Input both `supported_degree` for univariate and
@@ -72,7 +72,7 @@ pub trait PolynomialCommitmentScheme<E: Pairing> {
         srs: impl Borrow<Self::SRS>,
         supported_degree: Option<usize>,
         supported_num_vars: Option<usize>,
-    ) -> Result<(Self::ProverParam, Self::VerifierParam), PCSError>;
+    ) -> Result<(Self::CommitterKey, Self::VerifierKey), PCError>;
 
     /// Generate a commitment for a polynomial
     /// ## Note on function signature
@@ -84,17 +84,17 @@ pub trait PolynomialCommitmentScheme<E: Pairing> {
     /// Box<Self::ProverParam>, ..)` or `commit(prover_param:
     /// Arc<Self::ProverParam>, ..)` etc.
     fn commit(
-        prover_param: impl Borrow<Self::ProverParam>,
+        prover_param: impl Borrow<Self::CommitterKey>,
         poly: &Self::Polynomial,
-    ) -> Result<Self::Commitment, PCSError>;
+    ) -> Result<Self::Commitment, PCError>;
 
     /// On input a polynomial `p` and a point `point`, outputs a proof for the
     /// same.
     fn open(
-        prover_param: impl Borrow<Self::ProverParam>,
+        prover_param: impl Borrow<Self::CommitterKey>,
         polynomial: &Self::Polynomial,
         point: &Self::Point,
-    ) -> Result<(Self::Proof, Self::Evaluation), PCSError>;
+    ) -> Result<(Self::Proof, Self::Evaluation), PCError>;
 
     // // just a RLN of regular open
     // fn multi_open_single_point(
@@ -108,12 +108,12 @@ pub trait PolynomialCommitmentScheme<E: Pairing> {
     /// Input a list of multilinear extensions, and a same number of points, and
     /// a transcript, compute a multi-opening for all the polynomials.
     fn multi_open(
-        _prover_param: impl Borrow<Self::ProverParam>,
+        _prover_param: impl Borrow<Self::CommitterKey>,
         _polynomials: &[Self::Polynomial],
         _points: &[Self::Point],
         _evals: &[Self::Evaluation],
         _transcript: &mut IOPTranscript<E::ScalarField>,
-    ) -> Result<Self::BatchProof, PCSError> {
+    ) -> Result<Self::BatchProof, PCError> {
         // the reason we use unimplemented!() is to enable developers to implement the
         // trait without always implementing the batching APIs.
         unimplemented!()
@@ -122,22 +122,22 @@ pub trait PolynomialCommitmentScheme<E: Pairing> {
     /// Verifies that `value` is the evaluation at `x` of the polynomial
     /// committed inside `comm`.
     fn verify(
-        verifier_param: &Self::VerifierParam,
+        verifier_param: &Self::VerifierKey,
         commitment: &Self::Commitment,
         point: &Self::Point,
         value: &E::ScalarField,
         proof: &Self::Proof,
-    ) -> Result<bool, PCSError>;
+    ) -> Result<bool, PCError>;
 
     /// Verifies that `value_i` is the evaluation at `x_i` of the polynomial
     /// `poly_i` committed inside `comm`.
     fn batch_verify(
-        _verifier_param: &Self::VerifierParam,
+        _verifier_param: &Self::VerifierKey,
         _commitments: &[Self::Commitment],
         _points: &[Self::Point],
         _batch_proof: &Self::BatchProof,
         _transcript: &mut IOPTranscript<E::ScalarField>,
-    ) -> Result<bool, PCSError> {
+    ) -> Result<bool, PCError> {
         // the reason we use unimplemented!() is to enable developers to implement the
         // trait without always implementing the batching APIs.
         unimplemented!()
@@ -147,14 +147,14 @@ pub trait PolynomialCommitmentScheme<E: Pairing> {
 /// API definitions for structured reference string
 pub trait StructuredReferenceString<E: Pairing>: Sized {
     /// Prover parameters
-    type ProverParam;
+    type CommitterKey;
     /// Verifier parameters
-    type VerifierParam;
+    type VerifierKey;
 
     /// Extract the prover parameters from the public parameters.
-    fn extract_prover_param(&self, supported_size: usize) -> Self::ProverParam;
+    fn extract_ck(&self, supported_size: usize) -> Self::CommitterKey;
     /// Extract the verifier parameters from the public parameters.
-    fn extract_verifier_param(&self, supported_size: usize) -> Self::VerifierParam;
+    fn extract_vk(&self, supported_size: usize) -> Self::VerifierKey;
 
     /// Trim the universal parameters to specialize the public parameters
     /// for polynomials to the given `supported_size`, and
@@ -168,7 +168,7 @@ pub trait StructuredReferenceString<E: Pairing>: Sized {
     fn trim(
         &self,
         supported_size: usize,
-    ) -> Result<(Self::ProverParam, Self::VerifierParam), PCSError>;
+    ) -> Result<(Self::CommitterKey, Self::VerifierKey), PCError>;
 
     /// Build SRS for testing.
     ///
@@ -178,10 +178,10 @@ pub trait StructuredReferenceString<E: Pairing>: Sized {
     ///
     /// WARNING: THIS FUNCTION IS FOR TESTING PURPOSE ONLY.
     /// THE OUTPUT SRS SHOULD NOT BE USED IN PRODUCTION.
-    fn gen_srs_for_testing<R: Rng>(rng: &mut R, supported_size: usize) -> Result<Self, PCSError>;
+    fn gen_srs_for_testing<R: Rng>(rng: &mut R, supported_size: usize) -> Result<Self, PCError>;
 
     fn gen_fake_srs_for_testing<R: Rng>(
         rng: &mut R,
         supported_degree: usize,
-    ) -> Result<Self, PCSError>;
+    ) -> Result<Self, PCError>;
 }

@@ -2,11 +2,11 @@ pub(crate) mod batching;
 pub mod srs;
 pub(crate) mod util;
 use crate::pc::StructuredReferenceString;
-use crate::pc::{structs::Commitment, PCSError, PolynomialCommitmentScheme};
+use crate::pc::{structs::Commitment, PCError, PCScheme};
 use crate::streams::{iterator::BatchedIterator, MLE};
 use crate::transcript::IOPTranscript;
 use crate::{
-    pc::multilinear_kzg::batching::multi_open_internal,
+    pc::pst13::batching::multi_open_internal,
     streams::serialize::{RawAffine, RawPrimeField},
 };
 use ark_ec::{
@@ -21,7 +21,7 @@ use ark_std::{
     string::ToString, vec::Vec, One, Zero,
 };
 use rayon::iter::ParallelExtend;
-use srs::{MultilinearProverParam, MultilinearUniversalParams, MultilinearVerifierParam};
+use srs::{CommitterKey, VerifierKey, SRS};
 use std::ops::Mul;
 
 use self::batching::{batch_verify_internal, BatchProof};
@@ -39,15 +39,15 @@ pub struct MultilinearKzgProof<E: Pairing> {
     pub proofs: Vec<E::G1Affine>,
 }
 
-impl<E: Pairing> PolynomialCommitmentScheme<E> for PST13<E>
+impl<E: Pairing> PCScheme<E> for PST13<E>
 where
     E::G1Affine: RawAffine,
     E::ScalarField: RawPrimeField,
 {
     // Parameters
-    type ProverParam = MultilinearProverParam<E>;
-    type VerifierParam = MultilinearVerifierParam<E>;
-    type SRS = MultilinearUniversalParams<E>;
+    type CommitterKey = CommitterKey<E>;
+    type VerifierKey = VerifierKey<E>;
+    type SRS = SRS<E>;
     // Polynomial and its associated types
     type Polynomial = MLE<E::ScalarField>;
     type Point = Vec<E::ScalarField>;
@@ -64,15 +64,15 @@ where
     ///
     /// WARNING: THIS FUNCTION IS FOR TESTING PURPOSE ONLY.
     /// THE OUTPUT SRS SHOULD NOT BE USED IN PRODUCTION.
-    fn gen_srs_for_testing<R: Rng>(rng: &mut R, log_size: usize) -> Result<Self::SRS, PCSError> {
-        MultilinearUniversalParams::<E>::gen_srs_for_testing(rng, log_size)
+    fn gen_srs_for_testing<R: Rng>(rng: &mut R, log_size: usize) -> Result<Self::SRS, PCError> {
+        SRS::<E>::gen_srs_for_testing(rng, log_size)
     }
 
     fn gen_fake_srs_for_testing<R: Rng>(
         rng: &mut R,
         log_size: usize,
-    ) -> Result<Self::SRS, PCSError> {
-        MultilinearUniversalParams::<E>::gen_fake_srs_for_testing(rng, log_size)
+    ) -> Result<Self::SRS, PCError> {
+        SRS::<E>::gen_fake_srs_for_testing(rng, log_size)
     }
 
     /// Trim the universal parameters to specialize the public parameters.
@@ -82,13 +82,13 @@ where
         srs: impl Borrow<Self::SRS>,
         supported_degree: Option<usize>,
         supported_num_vars: Option<usize>,
-    ) -> Result<(Self::ProverParam, Self::VerifierParam), PCSError> {
+    ) -> Result<(Self::CommitterKey, Self::VerifierKey), PCError> {
         assert!(supported_degree.is_none());
 
         let supported_num_vars = match supported_num_vars {
             Some(p) => p,
             None => {
-                return Err(PCSError::InvalidParameters(
+                return Err(PCError::InvalidParameters(
                     "multilinear should receive a num_var param".to_string(),
                 ))
             },
@@ -103,15 +103,15 @@ where
     /// This function takes `2^num_vars` number of scalar multiplications over
     /// G1.
     fn commit(
-        prover_param: impl Borrow<Self::ProverParam>,
+        prover_param: impl Borrow<Self::CommitterKey>,
         poly: &Self::Polynomial,
-    ) -> Result<Self::Commitment, PCSError> {
+    ) -> Result<Self::Commitment, PCError> {
         let prover_param = prover_param.borrow();
         let poly_num_vars = poly.num_vars();
 
         let commit_timer = start_timer!(|| format!("commit poly nv = {}", poly_num_vars));
         if prover_param.num_vars < poly_num_vars {
-            return Err(PCSError::InvalidParameters(format!(
+            return Err(PCError::InvalidParameters(format!(
                 "MLE length ({}) exceeds param limit ({})",
                 poly_num_vars, prover_param.num_vars
             )));
@@ -148,10 +148,10 @@ where
     /// - at round i, we compute an MSM for `2^{num_var - i + 1}` number of G2
     ///   elements.
     fn open(
-        prover_param: impl Borrow<Self::ProverParam>,
+        prover_param: impl Borrow<Self::CommitterKey>,
         polynomial: &Self::Polynomial,
         point: &Self::Point,
-    ) -> Result<(Self::Proof, Self::Evaluation), PCSError> {
+    ) -> Result<(Self::Proof, Self::Evaluation), PCError> {
         open_internal(prover_param.borrow(), polynomial, point)
     }
 
@@ -214,12 +214,12 @@ where
     /// Input a list of multilinear extensions, and a same number of points, and
     /// a transcript, compute a multi-opening for all the polynomials.
     fn multi_open(
-        prover_param: impl Borrow<Self::ProverParam>,
+        prover_param: impl Borrow<Self::CommitterKey>,
         polynomials: &[Self::Polynomial],
         points: &[Self::Point],
         evals: &[Self::Evaluation],
         transcript: &mut IOPTranscript<E::ScalarField>,
-    ) -> Result<BatchProof<E, Self>, PCSError> {
+    ) -> Result<BatchProof<E, Self>, PCError> {
         multi_open_internal(
             prover_param.borrow(),
             polynomials,
@@ -236,24 +236,24 @@ where
     /// - num_var number of pairing product.
     /// - num_var number of MSM
     fn verify(
-        verifier_param: &Self::VerifierParam,
+        verifier_param: &Self::VerifierKey,
         commitment: &Self::Commitment,
         point: &Self::Point,
         value: &E::ScalarField,
         proof: &Self::Proof,
-    ) -> Result<bool, PCSError> {
+    ) -> Result<bool, PCError> {
         verify_internal(verifier_param, commitment, point, value, proof)
     }
 
     /// Verifies that `value_i` is the evaluation at `x_i` of the polynomial
     /// `poly_i` committed inside `comm`.
     fn batch_verify(
-        verifier_param: &Self::VerifierParam,
+        verifier_param: &Self::VerifierKey,
         commitments: &[Self::Commitment],
         points: &[Self::Point],
         batch_proof: &Self::BatchProof,
         transcript: &mut IOPTranscript<E::ScalarField>,
-    ) -> Result<bool, PCSError> {
+    ) -> Result<bool, PCError> {
         batch_verify_internal(verifier_param, commitments, points, batch_proof, transcript)
     }
 }
@@ -267,10 +267,10 @@ where
 /// - it proceeds with `num_var` number of rounds,
 /// - at round i, we compute an MSM for `2^{num_var - i}` number of G1 elements.
 fn open_internal<E: Pairing>(
-    prover_param: &MultilinearProverParam<E>,
+    prover_param: &CommitterKey<E>,
     polynomial: &MLE<E::ScalarField>,
     point: &[E::ScalarField],
-) -> Result<(MultilinearKzgProof<E>, E::ScalarField), PCSError>
+) -> Result<(MultilinearKzgProof<E>, E::ScalarField), PCError>
 where
     E::G1Affine: RawAffine,
     E::ScalarField: RawPrimeField,
@@ -278,7 +278,7 @@ where
     let open_timer = start_timer!(|| format!("open mle with {} variable", polynomial.num_vars()));
 
     if polynomial.num_vars() > prover_param.num_vars {
-        return Err(PCSError::InvalidParameters(format!(
+        return Err(PCError::InvalidParameters(format!(
             "Polynomial num_vars {} exceed the limit {}",
             polynomial.num_vars(),
             prover_param.num_vars
@@ -286,7 +286,7 @@ where
     }
 
     if polynomial.num_vars() != point.len() {
-        return Err(PCSError::InvalidParameters(format!(
+        return Err(PCError::InvalidParameters(format!(
             "Polynomial num_vars {} does not match point len {}",
             polynomial.num_vars(),
             point.len()
@@ -366,17 +366,17 @@ where
 /// - num_var number of pairing product.
 /// - num_var number of MSM
 fn verify_internal<E: Pairing>(
-    verifier_param: &MultilinearVerifierParam<E>,
+    verifier_param: &VerifierKey<E>,
     commitment: &Commitment<E>,
     point: &[E::ScalarField],
     value: &E::ScalarField,
     proof: &MultilinearKzgProof<E>,
-) -> Result<bool, PCSError> {
+) -> Result<bool, PCError> {
     let verify_timer = start_timer!(|| "verify");
     let num_var = point.len();
 
     if num_var > verifier_param.num_vars {
-        return Err(PCSError::InvalidParameters(format!(
+        return Err(PCError::InvalidParameters(format!(
             "point length ({}) exceeds param limit ({})",
             num_var, verifier_param.num_vars
         )));
@@ -437,10 +437,10 @@ mod tests {
     type Fr = <E as Pairing>::ScalarField;
 
     fn test_single_helper<R: Rng>(
-        params: &MultilinearUniversalParams<E>,
+        params: &SRS<E>,
         poly: &MLE<Fr>,
         rng: &mut R,
-    ) -> Result<(), PCSError> {
+    ) -> Result<(), PCError> {
         let nv = poly.num_vars();
         assert_ne!(nv, 0);
         let (ck, vk) = PST13::trim(params, None, Some(nv))?;
@@ -457,7 +457,7 @@ mod tests {
     }
 
     #[test]
-    fn test_single_commit() -> Result<(), PCSError> {
+    fn test_single_commit() -> Result<(), PCError> {
         let mut rng = test_rng();
 
         let params = PST13::<E>::gen_srs_for_testing(&mut rng, 10)?;

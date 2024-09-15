@@ -6,7 +6,7 @@ use ark_std::{end_timer, log2, start_timer, test_rng};
 
 use crate::snark::{
     custom_gate::CustomizedGates,
-    structs::{Index, ScribeParams},
+    structs::{Index, ScribeConfig},
 };
 
 #[derive(CanonicalDeserialize, CanonicalSerialize)]
@@ -85,7 +85,7 @@ impl<F: RawPrimeField> MockCircuit<F> {
         let mut public_inputs = witnesses[0].evals().iter().to_vec();
         public_inputs.truncate(pub_input_len);
 
-        let params = ScribeParams {
+        let params = ScribeConfig {
             num_constraints,
             num_pub_input: pub_input_len,
             gate_func: gate.clone(),
@@ -132,9 +132,9 @@ mod test {
     use std::fs::File;
 
     use super::*;
-    use crate::pc::multilinear_kzg::srs::MultilinearUniversalParams;
-    use crate::pc::multilinear_kzg::PST13;
-    use crate::pc::PolynomialCommitmentScheme;
+    use crate::pc::pst13::srs::SRS;
+    use crate::pc::pst13::PST13;
+    use crate::pc::PCScheme;
     use crate::snark::{errors::ScribeErrors, Scribe};
     use ark_bls12_381::Bls12_381;
     use ark_bls12_381::Fr;
@@ -169,7 +169,7 @@ mod test {
     fn test_mock_circuit_zkp_helper(
         nv: usize,
         gate: &CustomizedGates,
-        pcs_srs: &MultilinearUniversalParams<Bls12_381>,
+        pcs_srs: &SRS<Bls12_381>,
     ) -> Result<(), ScribeErrors> {
         let circuit = MockCircuit::<Fr>::new(1 << nv, gate);
         assert!(circuit.is_satisfied());

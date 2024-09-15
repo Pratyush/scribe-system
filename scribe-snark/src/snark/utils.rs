@@ -1,6 +1,6 @@
 use crate::pc::structs::Commitment;
-use crate::pc::PolynomialCommitmentScheme;
-use crate::snark::{custom_gate::CustomizedGates, errors::ScribeErrors, structs::ScribeParams};
+use crate::pc::PCScheme;
+use crate::snark::{custom_gate::CustomizedGates, errors::ScribeErrors, structs::ScribeConfig};
 use crate::streams::file_vec::FileVec;
 use crate::streams::iterator::BatchedIterator;
 use crate::streams::MLE;
@@ -16,7 +16,7 @@ use std::borrow::Borrow;
 /// An accumulator structure that holds a polynomial and
 /// its opening points
 #[derive(Debug)]
-pub(super) struct PcsAccumulator<E: Pairing, PC: PolynomialCommitmentScheme<E>> {
+pub(super) struct PcsAccumulator<E: Pairing, PC: PCScheme<E>> {
     pub(crate) num_var: usize,
     pub(crate) polynomials: Vec<PC::Polynomial>,
     pub(crate) commitments: Vec<PC::Commitment>,
@@ -27,7 +27,7 @@ impl<E, PC> PcsAccumulator<E, PC>
 where
     E: Pairing,
     E::ScalarField: RawPrimeField,
-    PC: PolynomialCommitmentScheme<
+    PC: PCScheme<
         E,
         Polynomial = MLE<E::ScalarField>,
         Point = Vec<E::ScalarField>,
@@ -64,7 +64,7 @@ where
     /// A simple wrapper of PC::multi_open
     pub(super) fn multi_open(
         &self,
-        prover_param: impl Borrow<PC::ProverParam>,
+        prover_param: impl Borrow<PC::CommitterKey>,
         transcript: &mut IOPTranscript<E::ScalarField>,
     ) -> Result<PC::BatchProof, ScribeErrors> {
         let evals = self
@@ -91,7 +91,7 @@ where
 
 /// Sanity-check for Scribe SNARK proving
 pub(crate) fn prover_sanity_check<F: RawPrimeField + CanonicalDeserialize + CanonicalSerialize>(
-    params: &ScribeParams,
+    params: &ScribeConfig,
     pub_input: &[F],
     witnesses: Vec<MLE<F>>,
 ) -> Result<(), ScribeErrors> {

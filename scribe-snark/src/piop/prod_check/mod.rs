@@ -1,6 +1,6 @@
 use crate::{arithmetic::virtual_polynomial::VPAuxInfo, streams::MLE};
 use crate::{
-    pc::PolynomialCommitmentScheme,
+    pc::PCScheme,
     piop::{
         errors::PIOPError,
         prod_check::util::{compute_frac_poly, compute_product_poly, prove_zero_check},
@@ -70,7 +70,7 @@ pub struct ProductCheckSubClaim<F: RawPrimeField> {
 /// - a product polynomial commitment
 /// - a polynomial commitment for the fractional polynomial
 #[derive(Clone, Debug, Default, PartialEq)]
-pub struct ProductCheckProof<E: Pairing, PC: PolynomialCommitmentScheme<E>>
+pub struct ProductCheckProof<E: Pairing, PC: PCScheme<E>>
 where
     E::ScalarField: RawPrimeField,
 {
@@ -83,14 +83,14 @@ impl<E, PC> ProductCheck<E, PC>
 where
     E: Pairing,
     E::ScalarField: RawPrimeField,
-    PC: PolynomialCommitmentScheme<E, Polynomial = MLE<E::ScalarField>>,
+    PC: PCScheme<E, Polynomial = MLE<E::ScalarField>>,
 {
     pub fn init_transcript() -> IOPTranscript<E::ScalarField> {
         IOPTranscript::<E::ScalarField>::new(b"Initializing ProductCheck transcript")
     }
 
     pub fn prove(
-        pcs_param: &PC::ProverParam,
+        pcs_param: &PC::CommitterKey,
         fxs: &[MLE<E::ScalarField>],
         gxs: &[MLE<E::ScalarField>],
         transcript: &mut IOPTranscript<E::ScalarField>,
@@ -193,11 +193,9 @@ mod test {
     use crate::streams::iterator::BatchedIterator;
     use crate::{arithmetic::virtual_polynomial::VPAuxInfo, streams::serialize::RawPrimeField};
     use crate::{
+        pc::{pst13::PST13, PCScheme},
+        piop::errors::PIOPError,
         streams::MLE,
-        {
-            pc::{multilinear_kzg::PST13, PolynomialCommitmentScheme},
-            piop::errors::PIOPError,
-        },
     };
     use ark_bls12_381::{Bls12_381, Fr};
     use ark_ec::pairing::Pairing;
@@ -245,12 +243,12 @@ mod test {
         fs: &[MLE<E::ScalarField>],
         gs: &[MLE<E::ScalarField>],
         hs: &[MLE<E::ScalarField>],
-        pcs_param: &PC::ProverParam,
+        pcs_param: &PC::CommitterKey,
     ) -> Result<(), PIOPError>
     where
         E: Pairing,
         E::ScalarField: RawPrimeField,
-        PC: PolynomialCommitmentScheme<E, Polynomial = MLE<E::ScalarField>>,
+        PC: PCScheme<E, Polynomial = MLE<E::ScalarField>>,
     {
         let mut transcript = ProductCheck::<E, PC>::init_transcript();
         transcript.append_message(b"testing", b"initializing transcript for testing")?;

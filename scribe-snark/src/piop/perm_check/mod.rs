@@ -84,7 +84,7 @@ pub trait PermutationCheck<F: PrimeField>: ZeroCheck<F> {
 impl<F: PrimeField> PermutationCheck<F> for PolyIOP<F>
 where
 // E: Pairing,
-// PC: PolynomialCommitmentScheme<E, Polynomial = Arc<DenseMultilinearExtension<E::ScalarField>>>,
+// PC: PCScheme<E, Polynomial = Arc<DenseMultilinearExtension<E::ScalarField>>>,
 {
     type PermutationCheckSubClaim = PermutationCheckSubClaim<F>;
     type PermutationCheckProof = Self::ZeroCheckProof;
@@ -406,7 +406,7 @@ where
 //     use super::{PermutationCheck, PermutationCheckSubClaim};
 //     use crate::arithmetic::virtual_polynomial::VPAuxInfo;
 //     use crate::{
-//         // pc::{prelude::PST13, PolynomialCommitmentScheme},
+//         // pc::{prelude::PST13, PCScheme},
 //         arithmetic::virtual_polynomial::VirtualPolynomial,
 //         piop::{errors::PolyIOPErrors, PolyIOP},
 //     };
@@ -442,7 +442,7 @@ where
 //     ) -> Result<(), PolyIOPErrors>
 // // where
 //     //     E: Pairing,
-//     //     PC: PolynomialCommitmentScheme<
+//     //     PC: PCScheme<
 //     //         E,
 //     //         Polynomial = Arc<DenseMultilinearExtension<E::ScalarField>>,
 //     //     >,

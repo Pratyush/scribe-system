@@ -3,7 +3,7 @@ use crate::streams::MLE;
 use crate::{
     arithmetic::virtual_polynomial::VPAuxInfo,
     {
-        pc::PolynomialCommitmentScheme,
+        pc::PCScheme,
         piop::{errors::PIOPError, prod_check::ProductCheck},
     },
 };
@@ -44,7 +44,7 @@ pub struct PermutationCheck<E, PC>(std::marker::PhantomData<E>, std::marker::Pha
 where
     E: Pairing,
     E::ScalarField: RawPrimeField,
-    PC: PolynomialCommitmentScheme<E>;
+    PC: PCScheme<E>;
 
 pub type PermutationProof<E, PC> = ProductCheckProof<E, PC>;
 
@@ -52,14 +52,14 @@ impl<E, PC> PermutationCheck<E, PC>
 where
     E: Pairing,
     E::ScalarField: RawPrimeField,
-    PC: PolynomialCommitmentScheme<E, Polynomial = MLE<E::ScalarField>>,
+    PC: PCScheme<E, Polynomial = MLE<E::ScalarField>>,
 {
     pub fn init_transcript() -> IOPTranscript<E::ScalarField> {
         IOPTranscript::<E::ScalarField>::new(b"Initializing PermutationCheck transcript")
     }
 
     pub fn prove(
-        pcs_param: &PC::ProverParam,
+        pcs_param: &PC::CommitterKey,
         fxs: &[MLE<E::ScalarField>],
         gxs: &[MLE<E::ScalarField>],
         perms: &[MLE<E::ScalarField>],
@@ -137,10 +137,8 @@ mod test {
     use crate::streams::{serialize::RawPrimeField, MLE};
     use crate::{
         arithmetic::virtual_polynomial::VPAuxInfo,
-        {
-            pc::{multilinear_kzg::PST13, PolynomialCommitmentScheme},
-            piop::errors::PIOPError,
-        },
+        pc::{pst13::PST13, PCScheme},
+        piop::errors::PIOPError,
     };
     use ark_bls12_381::Bls12_381;
     use ark_ec::pairing::Pairing;
@@ -150,7 +148,7 @@ mod test {
     type Kzg = PST13<Bls12_381>;
 
     fn test_permutation_check_helper<E, PC>(
-        pcs_param: &PC::ProverParam,
+        pcs_param: &PC::CommitterKey,
         fxs: &[MLE<E::ScalarField>],
         gxs: &[MLE<E::ScalarField>],
         perms: &[MLE<E::ScalarField>],
@@ -158,7 +156,7 @@ mod test {
     where
         E: Pairing,
         E::ScalarField: RawPrimeField,
-        PC: PolynomialCommitmentScheme<E, Polynomial = MLE<E::ScalarField>>,
+        PC: PCScheme<E, Polynomial = MLE<E::ScalarField>>,
     {
         let nv = fxs[0].num_vars();
         // what's AuxInfo used for?

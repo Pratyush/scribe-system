@@ -1,6 +1,6 @@
-use crate::pc::errors::PCSError;
+use crate::pc::errors::PCError;
 use crate::pc::structs::Commitment;
-use crate::pc::{multilinear_kzg::util::eq_eval, PolynomialCommitmentScheme};
+use crate::pc::{pst13::util::eq_eval, PCScheme};
 use crate::piop::{prelude::SumCheck, structs::IOPProof};
 use crate::{
     arithmetic::virtual_polynomial::{build_eq_x_r_vec, VPAuxInfo, VirtualPolynomial},
@@ -19,7 +19,7 @@ use ark_std::{end_timer, log2, start_timer, One, Zero};
 pub struct BatchProof<E, PC>
 where
     E: Pairing,
-    PC: PolynomialCommitmentScheme<E>,
+    PC: PCScheme<E>,
 {
     /// A sum check proof proving tilde g's sum
     pub(crate) sum_check_proof: IOPProof<E::ScalarField>,
@@ -38,16 +38,16 @@ where
 /// 6. build g'(X) = \sum_i=1..k \tilde eq_i(a2) * \tilde g_i(X) where (a2) is
 ///    the sumcheck's point 7. open g'(X) at point (a2)
 pub(crate) fn multi_open_internal<E, PC>(
-    prover_param: &PC::ProverParam,
+    prover_param: &PC::CommitterKey,
     polynomials: &[PC::Polynomial],
     points: &[PC::Point],
     evals: &[PC::Evaluation],
     transcript: &mut IOPTranscript<E::ScalarField>,
-) -> Result<BatchProof<E, PC>, PCSError>
+) -> Result<BatchProof<E, PC>, PCError>
 where
     E: Pairing,
     E::ScalarField: RawPrimeField,
-    PC: PolynomialCommitmentScheme<
+    PC: PCScheme<
         E,
         Polynomial = MLE<E::ScalarField>,
         Point = Vec<E::ScalarField>,
@@ -123,7 +123,7 @@ where
         Ok(p) => p,
         Err(_e) => {
             // cannot wrap IOPError with PCSError due to cyclic dependency
-            return Err(PCSError::InvalidProver(
+            return Err(PCError::InvalidProver(
                 "Sumcheck in batch proving Failed".to_string(),
             ));
         },
@@ -166,16 +166,16 @@ where
 /// 3. ensure \sum_i eq(a2, point_i) * eq(t, <i>) * f_i_evals matches the sum
 ///    via SumCheck verification 4. verify commitment
 pub(crate) fn batch_verify_internal<E, PC>(
-    verifier_param: &PC::VerifierParam,
+    verifier_param: &PC::VerifierKey,
     f_i_commitments: &[Commitment<E>],
     points: &[PC::Point],
     proof: &BatchProof<E, PC>,
     transcript: &mut IOPTranscript<E::ScalarField>,
-) -> Result<bool, PCSError>
+) -> Result<bool, PCError>
 where
     E: Pairing,
     E::ScalarField: RawPrimeField,
-    PC: PolynomialCommitmentScheme<
+    PC: PCScheme<
         E,
         Polynomial = MLE<E::ScalarField>,
         Point = Vec<E::ScalarField>,
@@ -231,7 +231,7 @@ where
         Ok(p) => p,
         Err(_e) => {
             // cannot wrap IOPError with PCSError due to cyclic dependency
-            return Err(PCSError::InvalidProver(
+            return Err(PCError::InvalidProver(
                 "Sumcheck in batch verification failed".to_string(),
             ));
         },
@@ -255,8 +255,8 @@ where
 mod tests {
     use super::*;
     use crate::arithmetic::util::get_batched_nv;
-    use crate::pc::multilinear_kzg::srs::MultilinearUniversalParams;
-    use crate::pc::multilinear_kzg::PST13;
+    use crate::pc::pst13::srs::SRS;
+    use crate::pc::pst13::PST13;
     use crate::pc::StructuredReferenceString;
     use ark_bls12_381::Bls12_381 as E;
     use ark_ec::pairing::Pairing;
@@ -265,10 +265,10 @@ mod tests {
     type Fr = <E as Pairing>::ScalarField;
 
     fn test_multi_open_helper<R: Rng>(
-        ml_params: &MultilinearUniversalParams<E>,
+        ml_params: &SRS<E>,
         polys: &[MLE<Fr>],
         rng: &mut R,
-    ) -> Result<(), PCSError> {
+    ) -> Result<(), PCError> {
         let merged_nv = get_batched_nv(polys[0].num_vars(), polys.len());
         let (ml_ck, ml_vk) = ml_params.trim(merged_nv)?;
 
@@ -312,10 +312,10 @@ mod tests {
     }
 
     #[test]
-    fn test_multi_open_internal() -> Result<(), PCSError> {
+    fn test_multi_open_internal() -> Result<(), PCError> {
         let mut rng = test_rng();
 
-        let ml_params = MultilinearUniversalParams::<E>::gen_srs_for_testing(&mut rng, 20)?;
+        let ml_params = SRS::<E>::gen_srs_for_testing(&mut rng, 20)?;
         for num_poly in 5..6 {
             for nv in 15..16 {
                 let polys1: Vec<_> = (0..num_poly).map(|_| MLE::rand(nv, &mut rng)).collect();

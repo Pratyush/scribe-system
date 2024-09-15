@@ -1,7 +1,7 @@
 use crate::piop::{perm_check_original::PermutationProof, zero_check::ZeroCheckProof};
 use crate::streams::serialize::RawPrimeField;
 use crate::streams::MLE;
-use crate::{pc::PolynomialCommitmentScheme, snark::custom_gate::CustomizedGates};
+use crate::{pc::PCScheme, snark::custom_gate::CustomizedGates};
 use ark_ec::pairing::Pairing;
 use ark_ff::PrimeField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
@@ -19,7 +19,7 @@ pub struct Proof<E, PC>
 where
     E: Pairing,
     E::ScalarField: RawPrimeField,
-    PC: PolynomialCommitmentScheme<E>,
+    PC: PCScheme<E>,
 {
     // PC commit for witnesses
     pub witness_commits: Vec<PC::Commitment>,
@@ -38,7 +38,7 @@ where
 ///   - number of public input columns
 ///   - the customized gate function
 #[derive(Clone, Debug, Default, PartialEq, Eq, CanonicalDeserialize, CanonicalSerialize)]
-pub struct ScribeParams {
+pub struct ScribeConfig {
     /// the number of constraints
     pub num_constraints: usize,
     /// number of public input
@@ -49,7 +49,7 @@ pub struct ScribeParams {
     pub gate_func: CustomizedGates,
 }
 
-impl ScribeParams {
+impl ScribeConfig {
     /// Number of variables in a multilinear system
     pub fn num_variables(&self) -> usize {
         log2(self.num_constraints) as usize
@@ -92,7 +92,7 @@ impl ScribeParams {
 ///   - the selector vectors
 #[derive(Clone, Debug, Default, Eq, PartialEq, CanonicalDeserialize, CanonicalSerialize)]
 pub struct Index<F: RawPrimeField> {
-    pub params: ScribeParams,
+    pub params: ScribeConfig,
     pub permutation: Vec<MLE<F>>,
     pub selectors: Vec<MLE<F>>,
 }
@@ -120,12 +120,12 @@ impl<F: RawPrimeField> Index<F> {
 ///   - the commitment to the selectors and permutations
 ///   - the parameters for polynomial commitment
 #[derive(Clone, Debug, Default, PartialEq, CanonicalDeserialize, CanonicalSerialize)]
-pub struct ProvingKey<E: Pairing, PC: PolynomialCommitmentScheme<E>>
+pub struct ProvingKey<E: Pairing, PC: PCScheme<E>>
 where
     E::ScalarField: RawPrimeField,
 {
     /// scribe instance parameters
-    pub params: ScribeParams,
+    pub params: ScribeConfig,
     /// The preprocessed permutation polynomials
     pub permutation_oracles: Vec<MLE<E::ScalarField>>,
     /// The preprocessed selector polynomials
@@ -135,7 +135,7 @@ where
     /// Commitments to the preprocessed permutation polynomials
     pub permutation_commitments: Vec<PC::Commitment>,
     /// The parameters for PC commitment
-    pub pcs_param: PC::ProverParam,
+    pub pc_ck: PC::CommitterKey,
 }
 
 /// The Scribe verifying key, consists of the following:
@@ -143,14 +143,13 @@ where
 ///   - the commitments to the preprocessed polynomials output by the indexer
 ///   - the parameters for polynomial commitment
 #[derive(Clone, Debug, Default, PartialEq, CanonicalDeserialize, CanonicalSerialize)]
-pub struct VerifyingKey<E: Pairing, PC: PolynomialCommitmentScheme<E>> {
+pub struct VerifyingKey<E: Pairing, PC: PCScheme<E>> {
     /// scribe instance parameters
-    pub params: ScribeParams,
+    pub params: ScribeConfig,
     /// The parameters for PC commitment
-    pub pcs_param: PC::VerifierParam,
+    pub pc_vk: PC::VerifierKey,
     /// A commitment to the preprocessed selector polynomials
     pub selector_commitments: Vec<PC::Commitment>,
-    // pub selector: Vec<Arc<Mutex<DenseMLPolyStream<F>>>>,
     /// Permutation oracles' commitments
     pub perm_commitments: Vec<PC::Commitment>,
 }
@@ -164,8 +163,8 @@ mod test {
 
     use crate::snark::{errors::ScribeErrors, Scribe};
 
-    use crate::pc::multilinear_kzg::PST13;
-    use crate::pc::PolynomialCommitmentScheme;
+    use crate::pc::pst13::PST13;
+    use crate::pc::PCScheme;
     use ark_bls12_381::Bls12_381;
     use ark_bls12_381::Fr;
     use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};

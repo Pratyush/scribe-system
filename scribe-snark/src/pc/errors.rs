@@ -6,7 +6,7 @@ use displaydoc::Display;
 
 /// A `enum` specifying the possible failure modes of the PC.
 #[derive(Display, Debug)]
-pub enum PCSError {
+pub enum PCError {
     /// Invalid Prover: {0}
     InvalidProver(String),
     /// Invalid Verifier: {0}
@@ -23,19 +23,19 @@ pub enum PCSError {
     ArithErrors(ArithError),
 }
 
-impl From<SerializationError> for PCSError {
+impl From<SerializationError> for PCError {
     fn from(e: ark_serialize::SerializationError) -> Self {
         Self::SerializationError(e)
     }
 }
 
-impl From<TranscriptError> for PCSError {
+impl From<TranscriptError> for PCError {
     fn from(e: TranscriptError) -> Self {
         Self::TranscriptError(e)
     }
 }
 
-impl From<ArithError> for PCSError {
+impl From<ArithError> for PCError {
     fn from(e: ArithError) -> Self {
         Self::ArithErrors(e)
     }

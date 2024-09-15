@@ -8,7 +8,7 @@ ark-ec = { version = "^0.4.0", default-features = false }
 ark-ff = { version = "^0.4.0", default-features = false }
 ark-std = { version = "^0.4.0", default-features = false }
 ark-poly = { version = "^0.4.0", default-features = false }
-ark-serialize = {version = "0.4.0", features = ["derive"]}
+ark-serialize = {version = "0.4.0", features = ["derive", "std"]}
 tempfile = "3.3.0"
 merlin = "3.0.0"
 smallvec = "1.6"
