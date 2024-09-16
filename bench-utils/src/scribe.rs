@@ -9,11 +9,17 @@ use ark_bls12_381::Fr;
 use ark_serialize::CanonicalDeserialize;
 use ark_serialize::CanonicalSerialize;
 use ark_std::test_rng;
-use scribe::pc::pst13::PST13;
 use scribe::pc::PCScheme;
 use scribe::snark::custom_gate::CustomizedGates;
 use scribe::snark::structs::{ProvingKey as _ProvingKey, VerifyingKey as _VerifyingKey};
 use scribe::snark::{errors::ScribeErrors, mock::MockCircuit, Scribe};
+use scribe::{
+    pc::{
+        pst13::{srs::SRS, PST13},
+        StructuredReferenceString,
+    },
+    snark::structs::ProvingKeyWithoutCk,
+};
 
 type ProvingKey = _ProvingKey<Bls12_381, PST13<Bls12_381>>;
 type VerifyingKey = _VerifyingKey<Bls12_381, PST13<Bls12_381>>;
@@ -23,7 +29,7 @@ pub fn setup(min_num_vars: usize, max_num_vars: usize, file_dir_path: &Path) {
     let mut rng = test_rng();
     let pc_srs = timed!(
         "Scribe: Generating SRS",
-        PST13::<Bls12_381>::gen_srs_for_testing(&mut rng, max_num_vars).unwrap()
+        PST13::<Bls12_381>::gen_fake_srs_for_testing(&mut rng, max_num_vars).unwrap()
     );
 
     let srs_path = file_dir_path.join(format!("scribe_srs_{max_num_vars}.params"));
@@ -41,23 +47,7 @@ pub fn setup(min_num_vars: usize, max_num_vars: usize, file_dir_path: &Path) {
     let vanilla_gate = CustomizedGates::vanilla_plonk_gate();
     for nv in min_num_vars..=max_num_vars {
         // generate and serialize circuit, pk, vk
-        let public_input_path = file_dir_path.join(format!("scribe_pubinput_{nv}.params"));
-        let witness_path = file_dir_path.join(format!("scribe_witness_{nv}.params"));
         let pk_path = file_dir_path.join(format!("scribe_pk_{nv}.params"));
-        let vk_path = file_dir_path.join(format!("scribe_vk_{nv}.params"));
-
-        let public_input_file = OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .open(&public_input_path)
-            .unwrap();
-        let witness_file = OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .open(&witness_path)
-            .unwrap();
 
         let pk_file = OpenOptions::new()
             .write(true)
@@ -65,35 +55,12 @@ pub fn setup(min_num_vars: usize, max_num_vars: usize, file_dir_path: &Path) {
             .truncate(true)
             .open(&pk_path)
             .unwrap();
-        let vk_file = OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .open(&vk_path)
-            .unwrap();
-        let mut public_input_file = std::io::BufWriter::new(public_input_file);
-        let mut witness_file = std::io::BufWriter::new(witness_file);
         let mut pk_file = std::io::BufWriter::new(pk_file);
-        let mut vk_file = std::io::BufWriter::new(vk_file);
 
         let circuit = timed!(
             format!("Scribe: Generating circuit for {nv}"),
             MockCircuit::<Fr>::new(1 << nv, &vanilla_gate)
         );
-
-        timed!(
-            format!("Scribe: Serializing witness for {nv}"),
-            circuit.witnesses.serialize_uncompressed(&mut witness_file)
-        )
-        .unwrap();
-
-        timed!(
-            format!("Scribe: Serializing public input for {nv}"),
-            circuit
-                .public_inputs
-                .serialize_uncompressed(&mut public_input_file)
-        )
-        .unwrap();
 
         let index = circuit.index;
         let pool = rayon::ThreadPoolBuilder::new()
@@ -101,7 +68,7 @@ pub fn setup(min_num_vars: usize, max_num_vars: usize, file_dir_path: &Path) {
             .build()
             .unwrap();
 
-        let (pk, vk): (ProvingKey, VerifyingKey) = pool
+        let (pk, _vk): (ProvingKey, VerifyingKey) = pool
             .install(|| {
                 timed!(
                     format!("Scribe: Generating pk/vk for {nv}",),
@@ -110,10 +77,10 @@ pub fn setup(min_num_vars: usize, max_num_vars: usize, file_dir_path: &Path) {
             })
             .unwrap();
 
-        timed!(format!("Scribe: Serializing pk/vk for {nv}"), {
-            pk.serialize_uncompressed(&mut pk_file).unwrap();
-            vk.serialize_uncompressed(&mut vk_file).unwrap();
-        });
+        timed!(
+            format!("Scribe: Serializing pk for {nv}"),
+            pk.inner.serialize_uncompressed(&mut pk_file).unwrap()
+        );
     }
 }
 
@@ -122,36 +89,41 @@ pub fn prover(
     max_nv: usize,
     supported_size: impl Into<Option<usize>>,
     file_dir_path: &Path,
-    remove_params: bool,
 ) -> Result<(), ScribeErrors> {
+    let supported_size = supported_size.into().unwrap_or(max_nv);
     assert!(max_nv >= min_nv);
-    assert!(max_nv <= supported_size.into().unwrap_or(max_nv));
+    assert!(max_nv <= supported_size);
+
+    let srs: SRS<_> = {
+        let srs_path = file_dir_path.join(format!("scribe_srs_{supported_size}.params"));
+        let srs_file = File::open(&srs_path).unwrap();
+        let mut srs_file = std::io::BufReader::new(srs_file);
+        CanonicalDeserialize::deserialize_uncompressed_unchecked(&mut srs_file).unwrap()
+    };
 
     let tmp_dir = std::env::temp_dir();
     for nv in min_nv..=max_nv {
         // Remove temporary files
-        std::fs::read_dir(&tmp_dir)
-            .unwrap()
-            .for_each(|entry| std::fs::remove_file(entry.unwrap().path()).unwrap());
+        std::fs::read_dir(&tmp_dir).unwrap().for_each(|entry| {
+            let entry = entry.unwrap();
+            if !entry.file_name().to_string_lossy().contains("ck_") {
+                println!("Removing entry: {}", entry.path().to_string_lossy());
+                std::fs::remove_file(entry.path()).unwrap()
+            }
+        });
 
-        let witness_path = file_dir_path.join(format!("scribe_witness_{nv}.params"));
+        let pk = {
+            let pk_path = file_dir_path.join(format!("scribe_pk_{nv}.params"));
+            let pk_file = BufReader::new(File::open(&pk_path).unwrap());
+            let inner = ProvingKeyWithoutCk::deserialize_uncompressed_unchecked(pk_file).unwrap();
+            let (pc_ck, _) = srs.trim(nv).unwrap();
+            ProvingKey { inner, pc_ck }
+        };
 
-        let public_input_path = file_dir_path.join(format!("scribe_pubinput_{nv}.params"));
-        let pk_path = file_dir_path.join(format!("scribe_pk_{nv}.params"));
-        let vk_path = file_dir_path.join(format!("scribe_vk_{nv}.params"));
-
-        let mut public_input_file = BufReader::new(File::open(&public_input_path).unwrap());
-        let mut witness_file = BufReader::new(File::open(&witness_path).unwrap());
-        let mut pk_file = BufReader::new(File::open(&pk_path).unwrap());
-        let mut vk_file = BufReader::new(File::open(&vk_path).unwrap());
-
-        let public_inputs =
-            Vec::deserialize_uncompressed_unchecked(&mut public_input_file).unwrap();
-        let witnesses = Vec::deserialize_uncompressed_unchecked(&mut witness_file).unwrap();
-
-        let pk = ProvingKey::deserialize_uncompressed_unchecked(&mut pk_file).unwrap();
-        let vk = VerifyingKey::deserialize_uncompressed_unchecked(&mut vk_file).unwrap();
-        assert_eq!(vk.params.num_variables(), nv);
+        let (public_inputs, witnesses) = timed!(
+            format!("Scribe: Generating witness for {nv} variables"),
+            MockCircuit::wire_values_for_index(&pk.index())
+        );
 
         let proof = timed!(
             format!("Scribe: Proving for {nv} variables",),
@@ -162,14 +134,8 @@ pub fn prover(
         // verify a proof
         timed!(
             format!("Scribe: Verifying for {nv} variables"),
-            Scribe::verify(&vk, &public_inputs, &proof).unwrap()
+            Scribe::verify(&pk.vk(), &public_inputs, &proof).unwrap()
         );
-        if remove_params {
-            std::fs::remove_file(&public_input_path).unwrap();
-            std::fs::remove_file(&witness_path).unwrap();
-            std::fs::remove_file(&pk_path).unwrap();
-            std::fs::remove_file(&vk_path).unwrap();
-        }
     }
     Ok(())
 }

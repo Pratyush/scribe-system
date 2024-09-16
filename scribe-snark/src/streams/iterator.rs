@@ -11,6 +11,7 @@ pub mod flat_map;
 pub mod from_fn;
 pub mod map;
 pub mod repeat;
+pub mod take;
 pub mod zip;
 pub mod zip_many;
 
@@ -20,12 +21,14 @@ pub use flat_map::FlatMap;
 pub use from_fn::FromFn;
 pub use map::Map;
 pub use repeat::Repeat;
+pub use take::Take;
 pub use zip::Zip;
 pub use zip_many::ZipMany;
 
 pub trait BatchedIterator: Sized {
     type Item: Send + Sync;
     type Batch: ParallelIterator<Item = Self::Item>;
+
     fn next_batch(&mut self) -> Option<Self::Batch>;
 
     #[inline(always)]
@@ -73,6 +76,11 @@ pub trait BatchedIterator: Sized {
         Self::Batch: IndexedParallelIterator,
     {
         ArrayChunks::new(self)
+    }
+
+    #[inline(always)]
+    fn take(self, n: usize) -> Take<Self> {
+        Take { iter: self, n }
     }
 
     #[inline(always)]

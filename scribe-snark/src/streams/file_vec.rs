@@ -208,10 +208,25 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
         Self::from_batched_iter(BatchAdapter::from(iter.into_iter()))
     }
 
-    pub fn from_batched_iter(iter: impl IntoBatchedIterator<Item = T>) -> Self
+    #[inline(always)]
+    pub fn from_iter_with_prefix(
+        iter: impl IntoIterator<Item = T>,
+        prefix: impl AsRef<OsStr>,
+    ) -> Self
     where
         T: Send + Sync + Debug,
     {
+        Self::from_batched_iter_with_prefix(BatchAdapter::from(iter.into_iter()), prefix)
+    }
+
+    pub fn from_batched_iter_with_prefix(
+        iter: impl IntoBatchedIterator<Item = T>,
+        prefix: impl AsRef<OsStr>,
+    ) -> Self
+    where
+        T: Send + Sync + Debug,
+    {
+        let prefix = [prefix.as_ref().to_str().unwrap(), "from_batched_iter"].join("_");
         let mut iter = iter.into_batched_iter();
         let mut buffer = Vec::with_capacity(BUFFER_SIZE);
         let (mut file, mut path) = (None, None);
@@ -230,7 +245,7 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
             if buffer.len() > BUFFER_SIZE {
                 batch_is_larger_than_buffer = true;
                 byte_buffer = Some(vec![0u8; buffer.len() * size]);
-                let (f, p) = NamedTempFile::with_prefix("from_batched_iter")
+                let (f, p) = NamedTempFile::with_prefix(&prefix)
                     .expect("failed to create temp file")
                     .keep()
                     .expect("failed to keep temp file");
@@ -248,7 +263,7 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
             }
             if file.is_none() {
                 assert!(path.is_none());
-                let (f, p) = NamedTempFile::with_prefix("from_batched_iter")
+                let (f, p) = NamedTempFile::with_prefix(&prefix)
                     .expect("failed to create temp file")
                     .keep()
                     .expect("failed to keep temp file");
@@ -298,6 +313,13 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
         } else {
             FileVec::Buffer { buffer }
         }
+    }
+
+    pub fn from_batched_iter(iter: impl IntoBatchedIterator<Item = T>) -> Self
+    where
+        T: Send + Sync + Debug,
+    {
+        Self::from_batched_iter_with_prefix(iter, "")
     }
 
     pub fn for_each(&mut self, f: impl Fn(&mut T) + Send + Sync)
@@ -666,14 +688,27 @@ impl<T: SerializeRaw + DeserializeRaw + Valid + Sync + Send + CanonicalDeseriali
     CanonicalDeserialize for FileVec<T>
 {
     fn deserialize_with_mode<R: ark_serialize::Read>(
+        reader: R,
+        _compress: ark_serialize::Compress,
+        _validate: ark_serialize::Validate,
+    ) -> Result<Self, ark_serialize::SerializationError> {
+        Self::deserialize_with_mode_and_prefix(reader, "", _compress, _validate)
+    }
+}
+
+impl<T: SerializeRaw + DeserializeRaw + Valid + Sync + Send + CanonicalDeserialize + Debug>
+    FileVec<T>
+{
+    pub fn deserialize_with_mode_and_prefix<R: ark_serialize::Read>(
         mut reader: R,
+        prefix: impl AsRef<OsStr>,
         _compress: ark_serialize::Compress,
         _validate: ark_serialize::Validate,
     ) -> Result<Self, ark_serialize::SerializationError> {
         let size = usize::deserialize_uncompressed_unchecked(&mut reader)?;
         let mut buffer = Vec::with_capacity(BUFFER_SIZE);
         if size > BUFFER_SIZE {
-            let (mut file, path) = NamedTempFile::new()
+            let (mut file, path) = NamedTempFile::with_prefix(prefix)
                 .expect("failed to create temp file")
                 .keep()
                 .expect("failed to keep temp file");

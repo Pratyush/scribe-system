@@ -2,7 +2,8 @@ use std::ops::{AddAssign, MulAssign};
 
 use crate::streams::{iterator::BatchedIterator, serialize::RawPrimeField, MLE};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-use ark_std::{end_timer, log2, start_timer, test_rng};
+use ark_std::{end_timer, log2, rand::SeedableRng, start_timer};
+use rand_chacha::ChaChaRng;
 
 use crate::snark::{
     custom_gate::CustomizedGates,
@@ -34,24 +35,23 @@ impl<F: RawPrimeField> MockCircuit<F> {
 }
 
 impl<F: RawPrimeField> MockCircuit<F> {
-    /// Generate a mock plonk circuit for the input constraint size.
-    pub fn new(num_constraints: usize, gate: &CustomizedGates) -> MockCircuit<F> {
-        let mut rng = test_rng();
+    pub fn new_index(num_constraints: usize, gate: &CustomizedGates) -> Index<F> {
+        let mut rng = ChaChaRng::seed_from_u64(0u64);
         let nv = log2(num_constraints) as usize;
         let num_selectors = gate.num_selector_columns();
         let num_witnesses = gate.num_witness_columns();
-
-        let selector_time = start_timer!(|| "selectors");
-        let mut selectors: Vec<MLE<F>> = (0..num_selectors - 1)
-            .map(|_| MLE::rand(nv, &mut rng))
-            .collect();
-        end_timer!(selector_time);
 
         let witness_time = start_timer!(|| "witnesses");
         let witnesses: Vec<MLE<F>> = (0..num_witnesses)
             .map(|_| MLE::rand(nv, &mut rng))
             .collect();
         end_timer!(witness_time);
+
+        let selector_time = start_timer!(|| "selectors");
+        let mut selectors: Vec<MLE<F>> = (0..num_selectors - 1)
+            .map(|_| MLE::rand(nv, &mut rng))
+            .collect();
+        end_timer!(selector_time);
 
         // for all test cases in this repo, there's one and only one selector for each monomial
         let last_selector_time = start_timer!(|| "last selector");
@@ -80,26 +80,42 @@ impl<F: RawPrimeField> MockCircuit<F> {
             });
 
         selectors.push(last_selector);
+        let num_pub_input = ark_std::cmp::min(4, num_constraints);
 
-        let pub_input_len = ark_std::cmp::min(4, num_constraints);
-        let mut public_inputs = witnesses[0].evals().iter().to_vec();
-        public_inputs.truncate(pub_input_len);
-
-        let params = ScribeConfig {
+        let config = ScribeConfig {
             num_constraints,
-            num_pub_input: pub_input_len,
+            num_pub_input,
             gate_func: gate.clone(),
         };
 
         let identity_time = start_timer!(|| "identity permutation");
         let permutation = MLE::identity_permutation_mles(nv as usize, num_witnesses);
         end_timer!(identity_time);
-        let index = Index {
-            params,
+        Index {
+            config,
             permutation,
             selectors,
-        };
+        }
+    }
 
+    pub fn wire_values_for_index(index: &Index<F>) -> (Vec<F>, Vec<MLE<F>>) {
+        let mut rng = ChaChaRng::seed_from_u64(0u64);
+        let witness_time = start_timer!(|| "witnesses");
+        let num_witnesses = index.config.gate_func.num_witness_columns();
+        let num_constraints = index.config.num_constraints;
+        let nv = log2(num_constraints) as usize;
+        let witnesses: Vec<_> = (0..num_witnesses)
+            .map(|_| MLE::rand(nv, &mut rng))
+            .collect();
+        end_timer!(witness_time);
+        let num_pub_inputs = ark_std::cmp::min(4, num_constraints);
+        let public_inputs = witnesses[0].evals().iter().take(num_pub_inputs).to_vec();
+        (public_inputs, witnesses)
+    }
+
+    pub fn new(num_constraints: usize, gate: &CustomizedGates) -> Self {
+        let index = Self::new_index(num_constraints, gate);
+        let (public_inputs, witnesses) = Self::wire_values_for_index(&index);
         Self {
             public_inputs,
             witnesses,
@@ -110,7 +126,7 @@ impl<F: RawPrimeField> MockCircuit<F> {
     pub fn is_satisfied(&self) -> bool {
         let nv = self.num_variables();
         let mut cur = MLE::constant(F::zero(), nv);
-        for (coeff, q, wit) in self.index.params.gate_func.gates.iter() {
+        for (coeff, q, wit) in self.index.config.gate_func.gates.iter() {
             let mut cur_monomial = MLE::constant(coeff.into_fp(), nv);
             if let Some(p) = q {
                 cur_monomial.mul_assign(&self.index.selectors[*p])
@@ -252,7 +268,7 @@ mod test {
             .witnesses
             .iter()
             .for_each(|perm| println!("witness: {:?}", perm.evals().iter().to_vec()));
-        println!("params: {:?}", circuit_2.index.params);
+        println!("params: {:?}", circuit_2.index.config);
         circuit_2
             .index
             .permutation

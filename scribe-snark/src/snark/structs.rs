@@ -6,6 +6,7 @@ use ark_ec::pairing::Pairing;
 use ark_ff::PrimeField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::log2;
+use derivative::Derivative;
 
 use super::prelude::ScribeErrors;
 
@@ -92,7 +93,7 @@ impl ScribeConfig {
 ///   - the selector vectors
 #[derive(Clone, Debug, Default, Eq, PartialEq, CanonicalDeserialize, CanonicalSerialize)]
 pub struct Index<F: RawPrimeField> {
-    pub params: ScribeConfig,
+    pub config: ScribeConfig,
     pub permutation: Vec<MLE<F>>,
     pub selectors: Vec<MLE<F>>,
 }
@@ -100,17 +101,17 @@ pub struct Index<F: RawPrimeField> {
 impl<F: RawPrimeField> Index<F> {
     /// Number of variables in a multilinear system
     pub fn num_variables(&self) -> usize {
-        self.params.num_variables()
+        self.config.num_variables()
     }
 
     /// number of selector columns
     pub fn num_selector_columns(&self) -> usize {
-        self.params.num_selector_columns()
+        self.config.num_selector_columns()
     }
 
     /// number of witness columns
     pub fn num_witness_columns(&self) -> usize {
-        self.params.num_witness_columns()
+        self.config.num_witness_columns()
     }
 }
 
@@ -119,33 +120,91 @@ impl<F: RawPrimeField> Index<F> {
 ///   - the preprocessed polynomials output by the indexer
 ///   - the commitment to the selectors and permutations
 ///   - the parameters for polynomial commitment
-#[derive(Clone, Debug, Default, PartialEq, CanonicalDeserialize, CanonicalSerialize)]
+#[derive(Clone, CanonicalDeserialize, CanonicalSerialize)]
 pub struct ProvingKey<E: Pairing, PC: PCScheme<E>>
 where
     E::ScalarField: RawPrimeField,
 {
+    pub inner: ProvingKeyWithoutCk<E, PC>,
+    /// The parameters for PC commitment
+    pub pc_ck: PC::CommitterKey,
+}
+
+impl<E: Pairing, PC: PCScheme<E>> ProvingKey<E, PC>
+where
+    E::ScalarField: RawPrimeField,
+{
+    pub fn new(
+        config: ScribeConfig,
+        permutation_oracles: Vec<MLE<E::ScalarField>>,
+        selector_oracles: Vec<MLE<E::ScalarField>>,
+        vk: VerifyingKey<E, PC>,
+        pc_ck: PC::CommitterKey,
+    ) -> Self {
+        ProvingKey {
+            inner: ProvingKeyWithoutCk {
+                config,
+                permutation_oracles,
+                selector_oracles,
+                vk,
+            },
+            pc_ck,
+        }
+    }
+
+    pub fn config(&self) -> &ScribeConfig {
+        &self.inner.config
+    }
+
+    pub fn permutation_oracles(&self) -> &[MLE<E::ScalarField>] {
+        &self.inner.permutation_oracles
+    }
+
+    pub fn selector_oracles(&self) -> &[MLE<E::ScalarField>] {
+        &self.inner.selector_oracles
+    }
+
+    pub fn vk(&self) -> &VerifyingKey<E, PC> {
+        &self.inner.vk
+    }
+
+    pub fn pc_ck(&self) -> &PC::CommitterKey {
+        &self.pc_ck
+    }
+
+    pub fn index(&self) -> Index<E::ScalarField> {
+        Index {
+            config: self.inner.config.clone(),
+            permutation: self.inner.permutation_oracles.clone(),
+            selectors: self.inner.selector_oracles.clone(),
+        }
+    }
+}
+
+#[derive(Clone, CanonicalSerialize, CanonicalDeserialize)]
+pub struct ProvingKeyWithoutCk<E: Pairing, PC: PCScheme<E>>
+where
+    E::ScalarField: RawPrimeField,
+{
     /// scribe instance parameters
-    pub params: ScribeConfig,
+    pub config: ScribeConfig,
     /// The preprocessed permutation polynomials
     pub permutation_oracles: Vec<MLE<E::ScalarField>>,
     /// The preprocessed selector polynomials
     pub selector_oracles: Vec<MLE<E::ScalarField>>,
-    /// Commitments to the preprocessed selector polynomials
-    pub selector_commitments: Vec<PC::Commitment>,
-    /// Commitments to the preprocessed permutation polynomials
-    pub permutation_commitments: Vec<PC::Commitment>,
-    /// The parameters for PC commitment
-    pub pc_ck: PC::CommitterKey,
+    /// The verifying key for the circuit.
+    pub vk: VerifyingKey<E, PC>,
 }
 
 /// The Scribe verifying key, consists of the following:
 ///   - the scribe instance parameters
 ///   - the commitments to the preprocessed polynomials output by the indexer
 ///   - the parameters for polynomial commitment
-#[derive(Clone, Debug, Default, PartialEq, CanonicalDeserialize, CanonicalSerialize)]
+#[derive(Derivative, CanonicalSerialize, CanonicalDeserialize)]
+#[derivative(Clone, Debug)]
 pub struct VerifyingKey<E: Pairing, PC: PCScheme<E>> {
     /// scribe instance parameters
-    pub params: ScribeConfig,
+    pub config: ScribeConfig,
     /// The parameters for PC commitment
     pub pc_vk: PC::VerifierKey,
     /// A commitment to the preprocessed selector polynomials
@@ -194,10 +253,10 @@ mod test {
         let pk_2 =
             ProvingKey::<Bls12_381, PST13<Bls12_381>>::deserialize_uncompressed_unchecked(&file_2)
                 .unwrap();
-        pk_2.permutation_oracles
+        pk_2.permutation_oracles()
             .iter()
             .for_each(|p| println!("perm oracle: {p}"));
-        pk_2.selector_oracles
+        pk_2.selector_oracles()
             .iter()
             .for_each(|s| println!("selector oracle: {s}"));
 

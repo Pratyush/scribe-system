@@ -38,7 +38,7 @@ where
 /// 6. build g'(X) = \sum_i=1..k \tilde eq_i(a2) * \tilde g_i(X) where (a2) is
 ///    the sumcheck's point 7. open g'(X) at point (a2)
 pub(crate) fn multi_open_internal<E, PC>(
-    prover_param: &PC::CommitterKey,
+    ck: &PC::CommitterKey,
     polynomials: &[PC::Polynomial],
     points: &[PC::Point],
     evals: &[PC::Evaluation],
@@ -145,8 +145,7 @@ where
     end_timer!(step);
 
     let step = start_timer!(|| "pc open");
-    let (g_prime_proof, _g_prime_eval) = PC::open(prover_param, &g_prime, a2.to_vec().as_ref())?;
-    // assert_eq!(g_prime_eval, tilde_g_eval);
+    let (g_prime_proof, _) = PC::open(ck, &g_prime, &a2.to_vec())?;
     end_timer!(step);
 
     let step = start_timer!(|| "evaluate fi(pi)");
@@ -166,7 +165,7 @@ where
 /// 3. ensure \sum_i eq(a2, point_i) * eq(t, <i>) * f_i_evals matches the sum
 ///    via SumCheck verification 4. verify commitment
 pub(crate) fn batch_verify_internal<E, PC>(
-    verifier_param: &PC::VerifierKey,
+    vk: &PC::VerifierKey,
     f_i_commitments: &[Commitment<E>],
     points: &[PC::Point],
     proof: &BatchProof<E, PC>,
@@ -240,7 +239,7 @@ where
 
     // verify commitment
     let res = PC::verify(
-        verifier_param,
+        vk,
         &Commitment(g_prime_commit.into_affine()),
         a2.to_vec().as_ref(),
         &tilde_g_eval,

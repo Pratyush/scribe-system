@@ -16,11 +16,7 @@ rayon = { version = "1.5.2", default-features = false, optional = true }
 displaydoc = "0.2.0"
 derivative = { version = "2", features = ["use_core"] }
 ark-bls12-381 = { version = "0.4.0", default-features = false, features = [ "curve" ] }
-
-[target.'cfg(target_os = "linux")'.dependencies]
-procfs = { version = "0.16"}
-libc = { version = "0.2.101"}
-log = { version = "0.4.14"}
+rand_chacha = "0.3.0"
 
 [dev-dependencies]
 env_logger = "0.11"

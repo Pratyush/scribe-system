@@ -320,7 +320,7 @@ mod test {
         let hs = vec![h1, h2];
 
         let srs = PST13::<Bls12_381>::gen_srs_for_testing(&mut rng, nv)?;
-        let (pcs_param, _) = PST13::<Bls12_381>::trim(&srs, None, Some(nv))?;
+        let (pcs_param, _) = PST13::trim(&srs, nv)?;
 
         test_product_check_helper::<Bls12_381, PST13<Bls12_381>>(&fs, &gs, &hs, &pcs_param)?;
 

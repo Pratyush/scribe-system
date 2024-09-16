@@ -195,7 +195,7 @@ mod test {
         let mut rng = test_rng();
 
         let srs = PST13::<Bls12_381>::gen_srs_for_testing(&mut rng, nv)?;
-        let (pcs_param, _) = PST13::<Bls12_381>::trim(&srs, None, Some(nv))?;
+        let (pcs_param, _) = PST13::trim(&srs, nv)?;
         let id_perms = MLE::identity_permutation_mles(nv, 2);
 
         {

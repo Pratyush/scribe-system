@@ -66,7 +66,7 @@ where
         self.h.serialize_with_mode(&mut writer, compress)?;
         Ok(())
     }
-    #[allow(unused_mut, unused_variables)]
+
     fn serialized_size(&self, compress: ark_serialize::Compress) -> usize {
         let mut size = 0;
         size += self.num_vars.serialized_size(compress);
@@ -94,9 +94,10 @@ where
 
         let len = usize::deserialize_with_mode(&mut reader, compress, validate)?;
         let mut powers_of_g = Vec::with_capacity(len);
-        for _ in 0..len {
-            powers_of_g.push(Arc::new(FileVec::deserialize_with_mode(
+        for i in 0..len {
+            powers_of_g.push(Arc::new(FileVec::deserialize_with_mode_and_prefix(
                 &mut reader,
+                &format!("ck_{i}"),
                 compress,
                 validate,
             )?));
@@ -281,8 +282,9 @@ where
         let mut start = 0;
         for i in 0..num_vars {
             let size = 1 << (num_vars - i);
-            let pp_k_g = Arc::new(FileVec::from_iter(
+            let pp_k_g = Arc::new(FileVec::from_iter_with_prefix(
                 pp_g[start..(start + size)].iter().copied(),
+                format!("srs_{i}"),
             ));
             // check correctness of pp_k_g
             // let t_eval_0 = eq_eval(&vec![E::ScalarField::zero(); num_vars - i], &t[i..num_vars])?;
@@ -290,7 +292,10 @@ where
             powers_of_g.push(pp_k_g);
             start += size;
         }
-        let gg = Arc::new(FileVec::from_iter([g.into_affine()].to_vec()));
+        let gg = Arc::new(FileVec::from_iter_with_prefix(
+            [g.into_affine()].to_vec(),
+            format!("srs_{num_vars}"),
+        ));
         powers_of_g.push(gg);
 
         let pp = Self::CommitterKey {

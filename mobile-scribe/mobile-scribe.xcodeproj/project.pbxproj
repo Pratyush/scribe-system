@@ -14,42 +14,17 @@
 		A2B6CD2D2C92570B00F6D105 /* hp_srs_22.params in Resources */ = {isa = PBXBuildFile; fileRef = A2B6CD282C92570B00F6D105 /* hp_srs_22.params */; };
 		A2B6CD342C93579F00F6D105 /* libbench_utils.a in Frameworks */ = {isa = PBXBuildFile; fileRef = A2B6CD332C93579F00F6D105 /* libbench_utils.a */; };
 		A2B6CD362C9357AB00F6D105 /* libbench_utils.a in Frameworks */ = {isa = PBXBuildFile; fileRef = A2B6CD352C9357AB00F6D105 /* libbench_utils.a */; };
-		A2B6CD632C94D9EF00F6D105 /* scribe_pubinput_19.params in Resources */ = {isa = PBXBuildFile; fileRef = A2B6CD3F2C94D9EF00F6D105 /* scribe_pubinput_19.params */; };
-		A2B6CD642C94D9EF00F6D105 /* scribe_witness_21.params in Resources */ = {isa = PBXBuildFile; fileRef = A2B6CD402C94D9EF00F6D105 /* scribe_witness_21.params */; };
-		A2B6CD652C94D9EF00F6D105 /* scribe_vk_15.params in Resources */ = {isa = PBXBuildFile; fileRef = A2B6CD412C94D9EF00F6D105 /* scribe_vk_15.params */; };
-		A2B6CD662C94D9EF00F6D105 /* scribe_pk_22.params in Resources */ = {isa = PBXBuildFile; fileRef = A2B6CD422C94D9EF00F6D105 /* scribe_pk_22.params */; };
-		A2B6CD672C94D9EF00F6D105 /* scribe_pubinput_22.params in Resources */ = {isa = PBXBuildFile; fileRef = A2B6CD432C94D9EF00F6D105 /* scribe_pubinput_22.params */; };
-		A2B6CD682C94D9EF00F6D105 /* scribe_pubinput_23.params in Resources */ = {isa = PBXBuildFile; fileRef = A2B6CD442C94D9EF00F6D105 /* scribe_pubinput_23.params */; };
-		A2B6CD692C94D9EF00F6D105 /* scribe_pubinput_21.params in Resources */ = {isa = PBXBuildFile; fileRef = A2B6CD452C94D9EF00F6D105 /* scribe_pubinput_21.params */; };
-		A2B6CD6A2C94D9EF00F6D105 /* scribe_witness_22.params in Resources */ = {isa = PBXBuildFile; fileRef = A2B6CD462C94D9EF00F6D105 /* scribe_witness_22.params */; };
-		A2B6CD6B2C94D9EF00F6D105 /* scribe_pubinput_17.params in Resources */ = {isa = PBXBuildFile; fileRef = A2B6CD472C94D9EF00F6D105 /* scribe_pubinput_17.params */; };
-		A2B6CD6C2C94D9EF00F6D105 /* scribe_vk_18.params in Resources */ = {isa = PBXBuildFile; fileRef = A2B6CD482C94D9EF00F6D105 /* scribe_vk_18.params */; };
-		A2B6CD6D2C94D9EF00F6D105 /* scribe_witness_20.params in Resources */ = {isa = PBXBuildFile; fileRef = A2B6CD492C94D9EF00F6D105 /* scribe_witness_20.params */; };
-		A2B6CD6E2C94D9EF00F6D105 /* scribe_pubinput_18.params in Resources */ = {isa = PBXBuildFile; fileRef = A2B6CD4A2C94D9EF00F6D105 /* scribe_pubinput_18.params */; };
-		A2B6CD6F2C94D9EF00F6D105 /* scribe_pk_20.params in Resources */ = {isa = PBXBuildFile; fileRef = A2B6CD4B2C94D9EF00F6D105 /* scribe_pk_20.params */; };
-		A2B6CD702C94D9EF00F6D105 /* scribe_witness_19.params in Resources */ = {isa = PBXBuildFile; fileRef = A2B6CD4C2C94D9EF00F6D105 /* scribe_witness_19.params */; };
-		A2B6CD712C94D9EF00F6D105 /* scribe_witness_17.params in Resources */ = {isa = PBXBuildFile; fileRef = A2B6CD4D2C94D9EF00F6D105 /* scribe_witness_17.params */; };
-		A2B6CD722C94D9EF00F6D105 /* scribe_pk_21.params in Resources */ = {isa = PBXBuildFile; fileRef = A2B6CD4E2C94D9EF00F6D105 /* scribe_pk_21.params */; };
-		A2B6CD732C94D9EF00F6D105 /* scribe_witness_16.params in Resources */ = {isa = PBXBuildFile; fileRef = A2B6CD4F2C94D9EF00F6D105 /* scribe_witness_16.params */; };
-		A2B6CD742C94D9EF00F6D105 /* scribe_vk_22.params in Resources */ = {isa = PBXBuildFile; fileRef = A2B6CD502C94D9EF00F6D105 /* scribe_vk_22.params */; };
-		A2B6CD752C94D9EF00F6D105 /* scribe_vk_19.params in Resources */ = {isa = PBXBuildFile; fileRef = A2B6CD512C94D9EF00F6D105 /* scribe_vk_19.params */; };
-		A2B6CD762C94D9EF00F6D105 /* scribe_pk_15.params in Resources */ = {isa = PBXBuildFile; fileRef = A2B6CD522C94D9EF00F6D105 /* scribe_pk_15.params */; };
-		A2B6CD772C94D9EF00F6D105 /* scribe_vk_16.params in Resources */ = {isa = PBXBuildFile; fileRef = A2B6CD532C94D9EF00F6D105 /* scribe_vk_16.params */; };
-		A2B6CD782C94D9EF00F6D105 /* scribe_pubinput_16.params in Resources */ = {isa = PBXBuildFile; fileRef = A2B6CD542C94D9EF00F6D105 /* scribe_pubinput_16.params */; };
-		A2B6CD792C94D9EF00F6D105 /* scribe_witness_15.params in Resources */ = {isa = PBXBuildFile; fileRef = A2B6CD552C94D9EF00F6D105 /* scribe_witness_15.params */; };
-		A2B6CD7A2C94D9EF00F6D105 /* scribe_pubinput_15.params in Resources */ = {isa = PBXBuildFile; fileRef = A2B6CD562C94D9EF00F6D105 /* scribe_pubinput_15.params */; };
-		A2B6CD7B2C94D9EF00F6D105 /* scribe_vk_20.params in Resources */ = {isa = PBXBuildFile; fileRef = A2B6CD572C94D9EF00F6D105 /* scribe_vk_20.params */; };
-		A2B6CD7C2C94D9EF00F6D105 /* scribe_witness_23.params in Resources */ = {isa = PBXBuildFile; fileRef = A2B6CD582C94D9EF00F6D105 /* scribe_witness_23.params */; };
-		A2B6CD7D2C94D9EF00F6D105 /* scribe_pubinput_20.params in Resources */ = {isa = PBXBuildFile; fileRef = A2B6CD592C94D9EF00F6D105 /* scribe_pubinput_20.params */; };
-		A2B6CD7E2C94D9EF00F6D105 /* scribe_pk_18.params in Resources */ = {isa = PBXBuildFile; fileRef = A2B6CD5A2C94D9EF00F6D105 /* scribe_pk_18.params */; };
-		A2B6CD7F2C94D9EF00F6D105 /* scribe_pk_16.params in Resources */ = {isa = PBXBuildFile; fileRef = A2B6CD5B2C94D9EF00F6D105 /* scribe_pk_16.params */; };
-		A2B6CD802C94D9EF00F6D105 /* scribe_pk_23.params in Resources */ = {isa = PBXBuildFile; fileRef = A2B6CD5C2C94D9EF00F6D105 /* scribe_pk_23.params */; };
-		A2B6CD812C94D9EF00F6D105 /* scribe_witness_18.params in Resources */ = {isa = PBXBuildFile; fileRef = A2B6CD5D2C94D9EF00F6D105 /* scribe_witness_18.params */; };
-		A2B6CD822C94D9EF00F6D105 /* scribe_pk_19.params in Resources */ = {isa = PBXBuildFile; fileRef = A2B6CD5E2C94D9EF00F6D105 /* scribe_pk_19.params */; };
-		A2B6CD832C94D9EF00F6D105 /* scribe_vk_17.params in Resources */ = {isa = PBXBuildFile; fileRef = A2B6CD5F2C94D9EF00F6D105 /* scribe_vk_17.params */; };
-		A2B6CD842C94D9EF00F6D105 /* scribe_vk_21.params in Resources */ = {isa = PBXBuildFile; fileRef = A2B6CD602C94D9EF00F6D105 /* scribe_vk_21.params */; };
-		A2B6CD852C94D9EF00F6D105 /* scribe_pk_17.params in Resources */ = {isa = PBXBuildFile; fileRef = A2B6CD612C94D9EF00F6D105 /* scribe_pk_17.params */; };
-		A2B6CD862C94D9EF00F6D105 /* scribe_vk_23.params in Resources */ = {isa = PBXBuildFile; fileRef = A2B6CD622C94D9EF00F6D105 /* scribe_vk_23.params */; };
+		A2B6CD962C97CF4D00F6D105 /* scribe_pk_22.params in Resources */ = {isa = PBXBuildFile; fileRef = A2B6CD8B2C97CF4D00F6D105 /* scribe_pk_22.params */; };
+		A2B6CD972C97CF4D00F6D105 /* scribe_pk_23.params in Resources */ = {isa = PBXBuildFile; fileRef = A2B6CD8C2C97CF4D00F6D105 /* scribe_pk_23.params */; };
+		A2B6CD982C97CF4D00F6D105 /* scribe_pk_16.params in Resources */ = {isa = PBXBuildFile; fileRef = A2B6CD8D2C97CF4D00F6D105 /* scribe_pk_16.params */; };
+		A2B6CD992C97CF4D00F6D105 /* scribe_pk_19.params in Resources */ = {isa = PBXBuildFile; fileRef = A2B6CD8E2C97CF4D00F6D105 /* scribe_pk_19.params */; };
+		A2B6CD9A2C97CF4D00F6D105 /* scribe_pk_24.params in Resources */ = {isa = PBXBuildFile; fileRef = A2B6CD8F2C97CF4D00F6D105 /* scribe_pk_24.params */; };
+		A2B6CD9B2C97CF4D00F6D105 /* scribe_pk_18.params in Resources */ = {isa = PBXBuildFile; fileRef = A2B6CD902C97CF4D00F6D105 /* scribe_pk_18.params */; };
+		A2B6CD9C2C97CF4D00F6D105 /* scribe_srs_24.params in Resources */ = {isa = PBXBuildFile; fileRef = A2B6CD912C97CF4D00F6D105 /* scribe_srs_24.params */; };
+		A2B6CD9D2C97CF4D00F6D105 /* scribe_pk_20.params in Resources */ = {isa = PBXBuildFile; fileRef = A2B6CD922C97CF4D00F6D105 /* scribe_pk_20.params */; };
+		A2B6CD9E2C97CF4D00F6D105 /* scribe_pk_17.params in Resources */ = {isa = PBXBuildFile; fileRef = A2B6CD932C97CF4D00F6D105 /* scribe_pk_17.params */; };
+		A2B6CD9F2C97CF4D00F6D105 /* scribe_pk_15.params in Resources */ = {isa = PBXBuildFile; fileRef = A2B6CD942C97CF4D00F6D105 /* scribe_pk_15.params */; };
+		A2B6CDA02C97CF4D00F6D105 /* scribe_pk_21.params in Resources */ = {isa = PBXBuildFile; fileRef = A2B6CD952C97CF4D00F6D105 /* scribe_pk_21.params */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -62,42 +37,17 @@
 		A2B6CD282C92570B00F6D105 /* hp_srs_22.params */ = {isa = PBXFileReference; lastKnownFileType = file; name = hp_srs_22.params; path = "../../bench-utils/example/hp_srs_22.params"; sourceTree = "<group>"; };
 		A2B6CD332C93579F00F6D105 /* libbench_utils.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libbench_utils.a; path = ../target/universal/release/libbench_utils.a; sourceTree = "<group>"; };
 		A2B6CD352C9357AB00F6D105 /* libbench_utils.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libbench_utils.a; path = ../target/universal/debug/libbench_utils.a; sourceTree = "<group>"; };
-		A2B6CD3F2C94D9EF00F6D105 /* scribe_pubinput_19.params */ = {isa = PBXFileReference; lastKnownFileType = file; name = scribe_pubinput_19.params; path = "../../bench-utils/example/scribe_pubinput_19.params"; sourceTree = "<group>"; };
-		A2B6CD402C94D9EF00F6D105 /* scribe_witness_21.params */ = {isa = PBXFileReference; lastKnownFileType = file; name = scribe_witness_21.params; path = "../../bench-utils/example/scribe_witness_21.params"; sourceTree = "<group>"; };
-		A2B6CD412C94D9EF00F6D105 /* scribe_vk_15.params */ = {isa = PBXFileReference; lastKnownFileType = file; name = scribe_vk_15.params; path = "../../bench-utils/example/scribe_vk_15.params"; sourceTree = "<group>"; };
-		A2B6CD422C94D9EF00F6D105 /* scribe_pk_22.params */ = {isa = PBXFileReference; lastKnownFileType = file; name = scribe_pk_22.params; path = "../../bench-utils/example/scribe_pk_22.params"; sourceTree = "<group>"; };
-		A2B6CD432C94D9EF00F6D105 /* scribe_pubinput_22.params */ = {isa = PBXFileReference; lastKnownFileType = file; name = scribe_pubinput_22.params; path = "../../bench-utils/example/scribe_pubinput_22.params"; sourceTree = "<group>"; };
-		A2B6CD442C94D9EF00F6D105 /* scribe_pubinput_23.params */ = {isa = PBXFileReference; lastKnownFileType = file; name = scribe_pubinput_23.params; path = "../../bench-utils/example/scribe_pubinput_23.params"; sourceTree = "<group>"; };
-		A2B6CD452C94D9EF00F6D105 /* scribe_pubinput_21.params */ = {isa = PBXFileReference; lastKnownFileType = file; name = scribe_pubinput_21.params; path = "../../bench-utils/example/scribe_pubinput_21.params"; sourceTree = "<group>"; };
-		A2B6CD462C94D9EF00F6D105 /* scribe_witness_22.params */ = {isa = PBXFileReference; lastKnownFileType = file; name = scribe_witness_22.params; path = "../../bench-utils/example/scribe_witness_22.params"; sourceTree = "<group>"; };
-		A2B6CD472C94D9EF00F6D105 /* scribe_pubinput_17.params */ = {isa = PBXFileReference; lastKnownFileType = file; name = scribe_pubinput_17.params; path = "../../bench-utils/example/scribe_pubinput_17.params"; sourceTree = "<group>"; };
-		A2B6CD482C94D9EF00F6D105 /* scribe_vk_18.params */ = {isa = PBXFileReference; lastKnownFileType = file; name = scribe_vk_18.params; path = "../../bench-utils/example/scribe_vk_18.params"; sourceTree = "<group>"; };
-		A2B6CD492C94D9EF00F6D105 /* scribe_witness_20.params */ = {isa = PBXFileReference; lastKnownFileType = file; name = scribe_witness_20.params; path = "../../bench-utils/example/scribe_witness_20.params"; sourceTree = "<group>"; };
-		A2B6CD4A2C94D9EF00F6D105 /* scribe_pubinput_18.params */ = {isa = PBXFileReference; lastKnownFileType = file; name = scribe_pubinput_18.params; path = "../../bench-utils/example/scribe_pubinput_18.params"; sourceTree = "<group>"; };
-		A2B6CD4B2C94D9EF00F6D105 /* scribe_pk_20.params */ = {isa = PBXFileReference; lastKnownFileType = file; name = scribe_pk_20.params; path = "../../bench-utils/example/scribe_pk_20.params"; sourceTree = "<group>"; };
-		A2B6CD4C2C94D9EF00F6D105 /* scribe_witness_19.params */ = {isa = PBXFileReference; lastKnownFileType = file; name = scribe_witness_19.params; path = "../../bench-utils/example/scribe_witness_19.params"; sourceTree = "<group>"; };
-		A2B6CD4D2C94D9EF00F6D105 /* scribe_witness_17.params */ = {isa = PBXFileReference; lastKnownFileType = file; name = scribe_witness_17.params; path = "../../bench-utils/example/scribe_witness_17.params"; sourceTree = "<group>"; };
-		A2B6CD4E2C94D9EF00F6D105 /* scribe_pk_21.params */ = {isa = PBXFileReference; lastKnownFileType = file; name = scribe_pk_21.params; path = "../../bench-utils/example/scribe_pk_21.params"; sourceTree = "<group>"; };
-		A2B6CD4F2C94D9EF00F6D105 /* scribe_witness_16.params */ = {isa = PBXFileReference; lastKnownFileType = file; name = scribe_witness_16.params; path = "../../bench-utils/example/scribe_witness_16.params"; sourceTree = "<group>"; };
-		A2B6CD502C94D9EF00F6D105 /* scribe_vk_22.params */ = {isa = PBXFileReference; lastKnownFileType = file; name = scribe_vk_22.params; path = "../../bench-utils/example/scribe_vk_22.params"; sourceTree = "<group>"; };
-		A2B6CD512C94D9EF00F6D105 /* scribe_vk_19.params */ = {isa = PBXFileReference; lastKnownFileType = file; name = scribe_vk_19.params; path = "../../bench-utils/example/scribe_vk_19.params"; sourceTree = "<group>"; };
-		A2B6CD522C94D9EF00F6D105 /* scribe_pk_15.params */ = {isa = PBXFileReference; lastKnownFileType = file; name = scribe_pk_15.params; path = "../../bench-utils/example/scribe_pk_15.params"; sourceTree = "<group>"; };
-		A2B6CD532C94D9EF00F6D105 /* scribe_vk_16.params */ = {isa = PBXFileReference; lastKnownFileType = file; name = scribe_vk_16.params; path = "../../bench-utils/example/scribe_vk_16.params"; sourceTree = "<group>"; };
-		A2B6CD542C94D9EF00F6D105 /* scribe_pubinput_16.params */ = {isa = PBXFileReference; lastKnownFileType = file; name = scribe_pubinput_16.params; path = "../../bench-utils/example/scribe_pubinput_16.params"; sourceTree = "<group>"; };
-		A2B6CD552C94D9EF00F6D105 /* scribe_witness_15.params */ = {isa = PBXFileReference; lastKnownFileType = file; name = scribe_witness_15.params; path = "../../bench-utils/example/scribe_witness_15.params"; sourceTree = "<group>"; };
-		A2B6CD562C94D9EF00F6D105 /* scribe_pubinput_15.params */ = {isa = PBXFileReference; lastKnownFileType = file; name = scribe_pubinput_15.params; path = "../../bench-utils/example/scribe_pubinput_15.params"; sourceTree = "<group>"; };
-		A2B6CD572C94D9EF00F6D105 /* scribe_vk_20.params */ = {isa = PBXFileReference; lastKnownFileType = file; name = scribe_vk_20.params; path = "../../bench-utils/example/scribe_vk_20.params"; sourceTree = "<group>"; };
-		A2B6CD582C94D9EF00F6D105 /* scribe_witness_23.params */ = {isa = PBXFileReference; lastKnownFileType = file; name = scribe_witness_23.params; path = "../../bench-utils/example/scribe_witness_23.params"; sourceTree = "<group>"; };
-		A2B6CD592C94D9EF00F6D105 /* scribe_pubinput_20.params */ = {isa = PBXFileReference; lastKnownFileType = file; name = scribe_pubinput_20.params; path = "../../bench-utils/example/scribe_pubinput_20.params"; sourceTree = "<group>"; };
-		A2B6CD5A2C94D9EF00F6D105 /* scribe_pk_18.params */ = {isa = PBXFileReference; lastKnownFileType = file; name = scribe_pk_18.params; path = "../../bench-utils/example/scribe_pk_18.params"; sourceTree = "<group>"; };
-		A2B6CD5B2C94D9EF00F6D105 /* scribe_pk_16.params */ = {isa = PBXFileReference; lastKnownFileType = file; name = scribe_pk_16.params; path = "../../bench-utils/example/scribe_pk_16.params"; sourceTree = "<group>"; };
-		A2B6CD5C2C94D9EF00F6D105 /* scribe_pk_23.params */ = {isa = PBXFileReference; lastKnownFileType = file; name = scribe_pk_23.params; path = "../../bench-utils/example/scribe_pk_23.params"; sourceTree = "<group>"; };
-		A2B6CD5D2C94D9EF00F6D105 /* scribe_witness_18.params */ = {isa = PBXFileReference; lastKnownFileType = file; name = scribe_witness_18.params; path = "../../bench-utils/example/scribe_witness_18.params"; sourceTree = "<group>"; };
-		A2B6CD5E2C94D9EF00F6D105 /* scribe_pk_19.params */ = {isa = PBXFileReference; lastKnownFileType = file; name = scribe_pk_19.params; path = "../../bench-utils/example/scribe_pk_19.params"; sourceTree = "<group>"; };
-		A2B6CD5F2C94D9EF00F6D105 /* scribe_vk_17.params */ = {isa = PBXFileReference; lastKnownFileType = file; name = scribe_vk_17.params; path = "../../bench-utils/example/scribe_vk_17.params"; sourceTree = "<group>"; };
-		A2B6CD602C94D9EF00F6D105 /* scribe_vk_21.params */ = {isa = PBXFileReference; lastKnownFileType = file; name = scribe_vk_21.params; path = "../../bench-utils/example/scribe_vk_21.params"; sourceTree = "<group>"; };
-		A2B6CD612C94D9EF00F6D105 /* scribe_pk_17.params */ = {isa = PBXFileReference; lastKnownFileType = file; name = scribe_pk_17.params; path = "../../bench-utils/example/scribe_pk_17.params"; sourceTree = "<group>"; };
-		A2B6CD622C94D9EF00F6D105 /* scribe_vk_23.params */ = {isa = PBXFileReference; lastKnownFileType = file; name = scribe_vk_23.params; path = "../../bench-utils/example/scribe_vk_23.params"; sourceTree = "<group>"; };
+		A2B6CD8B2C97CF4D00F6D105 /* scribe_pk_22.params */ = {isa = PBXFileReference; lastKnownFileType = file; name = scribe_pk_22.params; path = "../../bench-utils/example/scribe_pk_22.params"; sourceTree = "<group>"; };
+		A2B6CD8C2C97CF4D00F6D105 /* scribe_pk_23.params */ = {isa = PBXFileReference; lastKnownFileType = file; name = scribe_pk_23.params; path = "../../bench-utils/example/scribe_pk_23.params"; sourceTree = "<group>"; };
+		A2B6CD8D2C97CF4D00F6D105 /* scribe_pk_16.params */ = {isa = PBXFileReference; lastKnownFileType = file; name = scribe_pk_16.params; path = "../../bench-utils/example/scribe_pk_16.params"; sourceTree = "<group>"; };
+		A2B6CD8E2C97CF4D00F6D105 /* scribe_pk_19.params */ = {isa = PBXFileReference; lastKnownFileType = file; name = scribe_pk_19.params; path = "../../bench-utils/example/scribe_pk_19.params"; sourceTree = "<group>"; };
+		A2B6CD8F2C97CF4D00F6D105 /* scribe_pk_24.params */ = {isa = PBXFileReference; lastKnownFileType = file; name = scribe_pk_24.params; path = "../../bench-utils/example/scribe_pk_24.params"; sourceTree = "<group>"; };
+		A2B6CD902C97CF4D00F6D105 /* scribe_pk_18.params */ = {isa = PBXFileReference; lastKnownFileType = file; name = scribe_pk_18.params; path = "../../bench-utils/example/scribe_pk_18.params"; sourceTree = "<group>"; };
+		A2B6CD912C97CF4D00F6D105 /* scribe_srs_24.params */ = {isa = PBXFileReference; lastKnownFileType = file; name = scribe_srs_24.params; path = "../../bench-utils/example/scribe_srs_24.params"; sourceTree = "<group>"; };
+		A2B6CD922C97CF4D00F6D105 /* scribe_pk_20.params */ = {isa = PBXFileReference; lastKnownFileType = file; name = scribe_pk_20.params; path = "../../bench-utils/example/scribe_pk_20.params"; sourceTree = "<group>"; };
+		A2B6CD932C97CF4D00F6D105 /* scribe_pk_17.params */ = {isa = PBXFileReference; lastKnownFileType = file; name = scribe_pk_17.params; path = "../../bench-utils/example/scribe_pk_17.params"; sourceTree = "<group>"; };
+		A2B6CD942C97CF4D00F6D105 /* scribe_pk_15.params */ = {isa = PBXFileReference; lastKnownFileType = file; name = scribe_pk_15.params; path = "../../bench-utils/example/scribe_pk_15.params"; sourceTree = "<group>"; };
+		A2B6CD952C97CF4D00F6D105 /* scribe_pk_21.params */ = {isa = PBXFileReference; lastKnownFileType = file; name = scribe_pk_21.params; path = "../../bench-utils/example/scribe_pk_21.params"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -134,43 +84,18 @@
 		A2B6CD102C91316F00F6D105 /* mobile-scribe */ = {
 			isa = PBXGroup;
 			children = (
+				A2B6CD942C97CF4D00F6D105 /* scribe_pk_15.params */,
+				A2B6CD8D2C97CF4D00F6D105 /* scribe_pk_16.params */,
+				A2B6CD932C97CF4D00F6D105 /* scribe_pk_17.params */,
+				A2B6CD902C97CF4D00F6D105 /* scribe_pk_18.params */,
+				A2B6CD8E2C97CF4D00F6D105 /* scribe_pk_19.params */,
+				A2B6CD922C97CF4D00F6D105 /* scribe_pk_20.params */,
+				A2B6CD952C97CF4D00F6D105 /* scribe_pk_21.params */,
+				A2B6CD8B2C97CF4D00F6D105 /* scribe_pk_22.params */,
+				A2B6CD8C2C97CF4D00F6D105 /* scribe_pk_23.params */,
+				A2B6CD8F2C97CF4D00F6D105 /* scribe_pk_24.params */,
+				A2B6CD912C97CF4D00F6D105 /* scribe_srs_24.params */,
 				A2B6CD282C92570B00F6D105 /* hp_srs_22.params */,
-				A2B6CD522C94D9EF00F6D105 /* scribe_pk_15.params */,
-				A2B6CD5B2C94D9EF00F6D105 /* scribe_pk_16.params */,
-				A2B6CD612C94D9EF00F6D105 /* scribe_pk_17.params */,
-				A2B6CD5A2C94D9EF00F6D105 /* scribe_pk_18.params */,
-				A2B6CD5E2C94D9EF00F6D105 /* scribe_pk_19.params */,
-				A2B6CD4B2C94D9EF00F6D105 /* scribe_pk_20.params */,
-				A2B6CD4E2C94D9EF00F6D105 /* scribe_pk_21.params */,
-				A2B6CD422C94D9EF00F6D105 /* scribe_pk_22.params */,
-				A2B6CD5C2C94D9EF00F6D105 /* scribe_pk_23.params */,
-				A2B6CD562C94D9EF00F6D105 /* scribe_pubinput_15.params */,
-				A2B6CD542C94D9EF00F6D105 /* scribe_pubinput_16.params */,
-				A2B6CD472C94D9EF00F6D105 /* scribe_pubinput_17.params */,
-				A2B6CD4A2C94D9EF00F6D105 /* scribe_pubinput_18.params */,
-				A2B6CD3F2C94D9EF00F6D105 /* scribe_pubinput_19.params */,
-				A2B6CD592C94D9EF00F6D105 /* scribe_pubinput_20.params */,
-				A2B6CD452C94D9EF00F6D105 /* scribe_pubinput_21.params */,
-				A2B6CD432C94D9EF00F6D105 /* scribe_pubinput_22.params */,
-				A2B6CD442C94D9EF00F6D105 /* scribe_pubinput_23.params */,
-				A2B6CD412C94D9EF00F6D105 /* scribe_vk_15.params */,
-				A2B6CD532C94D9EF00F6D105 /* scribe_vk_16.params */,
-				A2B6CD5F2C94D9EF00F6D105 /* scribe_vk_17.params */,
-				A2B6CD482C94D9EF00F6D105 /* scribe_vk_18.params */,
-				A2B6CD512C94D9EF00F6D105 /* scribe_vk_19.params */,
-				A2B6CD572C94D9EF00F6D105 /* scribe_vk_20.params */,
-				A2B6CD602C94D9EF00F6D105 /* scribe_vk_21.params */,
-				A2B6CD502C94D9EF00F6D105 /* scribe_vk_22.params */,
-				A2B6CD622C94D9EF00F6D105 /* scribe_vk_23.params */,
-				A2B6CD552C94D9EF00F6D105 /* scribe_witness_15.params */,
-				A2B6CD4F2C94D9EF00F6D105 /* scribe_witness_16.params */,
-				A2B6CD4D2C94D9EF00F6D105 /* scribe_witness_17.params */,
-				A2B6CD5D2C94D9EF00F6D105 /* scribe_witness_18.params */,
-				A2B6CD4C2C94D9EF00F6D105 /* scribe_witness_19.params */,
-				A2B6CD492C94D9EF00F6D105 /* scribe_witness_20.params */,
-				A2B6CD402C94D9EF00F6D105 /* scribe_witness_21.params */,
-				A2B6CD462C94D9EF00F6D105 /* scribe_witness_22.params */,
-				A2B6CD582C94D9EF00F6D105 /* scribe_witness_23.params */,
 				A2B6CD112C91316F00F6D105 /* ScribeApp.swift */,
 				A2B6CD172C91317000F6D105 /* Assets.xcassets */,
 				A2B6CD192C91317000F6D105 /* Preview Content */,
@@ -268,45 +193,20 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				A2B6CD852C94D9EF00F6D105 /* scribe_pk_17.params in Resources */,
-				A2B6CD812C94D9EF00F6D105 /* scribe_witness_18.params in Resources */,
 				A2B6CD2D2C92570B00F6D105 /* hp_srs_22.params in Resources */,
-				A2B6CD712C94D9EF00F6D105 /* scribe_witness_17.params in Resources */,
-				A2B6CD7B2C94D9EF00F6D105 /* scribe_vk_20.params in Resources */,
-				A2B6CD862C94D9EF00F6D105 /* scribe_vk_23.params in Resources */,
-				A2B6CD682C94D9EF00F6D105 /* scribe_pubinput_23.params in Resources */,
-				A2B6CD772C94D9EF00F6D105 /* scribe_vk_16.params in Resources */,
+				A2B6CD9B2C97CF4D00F6D105 /* scribe_pk_18.params in Resources */,
+				A2B6CD992C97CF4D00F6D105 /* scribe_pk_19.params in Resources */,
+				A2B6CD972C97CF4D00F6D105 /* scribe_pk_23.params in Resources */,
 				A2B6CD1B2C91317000F6D105 /* Preview Assets.xcassets in Resources */,
-				A2B6CD652C94D9EF00F6D105 /* scribe_vk_15.params in Resources */,
-				A2B6CD7A2C94D9EF00F6D105 /* scribe_pubinput_15.params in Resources */,
-				A2B6CD6B2C94D9EF00F6D105 /* scribe_pubinput_17.params in Resources */,
-				A2B6CD752C94D9EF00F6D105 /* scribe_vk_19.params in Resources */,
-				A2B6CD6C2C94D9EF00F6D105 /* scribe_vk_18.params in Resources */,
-				A2B6CD832C94D9EF00F6D105 /* scribe_vk_17.params in Resources */,
-				A2B6CD802C94D9EF00F6D105 /* scribe_pk_23.params in Resources */,
-				A2B6CD662C94D9EF00F6D105 /* scribe_pk_22.params in Resources */,
-				A2B6CD722C94D9EF00F6D105 /* scribe_pk_21.params in Resources */,
-				A2B6CD822C94D9EF00F6D105 /* scribe_pk_19.params in Resources */,
-				A2B6CD792C94D9EF00F6D105 /* scribe_witness_15.params in Resources */,
-				A2B6CD672C94D9EF00F6D105 /* scribe_pubinput_22.params in Resources */,
-				A2B6CD742C94D9EF00F6D105 /* scribe_vk_22.params in Resources */,
-				A2B6CD6F2C94D9EF00F6D105 /* scribe_pk_20.params in Resources */,
-				A2B6CD6A2C94D9EF00F6D105 /* scribe_witness_22.params in Resources */,
-				A2B6CD632C94D9EF00F6D105 /* scribe_pubinput_19.params in Resources */,
-				A2B6CD7C2C94D9EF00F6D105 /* scribe_witness_23.params in Resources */,
-				A2B6CD762C94D9EF00F6D105 /* scribe_pk_15.params in Resources */,
-				A2B6CD642C94D9EF00F6D105 /* scribe_witness_21.params in Resources */,
-				A2B6CD6E2C94D9EF00F6D105 /* scribe_pubinput_18.params in Resources */,
-				A2B6CD7E2C94D9EF00F6D105 /* scribe_pk_18.params in Resources */,
-				A2B6CD782C94D9EF00F6D105 /* scribe_pubinput_16.params in Resources */,
-				A2B6CD6D2C94D9EF00F6D105 /* scribe_witness_20.params in Resources */,
-				A2B6CD732C94D9EF00F6D105 /* scribe_witness_16.params in Resources */,
-				A2B6CD702C94D9EF00F6D105 /* scribe_witness_19.params in Resources */,
+				A2B6CDA02C97CF4D00F6D105 /* scribe_pk_21.params in Resources */,
+				A2B6CD9A2C97CF4D00F6D105 /* scribe_pk_24.params in Resources */,
+				A2B6CD9E2C97CF4D00F6D105 /* scribe_pk_17.params in Resources */,
+				A2B6CD9F2C97CF4D00F6D105 /* scribe_pk_15.params in Resources */,
+				A2B6CD9C2C97CF4D00F6D105 /* scribe_srs_24.params in Resources */,
+				A2B6CD982C97CF4D00F6D105 /* scribe_pk_16.params in Resources */,
+				A2B6CD9D2C97CF4D00F6D105 /* scribe_pk_20.params in Resources */,
+				A2B6CD962C97CF4D00F6D105 /* scribe_pk_22.params in Resources */,
 				A2B6CD182C91317000F6D105 /* Assets.xcassets in Resources */,
-				A2B6CD7F2C94D9EF00F6D105 /* scribe_pk_16.params in Resources */,
-				A2B6CD7D2C94D9EF00F6D105 /* scribe_pubinput_20.params in Resources */,
-				A2B6CD842C94D9EF00F6D105 /* scribe_vk_21.params in Resources */,
-				A2B6CD692C94D9EF00F6D105 /* scribe_pubinput_21.params in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

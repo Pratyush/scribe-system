@@ -18,9 +18,9 @@ pub trait PCScheme<E: Pairing> {
     /// Prover parameters
     type CommitterKey: Sync + CanonicalDeserialize + CanonicalSerialize;
     /// Verifier parameters
-    type VerifierKey: Clone + CanonicalSerialize + CanonicalDeserialize;
+    type VerifierKey: Debug + Clone + CanonicalSerialize + CanonicalDeserialize;
     /// Structured reference string
-    type SRS: Debug;
+    type SRS;
     /// Polynomial and its associated types
     type Polynomial: Clone + Debug;
     /// Polynomial input domain
@@ -70,8 +70,7 @@ pub trait PCScheme<E: Pairing> {
     /// ..)` etc.
     fn trim(
         srs: impl Borrow<Self::SRS>,
-        supported_degree: Option<usize>,
-        supported_num_vars: Option<usize>,
+        supported_num_vars: usize,
     ) -> Result<(Self::CommitterKey, Self::VerifierKey), PCError>;
 
     /// Generate a commitment for a polynomial
@@ -84,14 +83,14 @@ pub trait PCScheme<E: Pairing> {
     /// Box<Self::ProverParam>, ..)` or `commit(prover_param:
     /// Arc<Self::ProverParam>, ..)` etc.
     fn commit(
-        prover_param: impl Borrow<Self::CommitterKey>,
+        ck: impl Borrow<Self::CommitterKey>,
         poly: &Self::Polynomial,
     ) -> Result<Self::Commitment, PCError>;
 
     /// On input a polynomial `p` and a point `point`, outputs a proof for the
     /// same.
     fn open(
-        prover_param: impl Borrow<Self::CommitterKey>,
+        ck: impl Borrow<Self::CommitterKey>,
         polynomial: &Self::Polynomial,
         point: &Self::Point,
     ) -> Result<(Self::Proof, Self::Evaluation), PCError>;
@@ -108,7 +107,7 @@ pub trait PCScheme<E: Pairing> {
     /// Input a list of multilinear extensions, and a same number of points, and
     /// a transcript, compute a multi-opening for all the polynomials.
     fn multi_open(
-        _prover_param: impl Borrow<Self::CommitterKey>,
+        _ck: impl Borrow<Self::CommitterKey>,
         _polynomials: &[Self::Polynomial],
         _points: &[Self::Point],
         _evals: &[Self::Evaluation],
@@ -122,7 +121,7 @@ pub trait PCScheme<E: Pairing> {
     /// Verifies that `value` is the evaluation at `x` of the polynomial
     /// committed inside `comm`.
     fn verify(
-        verifier_param: &Self::VerifierKey,
+        vk: &Self::VerifierKey,
         commitment: &Self::Commitment,
         point: &Self::Point,
         value: &E::ScalarField,
@@ -132,7 +131,7 @@ pub trait PCScheme<E: Pairing> {
     /// Verifies that `value_i` is the evaluation at `x_i` of the polynomial
     /// `poly_i` committed inside `comm`.
     fn batch_verify(
-        _verifier_param: &Self::VerifierKey,
+        _vk: &Self::VerifierKey,
         _commitments: &[Self::Commitment],
         _points: &[Self::Point],
         _batch_proof: &Self::BatchProof,

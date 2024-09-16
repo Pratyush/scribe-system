@@ -39,17 +39,14 @@ where
 {
     pub fn preprocess(
         index: &Index<E::ScalarField>,
-        pcs_srs: &PC::SRS,
+        pc_srs: &PC::SRS,
     ) -> Result<(ProvingKey<E, PC>, VerifyingKey<E, PC>), ScribeErrors> {
         let num_vars = index.num_variables();
-        let supported_ml_degree = num_vars;
-
-        let start = start_timer!(|| format!("scribe preprocessing nv = {}", num_vars));
+        let start = start_timer!(|| format!("scribe preprocessing nv = {num_vars}"));
 
         // extract PC prover and verifier keys from SRS
         let trim_time = start_timer!(|| "trimming PC SRS");
-        let (pcs_prover_param, pcs_verifier_param) =
-            PC::trim(pcs_srs, None, Some(supported_ml_degree))?;
+        let (pc_ck, pc_vk) = PC::trim(pc_srs, num_vars)?;
         end_timer!(trim_time);
 
         // build permutation oracles
@@ -57,8 +54,8 @@ where
         let permutation_commit_time = start_timer!(|| "commit permutation oracles");
         let permutation_commitments = permutation_oracles
             .iter()
-            .map(|perm_oracle| PC::commit(&pcs_prover_param, perm_oracle))
-            .collect::<Result<Vec<_>, _>>()?;
+            .map(|poly| PC::commit(&pc_ck, poly))
+            .collect::<Result<_, _>>()?;
         end_timer!(permutation_commit_time);
 
         // commit selector oracles
@@ -67,28 +64,26 @@ where
         let selector_commit_time = start_timer!(|| "commit selector oracles");
         let selector_commitments = selector_oracles
             .iter()
-            .map(|poly| PC::commit(&pcs_prover_param, poly))
-            .collect::<Result<Vec<_>, _>>()?;
+            .map(|poly| PC::commit(&pc_ck, poly))
+            .collect::<Result<_, _>>()?;
         end_timer!(selector_commit_time);
 
         end_timer!(start);
 
-        Ok((
-            ProvingKey {
-                params: index.params.clone(),
-                permutation_oracles,
-                selector_oracles,
-                selector_commitments: selector_commitments.clone(),
-                permutation_commitments: permutation_commitments.clone(),
-                pc_ck: pcs_prover_param,
-            },
-            VerifyingKey {
-                params: index.params.clone(),
-                pc_vk: pcs_verifier_param,
-                selector_commitments,
-                perm_commitments: permutation_commitments,
-            },
-        ))
+        let vk = VerifyingKey {
+            config: index.config.clone(),
+            pc_vk,
+            selector_commitments,
+            perm_commitments: permutation_commitments,
+        };
+        let pk = ProvingKey::new(
+            index.config.clone(),
+            permutation_oracles,
+            selector_oracles,
+            vk.clone(),
+            pc_ck,
+        );
+        Ok((pk, vk))
     }
 
     /// Generate Scribe SNARK proof.
@@ -144,16 +139,16 @@ where
         pub_input: &[E::ScalarField],
         witnesses: &[MLE<E::ScalarField>],
     ) -> Result<Proof<E, PC>, ScribeErrors> {
-        let start = start_timer!(|| format!("scribe proving nv = {}", pk.params.num_variables()));
+        let start = start_timer!(|| format!("scribe proving nv = {}", pk.config().num_variables()));
         let mut transcript = IOPTranscript::<E::ScalarField>::new(b"scribe");
 
-        prover_sanity_check(&pk.params, pub_input, witnesses.to_vec())?;
+        prover_sanity_check(&pk.config(), pub_input, witnesses.to_vec())?;
 
         // witness assignment of length 2^n
-        let num_vars = pk.params.num_variables();
+        let num_vars = pk.config().num_variables();
 
         // online public input of length 2^\ell
-        let ell = log2(pk.params.num_pub_input) as usize;
+        let ell = log2(pk.config().num_pub_input) as usize;
 
         // We use accumulators to store the polynomials and their eval points.
         // They are batch opened at a later stage.
@@ -190,9 +185,9 @@ where
         let step = start_timer!(|| "ZeroCheck on f");
 
         let fx = build_f(
-            &pk.params.gate_func,
-            pk.params.num_variables(),
-            &pk.selector_oracles,
+            &pk.config().gate_func,
+            pk.config().num_variables(),
+            &pk.selector_oracles(),
             witnesses,
         )?;
 
@@ -209,7 +204,7 @@ where
             &pk.pc_ck,
             witnesses,
             witnesses,
-            &pk.permutation_oracles,
+            &pk.permutation_oracles(),
             &mut transcript,
         )?;
         let perm_check_point = &perm_check_proof.zero_check_proof.point;
@@ -288,9 +283,9 @@ where
 
         // perms(x)'s points
         for (perm, pcom) in pk
-            .permutation_oracles
+            .permutation_oracles()
             .iter()
-            .zip(pk.permutation_commitments.iter())
+            .zip(&pk.vk().perm_commitments)
         {
             pcs_acc.insert_poly_and_points(perm, pcom, perm_check_point);
         }
@@ -305,9 +300,9 @@ where
         }
 
         //   - 4.3.2. (deferred) selector_poly(zero_check_point)
-        pk.selector_oracles
+        pk.selector_oracles()
             .iter()
-            .zip(pk.selector_commitments.iter())
+            .zip(&pk.vk().selector_commitments)
             .for_each(|(poly, com)| {
                 pcs_acc.insert_poly_and_points(poly, com, &zero_check_proof.point)
             });
@@ -389,18 +384,18 @@ where
 
         let mut transcript = IOPTranscript::<E::ScalarField>::new(b"scribe");
 
-        let num_selectors = vk.params.num_selector_columns();
-        let num_witnesses = vk.params.num_witness_columns();
-        let num_vars = vk.params.num_variables();
+        let num_selectors = vk.config.num_selector_columns();
+        let num_witnesses = vk.config.num_witness_columns();
+        let num_vars = vk.config.num_variables();
 
         //  online public input of length 2^\ell
-        let ell = log2(vk.params.num_pub_input) as usize;
+        let ell = log2(vk.config.num_pub_input) as usize;
 
         // =======================================================================
         // 0. sanity checks
         // =======================================================================
         // public input length
-        if pub_input.len() != vk.params.num_pub_input {
+        if pub_input.len() != vk.config.num_pub_input {
             return Err(ScribeErrors::InvalidProver(format!(
                 "Public input length is not correct: got {}, expect {}",
                 pub_input.len(),
@@ -433,7 +428,7 @@ where
         let step = start_timer!(|| "verify zero check");
         // Zero check and perm check have different AuxInfo
         let zero_check_aux_info = VPAuxInfo::<E::ScalarField> {
-            max_degree: vk.params.gate_func.degree(),
+            max_degree: vk.config.gate_func.degree(),
             num_variables: num_vars,
             phantom: PhantomData::default(),
         };
@@ -451,7 +446,7 @@ where
         let zero_check_point = zero_check_sub_claim.point;
 
         // check zero check subclaim
-        let f_eval = eval_f(&vk.params.gate_func, selector_evals, witness_gate_evals)?;
+        let f_eval = eval_f(&vk.config.gate_func, selector_evals, witness_gate_evals)?;
         if f_eval != zero_check_sub_claim.expected_evaluation {
             return Err(ScribeErrors::InvalidProof(
                 "zero check evaluation failed".to_string(),
@@ -488,7 +483,7 @@ where
         let mut id_evals = vec![];
         for i in 0..num_witnesses {
             let ith_point = gen_eval_point(i, log2(num_witnesses) as usize, &perm_check_point[..]);
-            id_evals.push(vk.params.eval_id_oracle(&ith_point[..])?);
+            id_evals.push(vk.config.eval_id_oracle(&ith_point[..])?);
         }
 
         // check evaluation subclaim
@@ -709,7 +704,7 @@ mod tests {
                 2,
             );
             let index = Index {
-                params: params.clone(),
+                config: params.clone(),
                 permutation,
                 selectors: vec![q1],
             };
@@ -813,7 +808,7 @@ mod tests {
                 2,
             );
             let bad_index = Index {
-                params,
+                config: params,
                 permutation: rand_perm,
                 selectors: vec![q1],
             };

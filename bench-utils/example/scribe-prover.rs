@@ -3,5 +3,5 @@ pub fn main() {
     let min_num_vars: usize = args[0].parse().unwrap();
     let max_num_vars: usize = args[1].parse().unwrap();
     let file_dir_path = std::path::Path::new(args[2].as_str());
-    bench_utils::scribe::prover(min_num_vars, max_num_vars, None, file_dir_path, false).unwrap();
+    bench_utils::scribe::prover(min_num_vars, max_num_vars, None, file_dir_path).unwrap();
 }

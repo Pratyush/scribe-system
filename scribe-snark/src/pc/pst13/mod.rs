@@ -17,8 +17,8 @@ use ark_ec::{
 use ark_ff::PrimeField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::{
-    borrow::Borrow, end_timer, format, marker::PhantomData, rand::Rng, start_timer,
-    string::ToString, vec::Vec, One, Zero,
+    borrow::Borrow, end_timer, format, marker::PhantomData, rand::Rng, start_timer, vec::Vec, One,
+    Zero,
 };
 use rayon::iter::ParallelExtend;
 use srs::{CommitterKey, VerifierKey, SRS};
@@ -80,22 +80,9 @@ where
     /// `supported_num_vars` for multilinear.
     fn trim(
         srs: impl Borrow<Self::SRS>,
-        supported_degree: Option<usize>,
-        supported_num_vars: Option<usize>,
+        supported_num_vars: usize,
     ) -> Result<(Self::CommitterKey, Self::VerifierKey), PCError> {
-        assert!(supported_degree.is_none());
-
-        let supported_num_vars = match supported_num_vars {
-            Some(p) => p,
-            None => {
-                return Err(PCError::InvalidParameters(
-                    "multilinear should receive a num_var param".to_string(),
-                ))
-            },
-        };
-        let (ml_ck, ml_vk) = srs.borrow().trim(supported_num_vars)?;
-
-        Ok((ml_ck, ml_vk))
+        srs.borrow().trim(supported_num_vars)
     }
 
     /// Generate a commitment for a polynomial.
@@ -103,10 +90,10 @@ where
     /// This function takes `2^num_vars` number of scalar multiplications over
     /// G1.
     fn commit(
-        prover_param: impl Borrow<Self::CommitterKey>,
+        ck: impl Borrow<Self::CommitterKey>,
         poly: &Self::Polynomial,
     ) -> Result<Self::Commitment, PCError> {
-        let prover_param = prover_param.borrow();
+        let prover_param = ck.borrow();
         let poly_num_vars = poly.num_vars();
 
         let commit_timer = start_timer!(|| format!("commit poly nv = {}", poly_num_vars));
@@ -148,85 +135,23 @@ where
     /// - at round i, we compute an MSM for `2^{num_var - i + 1}` number of G2
     ///   elements.
     fn open(
-        prover_param: impl Borrow<Self::CommitterKey>,
+        ck: impl Borrow<Self::CommitterKey>,
         polynomial: &Self::Polynomial,
         point: &Self::Point,
     ) -> Result<(Self::Proof, Self::Evaluation), PCError> {
-        open_internal(prover_param.borrow(), polynomial, point)
+        open_internal(ck.borrow(), polynomial, point.as_ref())
     }
-
-    // // this is the multi poly single point version
-    // /// Input a list of multilinear extensions, and a same number of points, and
-    // /// a transcript, compute a multi-opening for all the polynomials.
-    // fn multi_open_single_point(
-    //     prover_param: impl Borrow<Self::ProverParam>,
-    //     polynomials: &[Self::Polynomial],
-    //     point: Self::Point,
-    //     transcript: &mut IOPTranscript<E::ScalarField>,
-    // ) -> Result<(Self::Proof, E::ScalarField), PCSError> {
-    //     let alpha = transcript.get_and_append_challenge(b"opening rlc").unwrap();
-
-    //     // assert that poly has same num_vars as points length
-    //     let num_vars = polynomials[0].lock().unwrap().num_vars;
-    //     assert_eq!(num_vars, point.len());
-
-    //     // create random linear combination of polynomials, a new stream in the form of poly0 + alpha * poly1 + alpha^2 * poly2 + ...
-    //     let mut poly = DenseMLPolyStream::<E::ScalarField>::with_path(num_vars, None, None);
-
-    //     // create a vector of 1, alpha, alpha^2, ..., alpha^polynomials.len()
-    //     let alphas = (0..polynomials.len())
-    //         .map(|i| alpha.pow(&[i as u64]))
-    //         .collect::<Vec<E::ScalarField>>();
-
-    //     // lock all polynomials and make sure they all have the same num_vars
-    //     let mut polys_locks = polynomials
-    //         .iter()
-    //         .map(|p| p.lock().unwrap())
-    //         .collect::<Vec<_>>();
-    //     for poly_lock in &polys_locks {
-    //         assert_eq!(
-    //             poly_lock.num_vars, num_vars,
-    //             "All polynomials must have the same number of variables."
-    //         );
-    //     }
-
-    //     // for each locked polynomial, read the next element using polynomial_lock.read_next()
-    //     // if the return value is Some(), multiply it to the corresponding alpha and sum it
-    //     // write the sum to the result poly using poly.write_next_unchecked(sum)
-    //     // note that there's a sum for each value read from the polynomials, so the result poly will have the same length as the source polynomials
-    //     for _ in 0..(1 << num_vars) {
-    //         let mut sum = E::ScalarField::zero();
-    //         for (i, poly_lock) in polys_locks.iter_mut().enumerate() {
-    //             if let Some(val) = poly_lock.read_next() {
-    //                 // Multiply it to the corresponding alpha and sum it
-    //                 sum += val * &alphas[i];
-    //             }
-    //         }
-    //         // Write the sum to the result poly
-    //         poly.write_next_unchecked(sum);
-    //     }
-
-    //     poly.swap_read_write();
-
-    //     open_internal(prover_param.borrow(), Arc::new(Mutex::new(poly)), &point)
-    // }
 
     /// Input a list of multilinear extensions, and a same number of points, and
     /// a transcript, compute a multi-opening for all the polynomials.
     fn multi_open(
-        prover_param: impl Borrow<Self::CommitterKey>,
+        ck: impl Borrow<Self::CommitterKey>,
         polynomials: &[Self::Polynomial],
         points: &[Self::Point],
         evals: &[Self::Evaluation],
         transcript: &mut IOPTranscript<E::ScalarField>,
     ) -> Result<BatchProof<E, Self>, PCError> {
-        multi_open_internal(
-            prover_param.borrow(),
-            polynomials,
-            points,
-            evals,
-            transcript,
-        )
+        multi_open_internal(ck.borrow(), polynomials, points, evals, transcript)
     }
 
     /// Verifies that `value` is the evaluation at `x` of the polynomial
@@ -236,25 +161,25 @@ where
     /// - num_var number of pairing product.
     /// - num_var number of MSM
     fn verify(
-        verifier_param: &Self::VerifierKey,
+        vk: &Self::VerifierKey,
         commitment: &Self::Commitment,
         point: &Self::Point,
         value: &E::ScalarField,
         proof: &Self::Proof,
     ) -> Result<bool, PCError> {
-        verify_internal(verifier_param, commitment, point, value, proof)
+        verify_internal(vk, commitment, point, value, proof)
     }
 
     /// Verifies that `value_i` is the evaluation at `x_i` of the polynomial
     /// `poly_i` committed inside `comm`.
     fn batch_verify(
-        verifier_param: &Self::VerifierKey,
+        vk: &Self::VerifierKey,
         commitments: &[Self::Commitment],
         points: &[Self::Point],
         batch_proof: &Self::BatchProof,
         transcript: &mut IOPTranscript<E::ScalarField>,
     ) -> Result<bool, PCError> {
-        batch_verify_internal(verifier_param, commitments, points, batch_proof, transcript)
+        batch_verify_internal(vk, commitments, points, batch_proof, transcript)
     }
 }
 
@@ -366,7 +291,7 @@ where
 /// - num_var number of pairing product.
 /// - num_var number of MSM
 fn verify_internal<E: Pairing>(
-    verifier_param: &VerifierKey<E>,
+    vk: &VerifierKey<E>,
     commitment: &Commitment<E>,
     point: &[E::ScalarField],
     value: &E::ScalarField,
@@ -375,10 +300,10 @@ fn verify_internal<E: Pairing>(
     let verify_timer = start_timer!(|| "verify");
     let num_var = point.len();
 
-    if num_var > verifier_param.num_vars {
+    if num_var > vk.num_vars {
         return Err(PCError::InvalidParameters(format!(
             "point length ({}) exceeds param limit ({})",
-            num_var, verifier_param.num_vars
+            num_var, vk.num_vars
         )));
     }
 
@@ -387,13 +312,12 @@ fn verify_internal<E: Pairing>(
     let scalar_size = E::ScalarField::MODULUS_BIT_SIZE as usize;
     let window_size = FixedBase::get_mul_window_size(num_var);
 
-    let h_table =
-        FixedBase::get_window_table(scalar_size, window_size, verifier_param.h.into_group());
+    let h_table = FixedBase::get_window_table(scalar_size, window_size, vk.h.into_group());
     let h_mul: Vec<E::G2> = FixedBase::msm(scalar_size, window_size, &h_table, point);
 
-    let ignored = verifier_param.num_vars - num_var;
+    let ignored = vk.num_vars - num_var;
     let h_vec: Vec<_> = (0..num_var)
-        .map(|i| verifier_param.h_mask[ignored + i].into_group() - h_mul[i])
+        .map(|i| vk.h_mask[ignored + i].into_group() - h_mul[i])
         .collect();
     let h_vec: Vec<E::G2Affine> = E::G2::normalize_batch(&h_vec);
     end_timer!(prepare_inputs_timer);
@@ -408,10 +332,8 @@ fn verify_internal<E: Pairing>(
         .collect();
 
     pairings.push((
-        E::G1Prepared::from(
-            (verifier_param.g.mul(*value) - commitment.0.into_group()).into_affine(),
-        ),
-        E::G2Prepared::from(verifier_param.h),
+        E::G1Prepared::from((vk.g.mul(*value) - commitment.0.into_group()).into_affine()),
+        E::G2Prepared::from(vk.h),
     ));
 
     let ps = pairings.iter().map(|(p, _)| p.clone());
@@ -443,7 +365,7 @@ mod tests {
     ) -> Result<(), PCError> {
         let nv = poly.num_vars();
         assert_ne!(nv, 0);
-        let (ck, vk) = PST13::trim(params, None, Some(nv))?;
+        let (ck, vk) = PST13::trim(params, nv)?;
         let point: Vec<_> = (0..nv).map(|_| Fr::rand(rng)).collect();
         let com = PST13::commit(&ck, poly)?;
         let (proof, value) = PST13::open(&ck, poly, &point)?;
