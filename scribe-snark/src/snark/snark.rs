@@ -3,7 +3,7 @@ use crate::arithmetic::virtual_polynomial::VPAuxInfo;
 use crate::pc::pst13::batching::BatchProof;
 use crate::pc::structs::Commitment;
 use crate::pc::PCScheme;
-use crate::snark::utils::PcsAccumulator;
+use crate::snark::utils::PCAccumulator;
 
 use crate::piop::perm_check_original::PermutationCheck;
 use crate::piop::prelude::ZeroCheck;
@@ -152,7 +152,7 @@ where
 
         // We use accumulators to store the polynomials and their eval points.
         // They are batch opened at a later stage.
-        let mut pcs_acc = PcsAccumulator::<E, PC>::new(num_vars);
+        let mut pcs_acc = PCAccumulator::<E, PC>::new(num_vars);
 
         // =======================================================================
         // 1. Commit Witness polynomials `w_i(x)` and append commitment to

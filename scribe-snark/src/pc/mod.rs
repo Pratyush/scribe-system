@@ -2,8 +2,6 @@ pub mod errors;
 pub mod pst13;
 pub mod structs;
 
-// pub mod prelude;
-
 use crate::transcript::IOPTranscript;
 use ark_ec::pairing::Pairing;
 use ark_ff::Field;
@@ -107,16 +105,12 @@ pub trait PCScheme<E: Pairing> {
     /// Input a list of multilinear extensions, and a same number of points, and
     /// a transcript, compute a multi-opening for all the polynomials.
     fn multi_open(
-        _ck: impl Borrow<Self::CommitterKey>,
-        _polynomials: &[Self::Polynomial],
-        _points: &[Self::Point],
-        _evals: &[Self::Evaluation],
-        _transcript: &mut IOPTranscript<E::ScalarField>,
-    ) -> Result<Self::BatchProof, PCError> {
-        // the reason we use unimplemented!() is to enable developers to implement the
-        // trait without always implementing the batching APIs.
-        unimplemented!()
-    }
+        ck: impl Borrow<Self::CommitterKey>,
+        polynomials: &[Self::Polynomial],
+        points: &[Self::Point],
+        evals: &[Self::Evaluation],
+        transcript: &mut IOPTranscript<E::ScalarField>,
+    ) -> Result<Self::BatchProof, PCError>;
 
     /// Verifies that `value` is the evaluation at `x` of the polynomial
     /// committed inside `comm`.
@@ -131,16 +125,12 @@ pub trait PCScheme<E: Pairing> {
     /// Verifies that `value_i` is the evaluation at `x_i` of the polynomial
     /// `poly_i` committed inside `comm`.
     fn batch_verify(
-        _vk: &Self::VerifierKey,
-        _commitments: &[Self::Commitment],
-        _points: &[Self::Point],
-        _batch_proof: &Self::BatchProof,
-        _transcript: &mut IOPTranscript<E::ScalarField>,
-    ) -> Result<bool, PCError> {
-        // the reason we use unimplemented!() is to enable developers to implement the
-        // trait without always implementing the batching APIs.
-        unimplemented!()
-    }
+        vk: &Self::VerifierKey,
+        commitments: &[Self::Commitment],
+        points: &[Self::Point],
+        batch_proof: &Self::BatchProof,
+        transcript: &mut IOPTranscript<E::ScalarField>,
+    ) -> Result<bool, PCError>;
 }
 
 /// API definitions for structured reference string

@@ -1,4 +1,3 @@
-mod inner;
 use std::{
     fmt::{Debug, Display},
     io::Write,
@@ -9,9 +8,11 @@ use std::{
 
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Valid};
 use ark_std::{end_timer, rand::RngCore, start_timer};
-pub use inner::*;
 
-use crate::arithmetic::errors::ArithError;
+mod eq_iter;
+mod inner;
+pub use eq_iter::*;
+pub use inner::*;
 
 use super::{file_vec::FileVec, iterator::BatchedIterator, serialize::RawField, LOG_BUFFER_SIZE};
 
@@ -100,12 +101,17 @@ impl<F: RawField> MLE<F> {
     }
 
     #[inline(always)]
+    pub fn zero(num_vars: usize) -> Self {
+        Self::constant(F::zero(), num_vars)
+    }
+
+    #[inline(always)]
     pub fn constant(c: F, num_vars: usize) -> Self {
         Inner::constant(c, num_vars).into()
     }
 
     #[inline(always)]
-    pub fn eq_x_r(r: &[F]) -> Result<Self, ArithError> {
+    pub fn eq_x_r(r: &[F]) -> Option<Self> {
         let step = start_timer!(|| "construct eq_x_r polynomial");
         let res = eq_x_r_helper(r).map(|evals| Self::from_evals(evals, r.len()));
         end_timer!(step);
@@ -375,12 +381,12 @@ impl<F: RawField + Valid> Valid for MLE<F> {
 
 /// A helper function to build eq(x, r) recursively.
 #[inline]
-fn eq_x_r_helper<F: RawField>(r: &[F]) -> Result<FileVec<F>, ArithError> {
+fn eq_x_r_helper<F: RawField>(r: &[F]) -> Option<FileVec<F>> {
     if r.is_empty() {
-        Err(ArithError::InvalidParameters("r length is 0".to_string()))
+        None
     } else if r.len() <= LOG_BUFFER_SIZE as usize {
-        let result = crate::arithmetic::virtual_polynomial::build_eq_x_r_vec(r).unwrap();
-        Ok(FileVec::from_iter(result))
+        let result = crate::arithmetic::build_eq_x_r_vec(r).unwrap();
+        Some(FileVec::from_iter(result))
     } else {
         let prev = eq_x_r_helper(&r[1..])?;
         let result = prev
@@ -391,7 +397,7 @@ fn eq_x_r_helper<F: RawField>(r: &[F]) -> Result<FileVec<F>, ArithError> {
             })
             .to_file_vec()
             .reinterpret_type();
-        Ok(result)
+        Some(result)
     }
 }
 
@@ -402,7 +408,7 @@ mod test {
     use super::MLE;
     use crate::streams::iterator::BatchedIterator;
     use crate::{
-        arithmetic::virtual_polynomial::build_eq_x_r_vec,
+        arithmetic::build_eq_x_r_vec,
         streams::{file_vec::FileVec, LOG_BUFFER_SIZE},
     };
     use ark_bls12_381::Fr;

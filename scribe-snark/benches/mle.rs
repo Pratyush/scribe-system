@@ -5,16 +5,29 @@ use ark_bls12_381::Fr;
 use ark_ff::Field;
 use ark_std::UniformRand;
 use criterion::{BenchmarkId, Criterion};
-use scribe::streams::{LOG_BUFFER_SIZE, MLE};
+use scribe::streams::{iterator::BatchedIterator, EqEvalIter, LOG_BUFFER_SIZE, MLE};
 
 fn eq(c: &mut Criterion) {
     let num_threads = rayon::current_num_threads();
     let mut group = c.benchmark_group(format!("mle::eq {num_threads}"));
     let mut rng = &mut ark_std::test_rng();
-    for num_vars in LOG_BUFFER_SIZE as usize..=20 {
+    for num_vars in LOG_BUFFER_SIZE as usize..=24 {
         let e = Fr::rand(&mut rng);
         group.bench_with_input(BenchmarkId::from_parameter(num_vars), &num_vars, |b, _| {
             b.iter(|| MLE::eq_x_r(&vec![e; num_vars]))
+        });
+    }
+    group.finish();
+}
+
+fn eq_via_iter(c: &mut Criterion) {
+    let num_threads = rayon::current_num_threads();
+    let mut group = c.benchmark_group(format!("mle::eq_via_iter {num_threads}"));
+    let mut rng = &mut ark_std::test_rng();
+    for num_vars in LOG_BUFFER_SIZE as usize..=24 {
+        let e = Fr::rand(&mut rng);
+        group.bench_with_input(BenchmarkId::from_parameter(num_vars), &num_vars, |b, _| {
+            b.iter(|| EqEvalIter::new(vec![e; num_vars]).to_file_vec())
         });
     }
     group.finish();
@@ -122,6 +135,7 @@ fn add_assign_one(c: &mut Criterion) {
 criterion_group!(
     iter,
     eq,
+    eq_via_iter,
     eval,
     eval_vec,
     add_assign,

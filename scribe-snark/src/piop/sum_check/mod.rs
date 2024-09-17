@@ -178,9 +178,7 @@ impl<F: RawPrimeField> SumCheck<F> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{
-        arithmetic::virtual_polynomial::VirtualPolynomial, streams::iterator::BatchedIterator,
-    };
+    use crate::arithmetic::virtual_polynomial::VirtualPolynomial;
     use ark_bls12_381::Fr;
     use ark_ff::UniformRand;
     use ark_std::{
@@ -204,11 +202,6 @@ mod test {
             VirtualPolynomial::rand(nv, num_multiplicands_range, num_products, &mut rng)?;
 
         println!("generated asserted sum: {}", asserted_sum);
-
-        #[cfg(debug_assertions)]
-        for eval in poly.mles[0].evals().iter().to_vec() {
-            println!("sum check product eval: {}", eval);
-        }
 
         let proof = SumCheck::prove(&poly, &mut transcript)?;
         let poly_info = poly.aux_info.clone();

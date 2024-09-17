@@ -15,7 +15,9 @@ use rayon::prelude::*;
 use tempfile::NamedTempFile;
 
 pub use self::iter::Iter;
-use self::{array_chunks::ArrayChunks, into_iter::IntoIter, iter_chunk_mapped::IterChunkMapped};
+pub use self::{
+    array_chunks::ArrayChunks, into_iter::IntoIter, iter_chunk_mapped::IterChunkMapped,
+};
 
 use super::{
     iterator::{BatchAdapter, BatchedIterator, IntoBatchedIterator},

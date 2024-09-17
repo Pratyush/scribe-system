@@ -1,18 +1,17 @@
 use crate::{
     arithmetic::errors::ArithError,
-    streams::{serialize::RawPrimeField, MLE},
+    streams::{iterator::BatchedIterator, serialize::RawPrimeField, EqEvalIter, MLE},
 };
-use ark_ff::Field;
-// use ark_poly::{DenseMultilinearExtension, MultilinearExtension};
 use ark_serialize::CanonicalSerialize;
 use ark_std::{
     end_timer,
     rand::{Rng, RngCore},
     start_timer,
 };
-use rayon::iter::IntoParallelRefMutIterator;
-use rayon::prelude::*;
+use rayon::iter::MinLen;
 use std::{cmp::max, marker::PhantomData};
+
+use super::eq_eval;
 
 /// A virtual polynomial is a sum of products of multilinear polynomials;
 /// where the multilinear polynomials are stored via their multilinear
@@ -48,7 +47,116 @@ pub struct VirtualPolynomial<F: RawPrimeField> {
     pub products: Vec<(F, Vec<usize>)>,
     /// Stores multilinear extensions in which product multiplicand can refer
     /// to.
-    pub mles: Vec<MLE<F>>,
+    pub mles: Vec<VirtualMLE<F>>,
+}
+
+#[derive(Clone, PartialEq, Eq)]
+pub enum VirtualMLE<F: RawPrimeField> {
+    MLE(MLE<F>),
+    EqAtPoint {
+        num_vars: usize,
+        point: Vec<F>,
+        fixed_vars: Vec<F>,
+    },
+}
+
+impl<F: RawPrimeField> VirtualMLE<F> {
+    pub fn num_vars(&self) -> usize {
+        match self {
+            VirtualMLE::MLE(mle) => mle.num_vars(),
+            VirtualMLE::EqAtPoint { num_vars, .. } => *num_vars,
+        }
+    }
+
+    pub fn evaluate(&self, point: &[F]) -> Option<F> {
+        match self {
+            VirtualMLE::MLE(mle) => mle.evaluate(point),
+            VirtualMLE::EqAtPoint {
+                num_vars,
+                fixed_vars,
+                point: eq_point,
+            } => {
+                let mut new_point = fixed_vars.clone();
+                new_point.extend(point);
+                (point.len() == *num_vars).then(|| eq_eval(eq_point, &new_point).unwrap())
+            },
+        }
+    }
+
+    pub fn evals(&self) -> VirtualMLEIter<'_, F> {
+        match self {
+            VirtualMLE::MLE(mle) => VirtualMLEIter::MLE(mle.evals().iter()),
+            VirtualMLE::EqAtPoint { point, .. } => {
+                VirtualMLEIter::EqAtPoint(EqEvalIter::new(point.clone()))
+            },
+        }
+    }
+
+    pub fn fix_variables(&self, partial_point: &[F]) -> Self {
+        match self {
+            VirtualMLE::MLE(mle) => VirtualMLE::MLE(mle.fix_variables(partial_point)),
+            VirtualMLE::EqAtPoint {
+                num_vars,
+                point,
+                fixed_vars,
+            } => {
+                let num_vars = *num_vars - partial_point.len();
+                let mut fixed_vars = fixed_vars.to_vec();
+                fixed_vars.extend(partial_point);
+                VirtualMLE::EqAtPoint {
+                    num_vars,
+                    point: point.to_vec(),
+                    fixed_vars,
+                }
+            },
+        }
+    }
+
+    pub fn fix_variables_in_place(&mut self, partial_point: &[F]) {
+        match self {
+            VirtualMLE::MLE(mle) => mle.fix_variables_in_place(partial_point),
+            VirtualMLE::EqAtPoint {
+                num_vars,
+                fixed_vars,
+                ..
+            } => {
+                *num_vars -= partial_point.len();
+                fixed_vars.extend(partial_point);
+            },
+        }
+    }
+}
+
+pub enum VirtualMLEIter<'a, F: RawPrimeField> {
+    MLE(crate::streams::file_vec::Iter<'a, F>),
+    EqAtPoint(EqEvalIter<F>),
+}
+
+impl<'a, F: RawPrimeField> BatchedIterator for VirtualMLEIter<'a, F> {
+    type Item = F;
+    type Batch = MinLen<rayon::vec::IntoIter<F>>;
+
+    fn next_batch(&mut self) -> Option<Self::Batch> {
+        match self {
+            VirtualMLEIter::MLE(mle) => mle.next_batch(),
+            VirtualMLEIter::EqAtPoint(e) => e.next_batch(),
+        }
+    }
+}
+
+impl<F: RawPrimeField> From<MLE<F>> for VirtualMLE<F> {
+    fn from(mle: MLE<F>) -> Self {
+        VirtualMLE::MLE(mle)
+    }
+}
+
+impl<F: RawPrimeField> PartialEq<MLE<F>> for VirtualMLE<F> {
+    fn eq(&self, other: &MLE<F>) -> bool {
+        match self {
+            VirtualMLE::MLE(mle) => mle == other,
+            VirtualMLE::EqAtPoint { .. } => unimplemented!("this should not happen"),
+        }
+    }
 }
 
 /// Auxiliary information about the multilinear polynomial
@@ -91,7 +199,7 @@ impl<F: RawPrimeField> VirtualPolynomial<F> {
             },
             // here `0` points to the first polynomial of `flattened_ml_extensions`
             products: vec![(coefficient, vec![0])],
-            mles: vec![mle.clone()],
+            mles: vec![mle.clone().into()],
         }
     }
 
@@ -137,7 +245,7 @@ impl<F: RawPrimeField> VirtualPolynomial<F> {
             let mle_index = match self.mles.iter().position(|e| e == &mle) {
                 Some(p) => p,
                 None => {
-                    self.mles.push(mle.clone());
+                    self.mles.push(mle.clone().into());
                     self.mles.len() - 1
                 },
             };
@@ -165,7 +273,7 @@ impl<F: RawPrimeField> VirtualPolynomial<F> {
         let mle_index = match self.mles.iter().position(|e| e == &mle) {
             Some(p) => p,
             None => {
-                self.mles.push(mle);
+                self.mles.push(mle.into());
                 self.mles.len() - 1
             },
         };
@@ -281,7 +389,7 @@ impl<F: RawPrimeField> VirtualPolynomial<F> {
             )));
         }
 
-        let eq_x_r = MLE::eq_x_r(r)?;
+        let eq_x_r = MLE::eq_x_r(r).unwrap();
 
         let mut res = self.clone();
         res.mul_by_mle(eq_x_r, F::one())?;
@@ -440,93 +548,6 @@ impl<F: RawPrimeField> VirtualPolynomial<F> {
 
         Ok(())
     }
-}
-
-/// This function build the eq(x, r) polynomial for any given r, and output the
-/// evaluation of eq(x, r) in its vector form.
-///
-/// Evaluate
-///      eq(x,y) = \prod_i=1^num_var (x_i * y_i + (1-x_i)*(1-y_i))
-/// over r, which is
-///      eq(x,y) = \prod_i=1^num_var (x_i * r_i + (1-x_i)*(1-r_i))
-pub fn build_eq_x_r_vec<F: Field>(r: &[F]) -> Result<Vec<F>, ArithError> {
-    // we build eq(x,r) from its evaluations
-    // we want to evaluate eq(x,r) over x \in {0, 1}^num_vars
-    // for example, with num_vars = 4, x is a binary vector of 4, then
-    //  0 0 0 0 -> (1-r0)   * (1-r1)    * (1-r2)    * (1-r3)
-    //  1 0 0 0 -> r0       * (1-r1)    * (1-r2)    * (1-r3)
-    //  0 1 0 0 -> (1-r0)   * r1        * (1-r2)    * (1-r3)
-    //  1 1 0 0 -> r0       * r1        * (1-r2)    * (1-r3)
-    //  ....
-    //  1 1 1 1 -> r0       * r1        * r2        * r3
-    // we will need 2^num_var evaluations
-
-    let mut eval = Vec::new();
-    build_eq_x_r_vec_helper(r, &mut eval)?;
-
-    Ok(eval)
-}
-
-/// A helper function to build eq(x, r) recursively.
-/// This function takes `r.len()` steps, and for each step it requires a maximum
-/// `r.len()-1` multiplications.
-fn build_eq_x_r_vec_helper<F: Field>(r: &[F], buf: &mut Vec<F>) -> Result<(), ArithError> {
-    if r.is_empty() {
-        return Err(ArithError::InvalidParameters("r length is 0".to_string()));
-    } else if r.len() == 1 {
-        // initializing the buffer with [1-r_0, r_0]
-        buf.push(F::one() - r[0]);
-        buf.push(r[0]);
-    } else {
-        build_eq_x_r_vec_helper(&r[1..], buf)?;
-
-        let mut res = vec![F::zero(); buf.len() << 1];
-        res.par_iter_mut().enumerate().for_each(|(i, val)| {
-            let bi = buf[i >> 1];
-            let tmp = r[0] * bi;
-            if i & 1 == 0 {
-                *val = bi - tmp;
-            } else {
-                *val = tmp;
-            }
-        });
-        *buf = res;
-    }
-
-    Ok(())
-}
-
-/// Evaluate eq polynomial.
-pub fn eq_eval<F: RawPrimeField>(x: &[F], y: &[F]) -> Result<F, ArithError> {
-    if x.len() != y.len() {
-        return Err(ArithError::InvalidParameters(
-            "x and y have different length".to_string(),
-        ));
-    }
-    // let start = start_timer!(|| "eq_eval");
-    let mut res = F::one();
-    for (&xi, &yi) in x.iter().zip(y.iter()) {
-        let xi_yi = xi * yi;
-        res *= xi_yi + xi_yi - xi - yi + F::one();
-    }
-    // end_timer!(start);
-    Ok(res)
-}
-
-/// Decompose an integer into a binary vector in little endian.
-pub fn bit_decompose(input: u64, num_var: usize) -> Vec<bool> {
-    let mut res = Vec::with_capacity(num_var);
-    let mut i = input;
-    for _ in 0..num_var {
-        res.push(i & 1 == 1);
-        i >>= 1;
-    }
-    res
-}
-
-pub fn identity_permutation<F: RawPrimeField>(num_vars: usize, num_chunks: usize) -> Vec<F> {
-    let len = (num_chunks as u64) * (1u64 << num_vars);
-    (0..len).map(F::from).collect()
 }
 
 #[cfg(test)]

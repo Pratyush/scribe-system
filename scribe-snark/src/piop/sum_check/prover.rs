@@ -126,7 +126,7 @@ impl<F: RawPrimeField> SumCheckProver<F> for IOPProverState<F> {
                     .iter()
                     .map(|&f| self.poly.mles[f].evals())
                     .collect::<Vec<_>>();
-                let mut sum = zip_many(polys_in_product.iter().map(|x| x.array_chunks::<2>()))
+                let mut sum = zip_many(polys_in_product.into_iter().map(|x| x.array_chunks::<2>()))
                     .fold(
                         || vec![F::zero(); products.len() + 1],
                         |mut acc, mut products| {

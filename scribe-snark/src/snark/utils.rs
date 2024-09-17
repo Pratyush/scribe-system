@@ -9,6 +9,7 @@ use crate::{arithmetic::virtual_polynomial::VirtualPolynomial, streams::serializ
 use ark_ec::pairing::Pairing;
 use ark_ff::PrimeField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
+use ark_std::{end_timer, start_timer};
 use rayon::prelude::*;
 
 use std::borrow::Borrow;
@@ -16,14 +17,14 @@ use std::borrow::Borrow;
 /// An accumulator structure that holds a polynomial and
 /// its opening points
 #[derive(Debug)]
-pub(super) struct PcsAccumulator<E: Pairing, PC: PCScheme<E>> {
+pub(super) struct PCAccumulator<E: Pairing, PC: PCScheme<E>> {
     pub(crate) num_var: usize,
     pub(crate) polynomials: Vec<PC::Polynomial>,
     pub(crate) commitments: Vec<PC::Commitment>,
     pub(crate) points: Vec<PC::Point>,
 }
 
-impl<E, PC> PcsAccumulator<E, PC>
+impl<E, PC> PCAccumulator<E, PC>
 where
     E: Pairing,
     E::ScalarField: RawPrimeField,
@@ -64,28 +65,33 @@ where
     /// A simple wrapper of PC::multi_open
     pub(super) fn multi_open(
         &self,
-        prover_param: impl Borrow<PC::CommitterKey>,
+        ck: impl Borrow<PC::CommitterKey>,
         transcript: &mut IOPTranscript<E::ScalarField>,
     ) -> Result<PC::BatchProof, ScribeErrors> {
+        let start = start_timer!(|| "Multi-open");
+        let evals_time = start_timer!(|| "Evaluations");
         let evals = self
             .polynomials
             .par_iter()
             .zip(&self.points)
             .map(|(poly, point)| {
                 let pool = rayon::ThreadPoolBuilder::new()
-                    .num_threads(1)
+                    .num_threads(4)
                     .build()
                     .unwrap();
                 pool.install(|| poly.evaluate(point).unwrap())
             })
             .collect::<Vec<_>>();
-        Ok(PC::multi_open(
-            prover_param.borrow(),
+        end_timer!(evals_time);
+        let res = PC::multi_open(
+            ck.borrow(),
             self.polynomials.as_ref(),
             self.points.as_ref(),
             &evals,
             transcript,
-        )?)
+        )?;
+        end_timer!(start);
+        Ok(res)
     }
 }
 

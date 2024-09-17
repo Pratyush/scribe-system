@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 
 use crate::transcript::IOPTranscript;
-use crate::{arithmetic::virtual_polynomial::eq_eval, streams::serialize::RawPrimeField};
+use crate::{arithmetic::eq_eval, streams::serialize::RawPrimeField};
 use crate::{
     arithmetic::virtual_polynomial::{VPAuxInfo, VirtualPolynomial},
     piop::{errors::PIOPError, sum_check::SumCheck},
@@ -87,7 +87,9 @@ impl<F: RawPrimeField> ZeroCheck<F> {
 
         // expected_eval = sumcheck.expect_eval/eq(v, r)
         // where v = sum_check_sub_claim.point
-        let eq_x_r_eval = eq_eval(&sum_subclaim.point, &r)?;
+        let eq_x_r_eval = eq_eval(&sum_subclaim.point, &r).ok_or(
+            crate::arithmetic::errors::ArithError::InvalidParameters("eq_eval failed".to_string()),
+        )?;
         let expected_evaluation = sum_subclaim.expected_evaluation / eq_x_r_eval;
 
         end_timer!(start);
