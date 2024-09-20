@@ -1,9 +1,9 @@
-use itertools::Itertools;
+use ark_ff::Field;
 use rayon::{iter::MinLen, prelude::*};
 
 use crate::{
     arithmetic::eq_eval,
-    streams::{iterator::BatchedIterator, serialize::RawPrimeField, BUFFER_SIZE},
+    streams::{iterator::BatchedIterator, BUFFER_SIZE},
 };
 
 /// An iterator that generates the evaluations of the polynomial
@@ -21,7 +21,7 @@ pub struct EqEvalIter<F> {
     r_only_boolean: usize,
 }
 
-impl<F: RawPrimeField> EqEvalIter<F> {
+impl<F: Field> EqEvalIter<F> {
     pub fn new(r: Vec<F>) -> Self {
         Self::new_with_multiplier(r, F::one())
     }
@@ -48,13 +48,13 @@ impl<F: RawPrimeField> EqEvalIter<F> {
 
         let zero_values = one_minus_r_inv
             .into_iter()
-            .zip_eq(&r)
+            .zip(&r)
             .map(|(r, one_minus_r_inv)| r * one_minus_r_inv)
             .collect::<Vec<_>>();
 
         let one_values = r_inv
             .into_iter()
-            .zip_eq(&one_minus_r)
+            .zip(&one_minus_r)
             .map(|(one_minus_r, r_inv)| one_minus_r * r_inv)
             .collect::<Vec<_>>();
 
@@ -78,7 +78,7 @@ impl<F: RawPrimeField> EqEvalIter<F> {
     }
 }
 
-impl<F: RawPrimeField> BatchedIterator for EqEvalIter<F> {
+impl<F: Field> BatchedIterator for EqEvalIter<F> {
     type Item = F;
     type Batch = MinLen<rayon::vec::IntoIter<F>>;
 
@@ -114,12 +114,7 @@ const CHUNK_SIZE: usize = if BUFFER_SIZE < (1 << 14) {
     1 << 14
 };
 
-fn p<F: RawPrimeField>(
-    iter: &EqEvalIter<F>,
-    starting_value: F,
-    start: usize,
-    end: usize,
-) -> Vec<F> {
+fn p<F: Field>(iter: &EqEvalIter<F>, starting_value: F, start: usize, end: usize) -> Vec<F> {
     let nv = iter.r.len();
     let mut next_m = starting_value;
     (start..end)
@@ -157,11 +152,7 @@ fn p<F: RawPrimeField>(
 /// Computes the starting value for chunk `chunk_idx` by using the product
 /// of `r` and `one_minus_r` vectors and the binary decomposition of `chunk_idx * chunk_size - 1`
 #[inline]
-fn compute_starting_value<F: RawPrimeField>(
-    iter: &EqEvalIter<F>,
-    c_start: usize,
-    c_end: usize,
-) -> F {
+fn compute_starting_value<F: Field>(iter: &EqEvalIter<F>, c_start: usize, c_end: usize) -> F {
     // Compute the location where `c` differs from `r` in the boolean locations;
     // Flipping those bits will give us the first index where the value is non-zero.
     let new_c = c_start | iter.r_only_boolean;

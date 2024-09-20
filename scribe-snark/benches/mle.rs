@@ -13,8 +13,14 @@ fn eq(c: &mut Criterion) {
     let mut rng = &mut ark_std::test_rng();
     for num_vars in LOG_BUFFER_SIZE as usize..=24 {
         let e = Fr::rand(&mut rng);
+
         group.bench_with_input(BenchmarkId::from_parameter(num_vars), &num_vars, |b, _| {
-            b.iter(|| MLE::eq_x_r(&vec![e; num_vars]))
+            b.iter(|| {
+                let mle = MLE::eq_x_r(&vec![e; num_vars]);
+                mle.evals().iter().for_each(|e| {
+                    let _ = e.square();
+                })
+            })
         });
     }
     group.finish();
@@ -27,7 +33,11 @@ fn eq_via_iter(c: &mut Criterion) {
     for num_vars in LOG_BUFFER_SIZE as usize..=24 {
         let e = Fr::rand(&mut rng);
         group.bench_with_input(BenchmarkId::from_parameter(num_vars), &num_vars, |b, _| {
-            b.iter(|| EqEvalIter::new(vec![e; num_vars]).to_file_vec())
+            b.iter(|| {
+                EqEvalIter::new(vec![e; num_vars]).for_each(|e| {
+                    let _ = e.square();
+                })
+            })
         });
     }
     group.finish();
@@ -37,7 +47,7 @@ fn eval(c: &mut Criterion) {
     let num_threads = rayon::current_num_threads();
     let mut group = c.benchmark_group(format!("mle::eval {num_threads}"));
     let mut rng = &mut ark_std::test_rng();
-    for num_vars in LOG_BUFFER_SIZE as usize..=20 {
+    for num_vars in LOG_BUFFER_SIZE as usize..=24 {
         let e = Fr::rand(&mut rng);
         group.bench_with_input(BenchmarkId::from_parameter(num_vars), &num_vars, |b, _| {
             let p = MLE::rand(num_vars, &mut rng);

@@ -156,7 +156,11 @@ impl<F: RawPrimeField> SumCheck<F> {
                 &mut verifier_state,
                 prover_msg,
                 transcript,
-            )?;
+            )
+            .map_err(|e| {
+                end_timer!(start);
+                e
+            });
         }
 
         let res = IOPVerifierState::check_and_generate_subclaim(&verifier_state, &claimed_sum);

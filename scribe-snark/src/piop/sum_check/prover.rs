@@ -110,10 +110,11 @@ impl<F: RawPrimeField> SumCheckProver<F> for IOPProverState<F> {
 
         // Step 2: generate sum for the partial evaluated polynomial:
         // f(r_1, ... r_m,, x_{m+1}... x_n)
-        self.poly
+        let sums = self
+            .poly
             .products
-            .iter()
-            .for_each(|(coefficient, products)| {
+            .par_iter()
+            .map(|(coefficient, products)| {
                 let polys_in_product = products
                     .iter()
                     .map(|&f| self.poly.mles[f].evals())
@@ -149,11 +150,17 @@ impl<F: RawPrimeField> SumCheckProver<F> for IOPProverState<F> {
                         extrapolate(points, weights, &sum, &at)
                     })
                     .collect::<Vec<_>>();
-                products_sum
-                    .iter_mut()
-                    .zip(sum.iter().chain(extrapolation.iter()))
-                    .for_each(|(products_sum, sum)| *products_sum += sum);
-            });
+                sum.into_iter()
+                    .chain(extrapolation.into_iter())
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
+        for sum in sums {
+            products_sum
+                .iter_mut()
+                .zip(sum)
+                .for_each(|(acc, value)| *acc += value);
+        }
 
         end_timer!(generate_prover_message);
         end_timer!(start);

@@ -13,7 +13,7 @@ use crate::streams::{
     file_vec::FileVec,
     iterator::{from_fn, repeat, BatchedIterator},
     serialize::RawField,
-    BUFFER_SIZE, LOG_BUFFER_SIZE,
+    EqEvalIter, LOG_BUFFER_SIZE,
 };
 
 #[derive(Debug, Hash, PartialEq, Eq, CanonicalDeserialize, CanonicalSerialize)]
@@ -180,18 +180,13 @@ impl<F: RawField> Inner<F> {
     #[inline]
     pub fn evaluate(&self, point: &[F]) -> Option<F> {
         if point.len() == self.num_vars {
-            let mut tmp = self.deep_copy();
-            tmp.fix_variables_in_place(point);
-
-            // The result is the first element in the stream
-            let result = tmp
-                .evals
-                .iter()
-                .next_batch()?
-                .with_min_len(BUFFER_SIZE)
-                .collect::<Vec<_>>();
-            assert_eq!(result.len(), 1);
-            result.first().copied()
+            Some(
+                self.evals
+                    .iter()
+                    .zip(EqEvalIter::new(point.to_vec()))
+                    .map(|(a, b)| a * b)
+                    .sum(),
+            )
         } else {
             None
         }

@@ -1,6 +1,10 @@
 use crate::{
     arithmetic::{errors::ArithError, virtual_mle::VirtualMLE},
-    streams::{serialize::RawPrimeField, MLE},
+    streams::{
+        file_vec::FileVec,
+        iterator::BatchedIterator,
+        {serialize::RawPrimeField, MLE},
+    },
 };
 use ark_serialize::CanonicalSerialize;
 use ark_std::{
@@ -305,11 +309,7 @@ impl<F: RawPrimeField> VirtualPolynomial<F> {
             )));
         }
 
-        let eq_x_r = VirtualMLE::EqAtPoint {
-            num_vars: self.aux_info.num_variables,
-            point: r.to_vec(),
-            fixed_vars: vec![],
-        };
+        let eq_x_r = VirtualMLE::eq_x_r(r);
 
         let mut res = self.clone();
         res.mul_by_virtual_mle(eq_x_r, F::one())?;
@@ -469,10 +469,7 @@ impl<F: RawPrimeField> VirtualPolynomial<F> {
         Ok(())
     }
 
-    #[cfg(debug_assertions)]
-    #[allow(dead_code)]
     pub fn sum_over_hypercube(&self) -> F {
-        use crate::streams::{file_vec::FileVec, iterator::BatchedIterator};
         let evals: Vec<_> = self
             .mles
             .iter()

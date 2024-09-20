@@ -70,6 +70,7 @@ impl<F: RawPrimeField> ZeroCheck<F> {
 
         // check that the sum is zero
         if proof.proofs[0].evaluations[0] + proof.proofs[0].evaluations[1] != F::zero() {
+            end_timer!(start);
             return Err(PIOPError::InvalidProof(format!(
                 "zero check: sum {} is not zero",
                 proof.proofs[0].evaluations[0] + proof.proofs[0].evaluations[1]
@@ -130,11 +131,6 @@ mod test {
             let mut transcript = ZeroCheck::<Fr>::init_transcript();
             transcript.append_message(b"testing", b"initializing transcript for testing")?;
 
-            #[cfg(debug_assertions)]
-            poly.products.iter().for_each(|p| {
-                println!("test_zero_check before prove product: {:?}", p);
-            });
-
             let proof = ZeroCheck::<Fr>::prove(&poly, &mut transcript)?;
 
             let poly_info = poly.aux_info.clone();
@@ -169,7 +165,7 @@ mod test {
     }
 
     #[test]
-    fn test_trivial_polynomial() -> Result<(), PIOPError> {
+    fn trivial_polynomial() -> Result<(), PIOPError> {
         let nv = 1;
         let num_multiplicands_range = (1, 2);
         let num_products = 1;
@@ -177,12 +173,13 @@ mod test {
         test_zerocheck(nv, num_multiplicands_range, num_products)
     }
     #[test]
-    fn test_normal_polynomial() -> Result<(), PIOPError> {
-        let nv = 4;
-        let num_multiplicands_range = (4, 9);
-        let num_products = 4;
-
-        test_zerocheck(nv, num_multiplicands_range, num_products)
+    fn normal_polynomial() -> Result<(), PIOPError> {
+        for nv in 9..20 {
+            let num_multiplicands_range = (4, 9);
+            let num_products = 4;
+            test_zerocheck(nv, num_multiplicands_range, num_products)?
+        }
+        Ok(())
     }
 
     #[test]

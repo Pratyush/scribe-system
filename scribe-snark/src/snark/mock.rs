@@ -2,8 +2,11 @@ use std::ops::{AddAssign, MulAssign};
 
 use crate::streams::{iterator::BatchedIterator, serialize::RawPrimeField, MLE};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-use ark_std::{end_timer, log2, rand::SeedableRng, start_timer};
-use rand_chacha::ChaChaRng;
+use ark_std::{
+    end_timer, log2,
+    rand::{rngs::StdRng, SeedableRng},
+    start_timer,
+};
 
 use crate::snark::{
     custom_gate::CustomizedGates,
@@ -36,7 +39,7 @@ impl<F: RawPrimeField> MockCircuit<F> {
 
 impl<F: RawPrimeField> MockCircuit<F> {
     pub fn new_index(num_constraints: usize, gate: &CustomizedGates) -> Index<F> {
-        let mut rng = ChaChaRng::seed_from_u64(0u64);
+        let mut rng = StdRng::seed_from_u64(0u64);
         let nv = log2(num_constraints) as usize;
         let num_selectors = gate.num_selector_columns();
         let num_witnesses = gate.num_witness_columns();
@@ -99,7 +102,7 @@ impl<F: RawPrimeField> MockCircuit<F> {
     }
 
     pub fn wire_values_for_index(index: &Index<F>) -> (Vec<F>, Vec<MLE<F>>) {
-        let mut rng = ChaChaRng::seed_from_u64(0u64);
+        let mut rng = StdRng::seed_from_u64(0u64);
         let witness_time = start_timer!(|| "witnesses");
         let num_witnesses = index.config.gate_func.num_witness_columns();
         let num_constraints = index.config.num_constraints;

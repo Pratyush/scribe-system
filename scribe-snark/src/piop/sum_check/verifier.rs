@@ -8,8 +8,6 @@ use crate::{arithmetic::virtual_polynomial::VPAuxInfo, streams::serialize::RawPr
 use ark_ff::PrimeField;
 use ark_std::{end_timer, start_timer};
 
-use rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
-
 impl<F: RawPrimeField> SumCheckVerifier<F> for IOPVerifierState<F> {
     type VPAuxInfo = VPAuxInfo<F>;
     type ProverMessage = IOPProverMessage<F>;
@@ -47,6 +45,7 @@ impl<F: RawPrimeField> SumCheckVerifier<F> for IOPVerifierState<F> {
             start_timer!(|| format!("sum check verify {}-th round and update state", self.round));
 
         if self.finished {
+            end_timer!(start);
             return Err(PIOPError::InvalidVerifier(
                 "Incorrect verifier state: Verifier is already finished.".to_string(),
             ));
@@ -92,12 +91,14 @@ impl<F: RawPrimeField> SumCheckVerifier<F> for IOPVerifierState<F> {
     ) -> Result<Self::SumCheckSubClaim, PIOPError> {
         let start = start_timer!(|| "check and generate subclaim");
         if !self.finished {
+            end_timer!(start);
             return Err(PIOPError::InvalidVerifier(
                 "Incorrect verifier state: Verifier has not finished.".to_string(),
             ));
         }
 
         if self.polynomials_received.len() != self.num_vars {
+            end_timer!(start);
             return Err(PIOPError::InvalidVerifier(
                 "insufficient rounds".to_string(),
             ));
@@ -108,10 +109,11 @@ impl<F: RawPrimeField> SumCheckVerifier<F> for IOPVerifierState<F> {
         let mut expected_vec = self
             .polynomials_received
             .clone()
-            .into_par_iter()
+            .into_iter()
             .zip(self.challenges.clone())
             .map(|(evaluations, challenge)| {
                 if evaluations.len() != self.max_degree + 1 {
+                    end_timer!(start);
                     return Err(PIOPError::InvalidVerifier(format!(
                         "incorrect number of evaluations: {} vs {}",
                         evaluations.len(),
@@ -135,6 +137,7 @@ impl<F: RawPrimeField> SumCheckVerifier<F> for IOPVerifierState<F> {
             // the deferred check during the interactive phase:
             // 1. check if the received 'P(0) + P(1) = expected`.
             if evaluations[0] + evaluations[1] != expected {
+                end_timer!(start);
                 eprintln!(
                     "at round {i}, sum check verifier Prover message is NOT consistent with the claim, expected: {expected}, evaluation: {}",
                     evaluations[0] + evaluations[1]
