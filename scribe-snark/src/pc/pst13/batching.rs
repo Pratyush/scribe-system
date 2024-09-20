@@ -1,6 +1,6 @@
-use crate::pc::structs::Commitment;
-use crate::pc::{pst13::util::eq_eval, PCScheme};
 use crate::piop::{prelude::SumCheck, structs::IOPProof};
+use crate::{arithmetic::eq_eval, pc::PCScheme};
+use crate::{arithmetic::virtual_mle::VirtualMLE, pc::structs::Commitment};
 use crate::{
     arithmetic::{
         build_eq_x_r_vec,
@@ -98,8 +98,7 @@ where
 
     let mut v = BTreeMap::new();
     for ((poly, coeff), point) in polynomials.iter().zip(eq_t_i_list).zip(points) {
-        let e = v.entry(point).or_insert(Vec::new());
-        e.push((coeff, poly));
+        v.entry(point).or_insert(Vec::new()).push((coeff, poly));
     }
     let mut v = v.into_iter().collect::<Vec<_>>();
     v.sort_by_key(|(point, _)| point_indices[point]);
@@ -117,10 +116,11 @@ where
     end_timer!(timer);
 
     let timer = start_timer!(|| format!("compute tilde eq for {} points", deduped_points.len()));
-    let tilde_eqs: Vec<MLE<E::ScalarField>> = deduped_points
+    let tilde_eqs: Vec<_> = deduped_points
         .iter()
-        .map(|point| MLE::eq_x_r(point).unwrap())
+        .map(|point| VirtualMLE::eq_x_r(point))
         .collect();
+
     end_timer!(timer);
 
     // built the virtual polynomial for SumCheck
@@ -128,12 +128,15 @@ where
 
     let step = start_timer!(|| "add mle");
     let mut sum_check_vp = VirtualPolynomial::new(num_vars);
-    for (merged_tilde_g, tilde_eq) in merged_tilde_gs.iter().zip(tilde_eqs.into_iter()) {
-        sum_check_vp.add_mles([merged_tilde_g.clone(), tilde_eq], E::ScalarField::one())?;
+    for (merged_tilde_g, tilde_eq) in merged_tilde_gs.iter().zip(tilde_eqs.clone()) {
+        sum_check_vp.add_virtual_mles(
+            [merged_tilde_g.clone().into(), tilde_eq.into()],
+            E::ScalarField::one(),
+        )?;
     }
     end_timer!(step);
 
-    let proof = <SumCheck<_>>::prove(&sum_check_vp, transcript)
+    let proof = SumCheck::prove(&sum_check_vp, transcript)
         .map_err(|_| PCError::InvalidProver("Sumcheck in batch proving Failed".into()))?;
     end_timer!(timer);
 
@@ -146,7 +149,9 @@ where
     let eq_q_a2_s = deduped_points
         .iter()
         .map(|point| eq_eval(a2, point))
-        .collect::<Result<Vec<_>, _>>()?;
+        .collect::<Option<Vec<_>>>()
+        .unwrap();
+
     let g_prime_evals = zip_many(merged_tilde_gs.iter().map(|g| g.evals().iter()))
         .map(|evals| {
             evals
@@ -196,8 +201,6 @@ where
 {
     let open_timer = start_timer!(|| "batch verification");
 
-    // TODO: sanity checks
-
     let k = f_i_commitments.len();
     let ell = log2(k) as usize;
     let num_vars = proof.sum_check_proof.point.len();
@@ -211,14 +214,14 @@ where
     // build g' commitment
     let step = start_timer!(|| "build homomorphic commitment");
     let eq_t_list = build_eq_x_r_vec(t.as_ref()).ok_or(PCError::InvalidParameters(
-        "failed to build eq(t, i) for multi-open".to_string(),
+        "failed to build eq(t, i) for multi-open".into(),
     ))?;
 
     let mut scalars = vec![];
     let mut bases = vec![];
 
     for (i, point) in points.iter().enumerate() {
-        let eq_i_a2 = eq_eval(a2, point)?;
+        let eq_i_a2 = eq_eval(a2, point).unwrap();
         scalars.push(eq_i_a2 * eq_t_list[i]);
         bases.push(f_i_commitments[i].0);
     }
@@ -226,29 +229,17 @@ where
     end_timer!(step);
 
     // ensure \sum_i eq(t, <i>) * f_i_evals matches the sum via SumCheck
-    let mut sum = E::ScalarField::zero();
+    let mut claimed_sum = E::ScalarField::zero();
     for (i, &e) in eq_t_list.iter().enumerate().take(k) {
-        sum += e * proof.f_i_eval_at_point_i[i];
+        claimed_sum += e * proof.f_i_eval_at_point_i[i];
     }
     let aux_info = VPAuxInfo {
         max_degree: 2,
         num_variables: num_vars,
         phantom: PhantomData,
     };
-    let subclaim = match <SumCheck<E::ScalarField>>::verify(
-        sum,
-        &proof.sum_check_proof,
-        &aux_info,
-        transcript,
-    ) {
-        Ok(p) => p,
-        Err(_e) => {
-            // cannot wrap IOPError with PCSError due to cyclic dependency
-            return Err(PCError::InvalidProver(
-                "Sumcheck in batch verification failed".to_string(),
-            ));
-        },
-    };
+    let subclaim = SumCheck::verify(claimed_sum, &proof.sum_check_proof, &aux_info, transcript)
+        .map_err(|_| PCError::InvalidProver("Sumcheck in batch verification failed".into()))?;
     let tilde_g_eval = subclaim.expected_evaluation;
 
     // verify commitment
@@ -328,9 +319,9 @@ mod tests {
     fn test_multi_open_internal() -> Result<(), PCError> {
         let mut rng = test_rng();
 
-        let ml_params = SRS::<E>::gen_srs_for_testing(&mut rng, 20)?;
+        let ml_params = SRS::<E>::gen_srs_for_testing(&mut rng, 21)?;
         for num_poly in 5..6 {
-            for nv in 15..16 {
+            for nv in 9..19 {
                 let polys1: Vec<_> = (0..num_poly).map(|_| MLE::rand(nv, &mut rng)).collect();
                 test_multi_open_helper(&ml_params, &polys1, &mut rng)?;
             }

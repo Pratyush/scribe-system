@@ -89,6 +89,7 @@ pub fn prover(
     max_nv: usize,
     supported_size: impl Into<Option<usize>>,
     file_dir_path: &Path,
+    remove_files: bool,
 ) -> Result<(), ScribeErrors> {
     let supported_size = supported_size.into().unwrap_or(max_nv);
     assert!(max_nv >= min_nv);
@@ -104,13 +105,15 @@ pub fn prover(
     let tmp_dir = std::env::temp_dir();
     for nv in min_nv..=max_nv {
         // Remove temporary files
-        std::fs::read_dir(&tmp_dir).unwrap().for_each(|entry| {
-            let entry = entry.unwrap();
-            if !entry.file_name().to_string_lossy().contains("ck_") {
-                println!("Removing entry: {}", entry.path().to_string_lossy());
-                std::fs::remove_file(entry.path()).unwrap()
-            }
-        });
+        if remove_files {
+            std::fs::read_dir(&tmp_dir).unwrap().for_each(|entry| {
+                let entry = entry.unwrap();
+                if !entry.file_name().to_string_lossy().contains("ck_") {
+                    println!("Removing entry: {}", entry.path().to_string_lossy());
+                    std::fs::remove_file(entry.path()).unwrap()
+                }
+            });
+        }
 
         let pk = {
             let pk_path = file_dir_path.join(format!("scribe_pk_{nv}.params"));

@@ -19,7 +19,6 @@ use ark_ec::pairing::Pairing;
 
 use ark_std::{end_timer, log2, start_timer, One, Zero};
 use rayon::iter::IntoParallelRefIterator;
-#[cfg(feature = "parallel")]
 use rayon::iter::ParallelIterator;
 
 use std::marker::PhantomData;
@@ -751,6 +750,7 @@ mod tests {
             let proof = <Scribe<E, PST13<E>>>::prove(&pk, &pi, &[w1, w2])?;
 
             let _verify = <Scribe<E, PST13<E>>>::verify(&vk, &pi, &proof)?;
+            println!("Scribe proof verified: {_verify}");
 
             assert!(_verify);
         }

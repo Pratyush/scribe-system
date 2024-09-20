@@ -1,6 +1,6 @@
 use crate::{
-    arithmetic::errors::ArithError,
-    streams::{iterator::BatchedIterator, serialize::RawPrimeField, EqEvalIter, MLE},
+    arithmetic::{errors::ArithError, virtual_mle::VirtualMLE},
+    streams::{serialize::RawPrimeField, MLE},
 };
 use ark_serialize::CanonicalSerialize;
 use ark_std::{
@@ -8,10 +8,7 @@ use ark_std::{
     rand::{Rng, RngCore},
     start_timer,
 };
-use rayon::iter::MinLen;
 use std::{cmp::max, marker::PhantomData};
-
-use super::eq_eval;
 
 /// A virtual polynomial is a sum of products of multilinear polynomials;
 /// where the multilinear polynomials are stored via their multilinear
@@ -48,115 +45,6 @@ pub struct VirtualPolynomial<F: RawPrimeField> {
     /// Stores multilinear extensions in which product multiplicand can refer
     /// to.
     pub mles: Vec<VirtualMLE<F>>,
-}
-
-#[derive(Clone, PartialEq, Eq)]
-pub enum VirtualMLE<F: RawPrimeField> {
-    MLE(MLE<F>),
-    EqAtPoint {
-        num_vars: usize,
-        point: Vec<F>,
-        fixed_vars: Vec<F>,
-    },
-}
-
-impl<F: RawPrimeField> VirtualMLE<F> {
-    pub fn num_vars(&self) -> usize {
-        match self {
-            VirtualMLE::MLE(mle) => mle.num_vars(),
-            VirtualMLE::EqAtPoint { num_vars, .. } => *num_vars,
-        }
-    }
-
-    pub fn evaluate(&self, point: &[F]) -> Option<F> {
-        match self {
-            VirtualMLE::MLE(mle) => mle.evaluate(point),
-            VirtualMLE::EqAtPoint {
-                num_vars,
-                fixed_vars,
-                point: eq_point,
-            } => {
-                let mut new_point = fixed_vars.clone();
-                new_point.extend(point);
-                (point.len() == *num_vars).then(|| eq_eval(eq_point, &new_point).unwrap())
-            },
-        }
-    }
-
-    pub fn evals(&self) -> VirtualMLEIter<'_, F> {
-        match self {
-            VirtualMLE::MLE(mle) => VirtualMLEIter::MLE(mle.evals().iter()),
-            VirtualMLE::EqAtPoint { point, .. } => {
-                VirtualMLEIter::EqAtPoint(EqEvalIter::new(point.clone()))
-            },
-        }
-    }
-
-    pub fn fix_variables(&self, partial_point: &[F]) -> Self {
-        match self {
-            VirtualMLE::MLE(mle) => VirtualMLE::MLE(mle.fix_variables(partial_point)),
-            VirtualMLE::EqAtPoint {
-                num_vars,
-                point,
-                fixed_vars,
-            } => {
-                let num_vars = *num_vars - partial_point.len();
-                let mut fixed_vars = fixed_vars.to_vec();
-                fixed_vars.extend(partial_point);
-                VirtualMLE::EqAtPoint {
-                    num_vars,
-                    point: point.to_vec(),
-                    fixed_vars,
-                }
-            },
-        }
-    }
-
-    pub fn fix_variables_in_place(&mut self, partial_point: &[F]) {
-        match self {
-            VirtualMLE::MLE(mle) => mle.fix_variables_in_place(partial_point),
-            VirtualMLE::EqAtPoint {
-                num_vars,
-                fixed_vars,
-                ..
-            } => {
-                *num_vars -= partial_point.len();
-                fixed_vars.extend(partial_point);
-            },
-        }
-    }
-}
-
-pub enum VirtualMLEIter<'a, F: RawPrimeField> {
-    MLE(crate::streams::file_vec::Iter<'a, F>),
-    EqAtPoint(EqEvalIter<F>),
-}
-
-impl<'a, F: RawPrimeField> BatchedIterator for VirtualMLEIter<'a, F> {
-    type Item = F;
-    type Batch = MinLen<rayon::vec::IntoIter<F>>;
-
-    fn next_batch(&mut self) -> Option<Self::Batch> {
-        match self {
-            VirtualMLEIter::MLE(mle) => mle.next_batch(),
-            VirtualMLEIter::EqAtPoint(e) => e.next_batch(),
-        }
-    }
-}
-
-impl<F: RawPrimeField> From<MLE<F>> for VirtualMLE<F> {
-    fn from(mle: MLE<F>) -> Self {
-        VirtualMLE::MLE(mle)
-    }
-}
-
-impl<F: RawPrimeField> PartialEq<MLE<F>> for VirtualMLE<F> {
-    fn eq(&self, other: &MLE<F>) -> bool {
-        match self {
-            VirtualMLE::MLE(mle) => mle == other,
-            VirtualMLE::EqAtPoint { .. } => unimplemented!("this should not happen"),
-        }
-    }
 }
 
 /// Auxiliary information about the multilinear polynomial
@@ -224,6 +112,21 @@ impl<F: RawPrimeField> VirtualPolynomial<F> {
         mles: impl IntoIterator<Item = MLE<F>>,
         coefficient: F,
     ) -> Result<(), ArithError> {
+        self.add_virtual_mles(mles.into_iter().map(|m| m.into()), coefficient)
+    }
+
+    ///
+    /// Add a product of list of multilinear extensions to self
+    /// Returns an error if the list is empty, or the MLE has a different
+    /// `num_vars` from self.
+    ///
+    /// The MLEs will be multiplied together, and then multiplied by the scalar
+    /// `coefficient`.
+    pub fn add_virtual_mles(
+        &mut self,
+        mles: impl IntoIterator<Item = VirtualMLE<F>>,
+        coefficient: F,
+    ) -> Result<(), ArithError> {
         let mle_list = Vec::from_iter(mles);
         let mut indexed_product = Vec::with_capacity(mle_list.len());
 
@@ -245,7 +148,7 @@ impl<F: RawPrimeField> VirtualPolynomial<F> {
             let mle_index = match self.mles.iter().position(|e| e == &mle) {
                 Some(p) => p,
                 None => {
-                    self.mles.push(mle.clone().into());
+                    self.mles.push(mle.clone());
                     self.mles.len() - 1
                 },
             };
@@ -260,7 +163,11 @@ impl<F: RawPrimeField> VirtualPolynomial<F> {
     /// - multiply each product by MLE and its coefficient.
     ///
     /// Returns an error if the MLE has a different `num_vars` from self.
-    pub fn mul_by_mle(&mut self, mle: MLE<F>, coefficient: F) -> Result<(), ArithError> {
+    pub fn mul_by_virtual_mle(
+        &mut self,
+        mle: VirtualMLE<F>,
+        coefficient: F,
+    ) -> Result<(), ArithError> {
         let start = start_timer!(|| "mul by mle");
         if mle.num_vars() != self.num_vars() {
             return Err(ArithError::InvalidParameters(format!(
@@ -273,7 +180,7 @@ impl<F: RawPrimeField> VirtualPolynomial<F> {
         let mle_index = match self.mles.iter().position(|e| e == &mle) {
             Some(p) => p,
             None => {
-                self.mles.push(mle.into());
+                self.mles.push(mle);
                 self.mles.len() - 1
             },
         };
@@ -290,6 +197,15 @@ impl<F: RawPrimeField> VirtualPolynomial<F> {
 
         end_timer!(start);
         Ok(())
+    }
+
+    /// Multiply the current VirtualPolynomial by an MLE:
+    /// - add the MLE to the MLE list;
+    /// - multiply each product by MLE and its coefficient.
+    ///
+    /// Returns an error if the MLE has a different `num_vars` from self.
+    pub fn mul_by_mle(&mut self, mle: MLE<F>, coefficient: F) -> Result<(), ArithError> {
+        self.mul_by_virtual_mle(mle.into(), coefficient)
     }
 
     /// Evaluate the virtual polynomial at point `point`.
@@ -389,10 +305,14 @@ impl<F: RawPrimeField> VirtualPolynomial<F> {
             )));
         }
 
-        let eq_x_r = MLE::eq_x_r(r).unwrap();
+        let eq_x_r = VirtualMLE::EqAtPoint {
+            num_vars: self.aux_info.num_variables,
+            point: r.to_vec(),
+            fixed_vars: vec![],
+        };
 
         let mut res = self.clone();
-        res.mul_by_mle(eq_x_r, F::one())?;
+        res.mul_by_virtual_mle(eq_x_r, F::one())?;
 
         end_timer!(start);
         Ok(res)
@@ -548,6 +468,29 @@ impl<F: RawPrimeField> VirtualPolynomial<F> {
 
         Ok(())
     }
+
+    #[cfg(debug_assertions)]
+    #[allow(dead_code)]
+    pub fn sum_over_hypercube(&self) -> F {
+        use crate::streams::{file_vec::FileVec, iterator::BatchedIterator};
+        let evals: Vec<_> = self
+            .mles
+            .iter()
+            .map(|mle| mle.evals().to_file_vec())
+            .collect();
+        let mut sum = F::zero();
+        for (c, p) in &self.products {
+            let element_wise_product = p.iter().fold(
+                FileVec::from_iter(std::iter::repeat(F::one()).take(1 << self.num_vars())),
+                |mut acc, &i| {
+                    acc.zipped_for_each(evals[i].iter(), |a, b| *a *= b);
+                    acc
+                },
+            );
+            sum += element_wise_product.iter().sum::<F>() * c;
+        }
+        sum
+    }
 }
 
 #[cfg(test)]
@@ -640,7 +583,7 @@ mod test {
         ];
 
         // Action
-        let result_stream = MLE::eq_x_r(&r).expect("Failed to build eq(x, r)");
+        let result_stream = MLE::eq_x_r(&r);
 
         // Fetch the stream's values for comparison
         let result_values = result_stream.evals().iter().to_vec();
@@ -678,6 +621,19 @@ mod test {
             }
         }
 
+        Ok(())
+    }
+
+    #[test]
+    fn test_sum_over_hypercube() -> Result<(), ArithError> {
+        let mut rng = test_rng();
+        for nv in 2..5 {
+            for num_products in 2..5 {
+                let (a, a_sum) = VirtualPolynomial::<Fr>::rand(nv, (2, 3), num_products, &mut rng)?;
+                let sum = a.sum_over_hypercube();
+                assert_eq!(sum, a_sum);
+            }
+        }
         Ok(())
     }
 }

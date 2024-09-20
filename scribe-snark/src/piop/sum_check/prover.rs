@@ -11,9 +11,7 @@ use crate::{
     streams::serialize::RawPrimeField,
 };
 use ark_ff::{batch_inversion, PrimeField};
-use ark_std::{cfg_iter, cfg_iter_mut, end_timer, start_timer, vec::Vec};
-
-#[cfg(feature = "parallel")]
+use ark_std::{end_timer, start_timer, vec::Vec};
 use rayon::prelude::*;
 
 impl<F: RawPrimeField> SumCheckProver<F> for IOPProverState<F> {
@@ -60,8 +58,6 @@ impl<F: RawPrimeField> SumCheckProver<F> for IOPProverState<F> {
             return Err(PIOPError::InvalidProver("Prover is not active".to_string()));
         }
 
-        let fix_argument = start_timer!(|| "fix argument");
-
         // Step 1:
         // fix argument and evaluate f(x) over x_m = r; where r is the challenge
         // for the current round, and m is the round number, indexed from 1
@@ -73,12 +69,6 @@ impl<F: RawPrimeField> SumCheckProver<F> for IOPProverState<F> {
         //    g(r_1, ..., r_{m-1}, x_m ... x_n)
         //
         // eval g over r_m, and mutate g to g(r_1, ... r_m,, x_{m+1}... x_n)
-        // let mut flattened_ml_extensions: Vec<&DenseMLPolyStream<F>> = self
-        //     .poly
-        //     .flattened_ml_extensions
-        //     .par_iter()
-        //     .map(|x| x.as_ref().clone())
-        //     .collect();
 
         if let Some(chal) = challenge {
             // challenge is None for the first round
@@ -88,6 +78,8 @@ impl<F: RawPrimeField> SumCheckProver<F> for IOPProverState<F> {
                 ));
             }
             self.challenges.push(*chal);
+
+            let fix_argument = start_timer!(|| "fix argument");
 
             let r = self.challenges[self.round - 1];
             if self.round == 1 {
@@ -104,12 +96,12 @@ impl<F: RawPrimeField> SumCheckProver<F> for IOPProverState<F> {
                     .iter_mut()
                     .for_each(|mle| mle.fix_variables_in_place(&[r]));
             }
+            end_timer!(fix_argument);
         } else if self.round > 0 {
             return Err(PIOPError::InvalidProver(
                 "verifier message is empty".to_string(),
             ));
         }
-        end_timer!(fix_argument);
 
         let generate_prover_message = start_timer!(|| "generate prover message");
         self.round += 1;
@@ -192,17 +184,20 @@ fn barycentric_weights<F: PrimeField>(points: &[F]) -> Vec<F> {
 
 fn extrapolate<F: PrimeField>(points: &[F], weights: &[F], evals: &[F], at: &F) -> F {
     let (coeffs, sum_inv) = {
-        let mut coeffs = cfg_iter!(points)
+        let mut coeffs = points
+            .par_iter()
             .map(|point| *at - point)
             .collect::<Vec<_>>();
         batch_inversion(&mut coeffs);
-        cfg_iter_mut!(coeffs)
+        coeffs
+            .par_iter_mut()
             .zip(weights)
             .for_each(|(coeff, weight)| *coeff *= weight);
-        let sum_inv = cfg_iter!(coeffs).sum::<F>().inverse().unwrap_or_default();
+        let sum_inv = coeffs.par_iter().sum::<F>().inverse().unwrap_or_default();
         (coeffs, sum_inv)
     };
-    cfg_iter!(coeffs)
+    coeffs
+        .par_iter()
         .zip(evals)
         .map(|(coeff, eval)| *coeff * eval)
         .sum::<F>()

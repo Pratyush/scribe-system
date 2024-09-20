@@ -14,7 +14,7 @@ struct Scribe: App {
                 print("Result from bench_hp_prover: \(result)")
 
                 let result_ = resourceDirectory.withCString { dirCStr in
-                    return bench_scribe_prover(15, 24, 24, dirCStr)
+                    return bench_scribe_prover(24, 24, 24, dirCStr)
                 }
                 print("Result from bench_scribe_prover: \(result_)")
             } else {

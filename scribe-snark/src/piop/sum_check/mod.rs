@@ -149,12 +149,6 @@ impl<F: RawPrimeField> SumCheck<F> {
         transcript.append_serializable_element(b"aux info", aux_info)?;
         let mut verifier_state = IOPVerifierState::verifier_init(aux_info);
 
-        #[cfg(debug_assertions)]
-        println!(
-            "sum check verifier aux_info.num_variables: {}",
-            aux_info.num_variables
-        );
-
         for i in 0..aux_info.num_variables {
             let prover_msg = proof.proofs.get(i).expect("proof is incomplete");
             transcript.append_serializable_element(b"prover msg", prover_msg)?;
@@ -163,9 +157,6 @@ impl<F: RawPrimeField> SumCheck<F> {
                 prover_msg,
                 transcript,
             )?;
-
-            #[cfg(debug_assertions)]
-            println!("round={i}, verifier challenge: {_challenge}");
         }
 
         let res = IOPVerifierState::check_and_generate_subclaim(&verifier_state, &claimed_sum);
@@ -178,47 +169,39 @@ impl<F: RawPrimeField> SumCheck<F> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::arithmetic::virtual_polynomial::VirtualPolynomial;
+    use crate::arithmetic::{virtual_mle::VirtualMLE, virtual_polynomial::VirtualPolynomial};
+    use crate::streams::iterator::BatchedIterator;
     use ark_bls12_381::Fr;
     use ark_ff::UniformRand;
-    use ark_std::{
-        rand::{rngs::StdRng, SeedableRng},
-        test_rng,
-    };
+
+    fn test_sumcheck_helper(poly: VirtualPolynomial<Fr>, sum: Fr) -> Result<(), PIOPError> {
+        let mut transcript = SumCheck::<Fr>::init_transcript();
+        let proof = SumCheck::prove(&poly, &mut transcript)?;
+        let poly_info = poly.aux_info.clone();
+        let mut transcript = SumCheck::<Fr>::init_transcript();
+        let subclaim = SumCheck::verify(sum, &proof, &poly_info, &mut transcript)?;
+
+        let evaluation = poly.evaluate(&subclaim.point).unwrap();
+        // expected_evaluation is interpolated; in the full protocol, the evaluated_point should be a commitment query at subclaim point rather than evaluated from scratch
+        assert_eq!(
+            evaluation, subclaim.expected_evaluation,
+            "wrong subclaim: evaluated: {evaluation}, expected: {}",
+            subclaim.expected_evaluation
+        );
+        Ok(())
+    }
 
     fn test_sumcheck(
         nv: usize,
         num_multiplicands_range: (usize, usize),
         num_products: usize,
     ) -> Result<(), PIOPError> {
-        let seed = [
-            1, 0, 0, 0, 23, 0, 0, 0, 200, 1, 0, 0, 210, 30, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0,
-        ];
-        let mut rng = StdRng::from_seed(seed);
-        let mut transcript = SumCheck::<Fr>::init_transcript();
+        let mut rng = ark_std::test_rng();
 
         let (poly, asserted_sum) =
             VirtualPolynomial::rand(nv, num_multiplicands_range, num_products, &mut rng)?;
 
-        println!("generated asserted sum: {}", asserted_sum);
-
-        let proof = SumCheck::prove(&poly, &mut transcript)?;
-        let poly_info = poly.aux_info.clone();
-        let mut transcript = SumCheck::<Fr>::init_transcript();
-        let subclaim = SumCheck::verify(asserted_sum, &proof, &poly_info, &mut transcript)?;
-
-        let evaluated_point = poly.evaluate(&subclaim.point).unwrap();
-        assert!(
-            // expected_evaluation is interpolated; in the full protocol, the evaluated_point should be a commitment query at subclaim point rather than evaluated from scratch
-            evaluated_point == subclaim.expected_evaluation,
-            "{}",
-            format!(
-                "wrong subclaim: evaluated: {}, expected: {}",
-                evaluated_point, subclaim.expected_evaluation
-            )
-        );
-        Ok(())
+        test_sumcheck_helper(poly, asserted_sum)
     }
 
     fn test_sumcheck_internal(
@@ -226,11 +209,7 @@ mod test {
         num_multiplicands_range: (usize, usize),
         num_products: usize,
     ) -> Result<(), PIOPError> {
-        let seed = [
-            1, 0, 0, 0, 23, 0, 0, 0, 200, 1, 0, 0, 210, 30, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0,
-        ];
-        let mut rng = StdRng::from_seed(seed);
+        let mut rng = ark_std::test_rng();
         let (poly, asserted_sum) =
             VirtualPolynomial::<Fr>::rand(nv, num_multiplicands_range, num_products, &mut rng)?;
 
@@ -247,27 +226,23 @@ mod test {
                 IOPProverState::prove_round_and_update_state(&mut prover_state, &challenge)
                     .unwrap();
 
-            challenge = Some(
-                IOPVerifierState::verify_round_and_update_state(
-                    &mut verifier_state,
-                    &prover_message,
-                    &mut transcript,
-                )
-                .unwrap(),
-            );
+            challenge = IOPVerifierState::verify_round_and_update_state(
+                &mut verifier_state,
+                &prover_message,
+                &mut transcript,
+            )
+            .ok();
         }
         let subclaim =
             IOPVerifierState::check_and_generate_subclaim(&verifier_state, &asserted_sum)
                 .expect("fail to generate subclaim");
 
-        let evaluated_point = poly.evaluate(&subclaim.point).unwrap();
-        assert!(
-            evaluated_point == subclaim.expected_evaluation, // the expected evaluation is interpolated; in the full protocol, the poly evaluation should be a commitment query at subclaim point rather than evaluated from scratch
-            "{}",
-            format!(
-                "wrong subclaim: evaluated: {}, expected: {}",
-                evaluated_point, subclaim.expected_evaluation
-            )
+        let evaluation = poly.evaluate(&subclaim.point).unwrap();
+        // the expected evaluation is interpolated; in the full protocol, the poly evaluation should be a commitment query at subclaim point rather than evaluated from scratch
+        assert_eq!(
+            evaluation, subclaim.expected_evaluation,
+            "wrong subclaim: evaluated: {evaluation}, expected: {}",
+            subclaim.expected_evaluation
         );
         Ok(())
     }
@@ -291,6 +266,88 @@ mod test {
         test_sumcheck(nv, num_multiplicands_range, num_products)?;
         test_sumcheck_internal(nv, num_multiplicands_range, num_products)
     }
+
+    #[test]
+    fn test_eq_product() -> Result<(), PIOPError> {
+        let mut rng = ark_std::test_rng();
+        for nv in 9..=20 {
+            let eq_1 = VirtualMLE::eq_x_r(&vec![Fr::rand(&mut rng); nv]);
+            let eq_2 = VirtualMLE::eq_x_r(&vec![Fr::rand(&mut rng); nv]);
+            let c = Fr::rand(&mut rng);
+
+            let sum = c * eq_1
+                .evals()
+                .zip(eq_2.evals())
+                .map(|(a, b)| a * b)
+                .sum::<Fr>();
+
+            let mut poly = VirtualPolynomial::new(nv);
+            poly.add_virtual_mles([eq_1, eq_2], c)?;
+            test_sumcheck_helper(poly, sum)?
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_sum_of_eq_products() -> Result<(), PIOPError> {
+        let mut rng = ark_std::test_rng();
+        for nv in 9..=20 {
+            let eq_1 = VirtualMLE::eq_x_r(&vec![Fr::rand(&mut rng); nv]);
+            let eq_2 = VirtualMLE::eq_x_r(&vec![Fr::rand(&mut rng); nv]);
+            let eq_3 = VirtualMLE::eq_x_r(&vec![Fr::rand(&mut rng); nv]);
+            let eq_4 = VirtualMLE::eq_x_r(&vec![Fr::rand(&mut rng); nv]);
+            let (c1, c2) = (Fr::rand(&mut rng), Fr::rand(&mut rng));
+
+            let sum = c1
+                * eq_1
+                    .evals()
+                    .zip(eq_2.evals())
+                    .map(|(a, b)| a * b)
+                    .sum::<Fr>()
+                + c2 * eq_3
+                    .evals()
+                    .zip(eq_4.evals())
+                    .map(|(a, b)| a * b)
+                    .sum::<Fr>();
+
+            let mut poly = VirtualPolynomial::new(nv);
+            poly.add_virtual_mles([eq_1, eq_2], c1)?;
+            poly.add_virtual_mles([eq_3, eq_4], c2)?;
+            test_sumcheck_helper(poly, sum)?
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_sum_of_products_with_eq() -> Result<(), PIOPError> {
+        let mut rng = ark_std::test_rng();
+        for nv in 9..=20 {
+            let eq_1 = VirtualMLE::eq_x_r(&vec![Fr::rand(&mut rng); nv]);
+            let mle_1: VirtualMLE<_> = MLE::rand(nv, &mut rng).into();
+            let eq_2 = VirtualMLE::eq_x_r(&vec![Fr::rand(&mut rng); nv]);
+            let mle_2: VirtualMLE<_> = MLE::rand(nv, &mut rng).into();
+            let (c1, c2) = (Fr::rand(&mut rng), Fr::rand(&mut rng));
+
+            let sum = c1
+                * eq_1
+                    .evals()
+                    .zip(mle_1.evals())
+                    .map(|(a, b)| a * b)
+                    .sum::<Fr>()
+                + c2 * eq_2
+                    .evals()
+                    .zip(mle_2.evals())
+                    .map(|(a, b)| a * b)
+                    .sum::<Fr>();
+
+            let mut poly = VirtualPolynomial::new(nv);
+            poly.add_virtual_mles([eq_1, mle_1], c1)?;
+            poly.add_virtual_mles([eq_2, mle_2], c2)?;
+            test_sumcheck_helper(poly, sum)?
+        }
+        Ok(())
+    }
+
     #[test]
     fn zero_polynomial_should_error() {
         let nv = 0;
@@ -303,7 +360,7 @@ mod test {
 
     #[test]
     fn test_extract_sum() -> Result<(), PIOPError> {
-        let mut rng = test_rng();
+        let mut rng = ark_std::test_rng();
         let mut transcript = SumCheck::<Fr>::init_transcript();
         let (poly, asserted_sum) = VirtualPolynomial::<Fr>::rand(8, (3, 4), 3, &mut rng)?;
 
@@ -316,7 +373,7 @@ mod test {
     /// Test that the memory usage of shared-reference is linear to number of
     /// unique MLExtensions instead of total number of multiplicands.
     fn test_shared_reference() -> Result<(), PIOPError> {
-        let mut rng = test_rng();
+        let mut rng = ark_std::test_rng();
         let ml_extensions: Vec<_> = (0..5).map(|_| MLE::<Fr>::rand(8, &mut rng)).collect();
         let mut poly = VirtualPolynomial::new(8);
         poly.add_mles(
@@ -351,14 +408,6 @@ mod test {
 
         assert_eq!(poly.mles.len(), 5);
 
-        #[cfg(debug_assertions)]
-        {
-            // print each product indices of virtualpolynomial
-            for (coeff, product) in poly.products.iter() {
-                println!("coeff: {}, product: {:?}", coeff, product);
-            }
-        }
-
         // test memory usage for prover
         let prover = IOPProverState::<Fr>::prover_init(&poly).unwrap();
         assert_eq!(prover.poly.mles.len(), 5);
@@ -372,11 +421,8 @@ mod test {
         let mut transcript = SumCheck::<Fr>::init_transcript();
         let subclaim = SumCheck::verify(asserted_sum, &proof, &poly_info, &mut transcript)?;
 
-        let evaluated_point = poly.evaluate(&subclaim.point).unwrap();
-        assert!(
-            evaluated_point == subclaim.expected_evaluation,
-            "wrong subclaim"
-        );
+        let evaluation = poly.evaluate(&subclaim.point).unwrap();
+        assert_eq!(evaluation, subclaim.expected_evaluation, "wrong subclaim");
         Ok(())
     }
 }

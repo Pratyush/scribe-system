@@ -29,6 +29,7 @@ pub extern "C" fn bench_scribe_prover(
         max_num_vars,
         supported_size,
         Path::new(file_dir_path),
+        true,
     ) {
         Ok(_) => 0,
         Err(_) => 1,

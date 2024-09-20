@@ -8,7 +8,6 @@ use crate::{arithmetic::virtual_polynomial::VPAuxInfo, streams::serialize::RawPr
 use ark_ff::PrimeField;
 use ark_std::{end_timer, start_timer};
 
-#[cfg(feature = "parallel")]
 use rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
 
 impl<F: RawPrimeField> SumCheckVerifier<F> for IOPVerifierState<F> {
@@ -63,12 +62,6 @@ impl<F: RawPrimeField> SumCheckVerifier<F> for IOPVerifierState<F> {
 
         let challenge = transcript.get_and_append_challenge(b"Internal round")?;
 
-        #[cfg(debug_assertions)]
-        println!(
-            "sum check verifier challenge verify_round_and_update_state: {}",
-            challenge
-        );
-
         self.challenges.push(challenge);
         self.polynomials_received
             .push(prover_msg.evaluations.to_vec());
@@ -112,50 +105,11 @@ impl<F: RawPrimeField> SumCheckVerifier<F> for IOPVerifierState<F> {
 
         // the deferred check during the interactive phase:
         // 2. set `expected` to P(r)`
-        #[cfg(feature = "parallel")]
         let mut expected_vec = self
             .polynomials_received
             .clone()
             .into_par_iter()
-            .zip(self.challenges.clone().into_par_iter())
-            .map(|(evaluations, challenge)| {
-                #[cfg(debug_assertions)]
-                {
-                    println!("sum check verifier expected_vec challenge: {}", challenge);
-                    evaluations
-                        .iter()
-                        .for_each(|x| println!("sum check expecte_vec evaluations: {}", x));
-                }
-
-                if evaluations.len() != self.max_degree + 1 {
-                    return Err(PIOPError::InvalidVerifier(format!(
-                        "incorrect number of evaluations: {} vs {}",
-                        evaluations.len(),
-                        self.max_degree + 1
-                    )));
-                }
-
-                #[cfg(debug_assertions)]
-                {
-                    println!(
-                        "sum check verifier challenge before interpolation: {}",
-                        challenge
-                    );
-                    evaluations.iter().for_each(|x| {
-                        println!("sum check verifier evaluations before interpolation: {}", x)
-                    });
-                }
-
-                interpolate_uni_poly::<F>(&evaluations, challenge)
-            })
-            .collect::<Result<Vec<_>, PIOPError>>()?;
-
-        #[cfg(not(feature = "parallel"))]
-        let mut expected_vec = self
-            .polynomials_received
-            .clone()
-            .into_iter()
-            .zip(self.challenges.clone().into_iter())
+            .zip(self.challenges.clone())
             .map(|(evaluations, challenge)| {
                 if evaluations.len() != self.max_degree + 1 {
                     return Err(PIOPError::InvalidVerifier(format!(
@@ -169,58 +123,26 @@ impl<F: RawPrimeField> SumCheckVerifier<F> for IOPVerifierState<F> {
             .collect::<Result<Vec<_>, PIOPError>>()?;
 
         // insert the asserted_sum to the first position of the expected vector
-        #[cfg(debug_assertions)]
-        println!("asserted sum: {}", asserted_sum);
         expected_vec.insert(0, *asserted_sum);
 
-        #[cfg(debug_assertions)]
-        {
-            expected_vec.iter().for_each(|x| {
-                println!("sum check verifier expected_vec after interpolation: {}", x)
-            });
-            self.polynomials_received.iter().for_each(|x| {
-                x.iter()
-                    .for_each(|y| println!("sum check verifier polynomials_received: {}", y))
-            });
-        }
-
-        for (evaluations, &expected) in self
+        for (i, (evaluations, &expected)) in self
             .polynomials_received
             .iter()
             .zip(expected_vec.iter())
+            .enumerate()
             .take(self.num_vars)
         {
             // the deferred check during the interactive phase:
             // 1. check if the received 'P(0) + P(1) = expected`.
             if evaluations[0] + evaluations[1] != expected {
-                #[cfg(debug_assertions)]
-                {
-                    println!("sum check verifier Prover message is NOT consistent with the claim.");
-                    println!("sum check verifier expected: {}", expected);
-                    println!(
-                        "sum check verifier evaluation: {}",
-                        evaluations[0] + evaluations[1]
-                    );
-                    println!("sum check verifier evaluation 0: {}", evaluations[0]);
-                    println!("sum check verifier evaluation 1: {}", evaluations[1]);
-                }
+                eprintln!(
+                    "at round {i}, sum check verifier Prover message is NOT consistent with the claim, expected: {expected}, evaluation: {}",
+                    evaluations[0] + evaluations[1]
+                );
                 return Err(PIOPError::InvalidProof(format!(
-                    "sum check verifier Prover message is NOT consistent with the claim, expected: {}, evaluation: {}",
-                    expected,
+                    "sum check verifier Prover message is NOT consistent with the claim, expected: {expected}, evaluation: {}",
                     evaluations[0] + evaluations[1]
                 )));
-            } else {
-                #[cfg(debug_assertions)]
-                {
-                    println!("sum check verifier Prover message is consistent with the claim.");
-                    println!("sum check verifier expected: {}", expected);
-                    println!(
-                        "sum check verifier evaluation: {}",
-                        evaluations[0] + evaluations[1]
-                    );
-                    println!("sum check verifier evaluation 0: {}", evaluations[0]);
-                    println!("sum check verifier evaluation 1: {}", evaluations[1]);
-                }
             }
         }
         end_timer!(start);

@@ -8,12 +8,15 @@ ark-ff = { version = "^0.4", features = ["parallel"] }
 ark-bls12-381 = { version = "^0.4" }
 ark-serialize = { version = "^0.4" }
 ark-std = { version = "^0.4", features = ["parallel"] }
-scribe = { path = "../scribe-snark", features = ["parallel"] }
+scribe = { path = "../scribe-snark" }
 libc = { version = "^0.2.101" }
 rayon = { version = "^1.5" }
 hp = { git = "https://github.com/EspressoSystems/hyperplonk/", package = "hyperplonk" }
 hp-subroutines = { git = "https://github.com/EspressoSystems/hyperplonk/", package = "subroutines" }
 rlimit = { version = "^0.10" }
+
+[features]
+print-trace = ["scribe/print-trace"]
 
 [lib]
 crate-type = ["staticlib", "rlib"]

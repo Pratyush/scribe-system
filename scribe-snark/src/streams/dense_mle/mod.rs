@@ -110,10 +110,16 @@ impl<F: RawField> MLE<F> {
         Inner::constant(c, num_vars).into()
     }
 
+    pub fn deep_copy(&self) -> Self {
+        self.map(|inner| inner.deep_copy()).into()
+    }
+
     #[inline(always)]
-    pub fn eq_x_r(r: &[F]) -> Option<Self> {
+    pub fn eq_x_r(r: &[F]) -> Self {
         let step = start_timer!(|| "construct eq_x_r polynomial");
-        let res = eq_x_r_helper(r).map(|evals| Self::from_evals(evals, r.len()));
+        let res = eq_x_r_helper(r)
+            .map(|evals| Self::from_evals(evals, r.len()))
+            .unwrap();
         end_timer!(step);
         res
     }
@@ -421,7 +427,7 @@ mod test {
         for i in 0..=8 {
             let num_vars = i + LOG_BUFFER_SIZE as usize;
             let r: Vec<Fr> = (0..num_vars).map(|_| Fr::rand(&mut test_rng())).collect();
-            let eq_1 = MLE::eq_x_r(&r).unwrap();
+            let eq_1 = MLE::eq_x_r(&r);
             let eq_2 = FileVec::from_iter(build_eq_x_r_vec(&r).unwrap().into_iter());
             eq_1.to_evals().zipped_for_each(eq_2.into_iter(), |a, b| {
                 assert_eq!(*a, b);
