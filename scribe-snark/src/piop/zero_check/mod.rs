@@ -49,15 +49,21 @@ impl<F: RawPrimeField> ZeroCheck<F> {
         poly: &VirtualPolynomial<F>,
         transcript: &mut IOPTranscript<F>,
     ) -> Result<ZeroCheckProof<F>, PIOPError> {
+        let f_hat = Self::prove_emit_virtual_poly(poly, transcript)?;
+        SumCheck::<F>::prove(&f_hat, transcript)
+    }
+
+    pub fn prove_emit_virtual_poly(
+        poly: &VirtualPolynomial<F>,
+        transcript: &mut IOPTranscript<F>,
+    ) -> Result<VirtualPolynomial<F>, PIOPError> {
         let start = start_timer!(|| "zero check prove");
 
         let length = poly.aux_info.num_variables;
         let r = transcript.get_and_append_challenge_vectors(b"0check r", length)?;
         let f_hat = poly.build_f_hat(r.as_ref())?;
-        let res = SumCheck::<F>::prove(&f_hat, transcript);
-
         end_timer!(start);
-        res
+        Ok(f_hat)
     }
 
     /// verify the claimed sum using the proof

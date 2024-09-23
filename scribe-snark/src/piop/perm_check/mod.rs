@@ -27,64 +27,10 @@ pub struct PermutationCheckSubClaim<F: PrimeField> {
     pub gamma: F,
 }
 
-pub trait PermutationCheck<F: PrimeField>: ZeroCheck<F> {
-    type PermutationCheckSubClaim: Clone + Debug + Default + PartialEq;
     type PermutationCheckProof: Clone + Debug + Default + PartialEq;
+pub struct PermutationCheck<F: PrimeField>(PhantomData<F>);
 
-    /// Initialize the system with a transcript
-    ///
-    /// This function is optional -- in the case where a ProductCheck is
-    /// an building block for a more complex protocol, the transcript
-    /// may be initialized by this complex protocol, and passed to the
-    /// ProductCheck prover/verifier.
-    fn init_transcript() -> Self::Transcript;
-
-    #[allow(clippy::type_complexity)]
-    fn prove_plonk(
-        // pcs_param: &PC::ProverParam,
-        p: Vec<Self::MultilinearExtension>,
-        pi: Vec<Self::MultilinearExtension>,
-        index: Vec<Self::MultilinearExtension>,
-        transcript: &mut IOPTranscript<F>,
-    ) -> Result<
-        (
-            Self::PermutationCheckProof,
-            Vec<Self::MultilinearExtension>,
-            Vec<Self::MultilinearExtension>,
-            Self::MultilinearExtension,
-        ),
-        PIOPError,
-    >;
-
-    #[allow(clippy::type_complexity)]
-    fn prove(
-        // pcs_param: &PC::ProverParam,
-        p: Self::MultilinearExtension,
-        q: Self::MultilinearExtension,
-        pi: Self::MultilinearExtension,
-        index: Self::MultilinearExtension,
-        transcript: &mut IOPTranscript<F>,
-    ) -> Result<
-        (
-            Self::PermutationCheckProof,
-            Self::MultilinearExtension,
-            Self::MultilinearExtension,
-            Self::MultilinearExtension,
-        ),
-        PIOPError,
-    >;
-
-    fn verify(
-        proof: &Self::PermutationCheckProof,
-        aux_info: &VPAuxInfo<F>,
-        transcript: &mut Self::Transcript,
-    ) -> Result<Self::PermutationCheckSubClaim, PIOPError>;
-}
-
-impl<F: PrimeField> PermutationCheck<F> for PolyIOP<F>
-where
-// E: Pairing,
-// PC: PCScheme<E, Polynomial = Arc<DenseMultilinearExtension<E::ScalarField>>>,
+impl<F: PrimeField> PermutationCheck<F> 
 {
     type PermutationCheckSubClaim = PermutationCheckSubClaim<F>;
     type PermutationCheckProof = Self::ZeroCheckProof;
@@ -231,52 +177,6 @@ where
         // get challenge batch_factor for batch zero check of t_1 + batch_factor * t_2, where t_1 = h_p * (p + alpha * pi) - 1 and t_2 = h_q * (q + alpha) - 1
         let batch_factor = transcript.get_and_append_challenge(b"batch_factor")?;
 
-        #[cfg(debug_assertions)]
-        {
-            println!("prover batch_factor: {}", batch_factor);
-
-            // print the first member of each vector of polynomials
-            let mut h_p_locked = h_p[0].lock().unwrap();
-            let mut h_q_locked = h_q[0].lock().unwrap();
-            let mut p_locked = p[0].lock().unwrap();
-            let mut pi_locked = pi[0].lock().unwrap();
-            let mut index_locked = index[0].lock().unwrap();
-            // loop and read_next
-            while let Some(val) = h_p_locked.read_next() {
-                println!("prover h_p: {}", val);
-            }
-            while let Some(val) = h_q_locked.read_next() {
-                println!("prover h_q: {}", val);
-            }
-            while let Some(val) = p_locked.read_next() {
-                println!("prover p: {}", val);
-            }
-            if pi_locked.read_next().is_none() {
-                println!("prover pi is empty");
-            }
-            while let Some(val) = pi_locked.read_next() {
-                println!("prover pi: {}", val);
-            }
-            if index_locked.read_next().is_none() {
-                println!("prover index is empty");
-            }
-            while let Some(val) = index_locked.read_next() {
-                println!("prover index: {}", val);
-            }
-            // read_restart
-            h_p_locked.read_restart();
-            h_q_locked.read_restart();
-            p_locked.read_restart();
-            pi_locked.read_restart();
-            index_locked.read_restart();
-            // drop
-            drop(h_p_locked);
-            drop(h_q_locked);
-            drop(p_locked);
-            drop(pi_locked);
-            drop(index_locked);
-        }
-
         // poly = t_1 + r * t_2 = h_p * (p + alpha * pi) - 1 + r * (h_q * (q + alpha) - 1)
         let poly = VirtualPolynomial::build_perm_check_poly_plonk(
             h_p.clone(),
@@ -310,31 +210,6 @@ where
         h_q.iter().for_each(|h_q| {
             let _ = final_poly.add_mle_list(vec![h_q.clone()], -batch_factor * batch_factor);
         });
-
-        #[cfg(debug_assertions)]
-        {
-            // print products of final_poly
-            for (coeff, products) in &final_poly.products {
-                println!(
-                    "prover final_poly coeff: {}, products: {:?}",
-                    coeff, products
-                );
-            }
-            // print each stream of final poly
-            for (i, stream) in final_poly
-                .mles
-                .clone()
-                .iter()
-                .enumerate()
-            {
-                let mut stream_locked = stream.lock().unwrap();
-                while let Some(val) = stream_locked.read_next() {
-                    println!("prover final_poly stream {}: {}", i, val);
-                }
-                stream_locked.read_restart();
-                drop(stream_locked);
-            }
-        }
 
         let proof = <Self as SumCheck<F>>::prove(&final_poly, transcript)?;
 

@@ -13,8 +13,7 @@ pub mod structs;
 pub mod utils;
 mod witness;
 
-/// A trait for Scribe SNARKs.
-/// A Scribe is derived from SumCheck
+/// Marker struct for the Scribe SNARK
 pub struct Scribe<E, PC>
 where
     E: Pairing,
