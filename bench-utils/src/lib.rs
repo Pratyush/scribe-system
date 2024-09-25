@@ -12,7 +12,13 @@ macro_rules! timed {
     }};
 }
 
+#[cfg(feature = "gemini")]
+pub mod gemini;
+#[cfg(feature = "halo2")]
+pub mod halo2;
 pub mod hp;
+#[cfg(feature = "plonky2")]
+pub mod plonky2;
 pub mod scribe;
 
 #[no_mangle]
