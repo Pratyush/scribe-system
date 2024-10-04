@@ -1,4 +1,4 @@
-use std::fmt::Debug;
+use std::{array, fmt::Debug};
 
 use crate::streams::BUFFER_SIZE;
 use rayon::prelude::*;
@@ -39,16 +39,11 @@ where
         self.iter.next_batch().map(|i| {
             let batch = i.collect::<Vec<_>>();
             assert_eq!(batch.len() % N, 0, "Buffer size must be divisible by N");
-            let batch = unsafe {
-                // Ensure the original vector is not dropped.
-                let mut batch = std::mem::ManuallyDrop::new(batch);
-                Vec::from_raw_parts(
-                    batch.as_mut_ptr() as *mut [I::Item; N],
-                    batch.len() / N,
-                    batch.capacity(),
-                )
-            };
-            batch.into_par_iter()
+            batch
+                .par_chunks_exact(N)
+                .map(|chunk| array::from_fn(|i| chunk[i]))
+                .collect::<Vec<_>>()
+                .into_par_iter()
         })
     }
 }

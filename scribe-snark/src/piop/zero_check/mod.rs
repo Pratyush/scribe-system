@@ -75,11 +75,12 @@ impl<F: RawPrimeField> ZeroCheck<F> {
         let start = start_timer!(|| "zero check verify");
 
         // check that the sum is zero
-        if proof.proofs[0].evaluations[0] + proof.proofs[0].evaluations[1] != F::zero() {
+        let initial_sum = proof.proofs[0].evaluations[0] + proof.proofs[0].evaluations[1];
+        if initial_sum != F::zero() {
             end_timer!(start);
+            eprintln!("zero check: sum {initial_sum} is not zero");
             return Err(PIOPError::InvalidProof(format!(
-                "zero check: sum {} is not zero",
-                proof.proofs[0].evaluations[0] + proof.proofs[0].evaluations[1]
+                "zero check: sum {initial_sum} is not zero",
             )));
         }
 

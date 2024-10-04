@@ -148,7 +148,7 @@ impl<F: RawPrimeField> MockCircuit<F> {
 
 #[cfg(test)]
 mod test {
-    use std::fs::File;
+    use std::io::{Seek, Write};
 
     use super::*;
     use crate::pc::pst13::srs::SRS;
@@ -158,15 +158,16 @@ mod test {
     use ark_bls12_381::Bls12_381;
     use ark_bls12_381::Fr;
     use ark_std::test_rng;
+    use tempfile::tempfile;
 
-    const SUPPORTED_SIZE: usize = 22;
+    const SUPPORTED_SIZE: usize = 19;
     const MIN_NUM_VARS: usize = 10;
-    const MAX_NUM_VARS: usize = 22;
+    const MAX_NUM_VARS: usize = SUPPORTED_SIZE;
     const CUSTOM_DEGREE: [usize; 4] = [1, 2, 4, 8];
 
     #[test]
     fn test_mock_circuit_sat() {
-        for i in 1..10 {
+        for i in 10..22 {
             let vanilla_gate = CustomizedGates::vanilla_plonk_gate();
             let circuit = MockCircuit::<Fr>::new(1 << i, &vanilla_gate);
             assert!(circuit.is_satisfied());
@@ -214,6 +215,7 @@ mod test {
         let mut rng = test_rng();
         let pcs_srs = PST13::<Bls12_381>::gen_srs_for_testing(&mut rng, SUPPORTED_SIZE)?;
         for nv in MIN_NUM_VARS..MAX_NUM_VARS {
+            println!("test_mock_circuit_zkp for nv = {nv}");
             let vanilla_gate = CustomizedGates::vanilla_plonk_gate();
             test_mock_circuit_zkp_helper(nv, &vanilla_gate, &pcs_srs)?;
         }
@@ -260,29 +262,58 @@ mod test {
     fn test_mock_circuit_serialization() -> Result<(), ScribeErrors> {
         let vanilla_gate = CustomizedGates::vanilla_plonk_gate();
         let circuit = MockCircuit::<Fr>::new(1 << 6, &vanilla_gate);
-        let mut buf = File::create("mock_circuit.test").unwrap();
+        let mut buf = tempfile().unwrap();
         circuit.serialize_uncompressed(&mut buf).unwrap();
+        buf.flush().unwrap();
+        buf.seek(std::io::SeekFrom::Start(0)).unwrap();
+        let circuit_2 = MockCircuit::<Fr>::deserialize_uncompressed_unchecked(&buf).unwrap();
 
-        let buf_2 = File::open("mock_circuit.test").unwrap();
-        let circuit_2 = MockCircuit::<Fr>::deserialize_uncompressed_unchecked(&buf_2).unwrap();
+        assert_eq!(circuit.public_inputs, circuit_2.public_inputs);
+        assert_eq!(circuit.witnesses.len(), circuit_2.witnesses.len());
+        for (a, b) in circuit.witnesses.iter().zip(&circuit_2.witnesses) {
+            let a = a.evals().iter().to_vec();
+            let b = b.evals().iter().to_vec();
+            assert_eq!(a.len(), b.len());
+            a.iter().zip(b.iter()).for_each(|(a, b)| assert_eq!(a, b));
+        }
+        let index_1 = circuit.index;
+        let index_2 = circuit_2.index;
+        for (a, b) in index_1.selectors.iter().zip(&index_2.selectors) {
+            let a = a.evals().iter().to_vec();
+            let b = b.evals().iter().to_vec();
+            assert_eq!(a.len(), b.len());
+            a.iter().zip(b.iter()).for_each(|(a, b)| assert_eq!(a, b));
+        }
 
-        println!("pub inputs: {:?}", circuit_2.public_inputs);
-        circuit_2
-            .witnesses
-            .iter()
-            .for_each(|perm| println!("witness: {:?}", perm.evals().iter().to_vec()));
-        println!("params: {:?}", circuit_2.index.config);
-        circuit_2
-            .index
-            .permutation
-            .iter()
-            .for_each(|perm| println!("perm oracle: {:?}", perm.evals().iter().to_vec()));
-        circuit_2
-            .index
-            .selectors
-            .iter()
-            .for_each(|perm| println!("selector oracle: {:?}", perm.evals().iter().to_vec()));
+        for (a, b) in index_1.permutation.iter().zip(&index_2.permutation) {
+            let a = a.evals().iter().to_vec();
+            let b = b.evals().iter().to_vec();
+            assert_eq!(a.len(), b.len());
+            a.iter().zip(b.iter()).for_each(|(a, b)| assert_eq!(a, b));
+        }
 
         Ok(())
+    }
+
+    #[test]
+    fn index_witness_gen_consistency() {
+        let vanilla_gate = CustomizedGates::vanilla_plonk_gate();
+        for i in 10..22 {
+            let circuit = MockCircuit::<Fr>::new(1 << i, &vanilla_gate);
+            let (public_inputs, witnesses) =
+                MockCircuit::<Fr>::wire_values_for_index(&circuit.index);
+            let circuit2 = MockCircuit::<Fr> {
+                public_inputs,
+                witnesses,
+                index: circuit.index.clone(),
+            };
+            for (a, b) in circuit.witnesses.iter().zip(&circuit2.witnesses) {
+                let a = a.evals().iter().to_vec();
+                let b = b.evals().iter().to_vec();
+                assert_eq!(a.len(), b.len());
+                a.iter().zip(b.iter()).for_each(|(a, b)| assert_eq!(a, b));
+            }
+            assert!(circuit2.is_satisfied());
+        }
     }
 }
