@@ -84,3 +84,4 @@ sudo cgexec -g memory:/$CGROUP_NAME "${ENV_CMD[@]}"
 
 # Clean up by removing the cgroup (optional)
 sudo cgdelete -g memory:/$CGROUP_NAME
+
