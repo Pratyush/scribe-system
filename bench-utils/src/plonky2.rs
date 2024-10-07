@@ -1,13 +1,9 @@
-use jemallocator::Jemalloc;
 use plonky2::field::types::Field;
 use plonky2::iop::witness::{PartialWitness, WitnessWrite};
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::circuit_data::CircuitConfig;
 use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
 use std::time::Instant;
-
-#[global_allocator]
-static GLOBAL: Jemalloc = Jemalloc;
 
 type C = PoseidonGoldilocksConfig;
 const D: usize = 2;
