@@ -124,19 +124,19 @@ pub fn prover(
         };
 
         let (public_inputs, witnesses) = timed!(
-            format!("Scribe: Generating witness for {nv} variables"),
+            format!("Scribe: Generating witness for {nv}"),
             MockCircuit::wire_values_for_index(&pk.index())
         );
 
         let proof = timed!(
-            format!("Scribe: Proving for {nv} variables",),
+            format!("Scribe: Proving for {nv}",),
             Scribe::prove(&pk, &public_inputs, &witnesses).unwrap()
         );
         // Currently verifier doesn't work as we are using fake SRS
         //==========================================================
         // verify a proof
         let result = timed!(
-            format!("Scribe: Verifying for {nv} variables"),
+            format!("Scribe: Verifying for {nv}"),
             Scribe::verify(&pk.vk(), &public_inputs, &proof).unwrap()
         );
         assert!(result);
