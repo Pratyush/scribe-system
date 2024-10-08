@@ -28,7 +28,7 @@ pub fn prover(min_size: usize, max_size: usize) {
 
         // generate a proof
         let _proof = timed!(
-            format!("Gemini: Proving for {nv} constraints",),
+            format!("Gemini: Proving for {nv}",),
             Proof::<Bls12_381>::new_elastic(&ck, &r1cs_stream, &index, max_msm_buffer)
         );
     }

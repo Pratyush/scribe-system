@@ -203,7 +203,7 @@ pub fn prover(min_size: usize, max_size: usize) {
         let pk = keygen_pk(&params_kzg, vk, &empty_circuit).expect("keygen_pk should not fail");
 
         let _proof = timed!(
-            format!("Halo2: Proving for 2^{size} constraints",),
+            format!("Halo2: Proving for {size}",),
             prove(size as u32, &params_kzg, &pk)
         );
     }
