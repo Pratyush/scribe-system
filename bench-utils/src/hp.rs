@@ -84,7 +84,7 @@ pub fn prover(
 
         // generate a proof
         let proof = timed!(
-            format!("HyperPlonk: Proving for {nv} variables",),
+            format!("HyperPlonk: Proving for {nv}",),
             HyperPlonk::prove(&pk, &circuit.public_inputs, &circuit.witnesses)?
         );
         // Currently verifier doesn't work as we are using fake SRS
@@ -92,7 +92,7 @@ pub fn prover(
         //==========================================================
         // verify a proof
         timed!(
-            format!("HyperPlonk: Verifying for {nv} variables"),
+            format!("HyperPlonk: Verifying for {nv}"),
             HyperPlonk::verify(&vk, &circuit.public_inputs, &proof)?
         );
     }

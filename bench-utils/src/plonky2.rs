@@ -1,13 +1,9 @@
-use jemallocator::Jemalloc;
 use plonky2::field::types::Field;
 use plonky2::iop::witness::{PartialWitness, WitnessWrite};
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::circuit_data::CircuitConfig;
 use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
 use std::time::Instant;
-
-#[global_allocator]
-static GLOBAL: Jemalloc = Jemalloc;
 
 type C = PoseidonGoldilocksConfig;
 const D: usize = 2;
@@ -47,12 +43,12 @@ fn build_circuit(size: usize) -> (CircuitBuilder<F, D>, PartialWitness<F>) {
 pub fn prover(min_size: usize, max_size: usize) {
     for size in min_size..=max_size {
         let (builder, pw) = timed!(
-            format!("Plonky2: Generating circuit for 2^{size} constraints",),
+            format!("Plonky2: Generating circuit for {size}",),
             build_circuit(1 << size)
         );
 
         let num_gates = builder.num_gates();
-        let (data, proof) = timed!(format!("Plonky2: Proving for {num_gates} constraints"), {
+        let (data, proof) = timed!(format!("Plonky2: Proving for {num_gates}"), {
             let data = builder.build::<C>();
             let proof = data.prove(pw).unwrap();
             (data, proof)
