@@ -1,9 +1,7 @@
 macro_rules! process_file {
     ($self:ident, $extra:expr) => {{
         match $self {
-            FileVec::File {
-                ref mut file, path, ..
-            } => {
+            FileVec::File(file) => {
                 let mut reader = &mut *file;
 
                 let mut read_buffer = Vec::with_capacity(BUFFER_SIZE);
@@ -12,7 +10,16 @@ macro_rules! process_file {
                 let mut write_buffer = Vec::with_capacity(BUFFER_SIZE);
                 let mut write_byte_buffer = vec![0u8; T::SIZE * BUFFER_SIZE];
 
-                let mut writer = NamedTempFile::new().expect("failed to create temp file");
+                let mut writer = InnerFile::new_temp("");
+                #[cfg(target_os = "linux")]
+                {
+                    use libc::{off_t, posix_fadvise, POSIX_FADV_DONTNEED};
+                    use std::os::fd::AsRawFd;
+                    let metadata = writer.as_file().metadata().unwrap();
+                    let length = metadata.len();
+                    let fd = writer.as_raw_fd();
+                    posix_fadvise(fd, 0, length as off_t, POSIX_FADV_DONTNEED);
+                }
 
                 let mut num_iters = 0;
                 loop {
@@ -46,17 +53,16 @@ macro_rules! process_file {
                         break;
                     }
                 }
-                std::fs::remove_file(&path).expect(&format!("failed to remove file {path:?}"));
+                std::fs::remove_file(&file.path)
+                    .expect(&format!("failed to remove file {:?}", file.path));
                 if num_iters == 1 {
                     assert!(read_buffer.len() <= BUFFER_SIZE);
                     *$self = FileVec::Buffer {
                         buffer: read_buffer,
                     };
                 } else {
-                    let (mut new_file, new_path) = writer.keep().expect("failed to keep temp file");
-                    new_file.rewind().expect("could not rewind file");
-                    *path = new_path;
-                    *file = new_file;
+                    writer.rewind().expect("could not rewind file");
+                    *file = writer;
                 }
             },
             FileVec::Buffer { buffer } => {

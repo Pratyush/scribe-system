@@ -1,18 +1,16 @@
 use std::{
     ffi::OsStr,
     fmt::{Debug, Display},
-    fs::{File, OpenOptions},
     hash::{Hash, Hasher},
     io::{BufWriter, Seek, Write},
     mem,
-    path::{Path, PathBuf},
 };
 
 use crate::streams::serialize::{DeserializeRaw, SerializeRaw};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Valid};
+use backend::InnerFile;
 use derivative::Derivative;
 use rayon::prelude::*;
-use tempfile::NamedTempFile;
 
 pub use self::iter::Iter;
 pub use self::{
@@ -25,6 +23,7 @@ use super::{
 };
 
 mod array_chunks;
+pub mod backend;
 mod into_iter;
 mod iter;
 mod iter_chunk_mapped;
@@ -39,45 +38,26 @@ mod test;
 #[derivative(Debug(bound = "T: core::fmt::Debug"))]
 #[must_use]
 pub enum FileVec<T: SerializeRaw + DeserializeRaw> {
-    File { path: PathBuf, file: File },
+    File(InnerFile),
     Buffer { buffer: Vec<T> },
 }
 
 impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
     #[inline(always)]
-    fn new_file(file: File, path: PathBuf) -> Self {
-        Self::File { path, file }
-    }
-
-    #[inline(always)]
-    pub fn with_name(path: impl AsRef<Path>) -> Self {
-        let path = path.as_ref().to_path_buf();
-        let file = OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .open(&path)
-            .expect("failed to open file");
-        Self::new_file(file, path)
+    fn new_file(file: InnerFile) -> Self {
+        Self::File(file)
     }
 
     #[inline(always)]
     pub fn new() -> Self {
-        let (file, path) = NamedTempFile::new()
-            .expect("failed to create temp file")
-            .keep()
-            .expect("failed to keep temp file");
-        Self::new_file(file, path)
+        let file = InnerFile::new_temp("");
+        Self::File(file)
     }
 
     #[inline(always)]
     pub fn with_prefix(prefix: impl AsRef<OsStr>) -> Self {
-        let (file, path) = NamedTempFile::with_prefix(prefix)
-            .expect("failed to create temp file")
-            .keep()
-            .expect("failed to keep temp file");
-        Self::new_file(file, path)
+        let file = InnerFile::new_temp(prefix);
+        Self::File(file)
     }
 
     #[inline(always)]
@@ -101,12 +81,9 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
         T: Send + Sync + Clone,
     {
         match self {
-            Self::File { path, .. } => {
-                let file_2 = File::open(path).unwrap();
-                let mut fv = FileVec::File {
-                    file: file_2,
-                    path: path.clone(),
-                };
+            Self::File(file) => {
+                let file_2 = file.reopen().expect("failed to reopen file");
+                let mut fv = FileVec::File(file_2);
                 fv.convert_to_buffer_in_place();
                 fv
             },
@@ -122,11 +99,8 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
         T: Clone,
     {
         match self {
-            Self::File { path, .. } => {
-                let file = OpenOptions::new()
-                    .read(true)
-                    .open(path)
-                    .expect(&format!("failed to open file, {}", path.to_str().unwrap()));
+            Self::File(file) => {
+                let file = file.reopen_read().expect("failed to reopen file");
                 Iter::new_file(file)
             },
             Self::Buffer { buffer } => Iter::new_buffer(buffer.clone()),
@@ -157,11 +131,11 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
         U: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy,
     {
         match self {
-            Self::File { path, .. } => {
-                let file = OpenOptions::new()
-                    .read(true)
-                    .open(path)
-                    .expect(&format!("failed to open file, {}", path.to_str().unwrap()));
+            Self::File(file) => {
+                let file = file.reopen_read().expect(&format!(
+                    "failed to open file, {}",
+                    file.path.to_str().unwrap()
+                ));
                 IterChunkMapped::new_file(file, f)
             },
             Self::Buffer { buffer } => IterChunkMapped::new_buffer(buffer.clone(), f),
@@ -173,11 +147,11 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
         T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy,
     {
         match self {
-            Self::File { path, .. } => {
-                let file = OpenOptions::new()
-                    .read(true)
-                    .open(path)
-                    .expect(&format!("failed to open file, {}", path.to_str().unwrap()));
+            Self::File(file) => {
+                let file = file.reopen_read().expect(&format!(
+                    "failed to open file, {}",
+                    file.path.to_str().unwrap()
+                ));
                 ArrayChunks::new_file(file)
             },
             Self::Buffer { buffer } => ArrayChunks::new_buffer(buffer.clone()),
@@ -190,8 +164,9 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
         T: Clone,
     {
         match &mut self {
-            Self::File { path, .. } => {
-                let iter = IntoIter::new_file(File::open(&path).unwrap(), path.clone());
+            Self::File(file) => {
+                let file = file.reopen_read().expect("failed to reopen file");
+                let iter = IntoIter::new_file(file);
                 mem::forget(self);
                 iter
             },
@@ -231,7 +206,7 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
         let prefix = [prefix.as_ref().to_str().unwrap(), "from_batched_iter"].join("_");
         let mut iter = iter.into_batched_iter();
         let mut buffer = Vec::with_capacity(BUFFER_SIZE);
-        let (mut file, mut path) = (None, None);
+        let mut file = None;
         let size = T::SIZE;
 
         let mut byte_buffer = None;
@@ -247,11 +222,7 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
             if buffer.len() > BUFFER_SIZE {
                 batch_is_larger_than_buffer = true;
                 byte_buffer = Some(vec![0u8; buffer.len() * size]);
-                let (f, p) = NamedTempFile::with_prefix(&prefix)
-                    .expect("failed to create temp file")
-                    .keep()
-                    .expect("failed to keep temp file");
-                (file, path) = (Some(f), Some(p));
+                file = Some(InnerFile::new_temp(&prefix));
             }
         }
 
@@ -264,12 +235,7 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
                 byte_buffer = Some(vec![0u8; buffer.len() * size]);
             }
             if file.is_none() {
-                assert!(path.is_none());
-                let (f, p) = NamedTempFile::with_prefix(&prefix)
-                    .expect("failed to create temp file")
-                    .keep()
-                    .expect("failed to keep temp file");
-                (file, path) = (Some(f), Some(p));
+                file = Some(InnerFile::new_temp(&prefix));
             }
             let byte_buffer = byte_buffer.as_mut().unwrap();
             let file = file.as_mut().unwrap();
@@ -299,7 +265,6 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
         if more_than_one_batch || batch_is_larger_than_buffer {
             let byte_buffer = byte_buffer.as_mut().unwrap();
             let mut file = file.unwrap();
-            let path = path.unwrap();
             byte_buffer
                 .par_chunks_mut(size)
                 .zip(&buffer)
@@ -311,7 +276,7 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
                 .expect("failed to write to file");
             file.flush().expect("failed to flush file");
             file.rewind().expect("failed to seek file");
-            Self::new_file(file, path)
+            Self::File(file)
         } else {
             FileVec::Buffer { buffer }
         }
@@ -355,11 +320,8 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
     {
         assert_eq!(T::SIZE % U::SIZE, 0);
         match &mut self {
-            Self::File { file, path } => {
-                let f = FileVec::File {
-                    file: file.try_clone().unwrap(),
-                    path: path.clone(),
-                };
+            Self::File(file) => {
+                let f = FileVec::File(file.try_clone().unwrap());
                 mem::forget(self);
                 f
             },
@@ -388,13 +350,11 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
                         .for_each(|(chunk, item)| {
                             item.serialize_raw(chunk).unwrap();
                         });
-                    let (mut file, path) = NamedTempFile::new()
-                        .expect("failed to create temp file")
-                        .keep()
-                        .expect("failed to keep temp file");
+
+                    let mut file = InnerFile::new_temp("");
                     file.write_all(&byte_buffer)
                         .expect("failed to write to file");
-                    FileVec::File { file, path }
+                    FileVec::File(file)
                 }
             },
         }
@@ -418,14 +378,8 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
         B: SerializeRaw + DeserializeRaw + Send + Sync,
     {
         let mut buffer = Vec::<(A, B)>::with_capacity(BUFFER_SIZE);
-        let (mut file_1, path_1) = NamedTempFile::with_prefix("unzip_1")
-            .expect("failed to create temp file")
-            .keep()
-            .expect("failed to keep temp file");
-        let (mut file_2, path_2) = NamedTempFile::with_prefix("unzip_2")
-            .expect("failed to create temp file")
-            .keep()
-            .expect("failed to keep temp file");
+        let mut file_1 = InnerFile::new_temp("unzip_1");
+        let mut file_2 = InnerFile::new_temp("unzip_2");
         let size = core::mem::size_of::<A>();
         let mut writer_1 = BufWriter::with_capacity(size * BUFFER_SIZE, &mut file_1);
         let mut writer_2 = BufWriter::with_capacity(size * BUFFER_SIZE, &mut file_2);
@@ -469,12 +423,14 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
             drop(writer_2);
             file_1.rewind().expect("failed to seek file");
             file_2.rewind().expect("failed to seek file");
-            let v1: FileVec<A> = FileVec::new_file(file_1, path_1);
-            let v2: FileVec<B> = FileVec::new_file(file_2, path_2);
+            let v1: FileVec<A> = FileVec::new_file(file_1);
+            let v2: FileVec<B> = FileVec::new_file(file_2);
             (v1, v2)
         } else {
-            let _ = std::fs::remove_file(&path_1);
-            let _ = std::fs::remove_file(&path_2);
+            drop(writer_1);
+            drop(writer_2);
+            let _ = file_1.remove();
+            let _ = file_2.remove();
             let (b1, b2) = buffer.into_par_iter().unzip();
             (
                 FileVec::Buffer { buffer: b1 },
@@ -492,14 +448,8 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
     {
         let mut buffer_a = Vec::<A>::with_capacity(BUFFER_SIZE);
         let mut buffer_b = Vec::<B>::with_capacity(BUFFER_SIZE);
-        let (mut file_1, path_1) = NamedTempFile::with_prefix("unzip_1")
-            .expect("failed to create temp file")
-            .keep()
-            .expect("failed to keep temp file");
-        let (mut file_2, path_2) = NamedTempFile::with_prefix("unzip_2")
-            .expect("failed to create temp file")
-            .keep()
-            .expect("failed to keep temp file");
+        let mut file_1 = InnerFile::new_temp("unzip_1");
+        let mut file_2 = InnerFile::new_temp("unzip_2");
         let size = core::mem::size_of::<A>();
         let mut writer_1 = BufWriter::with_capacity(size * BUFFER_SIZE, &mut file_1);
         let mut writer_2 = BufWriter::with_capacity(size * BUFFER_SIZE, &mut file_2);
@@ -540,12 +490,14 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
             drop(writer_2);
             file_1.rewind().expect("failed to seek file");
             file_2.rewind().expect("failed to seek file");
-            let v1: FileVec<A> = FileVec::new_file(file_1, path_1);
-            let v2: FileVec<B> = FileVec::new_file(file_2, path_2);
+            let v1: FileVec<A> = FileVec::new_file(file_1);
+            let v2: FileVec<B> = FileVec::new_file(file_2);
             (v1, v2)
         } else {
-            let _ = std::fs::remove_file(&path_1);
-            let _ = std::fs::remove_file(&path_2);
+            drop(writer_1);
+            drop(writer_2);
+            let _ = file_1.remove();
+            let _ = file_2.remove();
             (
                 FileVec::Buffer { buffer: buffer_a },
                 FileVec::Buffer { buffer: buffer_b },
@@ -588,9 +540,9 @@ impl<T: SerializeRaw + DeserializeRaw> Drop for FileVec<T> {
     #[inline(always)]
     fn drop(&mut self) {
         match self {
-            Self::File { path, .. } => match std::fs::remove_file(&path) {
+            Self::File(file) => match std::fs::remove_file(&file.path) {
                 Ok(_) => (),
-                Err(e) => eprintln!("Failed to remove file at path {path:?}: {e:?}"),
+                Err(e) => eprintln!("Failed to remove file at path {:?}: {e:?}", file.path),
             },
             Self::Buffer { .. } => (),
         }
@@ -601,7 +553,7 @@ impl<T: SerializeRaw + DeserializeRaw + Hash> Hash for FileVec<T> {
     #[inline(always)]
     fn hash<H: Hasher>(&self, state: &mut H) {
         match self {
-            Self::File { path, .. } => path.hash(state),
+            Self::File(file) => file.path.hash(state),
             Self::Buffer { buffer } => buffer.hash(state),
         }
     }
@@ -611,7 +563,7 @@ impl<T: SerializeRaw + DeserializeRaw + PartialEq> PartialEq for FileVec<T> {
     #[inline(always)]
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (Self::File { path: p1, .. }, Self::File { path: p2, .. }) => p1 == p2,
+            (Self::File(f1), Self::File(f2)) => f1.path == f2.path,
             (Self::Buffer { buffer: b1 }, Self::Buffer { buffer: b2 }) => b1 == b2,
             _ => false,
         }
@@ -637,11 +589,11 @@ impl<
     ) -> Result<(), ark_serialize::SerializationError> {
         match self {
             Self::Buffer { buffer } => buffer.serialize_uncompressed(&mut writer),
-            Self::File { path, .. } => {
-                let mut file = OpenOptions::new()
-                    .read(true)
-                    .open(path)
-                    .expect(&format!("failed to open file, {}", path.to_str().unwrap()));
+            Self::File(file) => {
+                let mut file = file.reopen_read().expect(&format!(
+                    "failed to open file, {}",
+                    file.path.to_str().unwrap()
+                ));
                 let size = T::SIZE;
                 let mut final_result = vec![];
                 let mut work_buffer = vec![0u8; size * BUFFER_SIZE];
@@ -710,10 +662,7 @@ impl<T: SerializeRaw + DeserializeRaw + Valid + Sync + Send + CanonicalDeseriali
         let size = usize::deserialize_uncompressed_unchecked(&mut reader)?;
         let mut buffer = Vec::with_capacity(BUFFER_SIZE);
         if size > BUFFER_SIZE {
-            let (mut file, path) = NamedTempFile::with_prefix(prefix)
-                .expect("failed to create temp file")
-                .keep()
-                .expect("failed to keep temp file");
+            let mut file = InnerFile::new_temp(prefix);
             let mut remaining = size;
 
             let mut work_buffer = vec![0u8; T::SIZE * BUFFER_SIZE];
@@ -728,7 +677,7 @@ impl<T: SerializeRaw + DeserializeRaw + Valid + Sync + Send + CanonicalDeseriali
                 work_buffer.clear();
             }
 
-            Ok(FileVec::new_file(file, path))
+            Ok(FileVec::new_file(file))
         } else {
             for _ in 0..size {
                 let item = T::deserialize_uncompressed_unchecked(&mut reader).unwrap();
@@ -758,9 +707,9 @@ impl<T: SerializeRaw + DeserializeRaw + Valid> Valid for FileVec<T> {
 impl<T: SerializeRaw + DeserializeRaw + Display> Display for FileVec<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::File { path, .. } => {
-                writeln!(f, "FileVec at {}: [", path.display())?;
-                let file = std::fs::File::open(path).map_err(|_| std::fmt::Error)?;
+            Self::File(file) => {
+                writeln!(f, "FileVec at {}: [", file.path.display())?;
+                let file = file.reopen().unwrap();
                 let mut reader = std::io::BufReader::new(file);
                 while let Ok(item) = T::deserialize_raw(&mut reader) {
                     writeln!(f, "  {},", item)?;
@@ -786,6 +735,7 @@ mod tests {
     use ark_serialize::CanonicalSerialize;
     use ark_std::test_rng;
     use ark_std::UniformRand;
+    use std::fs::File;
 
     use super::*;
 

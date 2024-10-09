@@ -1,12 +1,14 @@
 use crate::streams::serialize::{DeserializeRaw, SerializeRaw};
 use rayon::{iter::MinLen, prelude::*, vec::IntoIter};
-use std::{fmt::Debug, fs::File, marker::PhantomData};
+use std::{fmt::Debug, marker::PhantomData};
 
 use crate::streams::{iterator::BatchedIterator, BUFFER_SIZE};
 
+use super::backend::InnerFile;
+
 pub enum Iter<'a, T: SerializeRaw + DeserializeRaw + 'static> {
     File {
-        file: File,
+        file: InnerFile,
         lifetime: PhantomData<&'a T>,
         work_buffer: Vec<u8>,
     },
@@ -16,7 +18,7 @@ pub enum Iter<'a, T: SerializeRaw + DeserializeRaw + 'static> {
 }
 
 impl<'a, T: SerializeRaw + DeserializeRaw> Iter<'a, T> {
-    pub fn new_file(file: File) -> Self {
+    pub fn new_file(file: InnerFile) -> Self {
         let size = T::SIZE;
         Self::File {
             file,

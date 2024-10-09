@@ -1,13 +1,13 @@
 use crate::streams::serialize::{DeserializeRaw, SerializeRaw};
 use rayon::{iter::MinLen, prelude::*, vec::IntoIter as VecIntoIter};
-use std::{fs::File, path::PathBuf};
 
 use crate::streams::{iterator::BatchedIterator, BUFFER_SIZE};
 
+use super::backend::InnerFile;
+
 pub enum IntoIter<T: SerializeRaw + DeserializeRaw + 'static> {
     File {
-        file: File,
-        path: PathBuf,
+        file: InnerFile,
         work_buffer: Vec<u8>,
     },
     Buffer {
@@ -17,11 +17,10 @@ pub enum IntoIter<T: SerializeRaw + DeserializeRaw + 'static> {
 
 impl<T: SerializeRaw + DeserializeRaw> IntoIter<T> {
     #[inline]
-    pub fn new_file(file: File, path: PathBuf) -> Self {
+    pub fn new_file(file: InnerFile) -> Self {
         let size = T::SIZE;
         Self::File {
             file,
-            path,
             work_buffer: Vec::with_capacity(size * BUFFER_SIZE),
         }
     }
@@ -67,9 +66,9 @@ impl<T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy> BatchedIte
 impl<T: SerializeRaw + DeserializeRaw> Drop for IntoIter<T> {
     fn drop(&mut self) {
         match self {
-            Self::File { path, .. } => match std::fs::remove_file(&path) {
+            Self::File { file, .. } => match std::fs::remove_file(&file.path) {
                 Ok(_) => (),
-                Err(e) => eprintln!("Failed to remove file at path {path:?}: {e:?}"),
+                Err(e) => eprintln!("Failed to remove file at path {:?}: {e:?}", &file.path),
             },
             Self::Buffer { .. } => (),
         }

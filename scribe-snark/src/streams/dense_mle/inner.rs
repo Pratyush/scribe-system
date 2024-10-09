@@ -1,7 +1,6 @@
 use std::{
     fmt::Display,
     ops::{AddAssign, Mul, MulAssign, SubAssign},
-    path::Path,
 };
 
 use ark_ff::batch_inversion;
@@ -26,12 +25,6 @@ impl<F: RawField> Inner<F> {
     #[inline(always)]
     pub fn new(num_vars: usize) -> Self {
         let evals = FileVec::with_prefix("evals");
-        Self { evals, num_vars }
-    }
-
-    #[inline(always)]
-    pub fn with_path(num_vars: usize, path: impl AsRef<Path>) -> Self {
-        let evals = FileVec::with_name(path);
         Self { evals, num_vars }
     }
 

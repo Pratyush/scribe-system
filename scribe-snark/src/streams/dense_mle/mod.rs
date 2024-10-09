@@ -2,7 +2,6 @@ use std::{
     fmt::{Debug, Display},
     io::Write,
     ops::{AddAssign, Mul, MulAssign, SubAssign},
-    path::Path,
     sync::Arc,
 };
 
@@ -53,11 +52,6 @@ impl<F: RawField> From<Inner<F>> for MLE<F> {
 }
 
 impl<F: RawField> MLE<F> {
-    #[inline(always)]
-    pub fn with_path(num_vars: usize, path: impl AsRef<Path>) -> Self {
-        Inner::with_path(num_vars, path).into()
-    }
-
     #[inline(always)]
     pub fn new(num_vars: usize) -> Self {
         Inner::new(num_vars).into()

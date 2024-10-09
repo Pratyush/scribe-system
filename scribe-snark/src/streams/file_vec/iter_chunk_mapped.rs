@@ -1,8 +1,10 @@
 use crate::streams::serialize::{DeserializeRaw, SerializeRaw};
 use rayon::{prelude::*, vec::IntoIter};
-use std::{fs::File, marker::PhantomData};
+use std::marker::PhantomData;
 
 use crate::streams::{iterator::BatchedIterator, BUFFER_SIZE};
+
+use super::backend::InnerFile;
 
 pub enum IterChunkMapped<'a, T, U, F, const N: usize>
 where
@@ -11,7 +13,7 @@ where
     F: for<'b> Fn(&[T]) -> U + Sync + Send,
 {
     File {
-        file: File,
+        file: InnerFile,
         lifetime: PhantomData<&'a T>,
         work_buffer: Vec<u8>,
         f: F,
@@ -28,7 +30,7 @@ where
     U: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy,
     F: for<'b> Fn(&[T]) -> U + Sync + Send,
 {
-    pub fn new_file(file: File, f: F) -> Self {
+    pub fn new_file(file: InnerFile, f: F) -> Self {
         let size = T::SIZE;
         assert!(N > 0, "N must be greater than 0");
         assert!(BUFFER_SIZE % N == 0, "BUFFER_SIZE must be divisible by N");
