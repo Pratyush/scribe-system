@@ -48,7 +48,7 @@ pub fn prover(min_size: usize, max_size: usize) {
         );
 
         let num_gates = builder.num_gates();
-        let (data, proof) = timed!(format!("Plonky2: Proving for {num_gates}"), {
+        let (data, proof) = timed!(format!("Plonky2: Proving for {size}"), {
             let data = builder.build::<C>();
             let proof = data.prove(pw).unwrap();
             (data, proof)
