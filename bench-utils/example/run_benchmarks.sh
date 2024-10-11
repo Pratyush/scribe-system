@@ -202,24 +202,22 @@ run_with_memory_limits() {
     # Convert memory limit to bytes
     MEMORY_LIMIT_BYTES=$(numfmt --from=iec "$MEMORY_LIMIT")
 
-    # Build systemd-run command
-    if [[ "$PROVER" == "gemini" ]] || [[ "$PROVER" == "scribe" ]]; then
-        # Use hard memory limit (MemoryMax)
-        SYSTEMD_CMD=(
-            sudo systemd-run --scope
-            --unit="${PROVER}_mem_$(date +%s%N)"
-            -p MemoryMax=$MEMORY_LIMIT_BYTES
-            env RAYON_NUM_THREADS=$THREAD_COUNT $BINARY_PATH $ARGS
-        )
-    else
+    # Determine memory property based on prover
+    if [[ "$PROVER" == "gemini" || "$PROVER" == "scribe" ]]; then
         # Use soft memory limit (MemoryHigh)
-        SYSTEMD_CMD=(
-            sudo systemd-run --scope
-            --unit="${PROVER}_mem_$(date +%s%N)"
-            -p MemoryHigh=$MEMORY_LIMIT_BYTES
-            env RAYON_NUM_THREADS=$THREAD_COUNT $BINARY_PATH $ARGS
-        )
+        MEMORY_PROPERTY="MemoryHigh=$MEMORY_LIMIT_BYTES"
+    else
+        # Use hard memory limit (MemoryMax)
+        MEMORY_PROPERTY="MemoryMax=$MEMORY_LIMIT_BYTES"
     fi
+
+    # Build systemd-run command
+    SYSTEMD_CMD=(
+        sudo systemd-run --scope
+        --unit="${PROVER}_mem_$(date +%s%N)"
+        -p "$MEMORY_PROPERTY"
+        env RAYON_NUM_THREADS=$THREAD_COUNT $BINARY_PATH $ARGS
+    )
 
     # Run the command and capture output
     echo "Executing command: ${SYSTEMD_CMD[*]}"
@@ -245,13 +243,19 @@ run_with_bandwidth_limits() {
     local BINARY_PATH=$4
     local ARGS=$5
 
+    # Only allow 'scribe' as the prover for bandwidth tests
+    if [[ "$PROVER" != "scribe" ]]; then
+        echo "Skipping bandwidth test for prover $PROVER as only 'scribe' is allowed."
+        return
+    fi
+
     # Convert bandwidth limit to bytes
     BANDWIDTH_LIMIT_BYTES=$(numfmt --from=iec "$BANDWIDTH_LIMIT")
 
     # Get the device for I/O limitations (adjust as necessary)
     DEVICE="/dev/nvme0n1"
 
-    # Build systemd-run command
+    # Build systemd-run command with bandwidth limits
     SYSTEMD_CMD=(
         sudo systemd-run --scope
         --unit="${PROVER}_bw_$(date +%s%N)"
@@ -373,24 +377,8 @@ if [[ "$EXPERIMENT_TYPE" == "b" || "$EXPERIMENT_TYPE" == "both" ]]; then
                         BINARY_PATH="../../target/release/examples/scribe-prover"
                         ARGS="$MIN_VARIABLES $MAX_VARIABLES $SETUP_FOLDER"
                         ;;
-                    hp)
-                        BINARY_PATH="../../target/release/examples/hp-prover"
-                        ARGS="$MIN_VARIABLES $MAX_VARIABLES $SETUP_FOLDER"
-                        ;;
-                    gemini)
-                        BINARY_PATH="../../target/release/examples/gemini-prover"
-                        ARGS="$MIN_VARIABLES $MAX_VARIABLES"
-                        ;;
-                    plonky2)
-                        BINARY_PATH="../../target/release/examples/plonky2-prover"
-                        ARGS="$MIN_VARIABLES $MAX_VARIABLES"
-                        ;;
-                    halo2)
-                        BINARY_PATH="../../target/release/examples/halo2-prover"
-                        ARGS="$MIN_VARIABLES $MAX_VARIABLES"
-                        ;;
                     *)
-                        echo "Unknown prover: $PROVER"
+                        echo "Skipping bandwidth test for prover $PROVER as only 'scribe' is allowed."
                         continue
                         ;;
                 esac
