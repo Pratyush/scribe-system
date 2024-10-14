@@ -14,29 +14,31 @@ SKIP_SETUP=false
 EXPERIMENT_TYPE="both"  # 'm' for memory, 'b' for bandwidth, 'both' for both
 OUTPUT_FILE=""
 DATA_FILE_BASE=""
+VISUALIZE_CACHE=false  # New variable for cache visualization
 
 # Function to display help
 function show_help {
     echo "Usage: $0 [options]"
     echo
     echo "Options:"
-    echo "  -h, --help          Show this help message"
-    echo "  -m MIN_VARIABLES    Set minimum number of variables (default: $MIN_VARIABLES)"
-    echo "  -M MAX_VARIABLES    Set maximum number of variables (default: $MAX_VARIABLES)"
-    echo "  -s SETUP_FOLDER     Set setup folder (default: $SETUP_FOLDER)"
-    echo "  -p PROVERS          Set provers to run (comma-separated, default: ${PROVERS[*]})"
-    echo "  -l MEMORY_LIMITS    Set memory limits (comma-separated, default: ${MEMORY_LIMITS[*]})"
-    echo "  -b BANDWIDTH_LIMITS Set bandwidth limits (comma-separated, default: ${BANDWIDTH_LIMITS[*]})"
-    echo "  -t THREADS          Set thread counts (comma-separated, default: ${THREADS[*]})"
-    echo "  -o OUTPUT_FILE      Set output file (default: [mmddhhmmss].log)"
-    echo "  --data-file NAME    Set base name for data file output (default: [mmddhhmmss].data)"
-    echo "  --skip-setup        Skip the setup section"
-    echo "  -e EXPERIMENT       Set experiment type: 'm' for memory, 'b' for bandwidth (default: both)"
+    echo "  -h, --help             Show this help message"
+    echo "  -m MIN_VARIABLES       Set minimum number of variables (default: $MIN_VARIABLES)"
+    echo "  -M MAX_VARIABLES       Set maximum number of variables (default: $MAX_VARIABLES)"
+    echo "  -s SETUP_FOLDER        Set setup folder (default: $SETUP_FOLDER)"
+    echo "  -p PROVERS             Set provers to run (comma-separated, default: ${PROVERS[*]})"
+    echo "  -l MEMORY_LIMITS       Set memory limits (comma-separated, default: ${MEMORY_LIMITS[*]})"
+    echo "  -b BANDWIDTH_LIMITS    Set bandwidth limits (comma-separated, default: ${BANDWIDTH_LIMITS[*]})"
+    echo "  -t THREADS             Set thread counts (comma-separated, default: ${THREADS[*]})"
+    echo "  -o OUTPUT_FILE         Set output file (default: [mmddhhmmss].log)"
+    echo "  --data-file NAME       Set base name for data file output (default: [mmddhhmmss].data)"
+    echo "  --visualize-cache      Enable visualization of filesystem cache for 'scribe' prover"
+    echo "  --skip-setup           Skip the setup section"
+    echo "  -e EXPERIMENT          Set experiment type: 'm' for memory, 'b' for bandwidth (default: both)"
     echo
     echo "Example:"
     echo "  $0 -m 5 -M 20 -s ./setup -p \"scribe,hp,gemini,plonky2,halo2\" \\"
     echo "     -l \"500M,1G,2G,4G\" -b \"200M,500M,1G,2G\" -t \"1,2,4,8\" -o mylog \\"
-    echo "     --data-file mydata"
+    echo "     --data-file mydata --visualize-cache"
 }
 
 # Parse options
@@ -83,6 +85,10 @@ while [[ $# -gt 0 ]]; do
             DATA_FILE_BASE=$2
             shift 2
             ;;
+        --visualize-cache)
+            VISUALIZE_CACHE=true
+            shift
+            ;;
         --skip-setup)
             SKIP_SETUP=true
             shift
@@ -121,6 +127,9 @@ fi
 # Write header to data file
 echo "starting_timestamp,prover,threads,memory_limit,bandwidth_limit,num_variables,run_time" > "$DATA_FILE"
 
+# Initialize cache data file variable
+CACHE_DATA_FILE=""
+
 # Print the configuration
 echo "Configuration:"
 echo "MIN_VARIABLES     : $MIN_VARIABLES"
@@ -134,6 +143,7 @@ echo "OUTPUT_FILE       : $OUTPUT_FILE"
 echo "DATA_FILE         : $DATA_FILE"
 echo "SKIP_SETUP        : $SKIP_SETUP"
 echo "EXPERIMENT_TYPE   : $EXPERIMENT_TYPE"
+echo "VISUALIZE_CACHE   : $VISUALIZE_CACHE"
 
 # Redirect all output to the output file
 exec > >(tee -a "$OUTPUT_FILE") 2>&1
@@ -202,28 +212,72 @@ run_with_memory_limits() {
     # Convert memory limit to bytes
     MEMORY_LIMIT_BYTES=$(numfmt --from=iec "$MEMORY_LIMIT")
 
-    # Build systemd-run command
-    if [[ "$PROVER" == "gemini" ]] || [[ "$PROVER" == "scribe" ]]; then
-        # Use hard memory limit (MemoryMax)
-        SYSTEMD_CMD=(
-            sudo systemd-run --scope
-            --unit="${PROVER}_mem_$(date +%s%N)"
-            -p MemoryMax=$MEMORY_LIMIT_BYTES
-            env RAYON_NUM_THREADS=$THREAD_COUNT $BINARY_PATH $ARGS
-        )
-    else
+    # Determine memory property based on prover
+    if [[ "$PROVER" == "gemini" || "$PROVER" == "scribe" ]]; then
         # Use soft memory limit (MemoryHigh)
-        SYSTEMD_CMD=(
-            sudo systemd-run --scope
-            --unit="${PROVER}_mem_$(date +%s%N)"
-            -p MemoryHigh=$MEMORY_LIMIT_BYTES
-            env RAYON_NUM_THREADS=$THREAD_COUNT $BINARY_PATH $ARGS
-        )
+        MEMORY_PROPERTY="MemoryHigh=${MEMORY_LIMIT_BYTES}"
+    else
+        # Use hard memory limit (MemoryMax)
+        MEMORY_PROPERTY="MemoryMax=${MEMORY_LIMIT_BYTES}"
+    fi
+
+    # Generate unique unit name
+    UNIT_NAME="${PROVER}_mem_$(date +%s%N)"
+
+    # Build systemd-run command
+    SYSTEMD_CMD=(
+        sudo systemd-run --scope
+        --unit="${UNIT_NAME}"
+        -p "$MEMORY_PROPERTY"
+        env RAYON_NUM_THREADS=$THREAD_COUNT $BINARY_PATH $ARGS
+    )
+
+    # Start the command
+    echo "Executing command: ${SYSTEMD_CMD[*]}"
+    START_TIMESTAMP=$(date +"%Y-%m-%d %H:%M:%S")
+
+    # If visualization is enabled and prover is scribe, set up cache monitoring
+    if [ "$VISUALIZE_CACHE" = true ] && [ "$PROVER" == "scribe" ]; then
+        # Define a single cache data file
+        CACHE_DATA_FILE="${START_TIME}.cachedata"
+
+        # Write header to cache data file only if it doesn't exist
+        if [ ! -f "$CACHE_DATA_FILE" ]; then
+            echo "prover,threads,memory_limit,num_variables,timestamp,memory.stat.anon,memory.stat.file" > "$CACHE_DATA_FILE"
+        fi
+
+        # Determine cgroup path
+        CGROUP_PATH="/sys/fs/cgroup/system.slice/${UNIT_NAME}.scope/memory.stat"
+
+        # Function to monitor memory.stat
+        monitor_cache() {
+            local PROVER_MON=$1
+            local THREAD_MON=$2
+            local MEMORY_LIMIT_MON=$3
+            local CGROUP_PATH_MON=$4
+            local CACHE_FILE_MON=$5
+            local RUNNING_PID=$6
+
+            while kill -0 "$RUNNING_PID" 2>/dev/null; do
+                if [ -f "$CGROUP_PATH_MON" ]; then
+                    ANON=$(grep "^anon " "$CGROUP_PATH_MON" | awk '{print $2}')
+                    FILE=$(grep "^file " "$CGROUP_PATH_MON" | awk '{print $2}')
+                    TIMESTAMP=$(date +"%Y-%m-%d %H:%M:%S")
+                    # Initially, num_variables is unknown. We'll update it later.
+                    echo "${PROVER_MON},${THREAD_MON},${MEMORY_LIMIT_MON},,${TIMESTAMP},${ANON},${FILE}" >> "$CACHE_FILE_MON"
+                else
+                    echo "Error: Cgroup path $CGROUP_PATH_MON does not exist."
+                fi
+                sleep 1
+            done
+        }
+
+        # Start monitoring in the background, passing the systemd-run PID
+        monitor_cache "$PROVER" "$THREAD_COUNT" "$MEMORY_LIMIT" "$CGROUP_PATH" "$CACHE_DATA_FILE" $$ &
+        MONITOR_PID=$!
     fi
 
     # Run the command and capture output
-    echo "Executing command: ${SYSTEMD_CMD[*]}"
-    START_TIMESTAMP=$(date +"%Y-%m-%d %H:%M:%S")
     OUTPUT=$("${SYSTEMD_CMD[@]}" 2>&1)
     EXIT_STATUS=$?
 
@@ -235,6 +289,28 @@ run_with_memory_limits() {
 
     # Process output to extract data
     process_output "$OUTPUT" "$START_TIMESTAMP" "$PROVER" "$THREAD_COUNT" "$MEMORY_LIMIT" "" "$EXIT_STATUS"
+
+    # If monitoring was started, stop it and update the cache data file with num_variables
+    if [ "$VISUALIZE_CACHE" = true ] && [ "$PROVER" == "scribe" ]; then
+        if [ -n "$MONITOR_PID" ]; then
+            # Stop the monitoring
+            sudo kill "$MONITOR_PID" 2>/dev/null
+            wait "$MONITOR_PID" 2>/dev/null
+
+            # Extract num_variables from the output
+            NUM_VARIABLES=$(echo "$OUTPUT" | grep -oP '(?<=Proving for )\d+(?= took:)')
+
+            if [ -z "$NUM_VARIABLES" ]; then
+                NUM_VARIABLES=""
+            fi
+
+            # Update the cache data file with num_variables
+            # Using awk to insert num_variables into the 4th column
+            awk -v num_vars="$NUM_VARIABLES" 'BEGIN{FS=OFS=","} NR==1 {print $0} NR>1 {$4=num_vars; print $0}' "$CACHE_DATA_FILE" > "${CACHE_DATA_FILE}.tmp" && mv "${CACHE_DATA_FILE}.tmp" "$CACHE_DATA_FILE"
+
+            echo "Cache data saved to $CACHE_DATA_FILE"
+        fi
+    fi
 }
 
 # Function to run a command with bandwidth limits using systemd-run
@@ -245,24 +321,32 @@ run_with_bandwidth_limits() {
     local BINARY_PATH=$4
     local ARGS=$5
 
+    # Only allow 'scribe' as the prover for bandwidth tests
+    if [[ "$PROVER" != "scribe" ]]; then
+        echo "Skipping bandwidth test for prover $PROVER as only 'scribe' is allowed."
+        return
+    fi
+
     # Convert bandwidth limit to bytes
     BANDWIDTH_LIMIT_BYTES=$(numfmt --from=iec "$BANDWIDTH_LIMIT")
 
     # Get the device for I/O limitations (adjust as necessary)
     DEVICE="/dev/nvme0n1"
 
-    # Build systemd-run command
+    # Build systemd-run command with bandwidth limits
     SYSTEMD_CMD=(
         sudo systemd-run --scope
         --unit="${PROVER}_bw_$(date +%s%N)"
-        -p "IOReadBandwidthMax=$DEVICE $BANDWIDTH_LIMIT_BYTES"
-        -p "IOWriteBandwidthMax=$DEVICE $BANDWIDTH_LIMIT_BYTES"
+        -p "IOReadBandwidthMax=${DEVICE}=${BANDWIDTH_LIMIT_BYTES}"
+        -p "IOWriteBandwidthMax=${DEVICE}=${BANDWIDTH_LIMIT_BYTES}"
         env RAYON_NUM_THREADS=$THREAD_COUNT $BINARY_PATH $ARGS
     )
 
-    # Run the command and capture output
+    # Start the command
     echo "Executing command: ${SYSTEMD_CMD[*]}"
     START_TIMESTAMP=$(date +"%Y-%m-%d %H:%M:%S")
+
+    # Run the command and capture output
     OUTPUT=$("${SYSTEMD_CMD[@]}" 2>&1)
     EXIT_STATUS=$?
 
@@ -373,24 +457,8 @@ if [[ "$EXPERIMENT_TYPE" == "b" || "$EXPERIMENT_TYPE" == "both" ]]; then
                         BINARY_PATH="../../target/release/examples/scribe-prover"
                         ARGS="$MIN_VARIABLES $MAX_VARIABLES $SETUP_FOLDER"
                         ;;
-                    hp)
-                        BINARY_PATH="../../target/release/examples/hp-prover"
-                        ARGS="$MIN_VARIABLES $MAX_VARIABLES $SETUP_FOLDER"
-                        ;;
-                    gemini)
-                        BINARY_PATH="../../target/release/examples/gemini-prover"
-                        ARGS="$MIN_VARIABLES $MAX_VARIABLES"
-                        ;;
-                    plonky2)
-                        BINARY_PATH="../../target/release/examples/plonky2-prover"
-                        ARGS="$MIN_VARIABLES $MAX_VARIABLES"
-                        ;;
-                    halo2)
-                        BINARY_PATH="../../target/release/examples/halo2-prover"
-                        ARGS="$MIN_VARIABLES $MAX_VARIABLES"
-                        ;;
                     *)
-                        echo "Unknown prover: $PROVER"
+                        echo "Skipping bandwidth test for prover $PROVER as only 'scribe' is allowed."
                         continue
                         ;;
                 esac
