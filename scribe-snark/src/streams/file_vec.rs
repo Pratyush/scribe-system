@@ -24,6 +24,7 @@ use super::{
 
 mod array_chunks;
 pub mod backend;
+pub use backend::AVec;
 mod into_iter;
 mod iter;
 mod iter_chunk_mapped;

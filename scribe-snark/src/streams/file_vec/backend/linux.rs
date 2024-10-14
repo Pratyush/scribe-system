@@ -1,61 +1,89 @@
 use std::{
     ffi::OsStr,
     fs::{File, OpenOptions},
-    io::{self, IoSlice, IoSliceMut, Read, Write},
+    io::{self, IoSlice, Read, Seek, Write},
+    os::unix::fs::OpenOptionsExt,
     path::PathBuf,
+    sync::{Arc, Mutex},
 };
-use nix::fcntl::{open, OFlag};
-use nix::sys::stat::Mode;
+use tempfile::Builder;
 
-use tempfile::NamedTempFile;
+use crate::streams::BUFFER_SIZE;
+
+pub type AVec = aligned_vec::AVec<u8, aligned_vec::ConstAlign<4096>>;
 
 #[derive(Debug)]
 pub struct InnerFile {
-    pub file: File,
-    pub buffer: Vec<u8>,
+    file: File,
+    buffer: Arc<Mutex<AVec>>,
     pub path: PathBuf,
 }
 
 impl InnerFile {
     #[inline(always)]
-    pub fn new(file: File, path: PathBuf) -> Self {
-        let fd: RawFd = open(
-            &path,
-            OFlag::O_DIRECT | OFlag::O_RDWR,  // O_DIRECT to bypass the cache
-            Mode::S_IRUSR | Mode::S_IWUSR,    // User read/write permissions
-        ).unwrap();
-        let file = unsafe { File::from_raw_fd(fd) };
-        Self { file, path }
+    pub fn create_read_write(path: PathBuf) -> Self {
+        let file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .custom_flags(libc::O_DIRECT)
+            .open(&path)
+            .expect("failed to open file");
+        let buffer: AVec = AVec::with_capacity(4096, BUFFER_SIZE);
+        Self {
+            file,
+            buffer: Arc::new(Mutex::new(buffer)),
+            path,
+        }
+    }
+
+    #[inline(always)]
+    pub fn open_read_only(path: PathBuf) -> Self {
+        let file = OpenOptions::new()
+            .read(true)
+            .custom_flags(libc::O_DIRECT)
+            .open(&path)
+            .expect("failed to open file");
+        let buffer: AVec = AVec::with_capacity(4096, BUFFER_SIZE);
+        Self {
+            file,
+            buffer: Arc::new(Mutex::new(buffer)),
+            path,
+        }
     }
 
     #[inline(always)]
     pub fn new_temp(prefix: impl AsRef<OsStr>) -> Self {
-        let (file, path) = NamedTempFile::with_prefix(prefix)
-            .expect("failed to create temp file")
+        let mut options = OpenOptions::new();
+        options
+            .read(true)
+            .write(true)
+            .create(true)
+            .custom_flags(libc::O_DIRECT);
+        let (file, path) = Builder::new()
+            .prefix(&prefix)
+            .suffix(".scribe")
+            .keep(true)
+            .make(|p| options.open(p))
+            .expect("failed to open file")
             .keep()
-            .expect("failed to keep temp file");
-        #[cfg(target_os = "linux")]
-        {
-            use libc::{off_t, posix_fadvise, POSIX_FADV_DONTNEED};
-            use std::os::fd::AsRawFd;
-            let metadata = file.metadata().unwrap();
-            let length = metadata.len();
-            let fd = file.as_raw_fd();
-            posix_fadvise(fd, 0, length as off_t, POSIX_FADV_DONTNEED);
+            .expect("failed to keep file");
+        let buffer: AVec = AVec::with_capacity(4096, BUFFER_SIZE);
+        Self {
+            file,
+            buffer: Arc::new(Mutex::new(buffer)),
+            path,
         }
-        Self { file, path }
     }
 
     #[inline(always)]
     pub fn reopen(&self) -> io::Result<Self> {
-        let file = File::open(&self.path)?;
-        Ok(Self::new(file, self.path.clone()))
+        Ok(Self::create_read_write(self.path.clone()))
     }
 
     #[inline(always)]
     pub fn reopen_read(&self) -> io::Result<Self> {
-        let file = OpenOptions::new().read(true).open(&self.path)?;
-        Ok(Self::new(file, self.path.clone()))
+        Ok(Self::open_read_only(self.path.clone()))
     }
 
     #[inline(always)]
@@ -66,7 +94,25 @@ impl InnerFile {
     #[inline(always)]
     pub fn try_clone(&self) -> io::Result<Self> {
         let file = self.file.try_clone()?;
-        Ok(Self::new(file, self.path.clone()))
+        Ok(Self {
+            file,
+            buffer: self.buffer.clone(),
+            path: self.path.clone(),
+        })
+    }
+
+    /// Reads `n` bytes from the file into `dest`.
+    /// This assumes that `dest` is of length `n`.
+    pub fn read_n(&mut self, dest: &mut AVec, n: usize) -> io::Result<()> {
+        assert_eq!(dest.len(), 0);
+        dest.clear();
+        dest.reserve(n);
+        // Safety: `dest` is empty and has capacity `n`.
+        unsafe {
+            dest.set_len(n);
+        }
+        dest.fill(0);
+        self.file.read_exact(&mut dest[..n])
     }
 }
 
@@ -76,19 +122,12 @@ impl Read for InnerFile {
         (&*self).read(buf)
     }
 
-    #[inline(always)]
-    fn read_vectored(&mut self, bufs: &mut [IoSliceMut<'_>]) -> io::Result<usize> {
-        (&*self).read_vectored(bufs)
+    fn read_exact(&mut self, buf: &mut [u8]) -> io::Result<()> {
+        (&*self).read_exact(buf)
     }
 
-    #[inline(always)]
     fn read_to_end(&mut self, buf: &mut Vec<u8>) -> io::Result<usize> {
         (&*self).read_to_end(buf)
-    }
-
-    #[inline(always)]
-    fn read_to_string(&mut self, buf: &mut String) -> io::Result<usize> {
-        (&*self).read_to_string(buf)
     }
 }
 
@@ -106,35 +145,21 @@ impl Read for &InnerFile {
     /// [changes]: io#platform-specific-behavior
     #[inline(always)]
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        (&(*self).file).read(buf)
+        let mut self_buffer = self.buffer.lock().unwrap();
+        self_buffer.clear();
+        self_buffer.extend_from_slice(&buf);
+        assert!(self_buffer.len() == buf.len());
+        assert!(self_buffer.len() % 4096 == 0);
+        (&self.file).read(&mut self_buffer)
     }
 
-    /// Like `read`, except that it reads into a slice of buffers.
-    ///
-    /// See [`Read::read_vectored`] docs for more info.
-    ///
-    /// # Platform-specific behavior
-    ///
-    /// This function currently corresponds to the `readv` function on Unix and
-    /// falls back to the `read` implementation on Windows. Note that this
-    /// [may change in the future][changes].
-    ///
-    /// [changes]: io#platform-specific-behavior
-    #[inline(always)]
-    fn read_vectored(&mut self, bufs: &mut [IoSliceMut<'_>]) -> io::Result<usize> {
-        (&(*self).file).read_vectored(bufs)
-    }
-
-    // Reserves space in the buffer based on the file size when available.
-    #[inline(always)]
-    fn read_to_end(&mut self, buf: &mut Vec<u8>) -> io::Result<usize> {
-        (&(*self).file).read_to_end(buf)
-    }
-
-    // Reserves space in the buffer based on the file size when available.
-    #[inline(always)]
-    fn read_to_string(&mut self, buf: &mut String) -> io::Result<usize> {
-        (&(*self).file).read_to_string(buf)
+    fn read_exact(&mut self, buf: &mut [u8]) -> io::Result<()> {
+        let mut self_buffer = self.buffer.lock().unwrap();
+        self_buffer.clear();
+        self_buffer.extend_from_slice(&buf);
+        assert!(self_buffer.len() == buf.len());
+        assert!(self_buffer.len() % 4096 == 0);
+        (&self.file).read_exact(&mut self_buffer)
     }
 }
 
@@ -169,23 +194,11 @@ impl Write for &InnerFile {
     /// [changes]: io#platform-specific-behavior
     #[inline(always)]
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        (&self.file).write(buf)
-    }
-
-    /// Like `write`, except that it writes into a slice of buffers.
-    ///
-    /// See [`Write::write_vectored`] docs for more info.
-    ///
-    /// # Platform-specific behavior
-    ///
-    /// This function currently corresponds to the `writev` function on Unix
-    /// and falls back to the `write` implementation on Windows. Note that this
-    /// [may change in the future][changes].
-    ///
-    /// [changes]: io#platform-specific-behavior
-    #[inline(always)]
-    fn write_vectored(&mut self, bufs: &[IoSlice<'_>]) -> io::Result<usize> {
-        (&self.file).write_vectored(bufs)
+        assert!(buf.len() % 4096 == 0);
+        let mut self_buffer = self.buffer.lock().unwrap();
+        self_buffer.clear();
+        self_buffer.extend_from_slice(&buf);
+        (&self.file).write(&self_buffer)
     }
 
     /// Flushes the file, ensuring that all intermediately buffered contents
@@ -208,14 +221,33 @@ impl Write for &InnerFile {
 
 impl io::Seek for &InnerFile {
     #[inline(always)]
-    fn seek(&mut self, pos: io::SeekFrom) -> io::Result<u64> {
-        (&(*self).file).seek(pos)
+    fn seek(&mut self, _: io::SeekFrom) -> io::Result<u64> {
+        unimplemented!()
+    }
+
+    #[inline(always)]
+    fn rewind(&mut self) -> io::Result<()> {
+        (&self.file).seek(io::SeekFrom::Start(0)).map(|_| ())
     }
 }
 
 impl io::Seek for InnerFile {
     #[inline(always)]
-    fn seek(&mut self, pos: io::SeekFrom) -> io::Result<u64> {
-        (&*self).seek(pos)
+    fn seek(&mut self, _: io::SeekFrom) -> io::Result<u64> {
+        unimplemented!()
     }
+
+    #[inline(always)]
+    fn rewind(&mut self) -> io::Result<()> {
+        (&self.file).seek(io::SeekFrom::Start(0)).map(|_| ())
+    }
+}
+
+/// Indicates how much extra capacity is needed to read the rest of the file.
+fn buffer_capacity_required(mut file: &File) -> Option<usize> {
+    let size = file.metadata().map(|m| m.len()).ok()?;
+    let pos = file.stream_position().ok()?;
+    // Don't worry about `usize` overflow because reading will fail regardless
+    // in that case.
+    Some(size.saturating_sub(pos) as usize)
 }

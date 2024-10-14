@@ -60,16 +60,7 @@ pub trait DeserializeRaw: SerializeRaw + Sized {
         (&mut file)
             .take((size * batch_size) as u64)
             .read_to_end(work_buffer)?;
-        #[cfg(target_os = "linux")]
-        {
-            use libc::{off_t, posix_fadvise, POSIX_FADV_DONTNEED};
-            use std::os::unix::io::AsRawFd;
-            let fd = file.as_raw_fd();
-            let length = work_buffer.len() as off_t;
-            unsafe {
-                posix_fadvise(fd, 0, length, POSIX_FADV_DONTNEED);
-            }
-        }
+
         if rayon::current_num_threads() == 1 {
             result_buffer.extend(
                 work_buffer
@@ -100,7 +91,6 @@ pub(crate) fn serialize_and_deserialize_raw_batch<
     mut read_file: impl Read + Send,
     batch_size: usize,
 ) -> Result<(), io::Error> {
-    // let time = start_timer!(|| "Perform IO");
     // Serialize
     let (write_to_buf, read_to_buf) = rayon::join(
         || -> Result<(), io::Error> {
@@ -148,7 +138,6 @@ pub(crate) fn serialize_and_deserialize_raw_batch<
     );
     write_to_file?;
     read_from_buf?;
-    // end_timer!(time);
     Ok(())
 }
 

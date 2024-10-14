@@ -7,6 +7,8 @@ use std::{
 
 use tempfile::NamedTempFile;
 
+pub type AVec = Vec<u8>;
+
 #[derive(Debug)]
 pub struct InnerFile {
     pub file: File,
@@ -25,15 +27,6 @@ impl InnerFile {
             .expect("failed to create temp file")
             .keep()
             .expect("failed to keep temp file");
-        #[cfg(target_os = "linux")]
-        {
-            use libc::{off_t, posix_fadvise, POSIX_FADV_DONTNEED};
-            use std::os::fd::AsRawFd;
-            let metadata = file.metadata().unwrap();
-            let length = metadata.len();
-            let fd = file.as_raw_fd();
-            posix_fadvise(fd, 0, length as off_t, POSIX_FADV_DONTNEED);
-        }
         Self { file, path }
     }
 
@@ -58,6 +51,20 @@ impl InnerFile {
     pub fn try_clone(&self) -> io::Result<Self> {
         let file = self.file.try_clone()?;
         Ok(Self::new(file, self.path.clone()))
+    }
+
+    /// Reads `n` bytes from the file into `dest`.
+    /// This assumes that `dest` is of length `n`.
+    pub fn read_n(&mut self, dest: &mut AVec, n: usize) -> io::Result<()> {
+        assert_eq!(dest.len(), 0);
+        dest.clear();
+        dest.reserve(n);
+        // Safety: `dest` is empty and has capacity `n`.
+        unsafe {
+            dest.set_len(n);
+        }
+        dest.fill(0);
+        self.file.read_exact(&mut dest[..n])
     }
 }
 

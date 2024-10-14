@@ -11,15 +11,6 @@ macro_rules! process_file {
                 let mut write_byte_buffer = vec![0u8; T::SIZE * BUFFER_SIZE];
 
                 let mut writer = InnerFile::new_temp("");
-                #[cfg(target_os = "linux")]
-                {
-                    use libc::{off_t, posix_fadvise, POSIX_FADV_DONTNEED};
-                    use std::os::fd::AsRawFd;
-                    let metadata = writer.as_file().metadata().unwrap();
-                    let length = metadata.len();
-                    let fd = writer.as_raw_fd();
-                    posix_fadvise(fd, 0, length as off_t, POSIX_FADV_DONTNEED);
-                }
 
                 let mut num_iters = 0;
                 loop {
