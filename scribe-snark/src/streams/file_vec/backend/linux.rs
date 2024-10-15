@@ -175,6 +175,11 @@ impl Write for InnerFile {
     }
 
     #[inline(always)]
+    fn write_all(&mut self, buf: &[u8]) -> io::Result<()> {
+        (&*self).write_all(buf)
+    }
+
+    #[inline(always)]
     fn flush(&mut self) -> io::Result<()> {
         (&*self).flush()
     }
@@ -199,6 +204,15 @@ impl Write for &InnerFile {
         self_buffer.clear();
         self_buffer.extend_from_slice(&buf);
         (&self.file).write(&self_buffer)
+    }
+
+    #[inline(always)]
+    fn write_all(&mut self, buf: &[u8]) -> io::Result<()> {
+        assert_eq!(buf.len() % 4096, 0);
+        let mut self_buffer = self.buffer.lock().unwrap();
+        self_buffer.clear();
+        self_buffer.extend_from_slice(&buf);
+        (&self.file).write_all(&self_buffer)
     }
 
     /// Flushes the file, ensuring that all intermediately buffered contents

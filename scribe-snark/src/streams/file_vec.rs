@@ -229,6 +229,7 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
             // We are done
             return FileVec::Buffer { buffer };
         }
+        dbg!(buffer.len());
         assert!(!buffer.is_empty());
 
         // Read from iterator and write to file.
@@ -236,7 +237,9 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
         // (that is, more than one batch),
         // we write the first batch to the file
         while let Some(batch) = iter.next_batch() {
-            if buffer.len() <= BUFFER_SIZE {
+            println!("In loop");
+            if buffer.len() < BUFFER_SIZE {
+                println!("Hit buffer.len() < BUFFER_SIZE");
                 buffer.par_extend(batch);
             } else {
                 if !more_than_one_batch {
@@ -253,16 +256,13 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
                     .par_chunks_mut(size)
                     .zip(&buffer)
                     .with_min_len(1 << 10)
-                    .for_each(|(chunk, item)| {
-                        item.serialize_raw(chunk).unwrap();
-                    });
+                    .try_for_each(|(chunk, item)| item.serialize_raw(chunk))
+                    .unwrap();
                 let buf_len = buffer.len();
+                buffer.clear();
                 rayon::join(
                     || file.write_all(&byte_buffer[..buf_len * size]).unwrap(),
-                    || {
-                        buffer.clear();
-                        buffer.par_extend(batch);
-                    },
+                    || buffer.par_extend(batch),
                 );
             }
         }
@@ -409,7 +409,7 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
         // we write the first batch to the file
         let mut more_than_one_batch = false;
         while let Some(batch) = iter.next_batch() {
-            if bufs.0.len() <= BUFFER_SIZE {
+            if bufs.0.len() < BUFFER_SIZE {
                 bufs.par_extend(batch);
             } else {
                 more_than_one_batch = true;
