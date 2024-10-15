@@ -16,7 +16,6 @@ smallvec = "1.6"
 rayon = { version = "1.5.2", default-features = false }
 displaydoc = "0.2.0"
 derivative = { version = "2", features = ["use_core"] }
-ark-bls12-381 = { version = "0.4.0", default-features = false, features = [ "curve" ] }
 libc = { version = "0.2.101", optional = true }
 
 
@@ -24,11 +23,10 @@ libc = { version = "0.2.101", optional = true }
 aligned-vec = { version = "0.6.1" }
 
 [dev-dependencies]
-env_logger = "0.11"
+ark-bls12-381 = { version = "0.4.0", default-features = false, features = [ "curve" ] }
 criterion = { version = "0.5" }
 
 [features]
-
 print-trace = [ "ark-std/print-trace" ] 
 
 [[bench]]
