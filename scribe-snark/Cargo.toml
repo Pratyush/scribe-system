@@ -17,9 +17,11 @@ rayon = { version = "1.5.2", default-features = false }
 displaydoc = "0.2.0"
 derivative = { version = "2", features = ["use_core"] }
 ark-bls12-381 = { version = "0.4.0", default-features = false, features = [ "curve" ] }
-aligned-vec = { version = "0.6.1" }
-libc = { version = "0.2" }
+libc = { version = "0.2.101", optional = true }
 
+
+[target.'cfg(target_os = "linux")'.dependencies]
+aligned-vec = { version = "0.6.1" }
 
 [dev-dependencies]
 env_logger = "0.11"
