@@ -3,26 +3,19 @@ use rayon::{iter::MinLen, prelude::*, vec::IntoIter as VecIntoIter};
 
 use crate::streams::{iterator::BatchedIterator, BUFFER_SIZE};
 
-use super::backend::InnerFile;
+use super::{avec, backend::InnerFile, AVec};
 
 pub enum IntoIter<T: SerializeRaw + DeserializeRaw + 'static> {
-    File {
-        file: InnerFile,
-        work_buffer: Vec<u8>,
-    },
-    Buffer {
-        buffer: Vec<T>,
-    },
+    File { file: InnerFile, work_buffer: AVec },
+    Buffer { buffer: Vec<T> },
 }
 
 impl<T: SerializeRaw + DeserializeRaw> IntoIter<T> {
     #[inline]
     pub fn new_file(file: InnerFile) -> Self {
-        let size = T::SIZE;
-        Self::File {
-            file,
-            work_buffer: Vec::with_capacity(size * BUFFER_SIZE),
-        }
+        let mut work_buffer = avec![];
+        work_buffer.reserve(T::SIZE * BUFFER_SIZE);
+        Self::File { file, work_buffer }
     }
 
     #[inline]

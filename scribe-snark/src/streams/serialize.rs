@@ -12,6 +12,10 @@ use ark_ec::{
 use ark_ff::{BigInt, Field, Fp, FpConfig, PrimeField};
 use ark_serialize::{Read, Write};
 
+use crate::streams::file_vec::backend::ReadN;
+
+use super::file_vec::AVec;
+
 pub trait SerializeRaw: Sized {
     const SIZE: usize = mem::size_of::<Self>();
 
@@ -42,12 +46,12 @@ pub trait SerializeRaw: Sized {
     }
 }
 
-pub trait DeserializeRaw: SerializeRaw + Sized {
+pub trait DeserializeRaw: SerializeRaw + Sized + std::fmt::Debug {
     fn deserialize_raw<R: Read>(reader: R) -> Result<Self, io::Error>;
 
     fn deserialize_raw_batch(
         result_buffer: &mut Vec<Self>,
-        work_buffer: &mut Vec<u8>,
+        work_buffer: &mut AVec,
         batch_size: usize,
         mut file: impl Read,
     ) -> Result<(), io::Error>
@@ -57,9 +61,7 @@ pub trait DeserializeRaw: SerializeRaw + Sized {
         work_buffer.clear();
         result_buffer.clear();
         let size = Self::SIZE;
-        (&mut file)
-            .take((size * batch_size) as u64)
-            .read_to_end(work_buffer)?;
+        (&mut file).read_n(work_buffer, size * batch_size)?;
 
         if rayon::current_num_threads() == 1 {
             result_buffer.extend(
@@ -359,7 +361,7 @@ impl<P: TECurveConfig> RawAffine for TEAffine<P> where P::BaseField: SerializeRa
 
 #[cfg(test)]
 mod tests {
-    use crate::streams::BUFFER_SIZE;
+    use crate::streams::{file_vec::backend::avec, BUFFER_SIZE};
 
     use super::*;
     use ark_bls12_381::Fr;
@@ -377,21 +379,23 @@ mod tests {
         data: &[T],
     ) {
         let size = T::SIZE;
-        let mut serialized = vec![0u8; size * data.len()];
-        let mut buffer = serialized.clone();
+        let mut serialized = avec![0u8; size * data.len()];
+        let mut buffer = serialized.to_vec();
         T::serialize_raw_batch(data, &mut buffer, &mut serialized[..]).unwrap();
         let mut final_result = vec![];
         let mut result_buf = vec![];
+        let mut buffer_2 = avec![];
+        buffer_2.extend_from_slice(&buffer);
         while final_result.len() < data.len() {
             T::deserialize_raw_batch(
                 &mut result_buf,
-                &mut buffer,
+                &mut buffer_2,
                 BUFFER_SIZE,
                 &serialized[(final_result.len() * size)..],
             )
             .unwrap();
-            buffer.clear();
-            final_result.extend(result_buf.clone());
+            buffer_2.clear();
+            final_result.extend(result_buf.drain(..));
             result_buf.clear();
         }
         assert_eq!(&data, &final_result);

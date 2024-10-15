@@ -12,6 +12,17 @@ use crate::streams::BUFFER_SIZE;
 
 pub type AVec = aligned_vec::AVec<u8, aligned_vec::ConstAlign<4096>>;
 
+macro_rules! avec {
+    () => {
+        $crate::streams::file_vec::AVec::new(4096)
+    };
+    ($elem: expr; $count: expr) => {
+        $crate::streams::file_vec::AVec::__from_elem(0, $elem, $count)
+    };
+}
+
+pub(crate) use avec;
+
 #[derive(Debug)]
 pub struct InnerFile {
     file: File,
@@ -100,20 +111,6 @@ impl InnerFile {
             path: self.path.clone(),
         })
     }
-
-    /// Reads `n` bytes from the file into `dest`.
-    /// This assumes that `dest` is of length `n`.
-    pub fn read_n(&mut self, dest: &mut AVec, n: usize) -> io::Result<()> {
-        assert_eq!(dest.len(), 0);
-        dest.clear();
-        dest.reserve(n);
-        // Safety: `dest` is empty and has capacity `n`.
-        unsafe {
-            dest.set_len(n);
-        }
-        dest.fill(0);
-        self.file.read_exact(&mut dest[..n])
-    }
 }
 
 impl Read for InnerFile {
@@ -148,18 +145,22 @@ impl Read for &InnerFile {
         let mut self_buffer = self.buffer.lock().unwrap();
         self_buffer.clear();
         self_buffer.extend_from_slice(&buf);
-        assert!(self_buffer.len() == buf.len());
-        assert!(self_buffer.len() % 4096 == 0);
-        (&self.file).read(&mut self_buffer)
+        assert_eq!(self_buffer.len(), buf.len());
+        assert_eq!(self_buffer.len() % 4096, 0);
+        let e = (&self.file).read(&mut self_buffer)?;
+        buf.copy_from_slice(&self_buffer);
+        Ok(e)
     }
 
     fn read_exact(&mut self, buf: &mut [u8]) -> io::Result<()> {
         let mut self_buffer = self.buffer.lock().unwrap();
         self_buffer.clear();
         self_buffer.extend_from_slice(&buf);
-        assert!(self_buffer.len() == buf.len());
-        assert!(self_buffer.len() % 4096 == 0);
-        (&self.file).read_exact(&mut self_buffer)
+        assert_eq!(self_buffer.len(), buf.len());
+        assert_eq!(self_buffer.len() % 4096, 0);
+        (&self.file).read_exact(&mut self_buffer)?;
+        buf.copy_from_slice(&self_buffer);
+        Ok(())
     }
 }
 

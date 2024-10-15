@@ -5,9 +5,10 @@ use std::{
     path::PathBuf,
 };
 
-use tempfile::NamedTempFile;
+use tempfile::Builder;
 
 pub type AVec = Vec<u8>;
+pub use std::vec::vec as avec;
 
 #[derive(Debug)]
 pub struct InnerFile {
@@ -24,10 +25,7 @@ impl InnerFile {
     #[inline(always)]
     pub fn new_temp(prefix: impl AsRef<OsStr>) -> Self {
         let mut options = OpenOptions::new();
-        options
-            .read(true)
-            .write(true)
-            .create(true);
+        options.read(true).write(true).create(true);
         let (file, path) = Builder::new()
             .prefix(&prefix)
             .suffix(".scribe")

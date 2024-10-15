@@ -30,7 +30,6 @@ fn file_vec_for_each() {
         });
         let vec: Vec<_> = (0..size).map(|i| Fr::from(i).square()).collect();
         let vec2 = fv.into_iter().to_vec();
-        dbg!(&vec2.len());
         for (fv, vec) in vec2.iter().zip(vec) {
             assert_eq!(*fv, vec);
         }

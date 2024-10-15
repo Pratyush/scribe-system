@@ -4,7 +4,7 @@ use std::marker::PhantomData;
 
 use crate::streams::{iterator::BatchedIterator, BUFFER_SIZE};
 
-use super::backend::InnerFile;
+use super::{avec, backend::InnerFile, AVec};
 
 pub enum ArrayChunks<'a, T, const N: usize>
 where
@@ -13,7 +13,7 @@ where
     File {
         file: InnerFile,
         lifetime: PhantomData<&'a T>,
-        work_buffer: Vec<u8>,
+        work_buffer: AVec,
     },
     Buffer {
         buffer: Vec<T>,
@@ -25,15 +25,17 @@ where
     T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy,
 {
     pub fn new_file(file: InnerFile) -> Self {
-        let size = T::SIZE;
         assert!(N > 0, "N must be greater than 0");
         assert!(BUFFER_SIZE % N == 0, "BUFFER_SIZE must be divisible by N");
         assert_eq!(std::mem::align_of::<[T; N]>(), std::mem::align_of::<T>());
         assert_eq!(std::mem::size_of::<[T; N]>(), N * std::mem::size_of::<T>());
+
+        let mut work_buffer = avec![];
+        work_buffer.reserve(T::SIZE * BUFFER_SIZE);
         Self::File {
             file,
             lifetime: PhantomData,
-            work_buffer: Vec::with_capacity(size * BUFFER_SIZE),
+            work_buffer,
         }
     }
 

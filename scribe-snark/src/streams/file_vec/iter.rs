@@ -4,13 +4,13 @@ use std::{fmt::Debug, marker::PhantomData};
 
 use crate::streams::{iterator::BatchedIterator, BUFFER_SIZE};
 
-use super::backend::InnerFile;
+use super::{avec, backend::InnerFile, AVec};
 
 pub enum Iter<'a, T: SerializeRaw + DeserializeRaw + 'static> {
     File {
         file: InnerFile,
         lifetime: PhantomData<&'a T>,
-        work_buffer: Vec<u8>,
+        work_buffer: AVec,
     },
     Buffer {
         buffer: Vec<T>,
@@ -19,11 +19,12 @@ pub enum Iter<'a, T: SerializeRaw + DeserializeRaw + 'static> {
 
 impl<'a, T: SerializeRaw + DeserializeRaw> Iter<'a, T> {
     pub fn new_file(file: InnerFile) -> Self {
-        let size = T::SIZE;
+        let mut work_buffer = avec![];
+        work_buffer.reserve(T::SIZE * BUFFER_SIZE);
         Self::File {
             file,
             lifetime: PhantomData,
-            work_buffer: Vec::with_capacity(size * BUFFER_SIZE),
+            work_buffer,
         }
     }
 

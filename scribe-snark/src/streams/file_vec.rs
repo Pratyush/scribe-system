@@ -7,8 +7,8 @@ use std::{
 };
 
 use crate::streams::serialize::{DeserializeRaw, SerializeRaw};
+
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Valid};
-use backend::InnerFile;
 use derivative::Derivative;
 use rayon::prelude::*;
 
@@ -24,7 +24,7 @@ use super::{
 
 mod array_chunks;
 pub mod backend;
-pub use backend::AVec;
+pub use backend::*;
 mod into_iter;
 mod iter;
 mod iter_chunk_mapped;
@@ -229,7 +229,6 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
             // We are done
             return FileVec::Buffer { buffer };
         }
-        dbg!(buffer.len());
         assert!(!buffer.is_empty());
 
         // Read from iterator and write to file.
@@ -559,7 +558,7 @@ impl<
                 ));
                 let size = T::SIZE;
                 let mut final_result = vec![];
-                let mut work_buffer = vec![0u8; size * BUFFER_SIZE];
+                let mut work_buffer: AVec = avec![0u8; size * BUFFER_SIZE];
 
                 let mut result_buffer = Vec::with_capacity(BUFFER_SIZE);
                 loop {
