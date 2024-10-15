@@ -34,6 +34,14 @@ impl InnerFile {
             .expect("failed to open file")
             .keep()
             .expect("failed to keep file");
+        #[cfg(any(target_os = "macos", target_os = "ios"))]
+        {
+            use libc::{fcntl, F_NOCACHE};
+            use std::os::fd::AsRawFd;
+            let fd = file.as_raw_fd();
+            let result = unsafe { fcntl(fd, F_NOCACHE, 1) };
+            assert_ne!(result, -1);
+        }
         Self { file, path }
     }
 
