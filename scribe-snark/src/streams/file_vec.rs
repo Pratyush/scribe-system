@@ -256,12 +256,9 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
                     .for_each(|(chunk, item)| {
                         item.serialize_raw(chunk).unwrap();
                     });
-                let buffer_length = buffer.len();
+                let buf_len = buffer.len();
                 rayon::join(
-                    || {
-                        file.write_all(&byte_buffer[..buffer_length * size])
-                            .expect("failed to write to file");
-                    },
+                    || file.write_all(&byte_buffer[..buf_len * size]).unwrap(),
                     || {
                         buffer.clear();
                         buffer.par_extend(batch);
@@ -455,6 +452,10 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
                 || file_1.write_all(&writer_1[..buf_a_len * size_a]).unwrap(),
                 || file_2.write_all(&writer_2[..buf_b_len * size_b]).unwrap(),
             );
+            file_1.flush().expect("failed to flush file");
+            file_2.flush().expect("failed to flush file");
+            file_1.rewind().expect("failed to seek file");
+            file_2.rewind().expect("failed to seek file");
             let v1: FileVec<A> = FileVec::new_file(file_1);
             let v2: FileVec<B> = FileVec::new_file(file_2);
             (v1, v2)

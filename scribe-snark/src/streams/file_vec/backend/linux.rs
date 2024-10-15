@@ -1,7 +1,7 @@
 use std::{
     ffi::OsStr,
     fs::{File, OpenOptions},
-    io::{self, IoSlice, Read, Seek, Write},
+    io::{self, IoSlice, Read, Write},
     os::unix::fs::OpenOptionsExt,
     path::PathBuf,
     sync::{Arc, Mutex},
@@ -195,7 +195,6 @@ impl Write for &InnerFile {
     #[inline(always)]
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         assert_eq!(buf.len() % 4096, 0);
-        dbg!(buf.len());
         let mut self_buffer = self.buffer.lock().unwrap();
         self_buffer.clear();
         self_buffer.extend_from_slice(&buf);
@@ -242,13 +241,4 @@ impl io::Seek for InnerFile {
     fn rewind(&mut self) -> io::Result<()> {
         (&self.file).seek(io::SeekFrom::Start(0)).map(|_| ())
     }
-}
-
-/// Indicates how much extra capacity is needed to read the rest of the file.
-fn buffer_capacity_required(mut file: &File) -> Option<usize> {
-    let size = file.metadata().map(|m| m.len()).ok()?;
-    let pos = file.stream_position().ok()?;
-    // Don't worry about `usize` overflow because reading will fail regardless
-    // in that case.
-    Some(size.saturating_sub(pos) as usize)
 }

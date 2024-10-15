@@ -382,7 +382,6 @@ mod tests {
         T::serialize_raw_batch(data, &mut buffer, &mut serialized[..]).unwrap();
         let mut final_result = vec![];
         let mut result_buf = vec![];
-        dbg!(serialized.len());
         while final_result.len() < data.len() {
             T::deserialize_raw_batch(
                 &mut result_buf,
@@ -392,8 +391,6 @@ mod tests {
             )
             .unwrap();
             buffer.clear();
-            dbg!(final_result.len());
-            dbg!(data.len());
             final_result.extend(result_buf.clone());
             result_buf.clear();
         }
