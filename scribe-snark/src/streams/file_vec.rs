@@ -236,9 +236,7 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
         // (that is, more than one batch),
         // we write the first batch to the file
         while let Some(batch) = iter.next_batch() {
-            println!("In loop");
             if buffer.len() < BUFFER_SIZE {
-                println!("Hit buffer.len() < BUFFER_SIZE");
                 buffer.par_extend(batch);
             } else {
                 if !more_than_one_batch {

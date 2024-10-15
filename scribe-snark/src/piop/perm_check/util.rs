@@ -88,33 +88,6 @@ pub fn compute_frac_poly_plonk<F: PrimeField>(
     ),
     PIOPError,
 > {
-    #[cfg(debug_assertions)]
-    {
-        // print the first element of each vector of polynomials
-        let mut p_lock = ps[0].lock().unwrap();
-        let mut pi_lock = pis[0].lock().unwrap();
-        let mut index_lock = indices[0].lock().unwrap();
-
-        while let (Some(p_val), Some(pi_val), Some(idx_val)) = (
-            p_lock.read_next(),
-            pi_lock.read_next(),
-            index_lock.read_next(),
-        ) {
-            println!("p_val: {}", p_val);
-            println!("alpha: {}", alpha);
-            println!("pi_val: {}", pi_val);
-            println!("idx_val: {}", idx_val);
-        }
-
-        p_lock.read_restart();
-        pi_lock.read_restart();
-        index_lock.read_restart();
-
-        drop(p_lock);
-        drop(pi_lock);
-        drop(index_lock);
-    }
-
     let start = start_timer!(|| "compute h_p h_q ");
 
     let batch_size = 1 << 20; // Maximum number of elements to process in a batch
