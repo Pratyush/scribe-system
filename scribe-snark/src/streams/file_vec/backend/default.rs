@@ -23,10 +23,19 @@ impl InnerFile {
 
     #[inline(always)]
     pub fn new_temp(prefix: impl AsRef<OsStr>) -> Self {
-        let (file, path) = NamedTempFile::with_prefix(prefix)
-            .expect("failed to create temp file")
+        let mut options = OpenOptions::new();
+        options
+            .read(true)
+            .write(true)
+            .create(true);
+        let (file, path) = Builder::new()
+            .prefix(&prefix)
+            .suffix(".scribe")
+            .keep(true)
+            .make(|p| options.open(p))
+            .expect("failed to open file")
             .keep()
-            .expect("failed to keep temp file");
+            .expect("failed to keep file");
         Self { file, path }
     }
 
