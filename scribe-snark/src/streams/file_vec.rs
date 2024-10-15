@@ -2,7 +2,7 @@ use std::{
     ffi::OsStr,
     fmt::{Debug, Display},
     hash::{Hash, Hasher},
-    io::{BufWriter, Seek, Write},
+    io::{Seek, Write},
     mem,
 };
 
@@ -225,41 +225,49 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
                 byte_buffer = Some(vec![0u8; buffer.len() * size]);
                 file = Some(InnerFile::new_temp(&prefix));
             }
+        } else {
+            // We are done
+            return FileVec::Buffer { buffer };
         }
+        assert!(!buffer.is_empty());
 
         // Read from iterator and write to file.
         // If the iterator contains more than `BUFFER_SIZE` elements
         // (that is, more than one batch),
         // we write the first batch to the file
         while let Some(batch) = iter.next_batch() {
-            if !more_than_one_batch {
-                byte_buffer = Some(vec![0u8; buffer.len() * size]);
-            }
-            if file.is_none() {
-                file = Some(InnerFile::new_temp(&prefix));
-            }
-            let byte_buffer = byte_buffer.as_mut().unwrap();
-            let file = file.as_mut().unwrap();
+            if buffer.len() <= BUFFER_SIZE {
+                buffer.par_extend(batch);
+            } else {
+                if !more_than_one_batch {
+                    byte_buffer = Some(vec![0u8; buffer.len() * size]);
+                }
+                if file.is_none() {
+                    file = Some(InnerFile::new_temp(&prefix));
+                }
+                let byte_buffer = byte_buffer.as_mut().unwrap();
+                let file = file.as_mut().unwrap();
 
-            more_than_one_batch = true;
-            byte_buffer
-                .par_chunks_mut(size)
-                .zip(&buffer)
-                .with_min_len(1 << 10)
-                .for_each(|(chunk, item)| {
-                    item.serialize_raw(chunk).unwrap();
-                });
-            let buffer_length = buffer.len();
-            rayon::join(
-                || {
-                    file.write_all(&byte_buffer[..buffer_length * size])
-                        .expect("failed to write to file");
-                },
-                || {
-                    buffer.clear();
-                    buffer.par_extend(batch);
-                },
-            );
+                more_than_one_batch = true;
+                byte_buffer
+                    .par_chunks_mut(size)
+                    .zip(&buffer)
+                    .with_min_len(1 << 10)
+                    .for_each(|(chunk, item)| {
+                        item.serialize_raw(chunk).unwrap();
+                    });
+                let buffer_length = buffer.len();
+                rayon::join(
+                    || {
+                        file.write_all(&byte_buffer[..buffer_length * size])
+                            .expect("failed to write to file");
+                    },
+                    || {
+                        buffer.clear();
+                        buffer.par_extend(batch);
+                    },
+                );
+            }
         }
 
         // Write the last batch to the file.
@@ -270,9 +278,8 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
                 .par_chunks_mut(size)
                 .zip(&buffer)
                 .with_min_len(1 << 10)
-                .for_each(|(chunk, item)| {
-                    item.serialize_raw(chunk).unwrap();
-                });
+                .try_for_each(|(chunk, item)| item.serialize_raw(chunk))
+                .unwrap();
             file.write_all(&byte_buffer[..buffer.len() * size])
                 .expect("failed to write to file");
             file.flush().expect("failed to flush file");
@@ -378,16 +385,26 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
         A: SerializeRaw + DeserializeRaw + Send + Sync,
         B: SerializeRaw + DeserializeRaw + Send + Sync,
     {
-        let mut buffer = Vec::<(A, B)>::with_capacity(BUFFER_SIZE);
+        let buffer_a = Vec::<A>::with_capacity(BUFFER_SIZE);
+        let buffer_b = Vec::<B>::with_capacity(BUFFER_SIZE);
+        let mut bufs = (buffer_a, buffer_b);
         let mut file_1 = InnerFile::new_temp("unzip_1");
         let mut file_2 = InnerFile::new_temp("unzip_2");
-        let size = core::mem::size_of::<A>();
-        let mut writer_1 = BufWriter::with_capacity(size * BUFFER_SIZE, &mut file_1);
-        let mut writer_2 = BufWriter::with_capacity(size * BUFFER_SIZE, &mut file_2);
+        let size_a = A::SIZE;
+        let size_b = B::SIZE;
+        let mut writer_1 = vec![0u8; size_a * BUFFER_SIZE];
+        let mut writer_2 = vec![0u8; size_b * BUFFER_SIZE];
 
         if let Some(batch) = iter.next_batch() {
-            buffer.par_extend(batch)
+            bufs.par_extend(batch);
+        } else {
+            return (
+                FileVec::Buffer { buffer: vec![] },
+                FileVec::Buffer { buffer: vec![] },
+            );
         }
+        assert!(!bufs.0.is_empty());
+        assert_eq!(bufs.0.len(), bufs.1.len());
 
         // Read from iterator and write to file.
         // If the iterator contains more than `BUFFER_SIZE` elements
@@ -395,114 +412,58 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
         // we write the first batch to the file
         let mut more_than_one_batch = false;
         while let Some(batch) = iter.next_batch() {
-            more_than_one_batch = true;
-            for (item_1, item_2) in &buffer {
-                item_1
-                    .serialize_raw(&mut writer_1)
-                    .expect("failed to write to file");
-                item_2
-                    .serialize_raw(&mut writer_2)
-                    .expect("failed to write to file");
+            if bufs.0.len() <= BUFFER_SIZE {
+                bufs.par_extend(batch);
+            } else {
+                more_than_one_batch = true;
+                let a = writer_1.par_chunks_mut(size_a).zip(&bufs.0);
+                let b = writer_2.par_chunks_mut(size_b).zip(&bufs.1);
+
+                a.zip(b)
+                    .try_for_each(|((c_a, a), (c_b, b))| {
+                        a.serialize_raw(c_a)?;
+                        b.serialize_raw(c_b)
+                    })
+                    .unwrap();
+                let buf_a_len = bufs.0.len();
+                let buf_b_len = bufs.1.len();
+                rayon::join(
+                    || file_1.write_all(&writer_1[..buf_a_len * size_a]).unwrap(),
+                    || file_2.write_all(&writer_2[..buf_b_len * size_b]).unwrap(),
+                );
+                bufs.0.clear();
+                bufs.1.clear();
+                bufs.par_extend(batch);
             }
-            buffer.clear();
-            buffer.par_extend(batch);
         }
 
         // Write the last batch to the file.
         if more_than_one_batch {
-            for (item_1, item_2) in &buffer {
-                item_1
-                    .serialize_raw(&mut writer_1)
-                    .expect("failed to write to file");
-                item_2
-                    .serialize_raw(&mut writer_2)
-                    .expect("failed to write to file");
-            }
-            writer_1.flush().expect("failed to flush file");
-            writer_2.flush().expect("failed to flush file");
-            drop(writer_1);
-            drop(writer_2);
-            file_1.rewind().expect("failed to seek file");
-            file_2.rewind().expect("failed to seek file");
+            writer_1
+                .par_chunks_mut(size_a)
+                .zip(&bufs.0)
+                .try_for_each(|(chunk, a)| a.serialize_raw(chunk))
+                .unwrap();
+            writer_2
+                .par_chunks_mut(size_b)
+                .zip(&bufs.1)
+                .try_for_each(|(chunk, b)| b.serialize_raw(chunk))
+                .unwrap();
+            let buf_a_len = bufs.0.len();
+            let buf_b_len = bufs.1.len();
+            rayon::join(
+                || file_1.write_all(&writer_1[..buf_a_len * size_a]).unwrap(),
+                || file_2.write_all(&writer_2[..buf_b_len * size_b]).unwrap(),
+            );
             let v1: FileVec<A> = FileVec::new_file(file_1);
             let v2: FileVec<B> = FileVec::new_file(file_2);
             (v1, v2)
         } else {
-            drop(writer_1);
-            drop(writer_2);
             let _ = file_1.remove();
             let _ = file_2.remove();
-            let (b1, b2) = buffer.into_par_iter().unzip();
-            (
-                FileVec::Buffer { buffer: b1 },
-                FileVec::Buffer { buffer: b2 },
-            )
-        }
-    }
-
-    pub(crate) fn unzip_helper_when_indexed<A, B, I>(mut iter: I) -> (FileVec<A>, FileVec<B>)
-    where
-        I: BatchedIterator<Item = (A, B)>,
-        I::Batch: IndexedParallelIterator,
-        A: SerializeRaw + DeserializeRaw + Send + Sync,
-        B: SerializeRaw + DeserializeRaw + Send + Sync,
-    {
-        let mut buffer_a = Vec::<A>::with_capacity(BUFFER_SIZE);
-        let mut buffer_b = Vec::<B>::with_capacity(BUFFER_SIZE);
-        let mut file_1 = InnerFile::new_temp("unzip_1");
-        let mut file_2 = InnerFile::new_temp("unzip_2");
-        let size = core::mem::size_of::<A>();
-        let mut writer_1 = BufWriter::with_capacity(size * BUFFER_SIZE, &mut file_1);
-        let mut writer_2 = BufWriter::with_capacity(size * BUFFER_SIZE, &mut file_2);
-
-        if let Some(batch) = iter.next_batch() {
-            batch.unzip_into_vecs(&mut buffer_a, &mut buffer_b);
-        }
-
-        // Read from iterator and write to file.
-        // If the iterator contains more than `BUFFER_SIZE` elements
-        // (that is, more than one batch),
-        // we write the first batch to the file
-        let mut more_than_one_batch = false;
-        while let Some(batch) = iter.next_batch() {
-            more_than_one_batch = true;
-            for a in &buffer_a {
-                a.serialize_raw(&mut writer_1).unwrap();
-            }
-            for b in &buffer_b {
-                b.serialize_raw(&mut writer_2).unwrap();
-            }
-            buffer_a.clear();
-            buffer_b.clear();
-            batch.unzip_into_vecs(&mut buffer_a, &mut buffer_b);
-        }
-
-        // Write the last batch to the file.
-        if more_than_one_batch {
-            for a in buffer_a {
-                a.serialize_raw(&mut writer_1).unwrap();
-            }
-            for b in buffer_b {
-                b.serialize_raw(&mut writer_2).unwrap();
-            }
-            writer_1.flush().expect("failed to flush file");
-            writer_2.flush().expect("failed to flush file");
-            drop(writer_1);
-            drop(writer_2);
-            file_1.rewind().expect("failed to seek file");
-            file_2.rewind().expect("failed to seek file");
-            let v1: FileVec<A> = FileVec::new_file(file_1);
-            let v2: FileVec<B> = FileVec::new_file(file_2);
+            let v1 = FileVec::Buffer { buffer: bufs.0 };
+            let v2 = FileVec::Buffer { buffer: bufs.1 };
             (v1, v2)
-        } else {
-            drop(writer_1);
-            drop(writer_2);
-            let _ = file_1.remove();
-            let _ = file_2.remove();
-            (
-                FileVec::Buffer { buffer: buffer_a },
-                FileVec::Buffer { buffer: buffer_b },
-            )
         }
     }
 

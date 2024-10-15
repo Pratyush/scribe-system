@@ -122,17 +122,6 @@ pub trait BatchedIterator: Sized {
         FileVec::<(A, B)>::unzip_helper(self)
     }
 
-    #[inline(always)]
-    fn unzip_faster<A, B>(self) -> (FileVec<A>, FileVec<B>)
-    where
-        Self: BatchedIterator<Item = (A, B)>,
-        Self::Batch: IndexedParallelIterator,
-        A: SerializeRaw + DeserializeRaw + Send + Sync,
-        B: SerializeRaw + DeserializeRaw + Send + Sync,
-    {
-        FileVec::<(A, B)>::unzip_helper_when_indexed(self)
-    }
-
     /// Helper function to convert the iterator into a vector.
     #[inline(always)]
     fn to_vec(mut self) -> Vec<Self::Item>

@@ -243,7 +243,7 @@ where
                 let r_bit = chunk[0] + q_bit * point_at_k;
                 (q_bit, r_bit)
             })
-            .unzip_faster();
+            .unzip();
 
         f = &r;
 

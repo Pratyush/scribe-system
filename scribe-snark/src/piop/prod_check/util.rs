@@ -57,7 +57,6 @@ pub(super) fn compute_product_poly<F: RawPrimeField>(
     let num_vars = frac_poly.num_vars();
     // assert that num_vars is at least two
 
-    // single stream for read and write pointers
     let product = frac_poly.fold_odd_even(|a, b| *a * b);
     let mut products = vec![product];
     while products.last().unwrap().num_vars() > 0 {
@@ -101,7 +100,7 @@ pub(super) fn prove_zero_check<F: RawPrimeField>(
             .map(|mle| (*mle).evals().iter().array_chunks()),
     )
     .map(|[even, odd]| (even, odd))
-    .unzip_faster();
+    .unzip();
 
     let num_vars = frac_poly.num_vars();
 

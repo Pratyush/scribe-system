@@ -46,7 +46,7 @@ pub(super) fn computer_nums_and_denoms<F: RawPrimeField>(
                     let denominator = g + *beta * perm + gamma;
                     (numerator, denominator)
                 })
-                .unzip_faster();
+                .unzip();
 
             (
                 MLE::from_evals(numerator, num_vars),

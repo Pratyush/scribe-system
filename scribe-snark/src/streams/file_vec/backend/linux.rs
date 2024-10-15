@@ -194,7 +194,8 @@ impl Write for &InnerFile {
     /// [changes]: io#platform-specific-behavior
     #[inline(always)]
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        assert!(buf.len() % 4096 == 0);
+        assert_eq!(buf.len() % 4096, 0);
+        dbg!(buf.len());
         let mut self_buffer = self.buffer.lock().unwrap();
         self_buffer.clear();
         self_buffer.extend_from_slice(&buf);

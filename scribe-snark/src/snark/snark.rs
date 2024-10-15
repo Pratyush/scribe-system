@@ -660,6 +660,7 @@ mod tests {
             ];
             let mut rng = StdRng::from_seed(seed);
             let pcs_srs = PST13::<E>::gen_srs_for_testing(&mut rng, 10)?;
+            println!("Generated Test SRS");
 
             let num_constraints = 4;
             let num_pub_input = 4;
@@ -693,6 +694,7 @@ mod tests {
                     2,
                 ),
             ];
+            println!("Generated Permutation MLEs");
             let q1 = MLE::from_evals_vec(
                 vec![
                     E::ScalarField::one(),
@@ -702,6 +704,7 @@ mod tests {
                 ],
                 2,
             );
+            println!("Generated Selectors");
             let index = Index {
                 config: params.clone(),
                 permutation,
@@ -710,6 +713,7 @@ mod tests {
 
             // generate pk and vks
             let (pk, vk) = <Scribe<E, PST13<E>>>::preprocess(&index, &pcs_srs)?;
+            println!("Finished preprocessing");
 
             // w1 := [1, 1, 2, 3]
             let w1 = MLE::from_evals_vec(
