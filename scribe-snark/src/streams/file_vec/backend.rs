@@ -8,8 +8,6 @@ pub use linux::{AVec, InnerFile};
 #[cfg(not(target_os = "linux"))]
 mod default;
 #[cfg(not(target_os = "linux"))]
-pub(crate) use default::avec;
-#[cfg(not(target_os = "linux"))]
 pub use default::{avec, AVec, InnerFile};
 
 pub trait ReadN: std::io::Read {

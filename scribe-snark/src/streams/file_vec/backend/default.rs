@@ -8,7 +8,7 @@ use std::{
 use tempfile::Builder;
 
 pub type AVec = Vec<u8>;
-pub use std::vec::vec as avec;
+pub use std::vec as avec;
 
 #[derive(Debug)]
 pub struct InnerFile {
