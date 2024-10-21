@@ -17,10 +17,7 @@ use ark_std::{borrow::ToOwned, boxed::Box, string::ToString, vec, vec::Vec};
 use core::marker::PhantomData;
 
 mod conversion;
-mod glv;
-mod msm;
 pub use conversion::*;
-pub use msm::*;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 /// An elliptic curve point in twisted Edwards affine form (x, y).
@@ -450,32 +447,6 @@ impl<F: PrimeField> PlonkCircuit<F> {
     }
 
     /// Obtain a variable of the result of a variable base scalar
-    /// multiplication. both `scalar` and `base` are variables.
-    /// Currently only supports `Affine::<P>`.
-    /// If the parameter is bandersnatch, we will use GLV multiplication.
-    pub fn variable_base_scalar_mul<P: Config<BaseField = F>>(
-        &mut self,
-        scalar: Variable,
-        base: &PointVariable,
-    ) -> Result<PointVariable, CircuitError> {
-        self.check_var_bound(scalar)?;
-        self.check_point_var_bound(base)?;
-
-        if self.support_lookup()
-            && P::ScalarField::MODULUS_BIT_SIZE == 253
-            && P::BaseField::MODULUS_BIT_SIZE == 255
-        {
-            // bandersnatch glv multiplication
-            // FIXME: we do not have an easier flag to tell if a parameter
-            // is bandersnatch or not, yet.
-            self.glv_mul::<P>(scalar, base)
-        } else {
-            // non-bandersantch multiplication
-            msm::MultiScalarMultiplicationCircuit::<F, P>::msm(self, &[*base], &[scalar])
-        }
-    }
-
-    /// Obtain a variable of the result of a variable base scalar
     /// multiplication. Both `scalar_bits_le` and `base` are variables,
     /// where `scalar_bits_le` is the little-endian form of the scalar.
     /// Currently only supports `Affine::<P>`.
@@ -582,7 +553,6 @@ fn compute_base_points<E: ScalarMul>(base: &E, len: usize) -> Result<[Vec<E>; 3]
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::gadgets::test_utils::test_variable_independence_for_circuit;
     use ark_bls12_377::{g1::Config as Param761, Fq as Fq377};
     use ark_ec::{twisted_edwards::TECurveConfig as Config, Group};
     use ark_ed_on_bls12_377::{EdwardsConfig as Param377, Fq as FqEd377};
@@ -623,9 +593,8 @@ mod test {
             .is_neutral_point::<P>(&PointVariable(circuit.num_vars(), circuit.num_vars() - 1))
             .is_err());
 
-        let circuit_1 = build_is_neutral_circuit::<F, P>(TEPoint(F::zero(), F::one()))?;
-        let circuit_2 = build_is_neutral_circuit::<F, P>(TEPoint(F::one(), F::zero()))?;
-        test_variable_independence_for_circuit(circuit_1, circuit_2)?;
+        let __circuit_1 = build_is_neutral_circuit::<F, P>(TEPoint(F::zero(), F::one()))?;
+        let __circuit_2 = build_is_neutral_circuit::<F, P>(TEPoint(F::one(), F::zero()))?;
 
         Ok(())
     }
@@ -662,13 +631,12 @@ mod test {
                 ))
                 .is_err());
 
-            let circuit_1 =
+            let __circuit_1 =
                 build_enforce_on_curve_circuit::<_, $param>(TEPoint($fq::zero(), $fq::one()))?;
-            let circuit_2 = build_enforce_on_curve_circuit::<_, $param>(TEPoint(
+            let __circuit_2 = build_enforce_on_curve_circuit::<_, $param>(TEPoint(
                 $fq::from(5u32),
                 $fq::from(89u32),
             ))?;
-            test_variable_independence_for_circuit(circuit_1, circuit_2)?;
         };
     }
 
@@ -790,11 +758,10 @@ mod test {
         let p2 = Affine::<P>::rand(&mut rng);
         let p3 = Affine::<P>::rand(&mut rng);
         let p4 = Affine::<P>::rand(&mut rng);
-        let circuit_1 =
+        let __circuit_1 =
             build_curve_point_addition_circuit::<F, P>(TEPoint::from(p1), TEPoint::from(p2))?;
-        let circuit_2 =
+        let __circuit_2 =
             build_curve_point_addition_circuit::<F, P>(TEPoint::from(p3), TEPoint::from(p4))?;
-        test_variable_independence_for_circuit(circuit_1, circuit_2)?;
 
         Ok(())
     }
@@ -880,9 +847,8 @@ mod test {
         *circuit.witness_mut(select_p3.1) = p2.y;
         assert!(circuit.check_circuit_satisfiability(&[]).is_err());
 
-        let circuit_1 = build_quaternary_select_gate::<F, P>(false, false)?;
-        let circuit_2 = build_quaternary_select_gate::<F, P>(true, true)?;
-        test_variable_independence_for_circuit(circuit_1, circuit_2)?;
+        let __circuit_1 = build_quaternary_select_gate::<F, P>(false, false)?;
+        let __circuit_2 = build_quaternary_select_gate::<F, P>(true, true)?;
         Ok(())
     }
 
@@ -944,9 +910,8 @@ mod test {
             .is_err());
 
         let new_p = Affine::<P>::rand(&mut rng);
-        let circuit_1 = build_point_equal_circuit(TEPoint::from(p), TEPoint::from(p))?;
-        let circuit_2 = build_point_equal_circuit(TEPoint::from(new_p), TEPoint::from(new_p))?;
-        test_variable_independence_for_circuit(circuit_1, circuit_2)?;
+        let __circuit_1 = build_point_equal_circuit(TEPoint::from(p), TEPoint::from(p))?;
+        let __circuit_2 = build_point_equal_circuit(TEPoint::from(new_p), TEPoint::from(new_p))?;
 
         Ok(())
     }
@@ -999,11 +964,10 @@ mod test {
             .is_point_equal(&PointVariable(0, 0), &PointVariable(1, circuit.num_vars()))
             .is_err());
 
-        let circuit_1 =
+        let __circuit_1 =
             build_is_equal_point_circuit(TEPoint::from(p1), TEPoint::from(p2), TEPoint::from(p3))?;
-        let circuit_2 =
+        let __circuit_2 =
             build_is_equal_point_circuit(TEPoint::from(p3), TEPoint::from(p3), TEPoint::from(p1))?;
-        test_variable_independence_for_circuit(circuit_1, circuit_2)?;
 
         Ok(())
     }
@@ -1115,9 +1079,8 @@ mod test {
             .fixed_base_scalar_mul(circuit.num_vars(), &Affine::<P>::rand(&mut rng))
             .is_err());
 
-        let circuit_1 = build_fixed_based_scalar_mul_circuit::<F, P>(F::from(87u32))?;
-        let circuit_2 = build_fixed_based_scalar_mul_circuit::<F, P>(F::from(2u32))?;
-        test_variable_independence_for_circuit(circuit_1, circuit_2)?;
+        let __circuit_1 = build_fixed_based_scalar_mul_circuit::<F, P>(F::from(87u32))?;
+        let __circuit_2 = build_fixed_based_scalar_mul_circuit::<F, P>(F::from(2u32))?;
         Ok(())
     }
 
@@ -1178,17 +1141,16 @@ mod test {
             )
             .is_err());
 
-        let circuit_1 = build_binary_point_vars_select_circuit::<F>(
+        let _circuit_1 = build_binary_point_vars_select_circuit::<F>(
             true,
             TEPoint::from(p0),
             TEPoint::from(p1),
         )?;
-        let circuit_2 = build_binary_point_vars_select_circuit::<F>(
+        let _circuit_2 = build_binary_point_vars_select_circuit::<F>(
             false,
             TEPoint::from(p1),
             TEPoint::from(p2),
         )?;
-        test_variable_independence_for_circuit(circuit_1, circuit_2)?;
 
         Ok(())
     }
@@ -1206,78 +1168,6 @@ mod test {
         let p0_var = circuit.create_point_variable(p0)?;
         let p1_var = circuit.create_point_variable(p1)?;
         circuit.binary_point_vars_select(b_var, &p0_var, &p1_var)?;
-        circuit.finalize_for_arithmetization()?;
-        Ok(circuit)
-    }
-
-    #[test]
-    fn test_variable_base_scalar_mul() -> Result<(), CircuitError> {
-        test_variable_base_scalar_mul_helper::<FqEd354, Param254>()?;
-        test_variable_base_scalar_mul_helper::<FqEd377, Param377>()?;
-        test_variable_base_scalar_mul_helper::<FqEd381, Param381>()?;
-        test_variable_base_scalar_mul_helper::<FqEd381b, Param381b>()?;
-        test_variable_base_scalar_mul_helper::<Fq377, Param761>()
-    }
-    fn test_variable_base_scalar_mul_helper<F, P>() -> Result<(), CircuitError>
-    where
-        F: PrimeField,
-        P: Config<BaseField = F>,
-    {
-        let mut rng = jf_utils::test_rng();
-        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_turbo_plonk();
-
-        for _ in 0..6 {
-            let mut base = Affine::<P>::rand(&mut rng);
-            let s = P::ScalarField::rand(&mut rng);
-            let s_var = circuit.create_variable(fr_to_fq::<F, P>(&s))?;
-            let base_var = circuit.create_point_variable(TEPoint::from(base))?;
-            base = (base * s).into();
-            let result = circuit.variable_base_scalar_mul::<P>(s_var, &base_var)?;
-            assert_eq!(TEPoint::from(base), circuit.point_witness(&result)?);
-        }
-        assert!(circuit.check_circuit_satisfiability(&[]).is_ok());
-
-        let base = Affine::<P>::rand(&mut rng);
-        let s = P::ScalarField::rand(&mut rng);
-        let s_var = circuit.create_variable(fr_to_fq::<F, P>(&s))?;
-        let base_var = circuit.create_point_variable(TEPoint::from(base))?;
-        // wrong witness should fail
-        *circuit.witness_mut(2) = F::rand(&mut rng);
-        assert!(circuit.check_circuit_satisfiability(&[]).is_err());
-        // Check variable out of bound error.
-        assert!(circuit
-            .variable_base_scalar_mul::<P>(circuit.num_vars(), &base_var)
-            .is_err());
-        assert!(circuit
-            .variable_base_scalar_mul::<P>(
-                s_var,
-                &PointVariable(circuit.num_vars(), circuit.num_vars())
-            )
-            .is_err());
-
-        let circuit_1 =
-            build_variable_base_scalar_mul_circuit::<F, P>(F::zero(), TEPoint::from(base))?;
-        let circuit_2 = build_variable_base_scalar_mul_circuit::<F, P>(
-            F::from(314u32),
-            TEPoint::from(Affine::<P>::rand(&mut rng)),
-        )?;
-        test_variable_independence_for_circuit(circuit_1, circuit_2)?;
-
-        Ok(())
-    }
-
-    fn build_variable_base_scalar_mul_circuit<F, P>(
-        scalar: F,
-        base: TEPoint<F>,
-    ) -> Result<PlonkCircuit<F>, CircuitError>
-    where
-        F: PrimeField,
-        P: Config<BaseField = F>,
-    {
-        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_turbo_plonk();
-        let scalar_var = circuit.create_variable(scalar)?;
-        let base_var = circuit.create_point_variable(base)?;
-        circuit.variable_base_scalar_mul::<P>(scalar_var, &base_var)?;
         circuit.finalize_for_arithmetization()?;
         Ok(circuit)
     }

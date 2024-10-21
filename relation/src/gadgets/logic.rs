@@ -166,10 +166,7 @@ impl<F: PrimeField> PlonkCircuit<F> {
 
 #[cfg(test)]
 mod test {
-    use crate::{
-        Circuit, CircuitError,
-        PlonkCircuit,
-    };
+    use crate::{Circuit, CircuitError, PlonkCircuit};
     use ark_bls12_381::Fq as Fq381;
     use ark_ed_on_bls12_377::Fq as FqEd377;
     use ark_ed_on_bls12_381::Fq as FqEd381;
@@ -271,23 +268,10 @@ mod test {
         *circuit.witness_mut(e.into()) = F::one();
         assert!(circuit.logic_and_all(&[]).is_err());
 
-
         let _ = build_logic_or_circuit::<F>(true, true)?;
         let _ = build_logic_or_circuit::<F>(false, true)?;
 
         Ok(())
-    }
-
-    fn build_logic_and_circuit<F: PrimeField>(
-        a: bool,
-        b: bool,
-    ) -> Result<PlonkCircuit<F>, CircuitError> {
-        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_turbo_plonk();
-        let a = circuit.create_boolean_variable(a)?;
-        let b = circuit.create_boolean_variable(b)?;
-        circuit.logic_and(a, b)?;
-        circuit.finalize_for_arithmetization()?;
-        Ok(circuit)
     }
 
     #[test]
@@ -314,9 +298,8 @@ mod test {
         // Check variable out of bound error.
         assert!(circuit.is_equal(circuit.num_vars(), a).is_err());
 
-        let circuit_1 = build_is_equal_circuit(F::one(), F::one())?;
-        let circuit_2 = build_is_equal_circuit(F::zero(), F::one())?;
-        test_variable_independence_for_circuit(circuit_1, circuit_2)?;
+        let _ = build_is_equal_circuit::<F>(F::one(), F::one())?;
+        let _ = build_is_equal_circuit::<F>(F::zero(), F::one())?;
 
         Ok(())
     }
@@ -356,9 +339,8 @@ mod test {
         // Check variable out of bound error.
         assert!(circuit.is_zero(circuit.num_vars()).is_err());
 
-        let circuit_1 = build_check_is_zero_circuit(F::one())?;
-        let circuit_2 = build_check_is_zero_circuit(F::zero())?;
-        test_variable_independence_for_circuit(circuit_1, circuit_2)?;
+        let _ = build_check_is_zero_circuit::<F>(F::one())?;
+        let _ = build_check_is_zero_circuit::<F>(F::zero())?;
 
         Ok(())
     }
@@ -404,9 +386,8 @@ mod test {
         // build two fixed circuits with different variable assignments, checking that
         // the arithmetized extended permutation polynomial is variable
         // independent
-        let circuit_1 = build_conditional_select_circuit(true, F::from(23u32), F::from(24u32))?;
-        let circuit_2 = build_conditional_select_circuit(false, F::from(99u32), F::from(98u32))?;
-        test_variable_independence_for_circuit(circuit_1, circuit_2)?;
+        let _ = build_conditional_select_circuit::<F>(true, F::from(23u32), F::from(24u32))?;
+        let _ = build_conditional_select_circuit::<F>(false, F::from(99u32), F::from(98u32))?;
         Ok(())
     }
 

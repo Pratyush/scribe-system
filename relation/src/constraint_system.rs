@@ -12,10 +12,7 @@ use crate::{
     CircuitError::*,
 };
 use ark_ff::{FftField, Field, PrimeField};
-use ark_poly::{
-    domain::Radix2EvaluationDomain, univariate::DensePolynomial,
-    EvaluationDomain,
-};
+use ark_poly::{domain::Radix2EvaluationDomain, EvaluationDomain};
 use ark_std::collections::HashSet;
 use ark_std::{boxed::Box, cmp::max, format, string::ToString, vec, vec::Vec};
 
@@ -186,11 +183,6 @@ pub trait Circuit<F: Field> {
     /// Return true if the circuit support lookup gates.
     fn support_lookup(&self) -> bool;
 }
-
-// The sorted concatenation of the lookup table and the witness values to be
-// checked in lookup gates. It also includes 2 polynomials that interpolate the
-// sorted vector.
-pub(crate) type SortedLookupVecAndPolys<F> = (Vec<F>, DensePolynomial<F>, DensePolynomial<F>);
 
 /// The wire type identifier for range gates.
 const RANGE_WIRE_ID: usize = 5;
@@ -402,16 +394,6 @@ impl<F: FftField> PlonkCircuit<F> {
     // TODO: make this function test only.
     pub fn witness_mut(&mut self, idx: Variable) -> &mut F {
         &mut self.witness[idx]
-    }
-
-    /// Get the mutable reference of the inserted table ids.
-    pub(crate) fn table_gate_ids_mut(&mut self) -> &mut Vec<(GateId, usize)> {
-        &mut self.table_gate_ids
-    }
-
-    /// Get the mutable reference of the number of inserted table elements.
-    pub(crate) fn num_table_elems_mut(&mut self) -> &mut usize {
-        &mut self.num_table_elems
     }
 
     /// Get the number of inserted table elements.
@@ -885,28 +867,28 @@ impl<F: FftField> PlonkCircuit<F> {
         Ok(())
     }
 
-    // Check whether the Plonk type is the expected Plonk type. Return an error if
-    // not.
+    /// Check whether the Plonk type is the expected Plonk type. Return an error if
+    /// not.
     #[inline]
-    fn check_plonk_type(&self, expect_type: PlonkType) -> Result<(), CircuitError> {
+    pub fn check_plonk_type(&self, expect_type: PlonkType) -> Result<(), CircuitError> {
         if self.plonk_params.plonk_type != expect_type {
             return Err(WrongPlonkType);
         }
         Ok(())
     }
 
-    // Return the variable that maps to a wire `(i, j)` where i is the wire type and
-    // j is the gate index. If gate `j` is a padded dummy gate, return zero
-    // variable.
+    /// Return the variable that maps to a wire `(i, j)` where i is the wire type and
+    /// j is the gate index. If gate `j` is a padded dummy gate, return zero
+    /// variable.
     #[inline]
-    fn wire_variable(&self, i: WireId, j: GateId) -> Variable {
+    pub fn wire_variable(&self, i: WireId, j: GateId) -> Variable {
         match j < self.wire_variables[i].len() {
             true => self.wire_variables[i][j],
             false => self.zero(),
         }
     }
 
-    // getter for all linear combination selector
+    /// getter for all linear combination selector
     #[inline]
     fn q_lc(&self) -> [Vec<F>; GATE_WIDTH] {
         let mut result = [vec![], vec![], vec![], vec![]];
@@ -919,9 +901,10 @@ impl<F: FftField> PlonkCircuit<F> {
         }
         result
     }
-    // getter for all multiplication selector
+
+    /// getter for all multiplication selector
     #[inline]
-    fn q_mul(&self) -> [Vec<F>; N_MUL_SELECTORS] {
+    pub fn q_mul(&self) -> [Vec<F>; N_MUL_SELECTORS] {
         let mut result = [vec![], vec![]];
         for gate in &self.gates {
             let q_mul_vec = gate.q_mul();
@@ -930,9 +913,10 @@ impl<F: FftField> PlonkCircuit<F> {
         }
         result
     }
-    // getter for all hash selector
+
+    /// getter for all hash selector
     #[inline]
-    fn q_hash(&self) -> [Vec<F>; GATE_WIDTH] {
+    pub fn q_hash(&self) -> [Vec<F>; GATE_WIDTH] {
         let mut result = [vec![], vec![], vec![], vec![]];
         for gate in &self.gates {
             let q_hash_vec = gate.q_hash();
@@ -943,46 +927,54 @@ impl<F: FftField> PlonkCircuit<F> {
         }
         result
     }
-    // getter for all output selector
+
+    /// getter for all output selector
     #[inline]
-    fn q_o(&self) -> Vec<F> {
+    pub fn q_o(&self) -> Vec<F> {
         self.gates.iter().map(|g| g.q_o()).collect()
     }
-    // getter for all constant selector
+
+    /// getter for all constant selector
     #[inline]
-    fn q_c(&self) -> Vec<F> {
+    pub fn q_c(&self) -> Vec<F> {
         self.gates.iter().map(|g| g.q_c()).collect()
     }
-    // getter for all ecc selector
+
+    /// getter for all ecc selector
     #[inline]
-    fn q_ecc(&self) -> Vec<F> {
+    pub fn q_ecc(&self) -> Vec<F> {
         self.gates.iter().map(|g| g.q_ecc()).collect()
     }
-    // getter for all lookup selector
+
+    /// getter for all lookup selector
     #[inline]
-    fn q_lookup(&self) -> Vec<F> {
+    pub fn q_lookup(&self) -> Vec<F> {
         self.gates.iter().map(|g| g.q_lookup()).collect()
     }
-    // getter for all lookup domain separation selector
+
+    /// getter for all lookup domain separation selector
     #[inline]
-    fn q_dom_sep(&self) -> Vec<F> {
+    pub fn q_dom_sep(&self) -> Vec<F> {
         self.gates.iter().map(|g| g.q_dom_sep()).collect()
     }
-    // getter for the vector of table keys
+
+    /// getter for the vector of table keys
     #[inline]
-    fn table_key_vec(&self) -> Vec<F> {
+    pub fn table_key_vec(&self) -> Vec<F> {
         self.gates.iter().map(|g| g.table_key()).collect()
     }
-    // getter for the vector of table domain separation ids
+
+    /// getter for the vector of table domain separation ids
     #[inline]
     fn table_dom_sep_vec(&self) -> Vec<F> {
         self.gates.iter().map(|g| g.table_dom_sep()).collect()
     }
+
     // TODO: (alex) try return reference instead of expensive clone
-    // getter for all selectors in the following order:
-    // q_lc, q_mul, q_hash, q_o, q_c, q_ecc, [q_lookup (if support lookup)]
+    /// getter for all selectors in the following order:
+    /// q_lc, q_mul, q_hash, q_o, q_c, q_ecc, [q_lookup (if support lookup)]
     #[inline]
-    fn all_selectors(&self) -> Vec<Vec<F>> {
+    pub fn all_selectors(&self) -> Vec<Vec<F>> {
         let mut selectors = vec![];
         self.q_lc()
             .as_ref()
@@ -1022,35 +1014,6 @@ impl<F: PrimeField> PlonkCircuit<F> {
             }
         }
     }
-
-    #[inline]
-    fn compute_extended_permutation(&self) -> Result<Vec<F>, CircuitError> {
-        assert!(self.is_finalized());
-        let n = self.eval_domain.size();
-
-        // The extended wire permutation can be computed as
-        // extended_perm[i] = id[wire_perm[i].into() * n + wire_perm[i].1]
-        let extended_perm: Vec<F> = self
-            .wire_permutation
-            .iter()
-            .map(|&(wire_id, gate_id)| {
-                // if permutation value undefined, return 0
-                if wire_id >= self.num_wire_types {
-                    F::zero()
-                } else {
-                    self.extended_id_permutation[wire_id * n + gate_id]
-                }
-            })
-            .collect();
-        if extended_perm.len() != self.num_wire_types * n {
-            return Err(ParameterError(
-                "Length of the extended permutation vector should be number of gate \
-                         (including padded dummy gates) * number of wire types"
-                    .to_string(),
-            ));
-        }
-        Ok(extended_perm)
-    }
 }
 
 /// Methods for finalizing and merging the circuits.
@@ -1076,68 +1039,5 @@ impl<F: PrimeField> PlonkCircuit<F> {
         self.compute_wire_permutation();
         self.compute_extended_id_permutation();
         Ok(())
-    }
-}
-
-/// Private helper methods for arithmetizations.
-impl<F: PrimeField> PlonkCircuit<F> {
-    #[inline]
-    fn compute_range_table(&self) -> Result<Vec<F>, CircuitError> {
-        self.check_plonk_type(PlonkType::UltraPlonk)?;
-        self.check_finalize_flag(true)?;
-        let domain = &self.eval_domain;
-        let range_size = self.range_size()?;
-        if domain.size() < range_size {
-            return Err(ParameterError(format!(
-                "Domain size {} < range size {}",
-                domain.size(),
-                range_size
-            )));
-        }
-        let mut range_table: Vec<F> = (0..range_size).map(|i| F::from(i as u32)).collect();
-        range_table.resize(domain.size(), F::zero());
-        Ok(range_table)
-    }
-
-    #[inline]
-    fn merged_table_value(
-        &self,
-        tau: F,
-        range_table: &[F],
-        table_key_vec: &[F],
-        table_dom_sep_vec: &[F],
-        q_lookup_vec: &[F],
-        i: usize,
-    ) -> Result<F, CircuitError> {
-        let range_val = range_table[i];
-        let key_val = table_key_vec[i];
-        let dom_sep_val = table_dom_sep_vec[i];
-        let q_lookup_val = q_lookup_vec[i];
-        let table_val_1 = self.witness(self.wire_variable(TABLE_VAL_1_WIRE_ID, i))?;
-        let table_val_2 = self.witness(self.wire_variable(TABLE_VAL_2_WIRE_ID, i))?;
-        Ok(range_val
-            + q_lookup_val
-                * tau
-                * (dom_sep_val + tau * (key_val + tau * (table_val_1 + tau * table_val_2))))
-    }
-
-    #[inline]
-    fn merged_lookup_wire_value(
-        &self,
-        tau: F,
-        i: usize,
-        q_lookup_vec: &[F],
-        q_dom_sep_vec: &[F],
-    ) -> Result<F, CircuitError> {
-        let w_range_val = self.witness(self.wire_variable(RANGE_WIRE_ID, i))?;
-        let lookup_key = self.witness(self.wire_variable(LOOKUP_KEY_WIRE_ID, i))?;
-        let lookup_val_1 = self.witness(self.wire_variable(LOOKUP_VAL_1_WIRE_ID, i))?;
-        let lookup_val_2 = self.witness(self.wire_variable(LOOKUP_VAL_2_WIRE_ID, i))?;
-        let q_lookup_val = q_lookup_vec[i];
-        let q_dom_sep_val = q_dom_sep_vec[i];
-        Ok(w_range_val
-            + q_lookup_val
-                * tau
-                * (q_dom_sep_val + tau * (lookup_key + tau * (lookup_val_1 + tau * lookup_val_2))))
     }
 }

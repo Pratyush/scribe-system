@@ -471,7 +471,7 @@ impl<F: PrimeField> PlonkCircuit<F> {
         // note that bit_length_lookup_component is public information
         // so we don't need to add a selection gate here
         if bit_length_lookup_component != 0 {
-            self.range_gate_with_lookup(b1_var, bit_length_lookup_component)?;
+            self.range_gate_internal(b1_var, bit_length_lookup_component)?;
         }
 
         // (7) b2 < 2^bit_length_non_lookup_range
@@ -485,7 +485,7 @@ impl<F: PrimeField> PlonkCircuit<F> {
         // note that delta_length_lookup_component is public information
         // so we don't need to add a selection gate here
         if delta_length_lookup_component != 0 {
-            self.range_gate_with_lookup(z1_var, delta_length_lookup_component)?;
+            self.range_gate_internal(z1_var, delta_length_lookup_component)?;
         }
 
         // (9) z2 < 2^delta_length_non_lookup_range
@@ -501,10 +501,7 @@ impl<F: PrimeField> PlonkCircuit<F> {
 
 #[cfg(test)]
 mod test {
-    use crate::{
-        constants::GATE_WIDTH, gadgets::test_utils::test_variable_independence_for_circuit,
-        Circuit, CircuitError, PlonkCircuit,
-    };
+    use crate::{constants::GATE_WIDTH, Circuit, CircuitError, PlonkCircuit};
     use ark_bls12_381::Fq as Fq381;
     use ark_ed_on_bls12_377::Fq as FqEd377;
     use ark_ed_on_bls12_381::Fq as FqEd381;
@@ -561,21 +558,20 @@ mod test {
             .quad_poly_gate(&[0, 1, 1, circuit.num_vars(), 0], &q_lc, &q_mul, q_o, q_c)
             .is_err());
 
-        let circuit_1 = build_quad_poly_gate_circuit([
+        let _ = build_quad_poly_gate_circuit([
             -F::from(98973u32),
             F::from(4u32),
             F::zero(),
             F::from(79u32),
             F::one(),
         ])?;
-        let circuit_2 = build_quad_poly_gate_circuit([
+        let _ = build_quad_poly_gate_circuit([
             F::one(),
             F::zero(),
             F::from(6u32),
             -F::from(9u32),
             F::one(),
         ])?;
-        test_variable_independence_for_circuit(circuit_1, circuit_2)?;
 
         Ok(())
     }
@@ -632,10 +628,8 @@ mod test {
         // Check variable out of bound error.
         assert!(circuit.lc(&[0, 1, 1, circuit.num_vars()], &coeffs).is_err());
 
-        let circuit_1 =
-            build_lc_circuit([-F::from(98973u32), F::from(4u32), F::zero(), F::from(79u32)])?;
-        let circuit_2 = build_lc_circuit([F::one(), F::zero(), F::from(6u32), -F::from(9u32)])?;
-        test_variable_independence_for_circuit(circuit_1, circuit_2)?;
+        let _ = build_lc_circuit([-F::from(98973u32), F::from(4u32), F::zero(), F::from(79u32)])?;
+        let _ = build_lc_circuit([F::one(), F::zero(), F::from(6u32), -F::from(9u32)])?;
 
         Ok(())
     }
@@ -691,11 +685,9 @@ mod test {
             .mul_add(&[0, 1, 1, circuit.num_vars()], &q_muls)
             .is_err());
 
-        let circuit_1 =
+        let _ =
             build_mul_add_circuit([-F::from(98973u32), F::from(4u32), F::zero(), F::from(79u32)])?;
-        let circuit_2 =
-            build_mul_add_circuit([F::one(), F::zero(), F::from(6u32), -F::from(9u32)])?;
-        test_variable_independence_for_circuit(circuit_1, circuit_2)?;
+        let _ = build_mul_add_circuit([F::one(), F::zero(), F::from(6u32), -F::from(9u32)])?;
 
         Ok(())
     }
@@ -744,21 +736,20 @@ mod test {
         // Check variable out of bound error.
         assert!(circuit.sum(&[circuit.num_vars()]).is_err());
 
-        let circuit_1 = build_sum_circuit(vec![
+        let _ = build_sum_circuit(vec![
             -F::from(73u32),
             F::from(4u32),
             F::zero(),
             F::from(79u32),
             F::from(23u32),
         ])?;
-        let circuit_2 = build_sum_circuit(vec![
+        let _ = build_sum_circuit(vec![
             F::one(),
             F::zero(),
             F::from(6u32),
             -F::from(9u32),
             F::one(),
         ])?;
-        test_variable_independence_for_circuit(circuit_1, circuit_2)?;
 
         Ok(())
     }

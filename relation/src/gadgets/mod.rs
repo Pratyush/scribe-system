@@ -7,7 +7,6 @@
 //! Gates and gadgets implementations
 
 pub mod ecc;
-pub mod ultraplonk;
 
 mod arithmetic;
 mod cmp;
