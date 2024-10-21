@@ -1,5 +1,5 @@
-use crate::streams::serialize::RawPrimeField;
 use ark_ec::pairing::Pairing;
+use scribe_streams::serialize::RawPrimeField;
 
 use super::pc::PCScheme;
 

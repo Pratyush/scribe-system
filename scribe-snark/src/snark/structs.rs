@@ -1,12 +1,12 @@
 use crate::piop::{perm_check_original::PermutationProof, zero_check::ZeroCheckProof};
-use crate::streams::serialize::RawPrimeField;
-use crate::streams::MLE;
 use crate::{pc::PCScheme, snark::custom_gate::CustomizedGates};
 use ark_ec::pairing::Pairing;
 use ark_ff::PrimeField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::log2;
 use derivative::Derivative;
+use mle::MLE;
+use scribe_streams::serialize::RawPrimeField;
 
 use super::prelude::ScribeErrors;
 

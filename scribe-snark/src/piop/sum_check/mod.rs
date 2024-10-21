@@ -1,16 +1,17 @@
 use crate::{
-    arithmetic::virtual_polynomial::{VPAuxInfo, VirtualPolynomial},
-    streams::{serialize::RawPrimeField, MLE},
-    {
-        piop::{
-            errors::PIOPError,
-            structs::{IOPProof, IOPProverState, IOPVerifierState},
-        },
-        transcript::IOPTranscript,
+    piop::{
+        errors::PIOPError,
+        structs::{IOPProof, IOPProverState, IOPVerifierState},
     },
+    transcript::IOPTranscript,
 };
 use ark_ff::PrimeField;
 use ark_std::{end_timer, start_timer};
+use mle::{
+    virtual_polynomial::{VPAuxInfo, VirtualPolynomial},
+    MLE,
+};
+use scribe_streams::serialize::RawPrimeField;
 use std::fmt::Debug;
 
 mod prover;
@@ -173,10 +174,10 @@ impl<F: RawPrimeField> SumCheck<F> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::arithmetic::{virtual_mle::VirtualMLE, virtual_polynomial::VirtualPolynomial};
-    use crate::streams::iterator::BatchedIterator;
     use ark_bls12_381::Fr;
     use ark_ff::UniformRand;
+    use mle::{virtual_mle::VirtualMLE, virtual_polynomial::VirtualPolynomial};
+    use scribe_streams::iterator::BatchedIterator;
 
     fn test_sumcheck_helper(poly: VirtualPolynomial<Fr>, sum: Fr) -> Result<(), PIOPError> {
         let mut transcript = SumCheck::<Fr>::init_transcript();

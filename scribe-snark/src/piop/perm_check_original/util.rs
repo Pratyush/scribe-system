@@ -1,6 +1,6 @@
-use crate::streams::iterator::BatchedIterator;
-use crate::streams::MLE;
-use crate::{piop::errors::PIOPError, streams::serialize::RawPrimeField};
+use crate::piop::errors::PIOPError;
+use mle::MLE;
+use scribe_streams::{iterator::BatchedIterator, serialize::RawPrimeField};
 
 use ark_std::{end_timer, start_timer};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
@@ -62,8 +62,8 @@ pub(super) fn computer_nums_and_denoms<F: RawPrimeField>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::streams::iterator::zip_many;
     use ark_bls12_381::Fr;
+    use scribe_streams::iterator::zip_many;
 
     #[test]
     fn test_compute_nums_and_denoms() {

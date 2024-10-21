@@ -1,8 +1,12 @@
 [package]
-name = "scribe"
-version = "0.1.0"
-edition = "2021"
-resolver = "2"
+name = "mle"
+version.workspace = true
+authors.workspace = true
+categories.workspace = true
+include.workspace = true
+license.workspace = true
+edition.workspace = true
+rust-version.workspace = true
 
 [dependencies]
 ark-ec = { version = "^0.4.0", default-features = false, features = ["parallel"] }
@@ -11,7 +15,6 @@ ark-std = { version = "^0.4.0", default-features = false, features = ["parallel"
 ark-poly = { version = "^0.4.0", default-features = false, features = ["parallel"] }
 ark-serialize = {version = "0.4.0", features = ["derive", "std"]}
 scribe-streams = { path = "../streams" }
-mle = { path = "../mle" }
 tempfile = "3.3.0"
 merlin = "3.0.0"
 smallvec = "1.6"
@@ -28,5 +31,7 @@ aligned-vec = { version = "0.6.1" }
 ark-bls12-381 = { version = "0.4.0", default-features = false, features = [ "curve" ] }
 criterion = { version = "0.5" }
 
-[features]
-print-trace = [ "ark-std/print-trace" ] 
+[[bench]]
+name = "mle"
+path = "benches/mle.rs"
+harness = false

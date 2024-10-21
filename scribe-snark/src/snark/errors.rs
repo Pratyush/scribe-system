@@ -1,10 +1,10 @@
-use crate::arithmetic::errors::ArithError;
 use crate::pc::errors::PCError;
 use crate::piop::errors::PIOPError;
 use crate::transcript::TranscriptError;
 use ark_serialize::SerializationError;
 use ark_std::string::String;
 use displaydoc::Display;
+use mle::errors::ArithError;
 
 /// A `enum` specifying the possible failure modes of scribe.
 #[derive(Display, Debug)]

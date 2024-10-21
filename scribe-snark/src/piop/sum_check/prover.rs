@@ -1,18 +1,16 @@
 use super::SumCheckProver;
-use crate::{
-    arithmetic::virtual_polynomial::VirtualPolynomial,
-    streams::iterator::{zip_many, BatchedIterator},
-};
-use crate::{
-    piop::{
-        errors::PIOPError,
-        structs::{IOPProverMessage, IOPProverState},
-    },
-    streams::serialize::RawPrimeField,
+use crate::piop::{
+    errors::PIOPError,
+    structs::{IOPProverMessage, IOPProverState},
 };
 use ark_ff::{batch_inversion, PrimeField};
 use ark_std::{end_timer, start_timer, vec::Vec};
+use mle::virtual_polynomial::VirtualPolynomial;
 use rayon::prelude::*;
+use scribe_streams::{
+    iterator::{zip_many, BatchedIterator},
+    serialize::RawPrimeField,
+};
 
 impl<F: RawPrimeField> SumCheckProver<F> for IOPProverState<F> {
     type VirtualPolynomial = VirtualPolynomial<F>;

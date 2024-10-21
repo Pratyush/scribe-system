@@ -1,14 +1,10 @@
 pub(crate) mod batching;
 pub mod srs;
 pub(crate) mod util;
+use crate::pc::pst13::batching::multi_open_internal;
 use crate::pc::StructuredReferenceString;
 use crate::pc::{structs::Commitment, PCError, PCScheme};
-use crate::streams::{iterator::BatchedIterator, MLE};
 use crate::transcript::IOPTranscript;
-use crate::{
-    pc::pst13::batching::multi_open_internal,
-    streams::serialize::{RawAffine, RawPrimeField},
-};
 use ark_ec::{
     pairing::Pairing,
     scalar_mul::{fixed_base::FixedBase, variable_base::VariableBaseMSM},
@@ -20,7 +16,10 @@ use ark_std::{
     borrow::Borrow, end_timer, format, marker::PhantomData, rand::Rng, start_timer, vec::Vec, One,
     Zero,
 };
+use mle::MLE;
 use rayon::iter::ParallelExtend;
+use scribe_streams::iterator::BatchedIterator;
+use scribe_streams::serialize::{RawAffine, RawPrimeField};
 use srs::{CommitterKey, VerifierKey, SRS};
 use std::ops::Mul;
 
@@ -108,8 +107,8 @@ where
         let commitment = {
             let mut poly_evals = poly.evals().iter();
             let mut srs = prover_param.powers_of_g[ignored].iter();
-            let mut f_buf = Vec::with_capacity(crate::streams::BUFFER_SIZE);
-            let mut g_buf = Vec::with_capacity(crate::streams::BUFFER_SIZE);
+            let mut f_buf = Vec::with_capacity(scribe_streams::BUFFER_SIZE);
+            let mut g_buf = Vec::with_capacity(scribe_streams::BUFFER_SIZE);
             let mut commitment = E::G1::zero();
             while let (Some(p), Some(g)) = (poly_evals.next_batch(), srs.next_batch()) {
                 f_buf.clear();
@@ -257,8 +256,8 @@ where
         let commitment = {
             let mut scalars = q.iter();
             let mut bases = gi.iter();
-            let mut scalars_buf = Vec::with_capacity(crate::streams::BUFFER_SIZE);
-            let mut bases_buf = Vec::with_capacity(crate::streams::BUFFER_SIZE);
+            let mut scalars_buf = Vec::with_capacity(scribe_streams::BUFFER_SIZE);
+            let mut bases_buf = Vec::with_capacity(scribe_streams::BUFFER_SIZE);
             let mut commitment = E::G1::zero();
             while let (Some(scalar_batch), Some(base_batch)) =
                 (scalars.next_batch(), bases.next_batch())

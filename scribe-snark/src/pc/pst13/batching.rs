@@ -1,19 +1,18 @@
+use crate::pc::errors::PCError;
+use crate::pc::structs::Commitment;
+use crate::pc::PCScheme;
 use crate::piop::{prelude::SumCheck, structs::IOPProof};
-use crate::{arithmetic::eq_eval, pc::PCScheme};
-use crate::{arithmetic::virtual_mle::VirtualMLE, pc::structs::Commitment};
-use crate::{
-    arithmetic::{
-        build_eq_x_r_vec,
-        virtual_polynomial::{VPAuxInfo, VirtualPolynomial},
-    },
-    streams::serialize::RawPrimeField,
+use mle::{
+    eq_eval,
+    util::build_eq_x_r_vec,
+    virtual_polynomial::{VPAuxInfo, VirtualPolynomial},
+    VirtualMLE, MLE,
 };
-use crate::{
-    pc::errors::PCError,
-    streams::iterator::{zip_many, BatchedIterator},
+use scribe_streams::{
+    iterator::{zip_many, BatchedIterator},
+    serialize::RawPrimeField,
 };
 
-use crate::streams::MLE;
 use ark_ec::pairing::Pairing;
 use ark_ec::{scalar_mul::variable_base::VariableBaseMSM, CurveGroup};
 
@@ -258,13 +257,13 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::arithmetic::util::get_batched_nv;
     use crate::pc::pst13::srs::SRS;
     use crate::pc::pst13::PST13;
     use crate::pc::StructuredReferenceString;
     use ark_bls12_381::Bls12_381 as E;
     use ark_ec::pairing::Pairing;
     use ark_std::{rand::Rng, test_rng, vec::Vec, UniformRand};
+    use mle::util::get_batched_nv;
 
     type Fr = <E as Pairing>::ScalarField;
 

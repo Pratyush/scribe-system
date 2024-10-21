@@ -1,8 +1,4 @@
-use crate::streams::file_vec::FileVec;
-use crate::{
-    pc::{errors::PCError, pst13::util::eq_extension, StructuredReferenceString},
-    streams::serialize::RawAffine,
-};
+use crate::pc::{errors::PCError, pst13::util::eq_extension, StructuredReferenceString};
 use ark_ec::{pairing::Pairing, scalar_mul::fixed_base::FixedBase, CurveGroup};
 use ark_ff::{Field, PrimeField};
 use ark_poly::DenseMultilinearExtension;
@@ -12,6 +8,7 @@ use ark_std::{
     UniformRand,
 };
 use core::iter::FromIterator;
+use scribe_streams::{file_vec::FileVec, serialize::RawAffine};
 use std::sync::Arc;
 
 /// Universal Parameter

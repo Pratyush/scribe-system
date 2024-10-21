@@ -1,15 +1,10 @@
+use crate::piop::{errors::PIOPError, structs::IOPProof, zero_check::ZeroCheck};
 use crate::transcript::IOPTranscript;
-use crate::{
-    arithmetic::virtual_polynomial::VirtualPolynomial,
-    streams::{
-        file_vec::FileVec,
-        iterator::{chain_many, zip_many, BatchedIterator},
-        MLE,
-    },
-};
-use crate::{
-    piop::{errors::PIOPError, structs::IOPProof, zero_check::ZeroCheck},
-    streams::serialize::RawPrimeField,
+use mle::{virtual_polynomial::VirtualPolynomial, MLE};
+use scribe_streams::{
+    file_vec::FileVec,
+    iterator::{chain_many, zip_many, BatchedIterator},
+    serialize::RawPrimeField,
 };
 
 use ark_std::{end_timer, start_timer};
@@ -139,8 +134,8 @@ mod test {
     use super::compute_product_poly;
     use super::*;
 
-    use crate::streams::MLE;
     use ark_bls12_381::Fr;
+    use mle::MLE;
 
     use ark_std::rand::distributions::{Distribution, Standard};
     use ark_std::rand::rngs::StdRng;

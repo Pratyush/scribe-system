@@ -1,9 +1,8 @@
-use crate::arithmetic::util::gen_eval_point;
-use crate::arithmetic::virtual_polynomial::VPAuxInfo;
 use crate::pc::pst13::batching::BatchProof;
 use crate::pc::structs::Commitment;
 use crate::pc::PCScheme;
 use crate::snark::utils::PCAccumulator;
+use mle::{util::gen_eval_point, virtual_polynomial::VPAuxInfo, MLE};
 
 use crate::piop::perm_check_original::PermutationCheck;
 use crate::piop::prelude::ZeroCheck;
@@ -13,9 +12,9 @@ use crate::snark::{
     utils::{build_f, eval_f, eval_perm_gate, prover_sanity_check},
     Scribe,
 };
-use crate::streams::{serialize::RawPrimeField, MLE};
 use crate::transcript::IOPTranscript;
 use ark_ec::pairing::Pairing;
+use scribe_streams::serialize::RawPrimeField;
 
 use ark_std::{end_timer, log2, start_timer, One, Zero};
 use rayon::iter::IntoParallelRefIterator;
@@ -613,10 +612,9 @@ where
 mod tests {
     use super::*;
     use crate::pc::pst13::PST13;
-    use crate::{
-        snark::{custom_gate::CustomizedGates, structs::ScribeConfig},
-        streams::serialize::RawAffine,
-    };
+
+    use crate::snark::{custom_gate::CustomizedGates, structs::ScribeConfig};
+    use scribe_streams::serialize::RawAffine;
 
     use ark_bls12_381::Bls12_381;
     use ark_std::rand::rngs::StdRng;

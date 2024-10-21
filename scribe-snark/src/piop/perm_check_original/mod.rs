@@ -1,15 +1,15 @@
 use self::util::computer_nums_and_denoms;
-use crate::streams::MLE;
 use crate::{
-    arithmetic::virtual_polynomial::VPAuxInfo,
+    transcript::IOPTranscript,
     {
         pc::PCScheme,
         piop::{errors::PIOPError, prod_check::ProductCheck},
     },
 };
-use crate::{streams::serialize::RawPrimeField, transcript::IOPTranscript};
 use ark_ec::pairing::Pairing;
 use ark_std::{end_timer, start_timer};
+use mle::{virtual_polynomial::VPAuxInfo, MLE};
+use scribe_streams::serialize::RawPrimeField;
 
 use super::prod_check::{ProductCheckProof, ProductCheckSubClaim};
 
@@ -134,15 +134,15 @@ where
 #[cfg(test)]
 mod test {
     use super::PermutationCheck;
-    use crate::streams::{serialize::RawPrimeField, MLE};
     use crate::{
-        arithmetic::virtual_polynomial::VPAuxInfo,
         pc::{pst13::PST13, PCScheme},
         piop::errors::PIOPError,
     };
     use ark_bls12_381::Bls12_381;
     use ark_ec::pairing::Pairing;
     use ark_std::test_rng;
+    use mle::{virtual_polynomial::VPAuxInfo, MLE};
+    use scribe_streams::serialize::RawPrimeField;
     use std::marker::PhantomData;
 
     type Kzg = PST13<Bls12_381>;

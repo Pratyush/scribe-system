@@ -1,6 +1,7 @@
-use crate::{arithmetic::virtual_polynomial::VirtualPolynomial, streams::serialize::RawPrimeField};
 use ark_ff::PrimeField;
 use ark_serialize::CanonicalSerialize;
+use mle::virtual_polynomial::VirtualPolynomial;
+use scribe_streams::serialize::RawPrimeField;
 
 /// An IOP proof is a collections of
 /// - messages from prover to verifier at each round through the interactive

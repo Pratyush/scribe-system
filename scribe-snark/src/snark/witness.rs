@@ -1,9 +1,8 @@
-use crate::{
-    snark::errors::ScribeErrors,
-    streams::{serialize::RawPrimeField, MLE},
-};
+use crate::snark::errors::ScribeErrors;
 use ark_ff::PrimeField;
 use ark_std::log2;
+use mle::MLE;
+use scribe_streams::serialize::RawPrimeField;
 
 /// A row of witnesses of width `#wires`
 #[derive(Debug, Clone)]

@@ -1,4 +1,3 @@
-use crate::{arithmetic::virtual_polynomial::VPAuxInfo, streams::MLE};
 use crate::{
     pc::PCScheme,
     piop::{
@@ -6,10 +5,12 @@ use crate::{
         prod_check::util::{compute_frac_poly, compute_product_poly, prove_zero_check},
         zero_check::ZeroCheck,
     },
+    transcript::IOPTranscript,
 };
-use crate::{streams::serialize::RawPrimeField, transcript::IOPTranscript};
 use ark_ec::pairing::Pairing;
 use ark_ff::{One, Zero};
+use mle::{virtual_polynomial::VPAuxInfo, MLE};
+use scribe_streams::serialize::RawPrimeField;
 
 use ark_std::{end_timer, start_timer};
 
@@ -188,19 +189,19 @@ where
 #[cfg(test)]
 mod test {
     use super::ProductCheck;
-    use crate::streams::file_vec::FileVec;
-    use crate::streams::iterator::zip_many;
-    use crate::streams::iterator::BatchedIterator;
-    use crate::{arithmetic::virtual_polynomial::VPAuxInfo, streams::serialize::RawPrimeField};
     use crate::{
         pc::{pst13::PST13, PCScheme},
         piop::errors::PIOPError,
-        streams::MLE,
     };
     use ark_bls12_381::{Bls12_381, Fr};
     use ark_ec::pairing::Pairing;
     use ark_std::test_rng;
     use ark_std::UniformRand;
+    use mle::{virtual_polynomial::VPAuxInfo, MLE};
+    use scribe_streams::file_vec::FileVec;
+    use scribe_streams::iterator::zip_many;
+    use scribe_streams::iterator::BatchedIterator;
+    use scribe_streams::serialize::RawPrimeField;
     use std::marker::PhantomData;
 
     fn check_frac_poly<E>(

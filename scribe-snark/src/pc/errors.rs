@@ -1,8 +1,8 @@
-use crate::arithmetic::errors::ArithError;
 use crate::transcript::TranscriptError;
 use ark_serialize::SerializationError;
 use ark_std::string::String;
 use displaydoc::Display;
+use mle::errors::ArithError;
 
 /// A `enum` specifying the possible failure modes of the PC.
 #[derive(Display, Debug)]

@@ -2,6 +2,9 @@
 members = [
     "bench-utils",
     "scribe-snark",
+    "relation", 
+    "streams", 
+    "mle",
 ]
 resolver = "2"
 
@@ -13,9 +16,6 @@ include = ["Cargo.toml", "src", "README.md", "LICENSE-APACHE", "LICENSE-MIT"]
 license = "MIT OR Apache-2.0"
 edition = "2021"
 rust-version = "1.75"
-
-# [workspace.metadata.docs.rs]
-# rustdoc-args = [ "--html-in-header katex-header.html" ]
 
 [workspace.metadata.release]
 dependent-version = "fix"

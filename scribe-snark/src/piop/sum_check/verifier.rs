@@ -4,9 +4,10 @@ use crate::piop::{
     structs::{IOPProverMessage, IOPVerifierState},
 };
 use crate::transcript::IOPTranscript;
-use crate::{arithmetic::virtual_polynomial::VPAuxInfo, streams::serialize::RawPrimeField};
 use ark_ff::PrimeField;
 use ark_std::{end_timer, start_timer};
+use mle::virtual_polynomial::VPAuxInfo;
+use scribe_streams::serialize::RawPrimeField;
 
 impl<F: RawPrimeField> SumCheckVerifier<F> for IOPVerifierState<F> {
     type VPAuxInfo = VPAuxInfo<F>;

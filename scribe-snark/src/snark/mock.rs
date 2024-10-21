@@ -1,12 +1,13 @@
 use std::ops::{AddAssign, MulAssign};
 
-use crate::streams::{iterator::BatchedIterator, serialize::RawPrimeField, MLE};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::{
     end_timer, log2,
     rand::{rngs::StdRng, SeedableRng},
     start_timer,
 };
+use mle::MLE;
+use scribe_streams::{iterator::BatchedIterator, serialize::RawPrimeField};
 
 use crate::snark::{
     custom_gate::CustomizedGates,
