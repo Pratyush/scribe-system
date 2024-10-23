@@ -229,6 +229,7 @@ run_with_memory_limits() {
         sudo systemd-run --scope
         --unit="${UNIT_NAME}"
         -p "$MEMORY_PROPERTY"
+        -p "MemorySwapMax=0"
         env RAYON_NUM_THREADS=$THREAD_COUNT $BINARY_PATH $ARGS
     )
 
@@ -313,13 +314,14 @@ run_with_memory_limits() {
     fi
 }
 
-# Function to run a command with bandwidth limits using systemd-run
+# Function to run a command with bandwidth and memory limits using systemd-run
 run_with_bandwidth_limits() {
     local BANDWIDTH_LIMIT=$1
-    local THREAD_COUNT=$2
-    local PROVER=$3
-    local BINARY_PATH=$4
-    local ARGS=$5
+    local MEMORY_LIMIT=$2
+    local THREAD_COUNT=$3
+    local PROVER=$4
+    local BINARY_PATH=$5
+    local ARGS=$6
 
     # Only allow 'scribe' as the prover for bandwidth tests
     if [[ "$PROVER" != "scribe" ]]; then
@@ -330,15 +332,25 @@ run_with_bandwidth_limits() {
     # Convert bandwidth limit to bytes
     BANDWIDTH_LIMIT_BYTES=$(numfmt --from=iec "$BANDWIDTH_LIMIT")
 
+    # Convert memory limit to bytes
+    MEMORY_LIMIT_BYTES=$(numfmt --from=iec "$MEMORY_LIMIT")
+
+    # Use soft memory limit (MemoryHigh)
+    MEMORY_PROPERTY="MemoryHigh=${MEMORY_LIMIT_BYTES}"
+
     # Get the device for I/O limitations (adjust as necessary)
     DEVICE="/dev/nvme0n1"
 
-    # Build systemd-run command with bandwidth limits
+    # Generate unique unit name
+    UNIT_NAME="${PROVER}_bw_$(date +%s%N)"
+
+    # Build systemd-run command with bandwidth and memory limits
     SYSTEMD_CMD=(
         sudo systemd-run --scope
-        --unit="${PROVER}_bw_$(date +%s%N)"
-        -p "IOReadBandwidthMax=${DEVICE}=${BANDWIDTH_LIMIT_BYTES}"
-        -p "IOWriteBandwidthMax=${DEVICE}=${BANDWIDTH_LIMIT_BYTES}"
+        --unit="${UNIT_NAME}"
+        -p "IOReadBandwidthMax=${DEVICE} ${BANDWIDTH_LIMIT_BYTES}"
+        -p "IOWriteBandwidthMax=${DEVICE} ${BANDWIDTH_LIMIT_BYTES}"
+        -p "$MEMORY_PROPERTY"
         env RAYON_NUM_THREADS=$THREAD_COUNT $BINARY_PATH $ARGS
     )
 
@@ -353,11 +365,11 @@ run_with_bandwidth_limits() {
     echo "$OUTPUT"
 
     if [ $EXIT_STATUS -ne 0 ]; then
-        echo "ERROR: Command failed for prover $PROVER with bandwidth limit $BANDWIDTH_LIMIT and threads $THREAD_COUNT"
+        echo "ERROR: Command failed for prover $PROVER with bandwidth limit $BANDWIDTH_LIMIT, memory limit $MEMORY_LIMIT and threads $THREAD_COUNT"
     fi
 
     # Process output to extract data
-    process_output "$OUTPUT" "$START_TIMESTAMP" "$PROVER" "$THREAD_COUNT" "" "$BANDWIDTH_LIMIT" "$EXIT_STATUS"
+    process_output "$OUTPUT" "$START_TIMESTAMP" "$PROVER" "$THREAD_COUNT" "$MEMORY_LIMIT" "$BANDWIDTH_LIMIT" "$EXIT_STATUS"
 }
 
 # Function to process command output and extract data
@@ -443,36 +455,37 @@ if [[ "$EXPERIMENT_TYPE" == "m" || "$EXPERIMENT_TYPE" == "both" ]]; then
     done
 fi
 
-# Step 4: Run bandwidth-thread-prover loop
+# Step 4: Run bandwidth-thread-prover loop with memory limits
 if [[ "$EXPERIMENT_TYPE" == "b" || "$EXPERIMENT_TYPE" == "both" ]]; then
     echo "Running bandwidth benchmarks..."
     for BANDWIDTH_LIMIT in "${BANDWIDTH_LIMITS[@]}"; do
-        for THREAD_COUNT in "${THREADS[@]}"; do
-            for PROVER in "${PROVERS[@]}"; do
-                echo "Running prover $PROVER with bandwidth limit $BANDWIDTH_LIMIT and $THREAD_COUNT threads..."
-
-                # Construct the binary path and arguments
-                case $PROVER in
-                    scribe)
-                        BINARY_PATH="../../target/release/examples/scribe-prover"
-                        ARGS="$MIN_VARIABLES $MAX_VARIABLES $SETUP_FOLDER"
-                        ;;
-                    *)
+        for MEMORY_LIMIT in "${MEMORY_LIMITS[@]}"; do
+            for THREAD_COUNT in "${THREADS[@]}"; do
+                for PROVER in "${PROVERS[@]}"; do
+                    # Only 'scribe' prover is allowed for bandwidth tests
+                    if [[ "$PROVER" != "scribe" ]]; then
                         echo "Skipping bandwidth test for prover $PROVER as only 'scribe' is allowed."
                         continue
-                        ;;
-                esac
+                    fi
 
-                # Print run information
-                echo "----------------------------------------"
-                echo "Starting bandwidth benchmark run:"
-                echo "Prover            : $PROVER"
-                echo "Bandwidth Limit   : $BANDWIDTH_LIMIT"
-                echo "Threads           : $THREAD_COUNT"
-                echo "----------------------------------------"
+                    echo "Running prover $PROVER with bandwidth limit $BANDWIDTH_LIMIT, memory limit $MEMORY_LIMIT and $THREAD_COUNT threads..."
 
-                # Run the prover with bandwidth limits
-                run_with_bandwidth_limits "$BANDWIDTH_LIMIT" "$THREAD_COUNT" "$PROVER" "$BINARY_PATH" "$ARGS"
+                    # Construct the binary path and arguments
+                    BINARY_PATH="../../target/release/examples/scribe-prover"
+                    ARGS="$MIN_VARIABLES $MAX_VARIABLES $SETUP_FOLDER"
+
+                    # Print run information
+                    echo "----------------------------------------"
+                    echo "Starting bandwidth benchmark run:"
+                    echo "Prover            : $PROVER"
+                    echo "Bandwidth Limit   : $BANDWIDTH_LIMIT"
+                    echo "Memory Limit      : $MEMORY_LIMIT"
+                    echo "Threads           : $THREAD_COUNT"
+                    echo "----------------------------------------"
+
+                    # Run the prover with bandwidth and memory limits
+                    run_with_bandwidth_limits "$BANDWIDTH_LIMIT" "$MEMORY_LIMIT" "$THREAD_COUNT" "$PROVER" "$BINARY_PATH" "$ARGS"
+                done
             done
         done
     done
