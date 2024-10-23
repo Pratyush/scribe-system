@@ -212,14 +212,8 @@ run_with_memory_limits() {
     # Convert memory limit to bytes
     MEMORY_LIMIT_BYTES=$(numfmt --from=iec "$MEMORY_LIMIT")
 
-    # Determine memory property based on prover
-    if [[ "$PROVER" == "gemini" || "$PROVER" == "scribe" ]]; then
-        # Use soft memory limit (MemoryHigh)
-        MEMORY_PROPERTY="MemoryHigh=${MEMORY_LIMIT_BYTES}"
-    else
-        # Use hard memory limit (MemoryMax)
-        MEMORY_PROPERTY="MemoryMax=${MEMORY_LIMIT_BYTES}"
-    fi
+    # Use hard memory limit (MemoryMax)
+    MEMORY_PROPERTY="MemoryMax=${MEMORY_LIMIT_BYTES}"
 
     # Generate unique unit name
     UNIT_NAME="${PROVER}_mem_$(date +%s%N)"
@@ -335,8 +329,8 @@ run_with_bandwidth_limits() {
     # Convert memory limit to bytes
     MEMORY_LIMIT_BYTES=$(numfmt --from=iec "$MEMORY_LIMIT")
 
-    # Use soft memory limit (MemoryHigh)
-    MEMORY_PROPERTY="MemoryHigh=${MEMORY_LIMIT_BYTES}"
+    # Use hard memory limit (MemoryMax)
+    MEMORY_PROPERTY="MemoryMax=${MEMORY_LIMIT_BYTES}"
 
     # Get the device for I/O limitations (adjust as necessary)
     DEVICE="/dev/nvme0n1"
