@@ -8,16 +8,16 @@ use std::{
 };
 use tempfile::Builder;
 
-use crate::streams::BUFFER_SIZE;
+use crate::BUFFER_SIZE;
 
 pub type AVec = aligned_vec::AVec<u8, aligned_vec::ConstAlign<4096>>;
 
 macro_rules! avec {
     () => {
-        $crate::streams::file_vec::AVec::new(4096)
+        $crate::file_vec::AVec::new(4096)
     };
     ($elem: expr; $count: expr) => {
-        $crate::streams::file_vec::AVec::__from_elem(0, $elem, $count)
+        $crate::file_vec::AVec::__from_elem(0, $elem, $count)
     };
 }
 
