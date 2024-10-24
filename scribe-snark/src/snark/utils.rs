@@ -1,16 +1,16 @@
 use crate::pc::structs::Commitment;
 use crate::pc::PCScheme;
 use crate::snark::{custom_gate::CustomizedGates, errors::ScribeErrors, structs::ScribeConfig};
+use scribe_streams::file_vec::FileVec;
+use scribe_streams::{iterator::BatchedIterator, serialize::RawPrimeField};
+use mle::MLE;
 use crate::transcript::IOPTranscript;
+use mle::VirtualPolynomial;
 use ark_ec::pairing::Pairing;
 use ark_ff::PrimeField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::{end_timer, start_timer};
-use mle::virtual_polynomial::VirtualPolynomial;
-use mle::MLE;
 use rayon::prelude::*;
-use scribe_streams::file_vec::FileVec;
-use scribe_streams::{iterator::BatchedIterator, serialize::RawPrimeField};
 
 use std::borrow::Borrow;
 

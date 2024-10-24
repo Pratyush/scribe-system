@@ -13,8 +13,7 @@ use crate::{
 };
 use ark_ff::{FftField, Field, PrimeField};
 use ark_poly::{domain::Radix2EvaluationDomain, EvaluationDomain};
-use ark_std::collections::HashSet;
-use ark_std::{boxed::Box, cmp::max, format, string::ToString, vec, vec::Vec};
+use ark_std::{boxed::Box, format, vec, vec::Vec};
 
 /// An index to a gate in circuit.
 pub type GateId = usize;
@@ -50,8 +49,6 @@ impl BoolVar {
 pub enum PlonkType {
     /// TurboPlonk
     TurboPlonk,
-    /// TurboPlonk that supports Plookup
-    UltraPlonk,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -178,50 +175,19 @@ pub trait Circuit<F: Field> {
 
     /// Pad the circuit with n dummy gates
     fn pad_gates(&mut self, n: usize);
-
-    /// Plookup-related methods.
-    /// Return true if the circuit support lookup gates.
-    fn support_lookup(&self) -> bool;
 }
-
-/// The wire type identifier for range gates.
-const RANGE_WIRE_ID: usize = 5;
-/// The wire type identifier for the key index in a lookup gate
-const LOOKUP_KEY_WIRE_ID: usize = 0;
-/// The wire type identifiers for the searched pair values in a lookup gate
-const LOOKUP_VAL_1_WIRE_ID: usize = 1;
-const LOOKUP_VAL_2_WIRE_ID: usize = 2;
-/// The wire type identifiers for the pair values in the lookup table
-const TABLE_VAL_1_WIRE_ID: usize = 3;
-const TABLE_VAL_2_WIRE_ID: usize = 4;
 
 /// Hardcoded parameters for Plonk systems.
 #[derive(Debug, Clone, Copy)]
 struct PlonkParams {
     /// The Plonk type of the circuit.
     plonk_type: PlonkType,
-
-    /// The bit length of a range-check. None for TurboPlonk.
-    range_bit_len: Option<usize>,
 }
 
 impl PlonkParams {
-    fn init(plonk_type: PlonkType, range_bit_len: Option<usize>) -> Result<Self, CircuitError> {
-        if plonk_type == PlonkType::TurboPlonk {
-            return Ok(Self {
-                plonk_type,
-                range_bit_len: None,
-            });
-        }
-        if range_bit_len.is_none() {
-            return Err(ParameterError(
-                "range bit len cannot be none for UltraPlonk".to_string(),
-            ));
-        }
-
+    fn init(plonk_type: PlonkType) -> Result<Self, CircuitError> {
         Ok(Self {
             plonk_type,
-            range_bit_len,
         })
     }
 }
@@ -270,19 +236,11 @@ where
 
     /// The Plonk parameters.
     plonk_params: PlonkParams,
-
-    /// The number of key-value table elements being inserted.
-    num_table_elems: usize,
-
-    /// The lookup gates indices for the inserted tables.
-    /// For each inserted table, the 1st value is the start id of the table,
-    /// the 2nd values is the length of the table.
-    table_gate_ids: Vec<(GateId, usize)>,
 }
 
 impl<F: FftField> Default for PlonkCircuit<F> {
     fn default() -> Self {
-        let params = PlonkParams::init(PlonkType::TurboPlonk, None).unwrap();
+        let params = PlonkParams::init(PlonkType::TurboPlonk).unwrap();
         Self::new(params)
     }
 }
@@ -302,16 +260,9 @@ impl<F: FftField> PlonkCircuit<F> {
 
             wire_permutation: vec![],
             extended_id_permutation: vec![],
-            num_wire_types: GATE_WIDTH
-                + 1
-                + match plonk_params.plonk_type {
-                    PlonkType::TurboPlonk => 0,
-                    PlonkType::UltraPlonk => 1,
-                },
+            num_wire_types: GATE_WIDTH + 1,
             eval_domain: Radix2EvaluationDomain::new(1).unwrap(),
             plonk_params,
-            num_table_elems: 0,
-            table_gate_ids: vec![],
         };
         // Constrain variables `0`/`1` to have value 0/1.
         circuit.enforce_constant(0, zero).unwrap(); // safe unwrap
@@ -321,13 +272,7 @@ impl<F: FftField> PlonkCircuit<F> {
 
     /// Construct a new TurboPlonk circuit.
     pub fn new_turbo_plonk() -> Self {
-        let plonk_params = PlonkParams::init(PlonkType::TurboPlonk, None).unwrap(); // safe unwrap
-        Self::new(plonk_params)
-    }
-
-    /// Construct a new UltraPlonk circuit.
-    pub fn new_ultra_plonk(range_bit_len: usize) -> Self {
-        let plonk_params = PlonkParams::init(PlonkType::UltraPlonk, Some(range_bit_len)).unwrap(); // safe unwrap
+        let plonk_params = PlonkParams::init(PlonkType::TurboPlonk).unwrap(); // safe unwrap
         Self::new(plonk_params)
     }
 
@@ -350,17 +295,6 @@ impl<F: FftField> PlonkCircuit<F> {
         }
 
         self.gates.push(gate);
-        Ok(())
-    }
-
-    /// Add a range_check gate that checks whether a variable is in the range
-    /// [0, range_size). Return an error if the circuit does not support
-    /// lookup.
-    pub fn add_range_check_variable(&mut self, var: Variable) -> Result<(), CircuitError> {
-        self.check_plonk_type(PlonkType::UltraPlonk)?;
-        self.check_finalize_flag(false)?;
-        self.check_var_bound(var)?;
-        self.wire_variables[RANGE_WIRE_ID].push(var);
         Ok(())
     }
 
@@ -394,26 +328,6 @@ impl<F: FftField> PlonkCircuit<F> {
     // TODO: make this function test only.
     pub fn witness_mut(&mut self, idx: Variable) -> &mut F {
         &mut self.witness[idx]
-    }
-
-    /// Get the number of inserted table elements.
-    pub(crate) fn num_table_elems(&self) -> usize {
-        self.num_table_elems
-    }
-
-    /// The bit length of UltraPlonk range gates.
-    pub fn range_bit_len(&self) -> Result<usize, CircuitError> {
-        if self.plonk_params.plonk_type != PlonkType::UltraPlonk {
-            return Err(ParameterError(
-                "call range_bit_len() with non-ultraplonk circuit".to_string(),
-            ));
-        }
-        Ok(self.plonk_params.range_bit_len.unwrap()) // safe unwrap
-    }
-
-    /// The range size of UltraPlonk range gates.
-    pub fn range_size(&self) -> Result<usize, CircuitError> {
-        Ok(1 << self.range_bit_len()?)
     }
 
     /// creating a `BoolVar` without checking if `v` is a boolean value!
@@ -475,51 +389,6 @@ impl<F: FftField> Circuit<F> for PlonkCircuit<F> {
                 self.check_gate(gate_id, &pi)?;
             }
         }
-        // Check range/lookup gates if the circuit supports lookup
-        if self.plonk_params.plonk_type == PlonkType::UltraPlonk {
-            // range gates
-            for idx in 0..self.wire_variables[RANGE_WIRE_ID].len() {
-                self.check_range_gate(idx)?
-            }
-            // key-value map lookup gates
-            let mut key_val_table = HashSet::new();
-            key_val_table.insert((F::zero(), F::zero(), F::zero(), F::zero()));
-            let q_lookup_vec = self.q_lookup();
-            let q_dom_sep_vec = self.q_dom_sep();
-            let table_key_vec = self.table_key_vec();
-            let table_dom_sep_vec = self.table_dom_sep_vec();
-            // insert table elements
-            for (gate_id, ((&q_lookup, &table_dom_sep), &table_key)) in q_lookup_vec
-                .iter()
-                .zip(table_dom_sep_vec.iter())
-                .zip(table_key_vec.iter())
-                .enumerate()
-            {
-                if q_lookup != F::zero() {
-                    let val0 = self.witness(self.wire_variable(TABLE_VAL_1_WIRE_ID, gate_id))?;
-                    let val1 = self.witness(self.wire_variable(TABLE_VAL_2_WIRE_ID, gate_id))?;
-                    key_val_table.insert((table_dom_sep, table_key, val0, val1));
-                }
-            }
-            // check lookups
-            for (gate_id, (&q_lookup, &q_dom_sep)) in
-                q_lookup_vec.iter().zip(q_dom_sep_vec.iter()).enumerate()
-            {
-                if q_lookup != F::zero() {
-                    let key = self.witness(self.wire_variable(LOOKUP_KEY_WIRE_ID, gate_id))?;
-                    let val0 = self.witness(self.wire_variable(LOOKUP_VAL_1_WIRE_ID, gate_id))?;
-                    let val1 = self.witness(self.wire_variable(LOOKUP_VAL_2_WIRE_ID, gate_id))?;
-                    if !key_val_table.contains(&(q_dom_sep, key, val0, val1)) {
-                        return Err(GateCheckFailure(
-                            gate_id,
-                            format!(
-                                "Lookup gate failed: ({q_dom_sep}, {key}, {val0}, {val1}) not in the table",
-                            ),
-                        ));
-                    }
-                }
-            }
-        }
         Ok(())
     }
 
@@ -533,6 +402,9 @@ impl<F: FftField> Circuit<F> for PlonkCircuit<F> {
         self.check_finalize_flag(false)?;
         self.witness.push(val);
         self.num_vars += 1;
+        if self.witness.len() == scribe_streams::BUFFER_SIZE {
+            
+        }
         // the index is from `0` to `num_vars - 1`
         Ok(self.num_vars - 1)
     }
@@ -662,36 +534,10 @@ impl<F: FftField> Circuit<F> for PlonkCircuit<F> {
             self.insert_gate(wire_vars, Box::new(EqualityGate)).unwrap();
         }
     }
-
-    // Plookup-related methods
-    //
-    fn support_lookup(&self) -> bool {
-        self.plonk_params.plonk_type == PlonkType::UltraPlonk
-    }
 }
 
 /// Private helper methods
 impl<F: FftField> PlonkCircuit<F> {
-    /// Check correctness of the idx-th range gate. Return an error if the
-    /// circuit does not support lookup.
-    fn check_range_gate(&self, idx: usize) -> Result<(), CircuitError> {
-        self.check_plonk_type(PlonkType::UltraPlonk)?;
-        if idx >= self.wire_variables[RANGE_WIRE_ID].len() {
-            return Err(IndexError);
-        }
-        let range_size = self.range_size()?;
-        if self.witness[self.wire_variables[RANGE_WIRE_ID][idx]] >= F::from(range_size as u32) {
-            return Err(GateCheckFailure(
-                idx,
-                format!(
-                    "Range gate failed: {} >= {}",
-                    self.witness[self.wire_variables[RANGE_WIRE_ID][idx]], range_size
-                ),
-            ));
-        }
-        Ok(())
-    }
-
     fn is_finalized(&self) -> bool {
         self.eval_domain.size() != 1
     }
@@ -714,26 +560,6 @@ impl<F: FftField> PlonkCircuit<F> {
                 }
                 // Update io gate index
                 *io_gate_id = gate_id;
-            }
-        }
-        if self.support_lookup() {
-            // move lookup gates to the rear, the relative order of the lookup gates
-            // should not change
-            let n = self.eval_domain.size();
-            // be careful that we can't put a lookup gates at the very last slot.
-            let mut cur_gate_id = n - 2;
-            for &(table_gate_id, table_size) in self.table_gate_ids.iter().rev() {
-                for gate_id in (table_gate_id..table_gate_id + table_size).rev() {
-                    if gate_id < cur_gate_id {
-                        // Swap gate types
-                        self.gates.swap(gate_id, cur_gate_id);
-                        // Swap wire variables
-                        for j in 0..GATE_WIDTH + 1 {
-                            self.wire_variables[j].swap(gate_id, cur_gate_id);
-                        }
-                        cur_gate_id -= 1;
-                    }
-                }
             }
         }
         Ok(())
@@ -946,30 +772,6 @@ impl<F: FftField> PlonkCircuit<F> {
         self.gates.iter().map(|g| g.q_ecc()).collect()
     }
 
-    /// getter for all lookup selector
-    #[inline]
-    pub fn q_lookup(&self) -> Vec<F> {
-        self.gates.iter().map(|g| g.q_lookup()).collect()
-    }
-
-    /// getter for all lookup domain separation selector
-    #[inline]
-    pub fn q_dom_sep(&self) -> Vec<F> {
-        self.gates.iter().map(|g| g.q_dom_sep()).collect()
-    }
-
-    /// getter for the vector of table keys
-    #[inline]
-    pub fn table_key_vec(&self) -> Vec<F> {
-        self.gates.iter().map(|g| g.table_key()).collect()
-    }
-
-    /// getter for the vector of table domain separation ids
-    #[inline]
-    fn table_dom_sep_vec(&self) -> Vec<F> {
-        self.gates.iter().map(|g| g.table_dom_sep()).collect()
-    }
-
     // TODO: (alex) try return reference instead of expensive clone
     /// getter for all selectors in the following order:
     /// q_lc, q_mul, q_hash, q_o, q_c, q_ecc, [q_lookup (if support lookup)]
@@ -985,9 +787,6 @@ impl<F: FftField> PlonkCircuit<F> {
         selectors.push(self.q_o());
         selectors.push(self.q_c());
         selectors.push(self.q_ecc());
-        if self.support_lookup() {
-            selectors.push(self.q_lookup());
-        }
         selectors
     }
 }
@@ -1023,15 +822,7 @@ impl<F: PrimeField> PlonkCircuit<F> {
         if self.is_finalized() {
             return Ok(());
         }
-        let num_slots_needed = match self.support_lookup() {
-            false => self.num_gates(),
-            true => max(
-                self.num_gates(),
-                max(self.range_size()?, self.wire_variables[RANGE_WIRE_ID].len())
-                    + self.num_table_elems()
-                    + 1,
-            ), // range gates and lookup gates need to have separate slots
-        };
+        let num_slots_needed = self.num_gates();
         self.eval_domain = Radix2EvaluationDomain::new(num_slots_needed)
             .ok_or(CircuitError::DomainCreationError)?;
         self.pad()?;
