@@ -17,11 +17,11 @@
 
 use super::TEPoint;
 use ark_ec::short_weierstrass::{Affine as SWAffine, SWCurveConfig as SWParam};
-use ark_ff::PrimeField;
+use scribe_streams::serialize::RawPrimeField;
 
 impl<F, P> From<SWAffine<P>> for TEPoint<F>
 where
-    F: PrimeField + SWToTEConParam,
+    F: RawPrimeField + SWToTEConParam,
     P: SWParam<BaseField = F>,
 {
     fn from(p: SWAffine<P>) -> Self {
@@ -59,7 +59,7 @@ where
 
 /// This trait holds constants that are used for curve conversion from
 /// short Weierstrass form to twisted Edwards form.
-pub trait SWToTEConParam: PrimeField {
+pub trait SWToTEConParam: RawPrimeField {
     /// Parameter S.
     const S: Self::BigInt;
     /// Parameter 1/alpha.

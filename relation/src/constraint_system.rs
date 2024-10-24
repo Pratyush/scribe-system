@@ -11,9 +11,10 @@ use crate::{
     CircuitError,
     CircuitError::*,
 };
-use ark_ff::{FftField, Field, PrimeField};
+use ark_ff::Field;
 use ark_poly::{domain::Radix2EvaluationDomain, EvaluationDomain};
 use ark_std::{boxed::Box, format, vec, vec::Vec};
+use scribe_streams::serialize::RawPrimeField;
 
 /// An index to a gate in circuit.
 pub type GateId = usize;
@@ -42,23 +43,6 @@ impl BoolVar {
     pub(crate) fn new_unchecked(inner: usize) -> Self {
         Self(inner)
     }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-/// Enum for each type of Plonk scheme.
-pub enum PlonkType {
-    /// TurboPlonk
-    TurboPlonk,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-/// Enum for each type of mergeable circuit. We can only merge circuits from
-/// different types.
-pub enum MergeableCircuitType {
-    /// First type
-    TypeA,
-    /// Second type
-    TypeB,
 }
 
 /// An interface for Plonk constraint systems.
@@ -177,26 +161,11 @@ pub trait Circuit<F: Field> {
     fn pad_gates(&mut self, n: usize);
 }
 
-/// Hardcoded parameters for Plonk systems.
-#[derive(Debug, Clone, Copy)]
-struct PlonkParams {
-    /// The Plonk type of the circuit.
-    plonk_type: PlonkType,
-}
-
-impl PlonkParams {
-    fn init(plonk_type: PlonkType) -> Result<Self, CircuitError> {
-        Ok(Self {
-            plonk_type,
-        })
-    }
-}
-
 /// A specific Plonk circuit instantiation.
 #[derive(Debug, Clone)]
 pub struct PlonkCircuit<F>
 where
-    F: FftField,
+    F: RawPrimeField + RawPrimeField,
 {
     /// The number of variables.
     num_vars: usize,
@@ -233,21 +202,17 @@ where
     /// arithmetization, by default it is a domain with size 1 (only with
     /// element 0).
     eval_domain: Radix2EvaluationDomain<F>,
-
-    /// The Plonk parameters.
-    plonk_params: PlonkParams,
 }
 
-impl<F: FftField> Default for PlonkCircuit<F> {
+impl<F: RawPrimeField + RawPrimeField> Default for PlonkCircuit<F> {
     fn default() -> Self {
-        let params = PlonkParams::init(PlonkType::TurboPlonk).unwrap();
-        Self::new(params)
+        Self::new()
     }
 }
 
-impl<F: FftField> PlonkCircuit<F> {
+impl<F: RawPrimeField + RawPrimeField> PlonkCircuit<F> {
     /// Construct a new circuit with type `plonk_type`.
-    fn new(plonk_params: PlonkParams) -> Self {
+    pub fn new() -> Self {
         let zero = F::zero();
         let one = F::one();
         let mut circuit = Self {
@@ -262,18 +227,11 @@ impl<F: FftField> PlonkCircuit<F> {
             extended_id_permutation: vec![],
             num_wire_types: GATE_WIDTH + 1,
             eval_domain: Radix2EvaluationDomain::new(1).unwrap(),
-            plonk_params,
         };
         // Constrain variables `0`/`1` to have value 0/1.
         circuit.enforce_constant(0, zero).unwrap(); // safe unwrap
         circuit.enforce_constant(1, one).unwrap(); // safe unwrap
         circuit
-    }
-
-    /// Construct a new TurboPlonk circuit.
-    pub fn new_turbo_plonk() -> Self {
-        let plonk_params = PlonkParams::init(PlonkType::TurboPlonk).unwrap(); // safe unwrap
-        Self::new(plonk_params)
     }
 
     /// Insert a general (algebraic) gate
@@ -343,7 +301,7 @@ impl<F: FftField> PlonkCircuit<F> {
     }
 }
 
-impl<F: FftField> Circuit<F> for PlonkCircuit<F> {
+impl<F: RawPrimeField + RawPrimeField> Circuit<F> for PlonkCircuit<F> {
     fn num_gates(&self) -> usize {
         self.gates.len()
     }
@@ -402,9 +360,7 @@ impl<F: FftField> Circuit<F> for PlonkCircuit<F> {
         self.check_finalize_flag(false)?;
         self.witness.push(val);
         self.num_vars += 1;
-        if self.witness.len() == scribe_streams::BUFFER_SIZE {
-            
-        }
+        if self.witness.len() == scribe_streams::BUFFER_SIZE {}
         // the index is from `0` to `num_vars - 1`
         Ok(self.num_vars - 1)
     }
@@ -537,7 +493,7 @@ impl<F: FftField> Circuit<F> for PlonkCircuit<F> {
 }
 
 /// Private helper methods
-impl<F: FftField> PlonkCircuit<F> {
+impl<F: RawPrimeField> PlonkCircuit<F> {
     fn is_finalized(&self) -> bool {
         self.eval_domain.size() != 1
     }
@@ -693,16 +649,6 @@ impl<F: FftField> PlonkCircuit<F> {
         Ok(())
     }
 
-    /// Check whether the Plonk type is the expected Plonk type. Return an error if
-    /// not.
-    #[inline]
-    pub fn check_plonk_type(&self, expect_type: PlonkType) -> Result<(), CircuitError> {
-        if self.plonk_params.plonk_type != expect_type {
-            return Err(WrongPlonkType);
-        }
-        Ok(())
-    }
-
     /// Return the variable that maps to a wire `(i, j)` where i is the wire type and
     /// j is the gate index. If gate `j` is a padded dummy gate, return zero
     /// variable.
@@ -792,7 +738,7 @@ impl<F: FftField> PlonkCircuit<F> {
 }
 
 /// Private permutation related methods
-impl<F: PrimeField> PlonkCircuit<F> {
+impl<F: RawPrimeField> PlonkCircuit<F> {
     /// Copy constraints: precompute the extended permutation over circuit
     /// wires. Refer to Sec 5.2 and Sec 8.1 of https://eprint.iacr.org/2019/953.pdf for more details.
     #[inline]
@@ -816,7 +762,7 @@ impl<F: PrimeField> PlonkCircuit<F> {
 }
 
 /// Methods for finalizing and merging the circuits.
-impl<F: PrimeField> PlonkCircuit<F> {
+impl<F: RawPrimeField> PlonkCircuit<F> {
     /// Finalize the setup of the circuit before arithmetization.
     pub fn finalize_for_arithmetization(&mut self) -> Result<(), CircuitError> {
         if self.is_finalized() {

@@ -7,13 +7,14 @@
 //! Comparison gadgets for circuit
 
 use crate::{BoolVar, Circuit, CircuitError, PlonkCircuit, Variable};
-use ark_ff::{BigInteger, PrimeField};
+use ark_ff::BigInteger;
+use scribe_streams::serialize::RawPrimeField;
 
-impl<F: PrimeField> PlonkCircuit<F> {
+impl<F: RawPrimeField> PlonkCircuit<F> {
     /// Constrain that `a` < `b`.
     pub fn enforce_lt(&mut self, a: Variable, b: Variable) -> Result<(), CircuitError>
     where
-        F: PrimeField,
+        F: RawPrimeField,
     {
         self.check_var_bound(a)?;
         self.check_var_bound(b)?;
@@ -23,7 +24,7 @@ impl<F: PrimeField> PlonkCircuit<F> {
     /// Constrain that `a` <= `b`
     pub fn enforce_leq(&mut self, a: Variable, b: Variable) -> Result<(), CircuitError>
     where
-        F: PrimeField,
+        F: RawPrimeField,
     {
         let c = self.is_lt(b, a)?;
         self.enforce_constant(c.0, F::zero())
@@ -32,7 +33,7 @@ impl<F: PrimeField> PlonkCircuit<F> {
     /// Constrain that `a` > `b`.
     pub fn enforce_gt(&mut self, a: Variable, b: Variable) -> Result<(), CircuitError>
     where
-        F: PrimeField,
+        F: RawPrimeField,
     {
         self.enforce_lt(b, a)
     }
@@ -40,7 +41,7 @@ impl<F: PrimeField> PlonkCircuit<F> {
     /// Constrain that `a` >= `b`.
     pub fn enforce_geq(&mut self, a: Variable, b: Variable) -> Result<(), CircuitError>
     where
-        F: PrimeField,
+        F: RawPrimeField,
     {
         let c = self.is_lt(a, b)?;
         self.enforce_constant(c.into(), F::zero())
@@ -49,7 +50,7 @@ impl<F: PrimeField> PlonkCircuit<F> {
     /// Returns a `BoolVar` indicating whether `a` < `b`.
     pub fn is_lt(&mut self, a: Variable, b: Variable) -> Result<BoolVar, CircuitError>
     where
-        F: PrimeField,
+        F: RawPrimeField,
     {
         self.check_var_bound(a)?;
         self.check_var_bound(b)?;
@@ -59,7 +60,7 @@ impl<F: PrimeField> PlonkCircuit<F> {
     /// Returns a `BoolVar` indicating whether `a` > `b`.
     pub fn is_gt(&mut self, a: Variable, b: Variable) -> Result<BoolVar, CircuitError>
     where
-        F: PrimeField,
+        F: RawPrimeField,
     {
         self.is_lt(b, a)
     }
@@ -67,7 +68,7 @@ impl<F: PrimeField> PlonkCircuit<F> {
     /// Returns a `BoolVar` indicating whether `a` <= `b`.
     pub fn is_leq(&mut self, a: Variable, b: Variable) -> Result<BoolVar, CircuitError>
     where
-        F: PrimeField,
+        F: RawPrimeField,
     {
         self.check_var_bound(a)?;
         self.check_var_bound(b)?;
@@ -78,7 +79,7 @@ impl<F: PrimeField> PlonkCircuit<F> {
     /// Returns a `BoolVar` indicating whether `a` >= `b`.
     pub fn is_geq(&mut self, a: Variable, b: Variable) -> Result<BoolVar, CircuitError>
     where
-        F: PrimeField,
+        F: RawPrimeField,
     {
         self.check_var_bound(a)?;
         self.check_var_bound(b)?;
@@ -90,7 +91,7 @@ impl<F: PrimeField> PlonkCircuit<F> {
     /// given constant `val`.
     pub fn is_lt_constant(&mut self, a: Variable, val: F) -> Result<BoolVar, CircuitError>
     where
-        F: PrimeField,
+        F: RawPrimeField,
     {
         self.check_var_bound(a)?;
         let b = self.create_constant_variable(val)?;
@@ -101,7 +102,7 @@ impl<F: PrimeField> PlonkCircuit<F> {
     /// equal to a given constant `val`.
     pub fn is_leq_constant(&mut self, a: Variable, val: F) -> Result<BoolVar, CircuitError>
     where
-        F: PrimeField,
+        F: RawPrimeField,
     {
         self.check_var_bound(a)?;
         let b = self.create_constant_variable(val)?;
@@ -112,7 +113,7 @@ impl<F: PrimeField> PlonkCircuit<F> {
     /// a given constant `val`.
     pub fn is_gt_constant(&mut self, a: Variable, val: F) -> Result<BoolVar, CircuitError>
     where
-        F: PrimeField,
+        F: RawPrimeField,
     {
         self.check_var_bound(a)?;
         self.is_gt_constant_internal(a, &val)
@@ -122,7 +123,7 @@ impl<F: PrimeField> PlonkCircuit<F> {
     /// or equal a given constant `val`.
     pub fn is_geq_constant(&mut self, a: Variable, val: F) -> Result<BoolVar, CircuitError>
     where
-        F: PrimeField,
+        F: RawPrimeField,
     {
         self.check_var_bound(a)?;
         let b = self.create_constant_variable(val)?;
@@ -133,7 +134,7 @@ impl<F: PrimeField> PlonkCircuit<F> {
     /// given constant `val`.
     pub fn enforce_lt_constant(&mut self, a: Variable, val: F) -> Result<(), CircuitError>
     where
-        F: PrimeField,
+        F: RawPrimeField,
     {
         self.check_var_bound(a)?;
         let b = self.create_constant_variable(val)?;
@@ -144,7 +145,7 @@ impl<F: PrimeField> PlonkCircuit<F> {
     /// equal to a given constant `val`.
     pub fn enforce_leq_constant(&mut self, a: Variable, val: F) -> Result<(), CircuitError>
     where
-        F: PrimeField,
+        F: RawPrimeField,
     {
         self.check_var_bound(a)?;
         let b = self.create_constant_variable(val)?;
@@ -155,7 +156,7 @@ impl<F: PrimeField> PlonkCircuit<F> {
     /// a given constant `val`.
     pub fn enforce_gt_constant(&mut self, a: Variable, val: F) -> Result<(), CircuitError>
     where
-        F: PrimeField,
+        F: RawPrimeField,
     {
         self.check_var_bound(a)?;
         let b = self.create_constant_variable(val)?;
@@ -166,7 +167,7 @@ impl<F: PrimeField> PlonkCircuit<F> {
     /// or equal a given constant `val`.
     pub fn enforce_geq_constant(&mut self, a: Variable, val: F) -> Result<(), CircuitError>
     where
-        F: PrimeField,
+        F: RawPrimeField,
     {
         self.check_var_bound(a)?;
         let b = self.create_constant_variable(val)?;
@@ -175,7 +176,7 @@ impl<F: PrimeField> PlonkCircuit<F> {
 }
 
 /// Private helper functions for comparison gate
-impl<F: PrimeField> PlonkCircuit<F> {
+impl<F: RawPrimeField> PlonkCircuit<F> {
     /// Returns 2 `BoolVar`s.
     /// First indicates whether `a` <= (q-1)/2 and `b` > (q-1)/2.
     /// Second indicates whether `a` and `b` are both <= (q-1)/2
@@ -254,9 +255,9 @@ impl<F: PrimeField> PlonkCircuit<F> {
 
 #[cfg(test)]
 mod test {
+    use super::*;
     use crate::{BoolVar, Circuit, CircuitError, PlonkCircuit};
     use ark_ed_on_bls12_381::Fq as FqEd381;
-    use ark_ff::PrimeField;
     use ark_std::cmp::Ordering;
     use itertools::multizip;
 
@@ -265,7 +266,7 @@ mod test {
         test_cmp_helper::<FqEd381>()
     }
 
-    fn test_cmp_helper<F: PrimeField>() -> Result<(), CircuitError> {
+    fn test_cmp_helper<F: RawPrimeField>() -> Result<(), CircuitError> {
         let list = [
             (F::from(5u32), F::from(5u32)),
             (F::from(1u32), F::from(2u32)),
@@ -295,14 +296,14 @@ mod test {
             )
     }
 
-    fn test_is_cmp_helper<F: PrimeField>(
+    fn test_is_cmp_helper<F: RawPrimeField>(
         a: &F,
         b: &F,
         ordering: Ordering,
         should_also_check_equality: bool,
         is_b_constant: bool,
     ) -> Result<(), CircuitError> {
-        let mut circuit = PlonkCircuit::<F>::new_turbo_plonk();
+        let mut circuit = PlonkCircuit::<F>::new();
         let expected_result = if a.cmp(b) == ordering
             || (a.cmp(b) == Ordering::Equal && should_also_check_equality)
         {
@@ -355,14 +356,14 @@ mod test {
         assert!(circuit.check_circuit_satisfiability(&[]).is_ok());
         Ok(())
     }
-    fn test_enforce_cmp_helper<F: PrimeField>(
+    fn test_enforce_cmp_helper<F: RawPrimeField>(
         a: &F,
         b: &F,
         ordering: Ordering,
         should_also_check_equality: bool,
         is_b_constant: bool,
     ) -> Result<(), CircuitError> {
-        let mut circuit = PlonkCircuit::<F>::new_turbo_plonk();
+        let mut circuit = PlonkCircuit::<F>::new();
         let expected_result =
             a.cmp(b) == ordering || (a.cmp(b) == Ordering::Equal && should_also_check_equality);
         let a = circuit.create_variable(*a)?;

@@ -15,15 +15,16 @@ use ark_ec::{
 use ark_ff::PrimeField;
 use ark_std::{borrow::ToOwned, boxed::Box, string::ToString, vec, vec::Vec};
 use core::marker::PhantomData;
+use scribe_streams::serialize::RawPrimeField;
 
 mod conversion;
 pub use conversion::*;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 /// An elliptic curve point in twisted Edwards affine form (x, y).
-pub struct TEPoint<F: PrimeField>(F, F);
+pub struct TEPoint<F: RawPrimeField>(F, F);
 
-impl<F: PrimeField> Default for TEPoint<F> {
+impl<F: RawPrimeField> Default for TEPoint<F> {
     fn default() -> Self {
         Self(F::zero(), F::one())
     }
@@ -31,7 +32,7 @@ impl<F: PrimeField> Default for TEPoint<F> {
 
 impl<F, P> From<Affine<P>> for TEPoint<F>
 where
-    F: PrimeField,
+    F: RawPrimeField,
     P: Config<BaseField = F>,
 {
     fn from(p: Affine<P>) -> Self {
@@ -48,7 +49,7 @@ where
     }
 }
 
-impl<F: PrimeField> TEPoint<F> {
+impl<F: RawPrimeField> TEPoint<F> {
     /// Get the x coordinate of the point.
     pub fn get_x(&self) -> F {
         self.0
@@ -67,7 +68,7 @@ impl<F: PrimeField> TEPoint<F> {
 
 impl<F, P> From<Projective<P>> for TEPoint<F>
 where
-    F: PrimeField,
+    F: RawPrimeField,
     P: Config<BaseField = F>,
 {
     fn from(p: Projective<P>) -> Self {
@@ -78,7 +79,7 @@ where
 
 impl<F, P> From<TEPoint<F>> for Affine<P>
 where
-    F: PrimeField,
+    F: RawPrimeField,
     P: Config<BaseField = F>,
 {
     fn from(p: TEPoint<F>) -> Self {
@@ -88,7 +89,7 @@ where
 
 impl<F, P> From<TEPoint<F>> for Projective<P>
 where
-    F: PrimeField,
+    F: RawPrimeField,
     P: Config<BaseField = F>,
 {
     fn from(p: TEPoint<F>) -> Self {
@@ -114,7 +115,7 @@ impl PointVariable {
 }
 
 // ECC related gates
-impl<F: PrimeField> PlonkCircuit<F> {
+impl<F: RawPrimeField> PlonkCircuit<F> {
     /// Return the witness point for the circuit
     pub fn point_witness(&self, point_var: &PointVariable) -> Result<TEPoint<F>, CircuitError> {
         self.check_point_var_bound(point_var)?;
@@ -253,7 +254,7 @@ impl<F: PrimeField> PlonkCircuit<F> {
     }
 }
 
-impl<F: PrimeField> PlonkCircuit<F> {
+impl<F: RawPrimeField> PlonkCircuit<F> {
     /// Inverse a point variable
     pub fn inverse_point(
         &mut self,
@@ -472,7 +473,7 @@ impl<F: PrimeField> PlonkCircuit<F> {
 }
 
 // private helper functions
-impl<F: PrimeField> PlonkCircuit<F> {
+impl<F: RawPrimeField> PlonkCircuit<F> {
     fn check_point_var_bound(&self, point_var: &PointVariable) -> Result<(), CircuitError> {
         self.check_var_bound(point_var.0)?;
         self.check_var_bound(point_var.1)?;
@@ -574,10 +575,10 @@ mod test {
 
     fn test_is_neutral_helper<F, P>() -> Result<(), CircuitError>
     where
-        F: PrimeField + ?Sized,
+        F: RawPrimeField + ?Sized,
         P: Config<BaseField = F>,
     {
-        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_turbo_plonk();
+        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new();
         let p1 = circuit.create_point_variable(TEPoint(F::zero(), F::one()))?;
         let p2 = circuit.create_point_variable(TEPoint(F::from(2353u32), F::one()))?;
         let p1_check = circuit.is_neutral_point::<P>(&p1)?;
@@ -601,10 +602,10 @@ mod test {
 
     fn build_is_neutral_circuit<F, P>(point: TEPoint<F>) -> Result<PlonkCircuit<F>, CircuitError>
     where
-        F: PrimeField,
+        F: RawPrimeField,
         P: Config<BaseField = F>,
     {
-        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_turbo_plonk();
+        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new();
         let p = circuit.create_point_variable(point)?;
         circuit.is_neutral_point::<P>(&p)?;
         circuit.finalize_for_arithmetization()?;
@@ -613,7 +614,7 @@ mod test {
 
     macro_rules! test_enforce_on_curve {
         ($fq:tt, $param:tt, $pt:tt) => {
-            let mut circuit: PlonkCircuit<$fq> = PlonkCircuit::new_turbo_plonk();
+            let mut circuit: PlonkCircuit<$fq> = PlonkCircuit::new();
             let p1 = circuit.create_point_variable(TEPoint($fq::zero(), $fq::one()))?;
             circuit.enforce_on_curve::<$param>(&p1)?;
             let p2 = circuit.create_point_variable($pt)?;
@@ -710,10 +711,10 @@ mod test {
         point: TEPoint<F>,
     ) -> Result<PlonkCircuit<F>, CircuitError>
     where
-        F: PrimeField,
+        F: RawPrimeField,
         P: Config<BaseField = F>,
     {
-        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_turbo_plonk();
+        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new();
         let p = circuit.create_point_variable(point)?;
         circuit.enforce_on_curve::<P>(&p)?;
         circuit.finalize_for_arithmetization()?;
@@ -731,7 +732,7 @@ mod test {
 
     fn test_curve_point_addition_helper<F, P>() -> Result<(), CircuitError>
     where
-        F: PrimeField,
+        F: RawPrimeField,
         P: Config<BaseField = F>,
     {
         let mut rng = jf_utils::test_rng();
@@ -739,7 +740,7 @@ mod test {
         let p2 = Affine::<P>::rand(&mut rng);
         let p3 = (p1 + p2).into_affine();
 
-        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_turbo_plonk();
+        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new();
         let p1_var = circuit.create_point_variable(TEPoint::from(p1))?;
         let p2_var = circuit.create_point_variable(TEPoint::from(p2))?;
         let p3_var = circuit.ecc_add::<P>(&p1_var, &p2_var)?;
@@ -771,10 +772,10 @@ mod test {
         p2: TEPoint<F>,
     ) -> Result<PlonkCircuit<F>, CircuitError>
     where
-        F: PrimeField,
+        F: RawPrimeField,
         P: Config<BaseField = F>,
     {
-        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_turbo_plonk();
+        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new();
         let p1_var = circuit.create_point_variable(p1)?;
         let p2_var = circuit.create_point_variable(p2)?;
         circuit.ecc_add::<P>(&p1_var, &p2_var)?;
@@ -793,7 +794,7 @@ mod test {
 
     fn test_quaternary_point_select_helper<F, P>() -> Result<(), CircuitError>
     where
-        F: PrimeField,
+        F: RawPrimeField,
         P: Config<BaseField = F>,
     {
         let mut rng = jf_utils::test_rng();
@@ -801,7 +802,7 @@ mod test {
         let p2 = Affine::<P>::rand(&mut rng);
         let p3 = Affine::<P>::rand(&mut rng);
 
-        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_turbo_plonk();
+        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new();
         let false_var = circuit.false_var();
         let true_var = circuit.true_var();
 
@@ -857,10 +858,10 @@ mod test {
         b1: bool,
     ) -> Result<PlonkCircuit<F>, CircuitError>
     where
-        F: PrimeField,
+        F: RawPrimeField,
         P: Config<BaseField = F>,
     {
-        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_turbo_plonk();
+        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new();
         let b0_var = circuit.create_boolean_variable(b0)?;
         let b1_var = circuit.create_boolean_variable(b1)?;
 
@@ -890,13 +891,13 @@ mod test {
 
     fn test_point_equal_gate_helper<F, P>() -> Result<(), CircuitError>
     where
-        F: PrimeField,
+        F: RawPrimeField,
         P: Config<BaseField = F>,
     {
         let mut rng = jf_utils::test_rng();
         let p = Affine::<P>::rand(&mut rng);
 
-        let mut circuit = PlonkCircuit::<F>::new_turbo_plonk();
+        let mut circuit = PlonkCircuit::<F>::new();
         let p1_var = circuit.create_point_variable(TEPoint::from(p))?;
         let p2_var = circuit.create_point_variable(TEPoint::from(p))?;
         circuit.enforce_point_equal(&p1_var, &p2_var)?;
@@ -916,11 +917,11 @@ mod test {
         Ok(())
     }
 
-    fn build_point_equal_circuit<F: PrimeField>(
+    fn build_point_equal_circuit<F: RawPrimeField>(
         p1: TEPoint<F>,
         p2: TEPoint<F>,
     ) -> Result<PlonkCircuit<F>, CircuitError> {
-        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_turbo_plonk();
+        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new();
         let p1_var = circuit.create_point_variable(p1)?;
         let p2_var = circuit.create_point_variable(p2)?;
         circuit.enforce_point_equal(&p1_var, &p2_var)?;
@@ -939,7 +940,7 @@ mod test {
 
     fn test_is_equal_point_helper<F, P>() -> Result<(), CircuitError>
     where
-        F: PrimeField,
+        F: RawPrimeField,
         P: Config<BaseField = F>,
     {
         let mut rng = jf_utils::test_rng();
@@ -947,7 +948,7 @@ mod test {
         let p2 = p1;
         let p3 = Affine::<P>::rand(&mut rng);
 
-        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_turbo_plonk();
+        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new();
         let p1_var = circuit.create_point_variable(TEPoint::from(p1))?;
         let p2_var = circuit.create_point_variable(TEPoint::from(p2))?;
         let p3_var = circuit.create_point_variable(TEPoint::from(p3))?;
@@ -972,12 +973,12 @@ mod test {
         Ok(())
     }
 
-    fn build_is_equal_point_circuit<F: PrimeField>(
+    fn build_is_equal_point_circuit<F: RawPrimeField>(
         p1: TEPoint<F>,
         p2: TEPoint<F>,
         p3: TEPoint<F>,
     ) -> Result<PlonkCircuit<F>, CircuitError> {
-        let mut circuit = PlonkCircuit::new_turbo_plonk();
+        let mut circuit = PlonkCircuit::new();
         let p1_var = circuit.create_point_variable(p1)?;
         let p2_var = circuit.create_point_variable(p2)?;
         let p3_var = circuit.create_point_variable(p3)?;
@@ -998,12 +999,12 @@ mod test {
 
     fn test_compute_fixed_bases_helper<F, P>() -> Result<(), CircuitError>
     where
-        F: PrimeField,
+        F: RawPrimeField,
         P: Config<BaseField = F>,
     {
         fn check_base_list<F, P>(bases: &[Projective<P>])
         where
-            F: PrimeField,
+            F: RawPrimeField,
             P: Config<BaseField = F>,
         {
             bases
@@ -1055,11 +1056,11 @@ mod test {
 
     fn test_fixed_based_scalar_mul_helper<F, P>() -> Result<(), CircuitError>
     where
-        F: PrimeField,
+        F: RawPrimeField,
         P: Config<BaseField = F>,
     {
         let mut rng = jf_utils::test_rng();
-        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_turbo_plonk();
+        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new();
 
         for _ in 0..6 {
             let mut base = Affine::<P>::rand(&mut rng);
@@ -1088,11 +1089,11 @@ mod test {
         scalar: F,
     ) -> Result<PlonkCircuit<F>, CircuitError>
     where
-        F: PrimeField,
+        F: RawPrimeField,
         P: Config<BaseField = F>,
     {
         let mut rng = jf_utils::test_rng();
-        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_turbo_plonk();
+        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new();
         let base = Affine::<P>::rand(&mut rng);
         let scalar_var = circuit.create_variable(scalar)?;
         circuit.fixed_base_scalar_mul(scalar_var, &base)?;
@@ -1110,7 +1111,7 @@ mod test {
     }
     fn test_binary_point_vars_select_helper<F, P>() -> Result<(), CircuitError>
     where
-        F: PrimeField,
+        F: RawPrimeField,
         P: Config<BaseField = F>,
     {
         let mut rng = jf_utils::test_rng();
@@ -1118,7 +1119,7 @@ mod test {
         let p1 = Affine::<P>::rand(&mut rng);
         let p2 = Affine::<P>::rand(&mut rng);
 
-        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_turbo_plonk();
+        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new();
         let p0_var = circuit.create_point_variable(TEPoint::from(p0))?;
         let p1_var = circuit.create_point_variable(TEPoint::from(p1))?;
         let true_var = circuit.true_var();
@@ -1161,9 +1162,9 @@ mod test {
         p1: TEPoint<F>,
     ) -> Result<PlonkCircuit<F>, CircuitError>
     where
-        F: PrimeField,
+        F: RawPrimeField,
     {
-        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_turbo_plonk();
+        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new();
         let b_var = circuit.create_boolean_variable(b)?;
         let p0_var = circuit.create_point_variable(p0)?;
         let p1_var = circuit.create_point_variable(p1)?;

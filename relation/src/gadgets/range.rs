@@ -8,10 +8,11 @@
 
 use super::utils::next_multiple;
 use crate::{constants::GATE_WIDTH, BoolVar, Circuit, CircuitError, PlonkCircuit, Variable};
-use ark_ff::{BigInteger, PrimeField};
+use ark_ff::BigInteger;
 use ark_std::{format, string::ToString, vec::Vec};
+use scribe_streams::serialize::RawPrimeField;
 
-impl<F: PrimeField> PlonkCircuit<F> {
+impl<F: RawPrimeField> PlonkCircuit<F> {
     /// Constrain a variable to be within the [0, 2^`bit_len`) range
     /// Return error if the variable is invalid.
     pub fn enforce_in_range(&mut self, a: Variable, bit_len: usize) -> Result<(), CircuitError> {
@@ -87,7 +88,7 @@ impl<F: PrimeField> PlonkCircuit<F> {
 }
 
 /// Private helper function for range gate
-impl<F: PrimeField> PlonkCircuit<F> {
+impl<F: RawPrimeField> PlonkCircuit<F> {
     // internal of a range check gate
     pub(crate) fn range_gate_internal(
         &mut self,
@@ -137,12 +138,12 @@ impl<F: PrimeField> PlonkCircuit<F> {
 
 #[cfg(test)]
 mod test {
+    use super::*;
     use crate::{Circuit, CircuitError, PlonkCircuit};
     use ark_bls12_381::Fq as Fq381;
     use ark_ed_on_bls12_377::Fq as FqEd377;
     use ark_ed_on_bls12_381::Fq as FqEd381;
     use ark_ed_on_bn254::Fq as FqEd254;
-    use ark_ff::PrimeField;
 
     #[test]
     fn test_unpack() -> Result<(), CircuitError> {
@@ -152,8 +153,8 @@ mod test {
         test_unpack_helper::<Fq381>()
     }
 
-    fn test_unpack_helper<F: PrimeField>() -> Result<(), CircuitError> {
-        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_turbo_plonk();
+    fn test_unpack_helper<F: RawPrimeField>() -> Result<(), CircuitError> {
+        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new();
         let a = circuit.create_variable(F::one())?;
         let b = circuit.create_variable(F::from(1023u32))?;
 
@@ -174,8 +175,8 @@ mod test {
         test_range_gate_helper::<FqEd381>()?;
         test_range_gate_helper::<Fq381>()
     }
-    fn test_range_gate_helper<F: PrimeField>() -> Result<(), CircuitError> {
-        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_turbo_plonk();
+    fn test_range_gate_helper<F: RawPrimeField>() -> Result<(), CircuitError> {
+        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new();
         let a = circuit.create_variable(F::one())?;
         let b = circuit.create_variable(F::from(1023u32))?;
 
@@ -206,8 +207,8 @@ mod test {
         Ok(())
     }
 
-    fn build_range_gate_circuit<F: PrimeField>(a: F) -> Result<PlonkCircuit<F>, CircuitError> {
-        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_turbo_plonk();
+    fn build_range_gate_circuit<F: RawPrimeField>(a: F) -> Result<PlonkCircuit<F>, CircuitError> {
+        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new();
         let a_var = circuit.create_variable(a)?;
         circuit.enforce_in_range(a_var, 10)?;
         circuit.finalize_for_arithmetization()?;
@@ -221,8 +222,8 @@ mod test {
         test_check_in_range_helper::<FqEd381>()?;
         test_check_in_range_helper::<Fq381>()
     }
-    fn test_check_in_range_helper<F: PrimeField>() -> Result<(), CircuitError> {
-        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_turbo_plonk();
+    fn test_check_in_range_helper<F: RawPrimeField>() -> Result<(), CircuitError> {
+        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new();
         let a = circuit.create_variable(F::from(1023u32))?;
 
         let b1 = circuit.is_in_range(a, 5)?;
@@ -248,8 +249,10 @@ mod test {
         Ok(())
     }
 
-    fn build_check_in_range_circuit<F: PrimeField>(a: F) -> Result<PlonkCircuit<F>, CircuitError> {
-        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_turbo_plonk();
+    fn build_check_in_range_circuit<F: RawPrimeField>(
+        a: F,
+    ) -> Result<PlonkCircuit<F>, CircuitError> {
+        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new();
         let a_var = circuit.create_variable(a)?;
         circuit.is_in_range(a_var, 10)?;
         circuit.finalize_for_arithmetization()?;

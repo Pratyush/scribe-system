@@ -10,10 +10,10 @@ use crate::{
     gates::{CondSelectGate, LogicOrGate, LogicOrOutputGate},
     BoolVar, Circuit, CircuitError, PlonkCircuit, Variable,
 };
-use ark_ff::PrimeField;
 use ark_std::{boxed::Box, string::ToString};
+use scribe_streams::serialize::RawPrimeField;
 
-impl<F: PrimeField> PlonkCircuit<F> {
+impl<F: RawPrimeField> PlonkCircuit<F> {
     /// Constrain that `a` is true or `b` is true.
     /// Return error if variables are invalid.
     pub fn logic_or_gate(&mut self, a: BoolVar, b: BoolVar) -> Result<(), CircuitError> {
@@ -166,12 +166,12 @@ impl<F: PrimeField> PlonkCircuit<F> {
 
 #[cfg(test)]
 mod test {
+    use super::*;
     use crate::{Circuit, CircuitError, PlonkCircuit};
     use ark_bls12_381::Fq as Fq381;
     use ark_ed_on_bls12_377::Fq as FqEd377;
     use ark_ed_on_bls12_381::Fq as FqEd381;
     use ark_ed_on_bn254::Fq as FqEd254;
-    use ark_ff::PrimeField;
 
     #[test]
     fn test_logic_or() -> Result<(), CircuitError> {
@@ -181,8 +181,8 @@ mod test {
         test_logic_or_helper::<Fq381>()
     }
 
-    fn test_logic_or_helper<F: PrimeField>() -> Result<(), CircuitError> {
-        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_turbo_plonk();
+    fn test_logic_or_helper<F: RawPrimeField>() -> Result<(), CircuitError> {
+        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new();
         let false_var = circuit.false_var();
         let true_var = circuit.true_var();
         // Good path
@@ -207,8 +207,8 @@ mod test {
         test_logic_or_gate_helper::<Fq381>()
     }
 
-    fn test_logic_or_gate_helper<F: PrimeField>() -> Result<(), CircuitError> {
-        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_turbo_plonk();
+    fn test_logic_or_gate_helper<F: RawPrimeField>() -> Result<(), CircuitError> {
+        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new();
         let false_var = circuit.false_var();
         let true_var = circuit.true_var();
         // Good path
@@ -226,11 +226,11 @@ mod test {
         Ok(())
     }
 
-    fn build_logic_or_circuit<F: PrimeField>(
+    fn build_logic_or_circuit<F: RawPrimeField>(
         a: bool,
         b: bool,
     ) -> Result<PlonkCircuit<F>, CircuitError> {
-        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_turbo_plonk();
+        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new();
         let a = circuit.create_boolean_variable(a)?;
         let b = circuit.create_boolean_variable(b)?;
         circuit.logic_or_gate(a, b)?;
@@ -246,8 +246,8 @@ mod test {
         test_logic_and_helper::<Fq381>()
     }
 
-    fn test_logic_and_helper<F: PrimeField>() -> Result<(), CircuitError> {
-        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_turbo_plonk();
+    fn test_logic_and_helper<F: RawPrimeField>() -> Result<(), CircuitError> {
+        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new();
         let false_var = circuit.false_var();
         let true_var = circuit.true_var();
         // Good path
@@ -281,8 +281,8 @@ mod test {
         test_is_equal_helper::<FqEd381>()?;
         test_is_equal_helper::<Fq381>()
     }
-    fn test_is_equal_helper<F: PrimeField>() -> Result<(), CircuitError> {
-        let mut circuit = PlonkCircuit::<F>::new_turbo_plonk();
+    fn test_is_equal_helper<F: RawPrimeField>() -> Result<(), CircuitError> {
+        let mut circuit = PlonkCircuit::<F>::new();
         let val = F::from(31415u32);
         let a = circuit.create_variable(val)?;
         let b = circuit.create_variable(val)?;
@@ -304,8 +304,11 @@ mod test {
         Ok(())
     }
 
-    fn build_is_equal_circuit<F: PrimeField>(a: F, b: F) -> Result<PlonkCircuit<F>, CircuitError> {
-        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_turbo_plonk();
+    fn build_is_equal_circuit<F: RawPrimeField>(
+        a: F,
+        b: F,
+    ) -> Result<PlonkCircuit<F>, CircuitError> {
+        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new();
         let a = circuit.create_variable(a)?;
         let b = circuit.create_variable(b)?;
         circuit.is_equal(a, b)?;
@@ -320,8 +323,8 @@ mod test {
         test_check_is_zero_helper::<FqEd381>()?;
         test_check_is_zero_helper::<Fq381>()
     }
-    fn test_check_is_zero_helper<F: PrimeField>() -> Result<(), CircuitError> {
-        let mut circuit = PlonkCircuit::<F>::new_turbo_plonk();
+    fn test_check_is_zero_helper<F: RawPrimeField>() -> Result<(), CircuitError> {
+        let mut circuit = PlonkCircuit::<F>::new();
         let val = F::from(31415u32);
         let a = circuit.create_variable(val)?;
         let a_zero_eq = circuit.is_zero(a)?;
@@ -345,8 +348,10 @@ mod test {
         Ok(())
     }
 
-    fn build_check_is_zero_circuit<F: PrimeField>(a: F) -> Result<PlonkCircuit<F>, CircuitError> {
-        let mut circuit = PlonkCircuit::new_turbo_plonk();
+    fn build_check_is_zero_circuit<F: RawPrimeField>(
+        a: F,
+    ) -> Result<PlonkCircuit<F>, CircuitError> {
+        let mut circuit = PlonkCircuit::new();
         let a = circuit.create_variable(a)?;
         circuit.is_zero(a)?;
         circuit.finalize_for_arithmetization()?;
@@ -361,8 +366,8 @@ mod test {
         test_conditional_select_helper::<Fq381>()
     }
 
-    fn test_conditional_select_helper<F: PrimeField>() -> Result<(), CircuitError> {
-        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_turbo_plonk();
+    fn test_conditional_select_helper<F: RawPrimeField>() -> Result<(), CircuitError> {
+        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new();
         let bit_true = circuit.true_var();
         let bit_false = circuit.false_var();
 
@@ -391,12 +396,12 @@ mod test {
         Ok(())
     }
 
-    fn build_conditional_select_circuit<F: PrimeField>(
+    fn build_conditional_select_circuit<F: RawPrimeField>(
         bit: bool,
         x_0: F,
         x_1: F,
     ) -> Result<PlonkCircuit<F>, CircuitError> {
-        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_turbo_plonk();
+        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new();
         let bit_var = circuit.create_boolean_variable(bit)?;
         let x_0_var = circuit.create_variable(x_0)?;
         let x_1_var = circuit.create_variable(x_1)?;
@@ -412,14 +417,14 @@ mod test {
         test_non_zero_gate_helper::<FqEd381>()?;
         test_non_zero_gate_helper::<Fq381>()
     }
-    fn test_non_zero_gate_helper<F: PrimeField>() -> Result<(), CircuitError> {
+    fn test_non_zero_gate_helper<F: RawPrimeField>() -> Result<(), CircuitError> {
         // Create the circuit
-        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_turbo_plonk();
+        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new();
         let non_zero_var = circuit.create_variable(F::from(2_u32))?;
         let _ = circuit.non_zero_gate(non_zero_var);
         assert!(circuit.check_circuit_satisfiability(&[]).is_ok());
 
-        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_turbo_plonk();
+        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new();
         let zero_var = circuit.create_variable(F::from(0_u32))?;
         let _ = circuit.non_zero_gate(zero_var);
         assert!(circuit.check_circuit_satisfiability(&[]).is_err());
