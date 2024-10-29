@@ -6,7 +6,6 @@
 
 //! Interfaces for Plonk-based constraint systems
 
-#![cfg_attr(not(feature = "std"), no_std)]
 #![warn(missing_docs)]
 pub mod constants;
 pub mod gadgets;
@@ -50,6 +49,8 @@ pub enum CircuitError {
     InternalError(String),
     /// Feature not supported: {0}
     NotSupported(String),
+    /// Incorrect mode
+    IncorrectMode,
 }
 
 impl ark_std::error::Error for CircuitError {}

@@ -168,7 +168,7 @@ impl<F: RawPrimeField> PlonkCircuit<F> {
 mod test {
     use super::*;
     use crate::{Circuit, CircuitError, PlonkCircuit};
-    use ark_bls12_381::Fq as Fq381;
+    use ark_bls12_377::Fq as Fq377;
     use ark_ed_on_bls12_377::Fq as FqEd377;
     use ark_ed_on_bls12_381::Fq as FqEd381;
     use ark_ed_on_bn254::Fq as FqEd254;
@@ -178,11 +178,11 @@ mod test {
         test_logic_or_helper::<FqEd254>()?;
         test_logic_or_helper::<FqEd377>()?;
         test_logic_or_helper::<FqEd381>()?;
-        test_logic_or_helper::<Fq381>()
+        test_logic_or_helper::<Fq377>()
     }
 
     fn test_logic_or_helper<F: RawPrimeField>() -> Result<(), CircuitError> {
-        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new();
+        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_in_prove_mode(true);
         let false_var = circuit.false_var();
         let true_var = circuit.true_var();
         // Good path
@@ -204,11 +204,11 @@ mod test {
         test_logic_or_gate_helper::<FqEd254>()?;
         test_logic_or_gate_helper::<FqEd377>()?;
         test_logic_or_gate_helper::<FqEd381>()?;
-        test_logic_or_gate_helper::<Fq381>()
+        test_logic_or_gate_helper::<Fq377>()
     }
 
     fn test_logic_or_gate_helper<F: RawPrimeField>() -> Result<(), CircuitError> {
-        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new();
+        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_in_prove_mode(true);
         let false_var = circuit.false_var();
         let true_var = circuit.true_var();
         // Good path
@@ -230,7 +230,7 @@ mod test {
         a: bool,
         b: bool,
     ) -> Result<PlonkCircuit<F>, CircuitError> {
-        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new();
+        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_in_prove_mode(true);
         let a = circuit.create_boolean_variable(a)?;
         let b = circuit.create_boolean_variable(b)?;
         circuit.logic_or_gate(a, b)?;
@@ -243,11 +243,11 @@ mod test {
         test_logic_and_helper::<FqEd254>()?;
         test_logic_and_helper::<FqEd377>()?;
         test_logic_and_helper::<FqEd381>()?;
-        test_logic_and_helper::<Fq381>()
+        test_logic_and_helper::<Fq377>()
     }
 
     fn test_logic_and_helper<F: RawPrimeField>() -> Result<(), CircuitError> {
-        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new();
+        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_in_prove_mode(true);
         let false_var = circuit.false_var();
         let true_var = circuit.true_var();
         // Good path
@@ -279,10 +279,10 @@ mod test {
         test_is_equal_helper::<FqEd254>()?;
         test_is_equal_helper::<FqEd377>()?;
         test_is_equal_helper::<FqEd381>()?;
-        test_is_equal_helper::<Fq381>()
+        test_is_equal_helper::<Fq377>()
     }
     fn test_is_equal_helper<F: RawPrimeField>() -> Result<(), CircuitError> {
-        let mut circuit = PlonkCircuit::<F>::new();
+        let mut circuit = PlonkCircuit::<F>::new_in_prove_mode(true);
         let val = F::from(31415u32);
         let a = circuit.create_variable(val)?;
         let b = circuit.create_variable(val)?;
@@ -308,7 +308,7 @@ mod test {
         a: F,
         b: F,
     ) -> Result<PlonkCircuit<F>, CircuitError> {
-        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new();
+        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_in_prove_mode(true);
         let a = circuit.create_variable(a)?;
         let b = circuit.create_variable(b)?;
         circuit.is_equal(a, b)?;
@@ -318,13 +318,14 @@ mod test {
 
     #[test]
     fn test_check_is_zero() -> Result<(), CircuitError> {
-        test_check_is_zero_helper::<FqEd254>()?;
-        test_check_is_zero_helper::<FqEd377>()?;
-        test_check_is_zero_helper::<FqEd381>()?;
-        test_check_is_zero_helper::<Fq381>()
+        test_check_is_zero_helper::<FqEd254>().unwrap();
+        test_check_is_zero_helper::<FqEd377>().unwrap();
+        test_check_is_zero_helper::<FqEd381>().unwrap();
+        test_check_is_zero_helper::<Fq377>().unwrap();
+        Ok(())
     }
     fn test_check_is_zero_helper<F: RawPrimeField>() -> Result<(), CircuitError> {
-        let mut circuit = PlonkCircuit::<F>::new();
+        let mut circuit = PlonkCircuit::<F>::new_in_prove_mode(true);
         let val = F::from(31415u32);
         let a = circuit.create_variable(val)?;
         let a_zero_eq = circuit.is_zero(a)?;
@@ -351,7 +352,7 @@ mod test {
     fn build_check_is_zero_circuit<F: RawPrimeField>(
         a: F,
     ) -> Result<PlonkCircuit<F>, CircuitError> {
-        let mut circuit = PlonkCircuit::new();
+        let mut circuit = PlonkCircuit::new_in_prove_mode(true);
         let a = circuit.create_variable(a)?;
         circuit.is_zero(a)?;
         circuit.finalize_for_arithmetization()?;
@@ -363,11 +364,11 @@ mod test {
         test_conditional_select_helper::<FqEd254>()?;
         test_conditional_select_helper::<FqEd377>()?;
         test_conditional_select_helper::<FqEd381>()?;
-        test_conditional_select_helper::<Fq381>()
+        test_conditional_select_helper::<Fq377>()
     }
 
     fn test_conditional_select_helper<F: RawPrimeField>() -> Result<(), CircuitError> {
-        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new();
+        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_in_prove_mode(true);
         let bit_true = circuit.true_var();
         let bit_false = circuit.false_var();
 
@@ -401,7 +402,7 @@ mod test {
         x_0: F,
         x_1: F,
     ) -> Result<PlonkCircuit<F>, CircuitError> {
-        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new();
+        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_in_prove_mode(true);
         let bit_var = circuit.create_boolean_variable(bit)?;
         let x_0_var = circuit.create_variable(x_0)?;
         let x_1_var = circuit.create_variable(x_1)?;
@@ -415,16 +416,16 @@ mod test {
         test_non_zero_gate_helper::<FqEd254>()?;
         test_non_zero_gate_helper::<FqEd377>()?;
         test_non_zero_gate_helper::<FqEd381>()?;
-        test_non_zero_gate_helper::<Fq381>()
+        test_non_zero_gate_helper::<Fq377>()
     }
     fn test_non_zero_gate_helper<F: RawPrimeField>() -> Result<(), CircuitError> {
         // Create the circuit
-        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new();
+        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_in_prove_mode(true);
         let non_zero_var = circuit.create_variable(F::from(2_u32))?;
         let _ = circuit.non_zero_gate(non_zero_var);
         assert!(circuit.check_circuit_satisfiability(&[]).is_ok());
 
-        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new();
+        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_in_prove_mode(true);
         let zero_var = circuit.create_variable(F::from(0_u32))?;
         let _ = circuit.non_zero_gate(zero_var);
         assert!(circuit.check_circuit_satisfiability(&[]).is_err());

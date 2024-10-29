@@ -9,17 +9,18 @@ edition.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-ark-ec = { version = "^0.4.0", default-features = false, features = ["parallel"] }
-ark-ff = { version = "^0.4.0", default-features = false, features = ["parallel"] }
-ark-std = { version = "^0.4.0", default-features = false, features = ["parallel"] }
-ark-poly = { version = "^0.4.0", default-features = false, features = ["parallel"] }
-ark-serialize = {version = "0.4.0", features = ["derive", "std"]}
+ark-ec = { workspace = true }
+ark-ff = { workspace = true }
+ark-std = { workspace = true }
+ark-poly = { workspace = true }
+ark-serialize = { workspace = true }
+
+rayon = { workspace = true }
+derivative = { workspace = true }
+displaydoc = { workspace = true }
+
 tempfile = "3.3.0"
-merlin = "3.0.0"
 smallvec = "1.6"
-rayon = { version = "1.5.2", default-features = false }
-displaydoc = "0.2.0"
-derivative = { version = "2", features = ["use_core"] }
 libc = { version = "0.2.101" }
 
 

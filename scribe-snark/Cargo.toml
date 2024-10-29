@@ -5,26 +5,28 @@ edition = "2021"
 resolver = "2"
 
 [dependencies]
-ark-ec = { version = "^0.4.0", default-features = false, features = ["parallel"] }
-ark-ff = { version = "^0.4.0", default-features = false, features = ["parallel"] }
-ark-std = { version = "^0.4.0", default-features = false, features = ["parallel"] }
-ark-poly = { version = "^0.4.0", default-features = false, features = ["parallel"] }
-ark-serialize = {version = "0.4.0", features = ["derive", "std"]}
+ark-ec = { workspace = true }
+ark-ff = { workspace = true }
+ark-std = { workspace = true }
+ark-poly = { workspace = true }
+ark-serialize = { workspace = true }
+
+displaydoc = { workspace = true }
+derivative = { workspace = true }
+rayon = { workspace = true }
+
 scribe-streams = { path = "../streams" }
 mle = { path = "../mle" }
-tempfile = "3.3.0"
+
 merlin = "3.0.0"
 smallvec = "1.6"
-rayon = { version = "1.5.2", default-features = false }
-displaydoc = "0.2.0"
-derivative = { version = "2", features = ["use_core"] }
 libc = { version = "0.2.101" }
-
 
 [target.'cfg(target_os = "linux")'.dependencies]
 aligned-vec = { version = "0.6.1" }
 
 [dev-dependencies]
+tempfile = "3.3.0"
 ark-bls12-381 = { version = "0.4.0", default-features = false, features = [ "curve" ] }
 criterion = { version = "0.5" }
 

@@ -14,7 +14,7 @@ use crate::{
 use ark_ff::Field;
 use ark_poly::{domain::Radix2EvaluationDomain, EvaluationDomain};
 use ark_std::{boxed::Box, format, vec, vec::Vec};
-use scribe_streams::serialize::RawPrimeField;
+use scribe_streams::{file_vec::FileVec, serialize::RawPrimeField};
 
 /// An index to a gate in circuit.
 pub type GateId = usize;
@@ -161,8 +161,22 @@ pub trait Circuit<F: Field> {
     fn pad_gates(&mut self, n: usize);
 }
 
+/// Specifies whether the circuit is in setup or prove mode.
+#[derive(Debug, Eq, PartialEq, Clone, Copy)]
+pub enum Mode {
+    /// The circuit is in setup mode.
+    Setup,
+    /// The circuit is in prove mode.
+    /// If `construct_index` is `true`, we will also construct the index.
+    /// Otherwise, we will only generate the witness.
+    Prove {
+        /// Whether to construct the index.
+        index: bool,
+    },
+}
+
 /// A specific Plonk circuit instantiation.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct PlonkCircuit<F>
 where
     F: RawPrimeField + RawPrimeField,
@@ -170,14 +184,27 @@ where
     /// The number of variables.
     num_vars: usize,
 
+    /// The number of variables.
+    num_gates: usize,
+
+    /// Which mode is the circuit in?
+    mode: Mode,
+
     /// The gate of each (algebraic) constraint
     gates: Vec<Box<dyn Gate<F>>>,
-    /// The map from arithmetic/lookup gate wires to variables.
+    /// An in-memory buffer for the map from arithmetic/lookup gate wires to variables.
+    /// When the vecs hit `BUFFER_SIZE`, the buffer is flushed to disk via `self.wire_variables`.
     wire_variables: [Vec<Variable>; GATE_WIDTH + 2],
+
     /// The IO gates for the list of public input variables.
     pub_input_gate_ids: Vec<GateId>,
-    /// The actual values of variables.
-    witness: Vec<F>,
+
+    /// An in-memory buffer for witness values.
+    /// Once this hits `BUFFER_SIZE`, the buffer is flushed to disk via `self.witness`.
+    witness_buf: Vec<F>,
+
+    /// A disk-backed vec for witness values.
+    witness: FileVec<F>,
 
     /// The permutation over wires.
     /// Each algebraic gate has 5 wires, i.e., 4 input wires and an output
@@ -211,16 +238,35 @@ impl<F: RawPrimeField + RawPrimeField> Default for PlonkCircuit<F> {
 }
 
 impl<F: RawPrimeField + RawPrimeField> PlonkCircuit<F> {
+    /// Construct a new circuit for indexing or setup.
+    pub fn new_in_setup_mode() -> Self {
+        let mut circuit = Self::new();
+        circuit.mode = Mode::Setup;
+        circuit
+    }
+
+    /// Construct a new circuit for proving.
+    pub fn new_in_prove_mode(construct_index: bool) -> Self {
+        let mut circuit = Self::new();
+        circuit.mode = Mode::Prove {
+            index: construct_index,
+        };
+        circuit
+    }
+
     /// Construct a new circuit with type `plonk_type`.
-    pub fn new() -> Self {
+    fn new() -> Self {
         let zero = F::zero();
         let one = F::one();
         let mut circuit = Self {
+            mode: Mode::Setup,
             num_vars: 2,
-            witness: vec![zero, one],
+            num_gates: 0,
+            witness_buf: vec![zero, one],
+            witness: FileVec::new(),
             gates: vec![],
             // size is `num_wire_types`
-            wire_variables: [vec![], vec![], vec![], vec![], vec![], vec![]],
+            wire_variables: Default::default(),
             pub_input_gate_ids: vec![],
 
             wire_permutation: vec![],
@@ -244,6 +290,10 @@ impl<F: RawPrimeField + RawPrimeField> PlonkCircuit<F> {
         gate: Box<dyn Gate<F>>,
     ) -> Result<(), CircuitError> {
         self.check_finalize_flag(false)?;
+        self.num_gates += 1;
+        if let Mode::Prove { index: false } = self.mode {
+            return Ok(());
+        }
 
         for (wire_var, wire_variable) in wire_vars
             .iter()
@@ -285,7 +335,11 @@ impl<F: RawPrimeField + RawPrimeField> PlonkCircuit<F> {
     /// Change the value of a variable. Only used for testing.
     // TODO: make this function test only.
     pub fn witness_mut(&mut self, idx: Variable) -> &mut F {
-        &mut self.witness[idx]
+        if let Mode::Prove { index: true } = self.mode {
+            &mut self.witness_buf[idx]
+        } else {
+            panic!("Cannot change witness in prove mode");
+        }
     }
 
     /// creating a `BoolVar` without checking if `v` is a boolean value!
@@ -303,7 +357,8 @@ impl<F: RawPrimeField + RawPrimeField> PlonkCircuit<F> {
 
 impl<F: RawPrimeField + RawPrimeField> Circuit<F> for PlonkCircuit<F> {
     fn num_gates(&self) -> usize {
-        self.gates.len()
+        debug_assert_eq!(self.gates.len(), self.num_gates);
+        self.num_gates
     }
 
     fn num_vars(&self) -> usize {
@@ -329,6 +384,9 @@ impl<F: RawPrimeField + RawPrimeField> Circuit<F> for PlonkCircuit<F> {
     }
 
     fn check_circuit_satisfiability(&self, pub_input: &[F]) -> Result<(), CircuitError> {
+        if let Mode::Setup | Mode::Prove { index: false } = self.mode {
+            return Err(CircuitError::IncorrectMode);
+        }
         if pub_input.len() != self.num_inputs() {
             return Err(PubInputLenMismatch(
                 pub_input.len(),
@@ -358,9 +416,14 @@ impl<F: RawPrimeField + RawPrimeField> Circuit<F> for PlonkCircuit<F> {
 
     fn create_variable(&mut self, val: F) -> Result<Variable, CircuitError> {
         self.check_finalize_flag(false)?;
-        self.witness.push(val);
+        self.witness_buf.push(val);
         self.num_vars += 1;
-        if self.witness.len() == scribe_streams::BUFFER_SIZE {}
+        if (Mode::Prove { index: false } == self.mode)
+            && (scribe_streams::BUFFER_SIZE == self.witness_buf.len())
+        {
+            self.witness.push_batch(&self.witness_buf);
+            self.witness_buf.clear();
+        }
         // the index is from `0` to `num_vars - 1`
         Ok(self.num_vars - 1)
     }
@@ -393,7 +456,11 @@ impl<F: RawPrimeField + RawPrimeField> Circuit<F> for PlonkCircuit<F> {
 
     fn witness(&self, idx: Variable) -> Result<F, CircuitError> {
         self.check_var_bound(idx)?;
-        Ok(self.witness[idx])
+        if let Mode::Prove { index: true } = self.mode {
+            Ok(self.witness_buf[idx])
+        } else {
+            panic!("No random access for witnesses if mode doesn't equal mode != `Prove` with `construct_index = true`");
+        }
     }
 
     fn enforce_constant(&mut self, var: Variable, constant: F) -> Result<(), CircuitError> {
@@ -506,6 +573,9 @@ impl<F: RawPrimeField> PlonkCircuit<F> {
     /// Remember to pad gates before calling the method.
     fn rearrange_gates(&mut self) -> Result<(), CircuitError> {
         self.check_finalize_flag(true)?;
+        if let Mode::Prove { index: false } = self.mode {
+            return Ok(());
+        }
         for (gate_id, io_gate_id) in self.pub_input_gate_ids.iter_mut().enumerate() {
             if *io_gate_id > gate_id {
                 // Swap gate types
@@ -529,6 +599,9 @@ impl<F: RawPrimeField> PlonkCircuit<F> {
     // arithmetization.
     fn pad(&mut self) -> Result<(), CircuitError> {
         self.check_finalize_flag(true)?;
+        if let Mode::Prove { index: false } = self.mode {
+            return Ok(());
+        }
         let n = self.eval_domain.size();
         for _ in self.num_gates()..n {
             self.gates.push(Box::new(PaddingGate));
@@ -548,10 +621,14 @@ impl<F: RawPrimeField> PlonkCircuit<F> {
     ///           q_hash0 * w0 + q_hash1 * w1 + q_hash2 * w2 + q_hash3 * w3 +
     ///           q_ecc * w0 * w1 * w2 * w3 * wo
     fn check_gate(&self, gate_id: Variable, pub_input: &F) -> Result<(), CircuitError> {
+        if let Mode::Prove { index: false } = self.mode {
+            return Err(CircuitError::IncorrectMode);
+        }
         // Compute wire values
 
+        let witness = &self.witness_buf;
         let w_vals: Vec<F> = (0..GATE_WIDTH + 1)
-            .map(|i| self.witness[self.wire_variables[i][gate_id]])
+            .map(|i| witness[self.wire_variables[i][gate_id]])
             .collect();
         // Compute selector values.
         let q_lc: [F; GATE_WIDTH] = self.gates[gate_id].q_lc();
@@ -598,6 +675,9 @@ impl<F: RawPrimeField> PlonkCircuit<F> {
     #[inline]
     fn compute_wire_permutation(&mut self) {
         assert!(self.is_finalized());
+        if let Mode::Prove { index: false } = self.mode {
+            return;
+        }
         let n = self.eval_domain.size();
         let m = self.num_vars();
 
@@ -647,17 +727,6 @@ impl<F: RawPrimeField> PlonkCircuit<F> {
             return Err(ModifyFinalizedCircuit);
         }
         Ok(())
-    }
-
-    /// Return the variable that maps to a wire `(i, j)` where i is the wire type and
-    /// j is the gate index. If gate `j` is a padded dummy gate, return zero
-    /// variable.
-    #[inline]
-    pub fn wire_variable(&self, i: WireId, j: GateId) -> Variable {
-        match j < self.wire_variables[i].len() {
-            true => self.wire_variables[i][j],
-            false => self.zero(),
-        }
     }
 
     /// getter for all linear combination selector

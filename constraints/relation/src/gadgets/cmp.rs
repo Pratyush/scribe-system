@@ -303,7 +303,7 @@ mod test {
         should_also_check_equality: bool,
         is_b_constant: bool,
     ) -> Result<(), CircuitError> {
-        let mut circuit = PlonkCircuit::<F>::new();
+        let mut circuit = PlonkCircuit::<F>::new_in_prove_mode(true);
         let expected_result = if a.cmp(b) == ordering
             || (a.cmp(b) == Ordering::Equal && should_also_check_equality)
         {
@@ -363,7 +363,7 @@ mod test {
         should_also_check_equality: bool,
         is_b_constant: bool,
     ) -> Result<(), CircuitError> {
-        let mut circuit = PlonkCircuit::<F>::new();
+        let mut circuit = PlonkCircuit::<F>::new_in_prove_mode(true);
         let expected_result =
             a.cmp(b) == ordering || (a.cmp(b) == Ordering::Equal && should_also_check_equality);
         let a = circuit.create_variable(*a)?;

@@ -16,12 +16,10 @@ use crate::constants::{GATE_WIDTH, N_MUL_SELECTORS};
 mod arithmetic;
 mod ecc;
 mod logic;
-mod lookup;
 
 pub use arithmetic::*;
 pub use ecc::*;
 pub use logic::*;
-pub use lookup::*;
 
 /// Describes a gate with getter for all selectors configuration
 pub trait Gate<F: Field>: Downcast + DynClone {

@@ -327,7 +327,7 @@ impl<F: RawPrimeField> PlonkCircuit<F> {
 mod test {
     use super::*;
     use crate::{constants::GATE_WIDTH, Circuit, CircuitError, PlonkCircuit};
-    use ark_bls12_381::Fq as Fq381;
+    use ark_bls12_377::Fq as Fq377;
     use ark_ed_on_bls12_377::Fq as FqEd377;
     use ark_ed_on_bls12_381::Fq as FqEd381;
     use ark_ed_on_bn254::Fq as FqEd254;
@@ -339,10 +339,10 @@ mod test {
         test_quad_poly_gate_helper::<FqEd254>()?;
         test_quad_poly_gate_helper::<FqEd377>()?;
         test_quad_poly_gate_helper::<FqEd381>()?;
-        test_quad_poly_gate_helper::<Fq381>()
+        test_quad_poly_gate_helper::<Fq377>()
     }
     fn test_quad_poly_gate_helper<F: RawPrimeField>() -> Result<(), CircuitError> {
-        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new();
+        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_in_prove_mode(true);
         let q_lc = [F::from(2u32), F::from(3u32), F::from(5u32), F::from(2u32)];
         let q_mul = [F::one(), F::from(2u8)];
         let q_o = F::one();
@@ -401,7 +401,7 @@ mod test {
     fn build_quad_poly_gate_circuit<F: RawPrimeField>(
         wires: [F; GATE_WIDTH + 1],
     ) -> Result<PlonkCircuit<F>, CircuitError> {
-        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new();
+        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_in_prove_mode(true);
         let wires: Vec<_> = wires
             .iter()
             .map(|val| circuit.create_variable(*val).unwrap())
@@ -420,10 +420,10 @@ mod test {
         test_lc_helper::<FqEd254>()?;
         test_lc_helper::<FqEd377>()?;
         test_lc_helper::<FqEd381>()?;
-        test_lc_helper::<Fq381>()
+        test_lc_helper::<Fq377>()
     }
     fn test_lc_helper<F: RawPrimeField>() -> Result<(), CircuitError> {
-        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new();
+        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_in_prove_mode(true);
         let wire_in_1: Vec<_> = [
             F::from(23u32),
             F::from(8u32),
@@ -460,7 +460,7 @@ mod test {
     fn build_lc_circuit<F: RawPrimeField>(
         wires_in: [F; 4],
     ) -> Result<PlonkCircuit<F>, CircuitError> {
-        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new();
+        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_in_prove_mode(true);
         let wires_in: Vec<_> = wires_in
             .iter()
             .map(|val| circuit.create_variable(*val).unwrap())
@@ -476,11 +476,11 @@ mod test {
         test_mul_add_helper::<FqEd254>()?;
         test_mul_add_helper::<FqEd377>()?;
         test_mul_add_helper::<FqEd381>()?;
-        test_mul_add_helper::<Fq381>()
+        test_mul_add_helper::<Fq377>()
     }
 
     fn test_mul_add_helper<F: RawPrimeField>() -> Result<(), CircuitError> {
-        let mut circuit = PlonkCircuit::<F>::new();
+        let mut circuit = PlonkCircuit::<F>::new_in_prove_mode(true);
         let wire_in_1: Vec<_> = [
             F::from(23u32),
             F::from(8u32),
@@ -520,7 +520,7 @@ mod test {
     fn build_mul_add_circuit<F: RawPrimeField>(
         wires_in: [F; 4],
     ) -> Result<PlonkCircuit<F>, CircuitError> {
-        let mut circuit = PlonkCircuit::new();
+        let mut circuit = PlonkCircuit::new_in_prove_mode(true);
         let wires_in: Vec<_> = wires_in
             .iter()
             .map(|val| circuit.create_variable(*val).unwrap())
@@ -536,11 +536,11 @@ mod test {
         test_sum_helper::<FqEd254>()?;
         test_sum_helper::<FqEd377>()?;
         test_sum_helper::<FqEd381>()?;
-        test_sum_helper::<Fq381>()
+        test_sum_helper::<Fq377>()
     }
 
     fn test_sum_helper<F: RawPrimeField>() -> Result<(), CircuitError> {
-        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new();
+        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_in_prove_mode(true);
         let mut vars = vec![];
         for i in 0..11 {
             vars.push(circuit.create_variable(F::from(i as u32))?);
@@ -580,7 +580,7 @@ mod test {
     }
 
     fn build_sum_circuit<F: RawPrimeField>(vals: Vec<F>) -> Result<PlonkCircuit<F>, CircuitError> {
-        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new();
+        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_in_prove_mode(true);
         let mut vars = vec![];
         for val in vals {
             vars.push(circuit.create_variable(val)?);
@@ -595,7 +595,7 @@ mod test {
         test_power_11_gen_gate_helper::<FqEd254>()?;
         test_power_11_gen_gate_helper::<FqEd377>()?;
         test_power_11_gen_gate_helper::<FqEd381>()?;
-        test_power_11_gen_gate_helper::<Fq381>()
+        test_power_11_gen_gate_helper::<Fq377>()
     }
     fn test_power_11_gen_gate_helper<F: RawPrimeField>() -> Result<(), CircuitError> {
         let mut rng = test_rng();
@@ -604,7 +604,7 @@ mod test {
         let x11 = x.pow([11]);
 
         // Create a satisfied circuit
-        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new();
+        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_in_prove_mode(true);
 
         let x_var = circuit.create_variable(x)?;
         let x_to_11_var = circuit.create_variable(x11)?;
@@ -614,7 +614,7 @@ mod test {
         assert!(circuit.check_circuit_satisfiability(&[]).is_ok());
 
         // Create an unsatisfied circuit
-        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new();
+        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_in_prove_mode(true);
 
         let y_var = circuit.create_variable(y)?;
         let x_to_11_var = circuit.create_variable(x11)?;
@@ -624,7 +624,7 @@ mod test {
         assert!(circuit.check_circuit_satisfiability(&[]).is_err());
 
         // Create an unsatisfied circuit
-        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new();
+        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_in_prove_mode(true);
         let x_var = circuit.create_variable(x)?;
         let y_var = circuit.create_variable(y)?;
 
@@ -640,7 +640,7 @@ mod test {
         test_power_11_gate_helper::<FqEd254>()?;
         test_power_11_gate_helper::<FqEd377>()?;
         test_power_11_gate_helper::<FqEd381>()?;
-        test_power_11_gate_helper::<Fq381>()
+        test_power_11_gate_helper::<Fq377>()
     }
     fn test_power_11_gate_helper<F: RawPrimeField>() -> Result<(), CircuitError> {
         let mut rng = test_rng();
@@ -649,7 +649,7 @@ mod test {
         let x11 = x.pow([11]);
 
         // Create a satisfied circuit
-        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new();
+        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_in_prove_mode(true);
         let x_var = circuit.create_variable(x)?;
         let x_to_11_var = circuit.create_variable(x11)?;
 
@@ -657,7 +657,7 @@ mod test {
         assert!(circuit.check_circuit_satisfiability(&[]).is_ok());
 
         // Create an unsatisfied circuit
-        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new();
+        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_in_prove_mode(true);
         let y_var = circuit.create_variable(y)?;
         let x_to_11_var = circuit.create_variable(x11)?;
 
@@ -665,7 +665,7 @@ mod test {
         assert!(circuit.check_circuit_satisfiability(&[]).is_err());
 
         // Create an unsatisfied circuit
-        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new();
+        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_in_prove_mode(true);
         let x_var = circuit.create_variable(x)?;
         let y = circuit.create_variable(y)?;
 
@@ -680,12 +680,12 @@ mod test {
         test_arithmetization_helper::<FqEd254>()?;
         test_arithmetization_helper::<FqEd377>()?;
         test_arithmetization_helper::<FqEd381>()?;
-        test_arithmetization_helper::<Fq381>()
+        test_arithmetization_helper::<Fq377>()
     }
 
     fn test_arithmetization_helper<F: RawPrimeField>() -> Result<(), CircuitError> {
         // Create the circuit
-        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new();
+        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_in_prove_mode(true);
         // is_equal gate
         let val = F::from(31415u32);
         let a = circuit.create_variable(val)?;

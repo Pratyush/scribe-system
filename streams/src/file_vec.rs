@@ -291,6 +291,30 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
         Self::from_batched_iter_with_prefix(iter, "")
     }
 
+    /// Pushes a batch of elements to the end of the `FileVec`.
+    ///
+    /// # Note
+    ///
+    /// Should only be used when `b` is sufficiently large.
+    pub fn push_batch(&mut self, b: &[T])
+    where
+        T: Send + Sync + Copy,
+    {
+        match self {
+            Self::File(ref mut file) => {
+                let mut work_buffer = vec![0u8; T::SIZE * b.len()];
+                T::serialize_raw_batch(b, &mut work_buffer, file).unwrap();
+            },
+            Self::Buffer { ref mut buffer } => {
+                buffer.extend_from_slice(b);
+                if buffer.len() > BUFFER_SIZE {
+                    let buffer = mem::take(buffer);
+                    *self = Self::from_iter(buffer.into_iter())
+                }
+            },
+        }
+    }
+
     pub fn for_each(&mut self, f: impl Fn(&mut T) + Send + Sync)
     where
         T: Send + Sync,

@@ -520,25 +520,15 @@ fn compute_base_points<E: ScalarMul>(base: &E, len: usize) -> Result<[Vec<E>; 3]
     // base3 = (3*B, 3*4*B, ..., 3*4^(l-1)*B)
     let mut bases3 = vec![b];
 
-    #[cfg(feature = "parallel")]
-    {
-        rayon::join(
-            || {
-                rayon::join(
-                    || fill_bases(&mut bases1, len).ok(),
-                    || fill_bases(&mut bases2, len).ok(),
-                )
-            },
-            || fill_bases(&mut bases3, len).ok(),
-        );
-    }
-
-    #[cfg(not(feature = "parallel"))]
-    {
-        fill_bases(&mut bases1, len).ok();
-        fill_bases(&mut bases2, len).ok();
-        fill_bases(&mut bases3, len).ok();
-    }
+    rayon::join(
+        || {
+            rayon::join(
+                || fill_bases(&mut bases1, len).ok(),
+                || fill_bases(&mut bases2, len).ok(),
+            )
+        },
+        || fill_bases(&mut bases3, len).ok(),
+    );
 
     // converting Affine -> Points here.
     // Cannot do it earlier: in `fill_bases` we need to do `double`
@@ -578,7 +568,7 @@ mod test {
         F: RawPrimeField + ?Sized,
         P: Config<BaseField = F>,
     {
-        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new();
+        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_in_prove_mode(true);
         let p1 = circuit.create_point_variable(TEPoint(F::zero(), F::one()))?;
         let p2 = circuit.create_point_variable(TEPoint(F::from(2353u32), F::one()))?;
         let p1_check = circuit.is_neutral_point::<P>(&p1)?;
@@ -605,7 +595,7 @@ mod test {
         F: RawPrimeField,
         P: Config<BaseField = F>,
     {
-        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new();
+        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_in_prove_mode(true);
         let p = circuit.create_point_variable(point)?;
         circuit.is_neutral_point::<P>(&p)?;
         circuit.finalize_for_arithmetization()?;
@@ -614,7 +604,7 @@ mod test {
 
     macro_rules! test_enforce_on_curve {
         ($fq:tt, $param:tt, $pt:tt) => {
-            let mut circuit: PlonkCircuit<$fq> = PlonkCircuit::new();
+            let mut circuit: PlonkCircuit<$fq> = PlonkCircuit::new_in_prove_mode(true);
             let p1 = circuit.create_point_variable(TEPoint($fq::zero(), $fq::one()))?;
             circuit.enforce_on_curve::<$param>(&p1)?;
             let p2 = circuit.create_point_variable($pt)?;
@@ -714,7 +704,7 @@ mod test {
         F: RawPrimeField,
         P: Config<BaseField = F>,
     {
-        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new();
+        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_in_prove_mode(true);
         let p = circuit.create_point_variable(point)?;
         circuit.enforce_on_curve::<P>(&p)?;
         circuit.finalize_for_arithmetization()?;
@@ -740,7 +730,7 @@ mod test {
         let p2 = Affine::<P>::rand(&mut rng);
         let p3 = (p1 + p2).into_affine();
 
-        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new();
+        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_in_prove_mode(true);
         let p1_var = circuit.create_point_variable(TEPoint::from(p1))?;
         let p2_var = circuit.create_point_variable(TEPoint::from(p2))?;
         let p3_var = circuit.ecc_add::<P>(&p1_var, &p2_var)?;
@@ -775,7 +765,7 @@ mod test {
         F: RawPrimeField,
         P: Config<BaseField = F>,
     {
-        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new();
+        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_in_prove_mode(true);
         let p1_var = circuit.create_point_variable(p1)?;
         let p2_var = circuit.create_point_variable(p2)?;
         circuit.ecc_add::<P>(&p1_var, &p2_var)?;
@@ -802,7 +792,7 @@ mod test {
         let p2 = Affine::<P>::rand(&mut rng);
         let p3 = Affine::<P>::rand(&mut rng);
 
-        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new();
+        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_in_prove_mode(true);
         let false_var = circuit.false_var();
         let true_var = circuit.true_var();
 
@@ -861,7 +851,7 @@ mod test {
         F: RawPrimeField,
         P: Config<BaseField = F>,
     {
-        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new();
+        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_in_prove_mode(true);
         let b0_var = circuit.create_boolean_variable(b0)?;
         let b1_var = circuit.create_boolean_variable(b1)?;
 
@@ -897,7 +887,7 @@ mod test {
         let mut rng = jf_utils::test_rng();
         let p = Affine::<P>::rand(&mut rng);
 
-        let mut circuit = PlonkCircuit::<F>::new();
+        let mut circuit = PlonkCircuit::<F>::new_in_prove_mode(true);
         let p1_var = circuit.create_point_variable(TEPoint::from(p))?;
         let p2_var = circuit.create_point_variable(TEPoint::from(p))?;
         circuit.enforce_point_equal(&p1_var, &p2_var)?;
@@ -921,7 +911,7 @@ mod test {
         p1: TEPoint<F>,
         p2: TEPoint<F>,
     ) -> Result<PlonkCircuit<F>, CircuitError> {
-        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new();
+        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_in_prove_mode(true);
         let p1_var = circuit.create_point_variable(p1)?;
         let p2_var = circuit.create_point_variable(p2)?;
         circuit.enforce_point_equal(&p1_var, &p2_var)?;
@@ -948,7 +938,7 @@ mod test {
         let p2 = p1;
         let p3 = Affine::<P>::rand(&mut rng);
 
-        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new();
+        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_in_prove_mode(true);
         let p1_var = circuit.create_point_variable(TEPoint::from(p1))?;
         let p2_var = circuit.create_point_variable(TEPoint::from(p2))?;
         let p3_var = circuit.create_point_variable(TEPoint::from(p3))?;
@@ -978,7 +968,7 @@ mod test {
         p2: TEPoint<F>,
         p3: TEPoint<F>,
     ) -> Result<PlonkCircuit<F>, CircuitError> {
-        let mut circuit = PlonkCircuit::new();
+        let mut circuit = PlonkCircuit::new_in_prove_mode(true);
         let p1_var = circuit.create_point_variable(p1)?;
         let p2_var = circuit.create_point_variable(p2)?;
         let p3_var = circuit.create_point_variable(p3)?;
@@ -1060,7 +1050,7 @@ mod test {
         P: Config<BaseField = F>,
     {
         let mut rng = jf_utils::test_rng();
-        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new();
+        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_in_prove_mode(true);
 
         for _ in 0..6 {
             let mut base = Affine::<P>::rand(&mut rng);
@@ -1093,7 +1083,7 @@ mod test {
         P: Config<BaseField = F>,
     {
         let mut rng = jf_utils::test_rng();
-        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new();
+        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_in_prove_mode(true);
         let base = Affine::<P>::rand(&mut rng);
         let scalar_var = circuit.create_variable(scalar)?;
         circuit.fixed_base_scalar_mul(scalar_var, &base)?;
@@ -1119,7 +1109,7 @@ mod test {
         let p1 = Affine::<P>::rand(&mut rng);
         let p2 = Affine::<P>::rand(&mut rng);
 
-        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new();
+        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_in_prove_mode(true);
         let p0_var = circuit.create_point_variable(TEPoint::from(p0))?;
         let p1_var = circuit.create_point_variable(TEPoint::from(p1))?;
         let true_var = circuit.true_var();
@@ -1164,7 +1154,7 @@ mod test {
     where
         F: RawPrimeField,
     {
-        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new();
+        let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_in_prove_mode(true);
         let b_var = circuit.create_boolean_variable(b)?;
         let p0_var = circuit.create_point_variable(p0)?;
         let p1_var = circuit.create_point_variable(p1)?;
