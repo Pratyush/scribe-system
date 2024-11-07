@@ -159,7 +159,7 @@ for PROVER in "${PROVERS[@]}"; do
         scribe)
             echo "Compiling scribe-prover and scribe-setup..."
             cargo build --release --example scribe-prover
-            cargo build --release --example scribe-setup
+            cargo build --release --example scribe-setup --features print-trace
             ;;
         hp)
             echo "Compiling hp-prover and hp-setup..."
@@ -188,13 +188,13 @@ done
 if [ "$SKIP_SETUP" = false ]; then
     if [[ " ${PROVERS[@]} " =~ " scribe " ]]; then
         echo "Running setup for scribe..."
-        env RAYON_NUM_THREADS=8 ../../target/release/examples/scribe-setup \
+        env RAYON_NUM_THREADS=16 ../../target/release/examples/scribe-setup \
             $MIN_VARIABLES $MAX_VARIABLES $SETUP_FOLDER
     fi
 
     if [[ " ${PROVERS[@]} " =~ " hp " ]]; then
         echo "Running setup for hp..."
-        env RAYON_NUM_THREADS=8 ../../target/release/examples/hp-setup \
+        env RAYON_NUM_THREADS=16 ../../target/release/examples/hp-setup \
             $MIN_VARIABLES $MAX_VARIABLES $SETUP_FOLDER
     fi
 else
@@ -333,7 +333,7 @@ run_with_bandwidth_limits() {
     MEMORY_PROPERTY="MemoryMax=${MEMORY_LIMIT_BYTES}"
 
     # Get the device for I/O limitations (adjust as necessary)
-    DEVICE="/dev/nvme0n1"
+    DEVICE="/dev/nvme2n1"
 
     # Generate unique unit name
     UNIT_NAME="${PROVER}_bw_$(date +%s%N)"
@@ -484,4 +484,3 @@ if [[ "$EXPERIMENT_TYPE" == "b" || "$EXPERIMENT_TYPE" == "both" ]]; then
         done
     done
 fi
-

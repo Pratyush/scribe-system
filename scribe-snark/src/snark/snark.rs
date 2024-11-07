@@ -51,7 +51,7 @@ where
         let permutation_oracles = index.permutation.clone();
         let permutation_commit_time = start_timer!(|| "commit permutation oracles");
         let permutation_commitments = permutation_oracles
-            .iter()
+            .par_iter()
             .map(|poly| PC::commit(&pc_ck, poly))
             .collect::<Result<_, _>>()?;
         end_timer!(permutation_commit_time);
@@ -61,7 +61,7 @@ where
 
         let selector_commit_time = start_timer!(|| "commit selector oracles");
         let selector_commitments = selector_oracles
-            .iter()
+            .par_iter()
             .map(|poly| PC::commit(&pc_ck, poly))
             .collect::<Result<_, _>>()?;
         end_timer!(selector_commit_time);

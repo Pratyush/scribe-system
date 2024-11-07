@@ -10,6 +10,7 @@ use ark_std::{
 use core::iter::FromIterator;
 use scribe_streams::{file_vec::FileVec, serialize::RawAffine};
 use std::sync::Arc;
+use rayon::prelude::*;
 
 /// Universal Parameter
 #[derive(Debug, CanonicalDeserialize, CanonicalSerialize)]
@@ -251,8 +252,8 @@ where
             if i != 0 {
                 let mul = eq.pop_back().unwrap().evaluations;
                 base = base
-                    .into_iter()
-                    .zip(mul.into_iter())
+                    .into_par_iter()
+                    .zip(&mul)
                     .map(|(a, b)| a * b)
                     .collect();
             }
