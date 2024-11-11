@@ -54,6 +54,14 @@ impl<T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy> BatchedIte
             },
         }
     }
+    
+    fn len(&self) -> Option<usize> {
+        let len = match self {
+            IntoIter::File { file, .. } => file.len() / T::SIZE,
+            IntoIter::Buffer { buffer } => buffer.len(),
+        };
+        Some(len)
+    }
 }
 
 impl<T: SerializeRaw + DeserializeRaw> Drop for IntoIter<T> {

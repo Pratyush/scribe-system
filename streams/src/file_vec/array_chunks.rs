@@ -14,6 +14,7 @@ where
         file: InnerFile,
         lifetime: PhantomData<&'a T>,
         work_buffer: AVec,
+        work_buffer_2: Vec<T>,
     },
     Buffer {
         buffer: Vec<T>,
@@ -36,6 +37,7 @@ where
             file,
             lifetime: PhantomData,
             work_buffer,
+            work_buffer_2: Vec::with_capacity(BUFFER_SIZE),
         }
     }
 
@@ -59,15 +61,18 @@ where
     fn next_batch(&mut self) -> Option<Self::Batch> {
         match self {
             Self::File {
-                file, work_buffer, ..
+                file,
+                work_buffer,
+                work_buffer_2,
+                ..
             } => {
-                let mut result = Vec::with_capacity(BUFFER_SIZE);
-                T::deserialize_raw_batch(&mut result, work_buffer, BUFFER_SIZE, file).ok()?;
-                if result.is_empty() {
+                work_buffer_2.clear();
+                T::deserialize_raw_batch(work_buffer_2, work_buffer, BUFFER_SIZE, file).ok()?;
+                if work_buffer_2.is_empty() {
                     None
                 } else {
                     Some(
-                        result
+                        work_buffer_2
                             .par_chunks(N)
                             .map(|chunk| <[T; N]>::try_from(chunk).unwrap())
                             .with_min_len(1 << 10)
@@ -91,5 +96,13 @@ where
                 }
             },
         }
+    }
+    
+    fn len(&self) -> Option<usize> {
+        let len = match self {
+            Self::File { file, .. } => file.len() / T::SIZE,
+            Self::Buffer { buffer } => buffer.len(),
+        };
+        Some(len / N)
     }
 }

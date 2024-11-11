@@ -2,6 +2,7 @@ use crate::pc::errors::PCError;
 use crate::pc::structs::Commitment;
 use crate::pc::PCScheme;
 use crate::piop::{prelude::SumCheck, structs::IOPProof};
+use crate::transcript::IOPTranscript;
 use mle::{
     eq_eval,
     util::build_eq_x_r_vec,
@@ -16,9 +17,10 @@ use scribe_streams::{
 use ark_ec::pairing::Pairing;
 use ark_ec::{scalar_mul::variable_base::VariableBaseMSM, CurveGroup};
 
-use crate::transcript::IOPTranscript;
 use ark_std::{collections::BTreeMap, marker::PhantomData};
 use ark_std::{end_timer, log2, start_timer, One, Zero};
+
+use itertools::Itertools;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct BatchProof<E, PC>
@@ -33,6 +35,7 @@ where
     /// proof for g'(a_2)
     pub(crate) g_prime_proof: PC::Proof,
 }
+
 
 /// Steps:
 /// 1. get challenge point t from transcript
@@ -104,10 +107,79 @@ where
     let merged_tilde_gs = v
         .into_iter()
         .map(|(_, coeffs_and_polys)| {
-            let (coeffs, polys): (Vec<_>, Vec<_>) = coeffs_and_polys.into_iter().unzip();
-            let evals = zip_many(polys.into_iter().map(|p| p.evals().iter()))
-                .map(|evals| evals.into_iter().zip(&coeffs).map(|(e, c)| e * c).sum())
-                .to_file_vec();
+            let evals = coeffs_and_polys
+                .into_iter()
+                .map(|(coeff, poly)| poly.evals().iter().map(move |p| p * coeff))
+                .chunks(8)
+                .into_iter()
+                .map(|chunk| {
+                    let mut chunk = chunk.collect::<Vec<_>>();
+                    match chunk.len() {
+                        1 => chunk.pop().unwrap().to_file_vec(),
+                        2 => {
+                            let a = chunk.pop().unwrap();
+                            let b = chunk.pop().unwrap();
+                            a.zip(b).map(|(a, b)| a + b).to_file_vec()
+                        },
+                        3 => {
+                            let a = chunk.pop().unwrap();
+                            let b = chunk.pop().unwrap();
+                            let c = chunk.pop().unwrap();
+                            a.zip(b).zip(c).map(|((a, b), c)| a + b + c).to_file_vec()
+                        },
+                        4 => {
+                            let a = chunk.pop().unwrap();
+                            let b = chunk.pop().unwrap();
+                            let c = chunk.pop().unwrap();
+                            let d = chunk.pop().unwrap();
+                            a.zip(b).zip(c).zip(d).map(|(((a, b), c), d)| a + b + c + d).to_file_vec()
+                        },
+                        5 => {
+                            let a = chunk.pop().unwrap();
+                            let b = chunk.pop().unwrap();
+                            let c = chunk.pop().unwrap();
+                            let d = chunk.pop().unwrap();
+                            let e = chunk.pop().unwrap();
+                            a.zip(b).zip(c).zip(d).zip(e).map(|((((a, b), c), d), e)| a + b + c + d + e).to_file_vec()
+                        },
+                        6 => {
+                            let a = chunk.pop().unwrap();
+                            let b = chunk.pop().unwrap();
+                            let c = chunk.pop().unwrap();
+                            let d = chunk.pop().unwrap();
+                            let e = chunk.pop().unwrap();
+                            let f = chunk.pop().unwrap();
+                            a.zip(b).zip(c).zip(d).zip(e).zip(f).map(|(((((a, b), c), d), e), f)| a + b + c + d + e + f).to_file_vec()
+                        },
+                        7 => {
+                            let a = chunk.pop().unwrap();
+                            let b = chunk.pop().unwrap();
+                            let c = chunk.pop().unwrap();
+                            let d = chunk.pop().unwrap();
+                            let e = chunk.pop().unwrap();
+                            let f = chunk.pop().unwrap();
+                            let g = chunk.pop().unwrap();
+                            a.zip(b).zip(c).zip(d).zip(e).zip(f).zip(g).map(|((((((a, b), c), d), e), f), g)| a + b + c + d + e + f + g).to_file_vec()
+                        },
+                        8 => {
+                            let a = chunk.pop().unwrap();
+                            let b = chunk.pop().unwrap();
+                            let c = chunk.pop().unwrap();
+                            let d = chunk.pop().unwrap();
+                            let e = chunk.pop().unwrap();
+                            let f = chunk.pop().unwrap();
+                            let g = chunk.pop().unwrap();
+                            let h = chunk.pop().unwrap();
+                            a.zip(b).zip(c).zip(d).zip(e).zip(f).zip(g).zip(h).map(|(((((((a, b), c), d), e), f), g), h)| a + b + c + d + e + f + g + h).to_file_vec()
+                        },
+                        _ => unreachable!(),
+                    }
+                })
+                .reduce(|mut acc, p| {
+                    acc.zipped_for_each(p.into_iter(), |a, b| *a += b);
+                    acc
+                })
+                .unwrap();
             MLE::from_evals(evals, num_vars)
         })
         .collect::<Vec<_>>();

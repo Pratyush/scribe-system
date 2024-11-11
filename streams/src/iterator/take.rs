@@ -30,6 +30,10 @@ where
             None
         }
     }
+    
+    fn len(&self) -> Option<usize> {
+        Some(self.n)
+    }
 }
 
 impl<I: BatchedIterator> Take<I> {

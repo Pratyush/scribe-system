@@ -8,9 +8,9 @@ use ark_std::{
     UniformRand,
 };
 use core::iter::FromIterator;
+use rayon::prelude::*;
 use scribe_streams::{file_vec::FileVec, serialize::RawAffine};
 use std::sync::Arc;
-use rayon::prelude::*;
 
 /// Universal Parameter
 #[derive(Debug, CanonicalDeserialize, CanonicalSerialize)]
@@ -251,11 +251,7 @@ where
             eq_arr.push_front(remove_dummy_variable(&base, i)?);
             if i != 0 {
                 let mul = eq.pop_back().unwrap().evaluations;
-                base = base
-                    .into_par_iter()
-                    .zip(&mul)
-                    .map(|(a, b)| a * b)
-                    .collect();
+                base = base.into_par_iter().zip(&mul).map(|(a, b)| a * b).collect();
             }
         }
 

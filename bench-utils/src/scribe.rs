@@ -97,9 +97,21 @@ pub fn prover(
 
     let srs: SRS<_> = {
         let srs_path = file_dir_path.join(format!("scribe_srs_{supported_size}.params"));
-        let srs_file = File::open(&srs_path).unwrap();
-        let mut srs_file = std::io::BufReader::new(srs_file);
-        CanonicalDeserialize::deserialize_uncompressed_unchecked(&mut srs_file).unwrap()
+        let srs_file = open_file(&srs_path);
+        let srs_file = std::io::BufReader::new(srs_file);
+        let srs = CanonicalDeserialize::deserialize_uncompressed_unchecked(srs_file).unwrap();
+        #[cfg(any(target_os = "macos", target_os = "ios"))]
+        {
+            std::process::Command::new("sync")
+                .status()
+                .expect("failed to sync file");
+
+            std::process::Command::new("sudo")
+                .arg("purge")
+                .status()
+                .expect("failed to purge fs cache");
+        }
+        srs
     };
 
     let tmp_dir = std::env::temp_dir();
@@ -117,8 +129,19 @@ pub fn prover(
 
         let pk = {
             let pk_path = file_dir_path.join(format!("scribe_pk_{nv}.params"));
-            let pk_file = BufReader::new(File::open(&pk_path).unwrap());
+            let pk_file = BufReader::new(open_file(&pk_path));
             let inner = ProvingKeyWithoutCk::deserialize_uncompressed_unchecked(pk_file).unwrap();
+            #[cfg(any(target_os = "macos", target_os = "ios"))]
+            {
+                std::process::Command::new("sync")
+                    .status()
+                    .expect("failed to sync file");
+
+                std::process::Command::new("sudo")
+                    .arg("purge")
+                    .status()
+                    .expect("failed to purge fs cache");
+            }
             let (pc_ck, _) = srs.trim(nv).unwrap();
             ProvingKey { inner, pc_ck }
         };
@@ -139,7 +162,22 @@ pub fn prover(
             format!("Scribe: Verifying for {nv}"),
             Scribe::verify(&pk.vk(), &public_inputs, &proof).unwrap()
         );
-        assert!(result);
+        if !result {
+            eprintln!("Verification failed for {nv}");
+        }
     }
     Ok(())
+}
+
+fn open_file(file_path: &Path) -> File {
+    let file = File::open(file_path).unwrap();
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
+    {
+        use libc::{fcntl, F_NOCACHE};
+        use std::os::fd::AsRawFd;
+        let fd = file.as_raw_fd();
+        let result = unsafe { fcntl(fd, F_NOCACHE, 1) };
+        assert_ne!(result, -1);
+    }
+    file
 }

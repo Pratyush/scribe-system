@@ -7,6 +7,7 @@ use super::BatchedIterator;
 
 pub struct ArrayChunks<I: BatchedIterator, const N: usize> {
     iter: I,
+    buffer: Vec<I::Item>,
 }
 
 impl<I: BatchedIterator, const N: usize> ArrayChunks<I, N> {
@@ -21,7 +22,8 @@ impl<I: BatchedIterator, const N: usize> ArrayChunks<I, N> {
             std::mem::size_of::<[I::Item; N]>(),
             N * std::mem::size_of::<I::Item>()
         );
-        Self { iter }
+        let buffer = Vec::with_capacity(BUFFER_SIZE);
+        Self { iter, buffer }
     }
 }
 
@@ -37,14 +39,23 @@ where
     #[inline]
     fn next_batch(&mut self) -> Option<Self::Batch> {
         self.iter.next_batch().map(|i| {
-            let batch = i.collect::<Vec<_>>();
-            assert_eq!(batch.len() % N, 0, "Buffer size must be divisible by N");
-            batch
+            self.buffer.clear();
+            self.buffer.par_extend(i);
+            assert_eq!(
+                self.buffer.len() % N,
+                0,
+                "Buffer size must be divisible by N"
+            );
+            self.buffer
                 .par_chunks_exact(N)
                 .map(|chunk| array::from_fn(|i| chunk[i]))
                 .collect::<Vec<_>>()
                 .into_par_iter()
         })
+    }
+    
+    fn len(&self) -> Option<usize> {
+        self.iter.len().map(|len| len / N)
     }
 }
 

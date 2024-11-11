@@ -33,14 +33,21 @@ pub trait SerializeRaw: Sized {
             return Ok(());
         }
         work_buffer.clear();
+        let n = result_buffer.len() * Self::SIZE;
+        work_buffer.reserve(n);
+        // Safety: `work_buffer` is empty and has capacity at least `n`.
+        unsafe {
+            work_buffer.set_len(n);
+        }
+        work_buffer.fill(0);
 
-        work_buffer.par_extend(result_buffer.par_chunks(1 << 10).flat_map(|v| {
-            let mut buffer = Vec::with_capacity((1 << 10) * Self::SIZE);
-            for val in v {
-                val.serialize_raw(&mut buffer).unwrap();
-            }
-            buffer
-        }));
+        work_buffer
+            .par_chunks_mut(Self::SIZE)
+            .zip(result_buffer.par_iter())
+            .with_min_len(1 << 8)
+            .for_each(|(chunk, val)| {
+                val.serialize_raw(chunk).unwrap();
+            });
         file.write_all(work_buffer)?;
         Ok(())
     }

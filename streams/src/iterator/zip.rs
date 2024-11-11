@@ -23,4 +23,8 @@ where
         let iter2 = self.iter2.next_batch()?;
         Some(iter1.zip(iter2))
     }
+    
+    fn len(&self) -> Option<usize> {
+        self.iter1.len().and_then(|len1| self.iter2.len().map(|len2| len1.min(len2)))
+    }
 }

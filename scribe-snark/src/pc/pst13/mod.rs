@@ -226,6 +226,9 @@ where
 
     let mut proofs = Vec::new();
 
+
+    let mut scalars_buf = Vec::with_capacity(scribe_streams::BUFFER_SIZE);
+    let mut bases_buf = Vec::with_capacity(scribe_streams::BUFFER_SIZE);
     for (_i, (&point_at_k, gi)) in point
         .iter()
         .zip(prover_param.powers_of_g[ignored..ignored + nv].iter())
@@ -237,7 +240,9 @@ where
 
         // TODO: confirm that FileVec in prior round's q and r are auto dropped via the Drop trait once q and r are assigned new FileVec
         (q, r) = f
-            .iter_chunk_mapped::<2, _, _>(|chunk| {
+            .iter()
+            .array_chunks::<2>()
+            .map(|chunk| {
                 let q_bit = chunk[1] - chunk[0];
                 let r_bit = chunk[0] + q_bit * point_at_k;
                 (q_bit, r_bit)
@@ -256,8 +261,6 @@ where
         let commitment = {
             let mut scalars = q.iter();
             let mut bases = gi.iter();
-            let mut scalars_buf = Vec::with_capacity(scribe_streams::BUFFER_SIZE);
-            let mut bases_buf = Vec::with_capacity(scribe_streams::BUFFER_SIZE);
             let mut commitment = E::G1::zero();
             while let (Some(scalar_batch), Some(base_batch)) =
                 (scalars.next_batch(), bases.next_batch())

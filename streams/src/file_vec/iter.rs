@@ -66,4 +66,12 @@ impl<'a, T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy + Debug
             },
         }
     }
+
+    fn len(&self) -> Option<usize> {
+        let len = match self {
+            Self::File { file, .. } => file.len() / T::SIZE,
+            Self::Buffer { buffer } => buffer.len(),
+        };
+        Some(len)
+    }
 }

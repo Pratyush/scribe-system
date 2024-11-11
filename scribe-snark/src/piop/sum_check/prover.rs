@@ -1,3 +1,5 @@
+use std::borrow::BorrowMut;
+
 use super::SumCheckProver;
 use crate::piop::{
     errors::PIOPError,
@@ -113,31 +115,53 @@ impl<F: RawPrimeField> SumCheckProver<F> for IOPProverState<F> {
             .products
             .par_iter()
             .map(|(coefficient, products)| {
-                let polys_in_product = products
+                let mut polys_in_product = products
                     .iter()
-                    .map(|&f| self.poly.mles[f].evals())
+                    .map(|&f| self.poly.mles[f].evals().array_chunks::<2>())
                     .collect::<Vec<_>>();
-                let mut sum = zip_many(polys_in_product.into_iter().map(|x| x.array_chunks::<2>()))
-                    .fold(
-                        || vec![F::zero(); products.len() + 1],
-                        |mut acc, mut products| {
-                            products.iter_mut().for_each(|[even, odd]| {
-                                *odd -= *even;
-                            });
-                            acc[0] += products.iter().map(|[e, _]| *e).product::<F>();
-                            acc[1..].iter_mut().for_each(|acc| {
-                                products.iter_mut().for_each(|[eval, step]| *eval += step);
-                                *acc += products.iter().map(|[e, _]| e).product::<F>();
-                            });
-                            acc // by the bit
-                        },
-                        |mut sum, partial| {
-                            sum.iter_mut()
-                                .zip(partial)
-                                .for_each(|(sum, partial)| *sum += partial);
-                            sum // sum for half of the bits
-                        },
-                    );
+                let mut sum = match polys_in_product.len() {
+                    1 => {
+                        let a = polys_in_product.pop().unwrap();
+                        summation_helper(a.map(|x| [x]), 1)
+                    },
+                    2 => {
+                        let a = polys_in_product.pop().unwrap();
+                        let b = polys_in_product.pop().unwrap();
+                        summation_helper(a.zip(b).map(|(x, y)| [x, y]), 2)
+                    },
+                    3 => {
+                        let a = polys_in_product.pop().unwrap();
+                        let b = polys_in_product.pop().unwrap();
+                        let c = polys_in_product.pop().unwrap();
+                        summation_helper(a.zip(b).zip(c).map(|((x, y), z)| [x, y, z]), 3)
+                    },
+                    4 => {
+                        let a = polys_in_product.pop().unwrap();
+                        let b = polys_in_product.pop().unwrap();
+                        let c = polys_in_product.pop().unwrap();
+                        let d = polys_in_product.pop().unwrap();
+                        summation_helper(
+                            a.zip(b).zip(c).zip(d).map(|(((x, y), z), w)| [x, y, z, w]),
+                            4,
+                        )
+                    },
+                    5 => {
+                        let a = polys_in_product.pop().unwrap();
+                        let b = polys_in_product.pop().unwrap();
+                        let c = polys_in_product.pop().unwrap();
+                        let d = polys_in_product.pop().unwrap();
+                        let e = polys_in_product.pop().unwrap();
+                        summation_helper(
+                            a.zip(b)
+                                .zip(c)
+                                .zip(d)
+                                .zip(e)
+                                .map(|((((x, y), z), w), v)| [x, y, z, w, v]),
+                            5,
+                        )
+                    },
+                    n => summation_helper(zip_many(polys_in_product), n),
+                };
 
                 sum.iter_mut().for_each(|sum| *sum *= *coefficient);
                 let extrapolation = (0..self.poly.aux_info.max_degree - products.len())
@@ -167,6 +191,33 @@ impl<F: RawPrimeField> SumCheckProver<F> for IOPProverState<F> {
             evaluations: products_sum,
         })
     }
+}
+
+fn summation_helper<F: PrimeField, T: BorrowMut<[[F; 2]]>>(
+    zipped: impl BatchedIterator<Item = T>,
+    len: usize,
+) -> Vec<F> {
+    zipped.fold(
+        || vec![F::zero(); len + 1],
+        |mut acc, mut products| {
+            let products = products.borrow_mut();
+            products.iter_mut().for_each(|[even, odd]| {
+                *odd -= *even;
+            });
+            acc[0] += products.iter().map(|[e, _]| *e).product::<F>();
+            acc[1..].iter_mut().for_each(|acc| {
+                products.iter_mut().for_each(|[eval, step]| *eval += step);
+                *acc += products.iter().map(|[e, _]| e).product::<F>();
+            });
+            acc // by the bit
+        },
+        |mut sum, partial| {
+            sum.iter_mut()
+                .zip(partial)
+                .for_each(|(sum, partial)| *sum += partial);
+            sum // sum for half of the bits
+        },
+    )
 }
 
 fn barycentric_weights<F: PrimeField>(points: &[F]) -> Vec<F> {

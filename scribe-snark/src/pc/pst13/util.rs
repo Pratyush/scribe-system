@@ -12,11 +12,14 @@ pub(crate) fn eq_extension<F: PrimeField>(t: &[F]) -> Vec<DenseMultilinearExtens
     let dim = t.len();
     let mut result = Vec::new();
     for (i, &ti) in t.iter().enumerate().take(dim) {
-        let poly = (0..(1 << dim)).into_par_iter().map(|x| {
-            let xi = if x >> i & 1 == 1 { F::one() } else { F::zero() };
-            let ti_xi = ti * xi;
-            ti_xi + ti_xi - xi - ti + F::one()
-        }).collect();
+        let poly = (0..(1 << dim))
+            .into_par_iter()
+            .map(|x| {
+                let xi = if x >> i & 1 == 1 { F::one() } else { F::zero() };
+                let ti_xi = ti * xi;
+                ti_xi + ti_xi - xi - ti + F::one()
+            })
+            .collect();
         result.push(DenseMultilinearExtension::from_evaluations_vec(dim, poly));
     }
 

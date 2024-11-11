@@ -25,7 +25,7 @@ pub struct Inner<F: RawField> {
 impl<F: RawField> Inner<F> {
     #[inline(always)]
     pub fn new(num_vars: usize) -> Self {
-        let evals = FileVec::with_prefix("evals");
+        let evals = FileVec::with_prefix_and_space("evals", 1 << num_vars);
         Self { evals, num_vars }
     }
 
