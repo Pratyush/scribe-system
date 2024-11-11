@@ -5,6 +5,8 @@ use std::{
     path::PathBuf,
     sync::{Arc, Mutex},
 };
+#[cfg(target_os = "linux")]
+use std::os::unix::fs::OpenOptionsExt;
 use tempfile::Builder;
 
 use crate::BUFFER_SIZE;
