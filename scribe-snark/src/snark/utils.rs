@@ -70,6 +70,7 @@ where
     ) -> Result<PC::BatchProof, ScribeErrors> {
         let start = start_timer!(|| "Multi-open");
         let evals_time = start_timer!(|| "Evaluations");
+        #[cfg(target_os = "linux")]
         let evals = self
             .polynomials
             .par_iter()
@@ -82,6 +83,15 @@ where
                 pool.install(|| poly.evaluate(point).unwrap())
             })
             .collect::<Vec<_>>();
+
+        #[cfg(not(target_os = "linux"))]
+        let evals = self
+            .polynomials
+            .iter()
+            .zip(&self.points)
+            .map(|(poly, point)| poly.evaluate(point).unwrap())
+            .collect::<Vec<_>>();
+
         end_timer!(evals_time);
         let res = PC::multi_open(
             ck.borrow(),

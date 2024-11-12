@@ -15,6 +15,7 @@ EXPERIMENT_TYPE="both"  # 'm' for memory, 'b' for bandwidth, 'both' for both
 OUTPUT_FILE=""
 DATA_FILE_BASE=""
 VISUALIZE_CACHE=false  # New variable for cache visualization
+export TMPDIR2=/home/ec2-user/external/tmp
 
 # Function to display help
 function show_help {
@@ -158,7 +159,7 @@ for PROVER in "${PROVERS[@]}"; do
     case $PROVER in
         scribe)
             echo "Compiling scribe-prover and scribe-setup..."
-            cargo build --release --example scribe-prover
+            cargo build --release --example scribe-prover --features print-trace
             cargo build --release --example scribe-setup --features print-trace
             ;;
         hp)
@@ -188,13 +189,13 @@ done
 if [ "$SKIP_SETUP" = false ]; then
     if [[ " ${PROVERS[@]} " =~ " scribe " ]]; then
         echo "Running setup for scribe..."
-        env RAYON_NUM_THREADS=16 ../../target/release/examples/scribe-setup \
+        env TMPDIR=$TMPDIR2 RAYON_NUM_THREADS=16 ../../target/release/examples/scribe-setup \
             $MIN_VARIABLES $MAX_VARIABLES $SETUP_FOLDER
     fi
 
     if [[ " ${PROVERS[@]} " =~ " hp " ]]; then
         echo "Running setup for hp..."
-        env RAYON_NUM_THREADS=16 ../../target/release/examples/hp-setup \
+        env TMPDIR=$TMPDIR2 RAYON_NUM_THREADS=16 ../../target/release/examples/hp-setup \
             $MIN_VARIABLES $MAX_VARIABLES $SETUP_FOLDER
     fi
 else
@@ -224,7 +225,7 @@ run_with_memory_limits() {
         --unit="${UNIT_NAME}"
         -p "$MEMORY_PROPERTY"
         -p "MemorySwapMax=0"
-        env RAYON_NUM_THREADS=$THREAD_COUNT $BINARY_PATH $ARGS
+        env TMPDIR=$TMPDIR2 RAYON_NUM_THREADS=$THREAD_COUNT $BINARY_PATH $ARGS
     )
 
     # Start the command

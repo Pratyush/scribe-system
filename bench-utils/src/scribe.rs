@@ -100,17 +100,8 @@ pub fn prover(
         let srs_file = open_file(&srs_path);
         let srs_file = std::io::BufReader::new(srs_file);
         let srs = CanonicalDeserialize::deserialize_uncompressed_unchecked(srs_file).unwrap();
-        #[cfg(any(target_os = "macos", target_os = "ios"))]
-        {
-            std::process::Command::new("sync")
-                .status()
-                .expect("failed to sync file");
-
-            std::process::Command::new("sudo")
-                .arg("purge")
-                .status()
-                .expect("failed to purge fs cache");
-        }
+        clear_caches();
+        
         srs
     };
 
@@ -131,17 +122,6 @@ pub fn prover(
             let pk_path = file_dir_path.join(format!("scribe_pk_{nv}.params"));
             let pk_file = BufReader::new(open_file(&pk_path));
             let inner = ProvingKeyWithoutCk::deserialize_uncompressed_unchecked(pk_file).unwrap();
-            #[cfg(any(target_os = "macos", target_os = "ios"))]
-            {
-                std::process::Command::new("sync")
-                    .status()
-                    .expect("failed to sync file");
-
-                std::process::Command::new("sudo")
-                    .arg("purge")
-                    .status()
-                    .expect("failed to purge fs cache");
-            }
             let (pc_ck, _) = srs.trim(nv).unwrap();
             ProvingKey { inner, pc_ck }
         };
@@ -150,6 +130,7 @@ pub fn prover(
             format!("Scribe: Generating witness for {nv}"),
             MockCircuit::wire_values_for_index(&pk.index())
         );
+        clear_caches();
 
         let proof = timed!(
             format!("Scribe: Proving for {nv}",),
@@ -180,4 +161,43 @@ fn open_file(file_path: &Path) -> File {
         assert_ne!(result, -1);
     }
     file
+}
+
+fn clear_caches() {
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
+    {
+        std::process::Command::new("sync")
+            .status()
+            .expect("failed to sync file");
+
+        std::process::Command::new("sudo")
+            .arg("purge")
+            .status()
+            .expect("failed to purge fs cache");
+    }
+    #[cfg(target_os = "linux")]
+    {
+        use std::process::{Command, Stdio};
+        let echo = Command::new("echo")
+            .arg("3")
+            .stdout(Stdio::piped())
+            .spawn()
+            .expect("Failed to start echo");
+
+        let mut tee = Command::new("sudo")
+            .arg("tee")
+            .arg("/proc/sys/vm/drop_caches")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::null()) // To suppress tee's stdout
+            .spawn()
+            .expect("Failed to start tee");
+
+        if let Some(mut echo_stdout) = echo.stdout {
+            if let Some(mut tee_stdin) = tee.stdin.take() {
+                std::io::copy(&mut echo_stdout, &mut tee_stdin).expect("Failed to write to tee");
+            }
+        }        
+
+        tee.wait().expect("Failed to wait for tee");
+    }
 }
