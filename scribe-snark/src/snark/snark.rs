@@ -140,6 +140,7 @@ where
         let start = start_timer!(|| format!("scribe proving nv = {}", pk.config().num_variables()));
         let mut transcript = IOPTranscript::<E::ScalarField>::new(b"scribe");
 
+        #[cfg(debug_assertions)]
         prover_sanity_check(&pk.config(), pub_input, witnesses.to_vec())?;
 
         // witness assignment of length 2^n
@@ -158,6 +159,12 @@ where
         // =======================================================================
         let step = start_timer!(|| "commit witnesses");
 
+        #[cfg(target_os = "linux")]
+        let witness_commits = witnesses
+            .iter()
+            .map(|x| PC::commit(&pk.pc_ck, x).unwrap())
+            .collect::<Vec<_>>();
+        #[cfg(not(target_os = "linux"))]
         let witness_commits = witnesses
             .par_iter()
             .map(|x| PC::commit(&pk.pc_ck, x).unwrap())
