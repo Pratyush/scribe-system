@@ -36,7 +36,6 @@ where
     pub(crate) g_prime_proof: PC::Proof,
 }
 
-
 /// Steps:
 /// 1. get challenge point t from transcript
 /// 2. build eq(t,i) for i in [0..k]
@@ -132,7 +131,11 @@ where
                             let b = chunk.pop().unwrap();
                             let c = chunk.pop().unwrap();
                             let d = chunk.pop().unwrap();
-                            a.zip(b).zip(c).zip(d).map(|(((a, b), c), d)| a + b + c + d).to_file_vec()
+                            a.zip(b)
+                                .zip(c)
+                                .zip(d)
+                                .map(|(((a, b), c), d)| a + b + c + d)
+                                .to_file_vec()
                         },
                         5 => {
                             let a = chunk.pop().unwrap();
@@ -140,7 +143,12 @@ where
                             let c = chunk.pop().unwrap();
                             let d = chunk.pop().unwrap();
                             let e = chunk.pop().unwrap();
-                            a.zip(b).zip(c).zip(d).zip(e).map(|((((a, b), c), d), e)| a + b + c + d + e).to_file_vec()
+                            a.zip(b)
+                                .zip(c)
+                                .zip(d)
+                                .zip(e)
+                                .map(|((((a, b), c), d), e)| a + b + c + d + e)
+                                .to_file_vec()
                         },
                         6 => {
                             let a = chunk.pop().unwrap();
@@ -149,7 +157,13 @@ where
                             let d = chunk.pop().unwrap();
                             let e = chunk.pop().unwrap();
                             let f = chunk.pop().unwrap();
-                            a.zip(b).zip(c).zip(d).zip(e).zip(f).map(|(((((a, b), c), d), e), f)| a + b + c + d + e + f).to_file_vec()
+                            a.zip(b)
+                                .zip(c)
+                                .zip(d)
+                                .zip(e)
+                                .zip(f)
+                                .map(|(((((a, b), c), d), e), f)| a + b + c + d + e + f)
+                                .to_file_vec()
                         },
                         7 => {
                             let a = chunk.pop().unwrap();
@@ -159,7 +173,14 @@ where
                             let e = chunk.pop().unwrap();
                             let f = chunk.pop().unwrap();
                             let g = chunk.pop().unwrap();
-                            a.zip(b).zip(c).zip(d).zip(e).zip(f).zip(g).map(|((((((a, b), c), d), e), f), g)| a + b + c + d + e + f + g).to_file_vec()
+                            a.zip(b)
+                                .zip(c)
+                                .zip(d)
+                                .zip(e)
+                                .zip(f)
+                                .zip(g)
+                                .map(|((((((a, b), c), d), e), f), g)| a + b + c + d + e + f + g)
+                                .to_file_vec()
                         },
                         8 => {
                             let a = chunk.pop().unwrap();
@@ -170,7 +191,17 @@ where
                             let f = chunk.pop().unwrap();
                             let g = chunk.pop().unwrap();
                             let h = chunk.pop().unwrap();
-                            a.zip(b).zip(c).zip(d).zip(e).zip(f).zip(g).zip(h).map(|(((((((a, b), c), d), e), f), g), h)| a + b + c + d + e + f + g + h).to_file_vec()
+                            a.zip(b)
+                                .zip(c)
+                                .zip(d)
+                                .zip(e)
+                                .zip(f)
+                                .zip(g)
+                                .zip(h)
+                                .map(|(((((((a, b), c), d), e), f), g), h)| {
+                                    a + b + c + d + e + f + g + h
+                                })
+                                .to_file_vec()
                         },
                         _ => unreachable!(),
                     }

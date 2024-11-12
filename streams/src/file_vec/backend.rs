@@ -1,3 +1,5 @@
+#[cfg(target_os = "linux")]
+use std::os::unix::fs::OpenOptionsExt;
 use std::{
     ffi::OsStr,
     fs::{File, OpenOptions},
@@ -5,11 +7,7 @@ use std::{
     path::PathBuf,
     sync::{Arc, Mutex},
 };
-#[cfg(target_os = "linux")]
-use std::os::unix::fs::OpenOptionsExt;
 use tempfile::Builder;
-
-use crate::BUFFER_SIZE;
 
 pub trait ReadN: std::io::Read {
     /// Reads `n` bytes from the file into `dest`.
@@ -34,7 +32,31 @@ pub trait ReadN: std::io::Read {
     }
 }
 
-impl<R: std::io::Read> ReadN for R {}
+impl<'a> ReadN for &'a mut InnerFile {
+    /// Reads `n` bytes from the file into `dest`.
+    /// This assumes that `dest` is of length `n`.
+    /// Clears `dest` before reading.
+    ///
+    /// If `self` contains `m` bytes, for `m < n`, this function will fill `dest` with `m` bytes and return `Ok(())`.
+    fn read_n(&mut self, dest: &mut AVec, n: usize) -> std::io::Result<()> {
+        debug_assert_eq!(dest.len(), 0);
+        unsafe {
+            dest.set_len(0);
+        }
+        dest.reserve(n);
+        // Safety: `dest` is empty and has capacity `n`.
+        unsafe {
+            dest.set_len(n);
+        }
+        dest.fill(0);
+        debug_assert_eq!(dest.len() % PAGE_SIZE, 0);
+        let n = (&self.file).read(&mut dest[..])?;
+        dest.truncate(n);
+        Ok(())
+    }
+}
+
+impl<'a> ReadN for &'a [u8] {}
 
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 pub const PAGE_SIZE: usize = 16384;
@@ -74,7 +96,7 @@ impl InnerFile {
         #[cfg(any(target_os = "macos", target_os = "ios"))]
         mac_os_file_set_nocache(&file);
 
-        let buffer: AVec = AVec::with_capacity(PAGE_SIZE, BUFFER_SIZE);
+        let buffer: AVec = AVec::new(PAGE_SIZE);
         Self {
             file,
             buffer: Arc::new(Mutex::new(buffer)),
@@ -94,7 +116,7 @@ impl InnerFile {
         #[cfg(any(target_os = "macos", target_os = "ios"))]
         mac_os_file_set_nocache(&file);
 
-        let buffer: AVec = AVec::with_capacity(PAGE_SIZE, BUFFER_SIZE);
+        let buffer: AVec = AVec::new(PAGE_SIZE);
         Self {
             file,
             buffer: Arc::new(Mutex::new(buffer)),
@@ -139,7 +161,7 @@ impl InnerFile {
         #[cfg(any(target_os = "macos", target_os = "ios"))]
         mac_os_file_set_nocache(&file);
 
-        let buffer: AVec = AVec::with_capacity(PAGE_SIZE, BUFFER_SIZE);
+        let buffer: AVec = AVec::new(PAGE_SIZE);
         Self {
             file,
             buffer: Arc::new(Mutex::new(buffer)),
@@ -173,7 +195,7 @@ impl InnerFile {
     pub fn remove(self) -> io::Result<()> {
         std::fs::remove_file(&self.path)
     }
-    
+
     pub fn allocate_space(&mut self, len: usize) -> io::Result<()> {
         let len = len as u64;
         use std::os::unix::io::AsRawFd;
@@ -190,8 +212,7 @@ impl InnerFile {
         }
         #[cfg(any(target_os = "macos", target_os = "ios"))]
         {
-
-            use libc::{fcntl, F_ALLOCATECONTIG, F_ALLOCATEALL, F_PREALLOCATE, c_void, off_t};
+            use libc::{c_void, fcntl, off_t, F_ALLOCATEALL, F_ALLOCATECONTIG, F_PREALLOCATE};
             // Prepare the allocation request
             let mut alloc_struct = libc::fstore_t {
                 fst_flags: F_ALLOCATECONTIG,
@@ -203,18 +224,26 @@ impl InnerFile {
 
             // Attempt to allocate contiguous space
             let result = unsafe {
-                fcntl(fd, F_PREALLOCATE, &alloc_struct as *const _ as *const c_void)
+                fcntl(
+                    fd,
+                    F_PREALLOCATE,
+                    &alloc_struct as *const _ as *const c_void,
+                )
             };
 
             if result == -1 {
                 alloc_struct.fst_flags = F_ALLOCATEALL;
                 let result = unsafe {
-                    fcntl(fd, F_PREALLOCATE, &alloc_struct as *const _ as *const c_void)
+                    fcntl(
+                        fd,
+                        F_PREALLOCATE,
+                        &alloc_struct as *const _ as *const c_void,
+                    )
                 };
 
                 if result == -1 {
                     return Err(io::Error::last_os_error());
-                } 
+                }
             }
 
             // Set the file size to the desired length
@@ -222,12 +251,12 @@ impl InnerFile {
             Ok(())
         }
     }
-    
+
     #[inline(always)]
     pub fn metadata(&self) -> io::Result<std::fs::Metadata> {
         self.file.metadata()
     }
-    
+
     #[inline(always)]
     pub fn len(&self) -> usize {
         self.metadata().expect("failed to get metadata").len() as usize
@@ -336,19 +365,29 @@ impl Write for &InnerFile {
     #[inline(always)]
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         debug_assert_eq!(buf.len() % PAGE_SIZE, 0);
-        let mut self_buffer = self.buffer.lock().unwrap();
-        self_buffer.clear();
-        self_buffer.extend_from_slice(&buf);
-        (&self.file).write(&self_buffer)
+        if std::mem::align_of_val(buf) % PAGE_SIZE == 0 {
+            // If the buffer is already aligned, we can write directly.
+            (&self.file).write(buf)
+        } else {
+            let mut self_buffer = self.buffer.lock().unwrap();
+            self_buffer.clear();
+            self_buffer.extend_from_slice(&buf);
+            (&self.file).write(&self_buffer)
+        }
     }
 
     #[inline(always)]
     fn write_all(&mut self, buf: &[u8]) -> io::Result<()> {
         debug_assert_eq!(buf.len() % PAGE_SIZE, 0);
-        let mut self_buffer = self.buffer.lock().unwrap();
-        self_buffer.clear();
-        self_buffer.extend_from_slice(&buf);
-        (&self.file).write_all(&self_buffer)
+        if std::mem::align_of_val(buf) % PAGE_SIZE == 0 {
+            // If the buffer is already aligned, we can write directly.
+            (&self.file).write_all(buf)
+        } else {
+            let mut self_buffer = self.buffer.lock().unwrap();
+            self_buffer.clear();
+            self_buffer.extend_from_slice(&buf);
+            (&self.file).write_all(&self_buffer)
+        }
     }
 
     /// Flushes the file, ensuring that all intermediately buffered contents

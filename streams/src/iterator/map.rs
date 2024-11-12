@@ -19,7 +19,7 @@ where
     fn next_batch(&mut self) -> Option<Self::Batch> {
         self.iter.next_batch().map(|i| i.map(self.f.clone()))
     }
-    
+
     fn len(&self) -> Option<usize> {
         self.iter.len()
     }

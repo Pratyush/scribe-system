@@ -53,7 +53,7 @@ where
                 .into_par_iter()
         })
     }
-    
+
     fn len(&self) -> Option<usize> {
         self.iter.len().map(|len| len / N)
     }

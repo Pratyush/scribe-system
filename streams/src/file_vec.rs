@@ -54,7 +54,7 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
         let file = InnerFile::new_temp("");
         Self::File(file)
     }
-    
+
     #[inline(always)]
     pub fn with_space(n: usize) -> Self {
         let mut file = InnerFile::new_temp("");
@@ -67,7 +67,6 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
     //     let file = InnerFile::new_temp(prefix);
     //     Self::File(file)
     // }
-    
 
     #[inline(always)]
     pub fn with_prefix_and_space(prefix: impl AsRef<OsStr>, n: usize) -> Self {
@@ -75,7 +74,7 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
         file.allocate_space(n * T::SIZE).unwrap();
         Self::File(file)
     }
-    
+
     #[inline(always)]
     pub fn clone(a: &Self) -> Self
     where
@@ -251,7 +250,7 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
             // So, we initialize the byte_buffer and file here.
             if buffer.len() > BUFFER_SIZE {
                 batch_is_larger_than_buffer = true;
-                byte_buffer = Some(vec![0u8; buffer.len() * size]);
+                byte_buffer = Some(avec![0u8; buffer.len() * size]);
                 let mut f = InnerFile::new_temp(&prefix);
                 file_length.map(|l| f.allocate_space(l).unwrap());
                 file = Some(f);
@@ -271,7 +270,7 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
                 buffer.par_extend(batch);
             } else {
                 if !more_than_one_batch {
-                    byte_buffer = Some(vec![0u8; buffer.len() * size]);
+                    byte_buffer = Some(avec![0u8; buffer.len() * size]);
                 }
                 if file.is_none() {
                     let mut f = InnerFile::new_temp(&prefix);
@@ -335,7 +334,7 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
     {
         match self {
             Self::File(ref mut file) => {
-                let mut work_buffer = vec![0u8; T::SIZE * b.len()];
+                let mut work_buffer = avec![0u8; T::SIZE * b.len()];
                 T::serialize_raw_batch(b, &mut work_buffer, file).unwrap();
             },
             Self::Buffer { ref mut buffer } => {
@@ -366,7 +365,12 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
         let mut temp_buffer = Vec::with_capacity(BUFFER_SIZE);
         process_file!(self, |buffer: &mut Vec<T>| {
             temp_buffer.clear();
-            temp_buffer.par_extend(buffer.par_chunks(2).with_min_len(1 << 7).map(|chunk| f(&chunk[0], &chunk[1])));
+            temp_buffer.par_extend(
+                buffer
+                    .par_chunks(2)
+                    .with_min_len(1 << 7)
+                    .map(|chunk| f(&chunk[0], &chunk[1])),
+            );
             std::mem::swap(buffer, &mut temp_buffer);
             Some(())
         })
@@ -401,7 +405,7 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
                     };
                     FileVec::Buffer { buffer }
                 } else {
-                    let mut byte_buffer = vec![0u8; buffer.len() * T::SIZE];
+                    let mut byte_buffer = avec![0u8; buffer.len() * T::SIZE];
                     byte_buffer
                         .par_chunks_mut(T::SIZE)
                         .zip(buffer)
@@ -441,11 +445,11 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
         let mut file_1 = InnerFile::new_temp("unzip_1");
         let mut file_2 = InnerFile::new_temp("unzip_2");
         let iter_len = iter.len();
-        
+
         let size_a = A::SIZE;
         let size_b = B::SIZE;
-        let mut writer_1 = vec![0u8; size_a * BUFFER_SIZE];
-        let mut writer_2 = vec![0u8; size_b * BUFFER_SIZE];
+        let mut writer_1 = avec![0u8; size_a * BUFFER_SIZE];
+        let mut writer_2 = avec![0u8; size_b * BUFFER_SIZE];
 
         if let Some(batch) = iter.next_batch() {
             bufs.par_extend(batch);
@@ -470,7 +474,6 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
                 more_than_one_batch = true;
                 let a = writer_1.par_chunks_mut(size_a).zip(&bufs.0);
                 let b = writer_2.par_chunks_mut(size_b).zip(&bufs.1);
-                
 
                 a.zip(b)
                     .try_for_each(|((c_a, a), (c_b, b))| {
@@ -693,7 +696,7 @@ impl<T: SerializeRaw + DeserializeRaw + Valid + Sync + Send + CanonicalDeseriali
             file.allocate_space(size * T::SIZE).unwrap();
             let mut remaining = size;
 
-            let mut work_buffer = vec![0u8; T::SIZE * BUFFER_SIZE];
+            let mut work_buffer = avec![0u8; T::SIZE * BUFFER_SIZE];
             while remaining > 0 {
                 for _ in 0..std::cmp::min(remaining, BUFFER_SIZE) {
                     let item = T::deserialize_uncompressed_unchecked(&mut reader).unwrap();

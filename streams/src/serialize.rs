@@ -23,7 +23,7 @@ pub trait SerializeRaw: Sized {
 
     fn serialize_raw_batch(
         result_buffer: &[Self],
-        work_buffer: &mut Vec<u8>,
+        work_buffer: &mut AVec,
         mut file: impl Write,
     ) -> Result<(), io::Error>
     where
@@ -60,7 +60,7 @@ pub trait DeserializeRaw: SerializeRaw + Sized + std::fmt::Debug {
         result_buffer: &mut Vec<Self>,
         work_buffer: &mut AVec,
         batch_size: usize,
-        mut file: impl Read,
+        mut file: impl ReadN,
     ) -> Result<(), io::Error>
     where
         Self: Sync + Send,
@@ -387,7 +387,7 @@ mod tests {
     ) {
         let size = T::SIZE;
         let mut serialized = avec![0u8; size * data.len()];
-        let mut buffer = serialized.to_vec();
+        let mut buffer = serialized.clone();
         T::serialize_raw_batch(data, &mut buffer, &mut serialized[..]).unwrap();
         let mut final_result = vec![];
         let mut result_buf = vec![];

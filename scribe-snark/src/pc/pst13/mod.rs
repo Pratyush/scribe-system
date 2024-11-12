@@ -226,7 +226,6 @@ where
 
     let mut proofs = Vec::new();
 
-
     let mut scalars_buf = Vec::with_capacity(scribe_streams::BUFFER_SIZE);
     let mut bases_buf = Vec::with_capacity(scribe_streams::BUFFER_SIZE);
     for (_i, (&point_at_k, gi)) in point

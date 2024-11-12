@@ -106,7 +106,7 @@ where
             },
         }
     }
-    
+
     fn len(&self) -> Option<usize> {
         let len = match self {
             Self::File { file, .. } => file.len() / T::SIZE / N,

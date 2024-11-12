@@ -41,7 +41,7 @@ where
                 .filter_map(self.func),
         )
     }
-    
+
     fn len(&self) -> Option<usize> {
         Some(self.max)
     }

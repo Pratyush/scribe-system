@@ -30,7 +30,7 @@ pub trait BatchedIterator: Sized {
     type Batch: ParallelIterator<Item = Self::Item>;
 
     fn next_batch(&mut self) -> Option<Self::Batch>;
-    
+
     fn len(&self) -> Option<usize> {
         None
     }

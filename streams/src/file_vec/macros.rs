@@ -12,7 +12,8 @@ macro_rules! process_file {
                 let mut write_byte_buffer = vec![0u8; T::SIZE * BUFFER_SIZE];
 
                 let mut writer = InnerFile::new_temp("");
-                writer.allocate_space(file_len as usize)
+                writer
+                    .allocate_space(file_len as usize)
                     .expect("could not allocate space for file");
 
                 let mut num_iters = 0;

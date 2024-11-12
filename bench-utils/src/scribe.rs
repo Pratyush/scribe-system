@@ -93,7 +93,7 @@ pub fn prover(
         let srs_file = std::io::BufReader::new(srs_file);
         let srs = CanonicalDeserialize::deserialize_uncompressed_unchecked(srs_file).unwrap();
         clear_caches();
-        
+
         srs
     };
 
@@ -188,7 +188,7 @@ fn clear_caches() {
             if let Some(mut tee_stdin) = tee.stdin.take() {
                 std::io::copy(&mut echo_stdout, &mut tee_stdin).expect("Failed to write to tee");
             }
-        }        
+        }
 
         tee.wait().expect("Failed to wait for tee");
     }

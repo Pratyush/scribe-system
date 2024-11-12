@@ -85,9 +85,14 @@ where
         batched.truncate(start_of_empty);
         Some(batched.into_par_iter())
     }
-    
+
     fn len(&self) -> Option<usize> {
-        let len = self.iters.iter().map(|iter| iter.len().unwrap_or(0)).min().unwrap_or(0);
+        let len = self
+            .iters
+            .iter()
+            .map(|iter| iter.len().unwrap_or(0))
+            .min()
+            .unwrap_or(0);
         if len == 0 {
             None
         } else {

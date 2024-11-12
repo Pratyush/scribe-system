@@ -35,7 +35,7 @@ where
             self.next_batch()
         }
     }
-    
+
     fn len(&self) -> Option<usize> {
         self.iters.iter().map(|iter| iter.len()).sum()
     }

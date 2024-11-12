@@ -27,7 +27,7 @@ where
         self.count -= batch_size;
         Some(rayon::iter::repeatn(self.iter, batch_size))
     }
-    
+
     fn len(&self) -> Option<usize> {
         Some(self.count)
     }

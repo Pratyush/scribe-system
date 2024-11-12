@@ -30,7 +30,7 @@ where
             None
         }
     }
-    
+
     fn len(&self) -> Option<usize> {
         Some(self.n)
     }
