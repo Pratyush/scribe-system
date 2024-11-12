@@ -1,9 +1,9 @@
 #!/bin/bash
 
 DEVICE=$(lsblk -nd --output NAME,TYPE | grep disk | grep nvme2n1 | awk '{print "/dev/" $1}')
-sudo mkfs.ext4 -E nodiscard -E noatime $DEVICE
+sudo mkfs.ext4 -E nodiscard $DEVICE
 sudo mkdir -p /home/ec2-user/external
-sudo mount $DEVICE /home/ec2-user/external 
+sudo mount -o noatime $DEVICE /home/ec2-user/external 
 sudo chown -R ec2-user:ec2-user /home/ec2-user/external/
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- --default-toolchain nightly -y
 . "$HOME/.cargo/env"

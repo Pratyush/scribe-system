@@ -69,7 +69,7 @@ pub fn prover(
 
         let index = circuit.index;
 
-        let (pk, vk) = timed!(
+        let (pk, vk): (ProvingKey, VerifyingKey) = timed!(
             format!("HyperPlonk: Generating pk/vk for {nv}",),
             HyperPlonk::preprocess(&index, &pc_srs).unwrap()
         );
