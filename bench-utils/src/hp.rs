@@ -68,19 +68,11 @@ pub fn prover(
         );
 
         let index = circuit.index;
-        let pool = rayon::ThreadPoolBuilder::new()
-            .num_threads(8)
-            .build()
-            .unwrap();
 
-        let (pk, vk): (ProvingKey, VerifyingKey) = pool
-            .install(|| {
-                timed!(
-                    format!("HyperPlonk: Generating pk/vk for {nv}",),
-                    HyperPlonk::preprocess(&index, &pc_srs)
-                )
-            })
-            .unwrap();
+        let (pk, vk) = timed!(
+            format!("HyperPlonk: Generating pk/vk for {nv}",),
+            HyperPlonk::preprocess(&index, &pc_srs).unwrap()
+        );
 
         // generate a proof
         let proof = timed!(

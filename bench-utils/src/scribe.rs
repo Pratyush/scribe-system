@@ -63,19 +63,11 @@ pub fn setup(min_num_vars: usize, max_num_vars: usize, file_dir_path: &Path) {
         );
 
         let index = circuit.index;
-        let pool = rayon::ThreadPoolBuilder::new()
-            .num_threads(8)
-            .build()
-            .unwrap();
 
-        let (pk, _vk): (ProvingKey, VerifyingKey) = pool
-            .install(|| {
-                timed!(
-                    format!("Scribe: Generating pk/vk for {nv}",),
-                    Scribe::preprocess(&index, &pc_srs)
-                )
-            })
-            .unwrap();
+        let (pk, _vk) = timed!(
+            format!("Scribe: Generating pk/vk for {nv}",),
+            Scribe::preprocess(&index, &pc_srs).unwrap()
+        );
 
         timed!(
             format!("Scribe: Serializing pk for {nv}"),
