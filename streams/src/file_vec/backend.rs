@@ -93,8 +93,7 @@ impl InnerFile {
         options.custom_flags(libc::O_DIRECT);
         let file = options.open(&path).expect("failed to open file");
 
-        #[cfg(any(target_os = "macos", target_os = "ios"))]
-        mac_os_file_set_nocache(&file);
+        file_set_nocache(&file);
 
         let buffer: AVec = AVec::new(PAGE_SIZE);
         Self {
@@ -113,8 +112,7 @@ impl InnerFile {
 
         let file = options.open(&path).expect("failed to open file");
 
-        #[cfg(any(target_os = "macos", target_os = "ios"))]
-        mac_os_file_set_nocache(&file);
+        file_set_nocache(&file);
 
         let buffer: AVec = AVec::new(PAGE_SIZE);
         Self {
@@ -158,8 +156,7 @@ impl InnerFile {
             .keep()
             .expect("failed to keep file");
 
-        #[cfg(any(target_os = "macos", target_os = "ios"))]
-        mac_os_file_set_nocache(&file);
+        file_set_nocache(&file);
 
         let buffer: AVec = AVec::new(PAGE_SIZE);
         Self {
@@ -185,8 +182,7 @@ impl InnerFile {
 
         self.file = options.open(&self.path)?;
 
-        #[cfg(any(target_os = "macos", target_os = "ios"))]
-        mac_os_file_set_nocache(&self.file);
+        file_set_nocache(&self.file);
 
         Ok(self)
     }
@@ -266,8 +262,7 @@ impl InnerFile {
     pub fn try_clone(&self) -> io::Result<Self> {
         let file = self.file.try_clone()?;
 
-        #[cfg(any(target_os = "macos", target_os = "ios"))]
-        mac_os_file_set_nocache(&file);
+        file_set_nocache(&file);
 
         Ok(Self {
             file,
@@ -432,11 +427,14 @@ impl io::Seek for InnerFile {
     }
 }
 
-#[cfg(any(target_os = "macos", target_os = "ios"))]
-fn mac_os_file_set_nocache(file: &File) {
-    use libc::{fcntl, F_NOCACHE};
-    use std::os::unix::io::AsRawFd;
-    let fd = file.as_raw_fd();
-    let result = unsafe { fcntl(fd, F_NOCACHE, 1) };
-    assert_ne!(result, -1);
+// #[cfg(any(target_os = "macos", target_os = "ios"))]
+fn file_set_nocache(file: &File) {
+    #[cfg(target_os = "macos")]
+    {
+        use libc::{fcntl, F_NOCACHE};
+        use std::os::unix::io::AsRawFd;
+        let fd = file.as_raw_fd();
+        let result = unsafe { fcntl(fd, F_NOCACHE, 1) };
+        assert_ne!(result, -1);
+    }
 }

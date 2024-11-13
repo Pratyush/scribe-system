@@ -131,7 +131,7 @@ def run_benchmark(prover, thread_count, memory_limit, min_vars, max_vars, skip_m
     for line in run_with_systemd(prover, thread_count, memory_limit, command, skip_memory_limit):
         print(line)  # Print real-time output for visibility
         line = line.strip()
-        match = pattern.match(line)
+        match = pattern.search(line)
         print("Pattern match: ", match)
         if match:
             num_variables = match.group(1)
