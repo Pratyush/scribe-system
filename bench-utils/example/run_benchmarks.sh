@@ -159,8 +159,8 @@ for PROVER in "${PROVERS[@]}"; do
     case $PROVER in
         scribe)
             echo "Compiling scribe-prover and scribe-setup..."
-            cargo build --release --example scribe-prover print-trace
-            cargo build --release --example scribe-setup print-trace
+            cargo build --release --example scribe-prover
+            cargo build --release --example scribe-setup
             ;;
         hp)
             echo "Compiling hp-prover and hp-setup..."
