@@ -1,20 +1,25 @@
 #!/bin/bash
 
+# Check if the architecture argument is provided
+if [ -z "$1" ]; then
+  echo "Usage: $0 <architecture>"
+  echo "Supported architectures: x86_64, arm64"
+  exit 1
+fi
 
-
-# Find AMI ID for RHEL via 
-# ```
-#  aws ec2 describe-images \
-#         --region us-east-1 \
-#         --owners amazon \
-#         --filters "Name=name,Values=amzn2-ami-hvm-*-x86_64-gp2" \
-#         --query "Images[*].[ImageId,Name,CreationDate]" \
-#         --output table
-# ```
-# This ID depends on the region.
-# arm64 ID is `ami-07472131ec292b5da`
-# x86_64 ID is `ami-0583d8c7a9c35822c`
-IMAGE_ID="ami-0583d8c7a9c35822c"
+ARCHITECTURE=$1
+# Set AMI and instance type based on architecture
+if [ "$ARCHITECTURE" == "x86_64" ]; then
+  IMAGE_ID="ami-0583d8c7a9c35822c"  # x86_64 AMI ID
+  INSTANCE_TYPE="i3en.3xlarge"       # x86_64 instance type
+elif [ "$ARCHITECTURE" == "arm64" ]; then
+  IMAGE_ID="ami-07472131ec292b5da"  # arm64 AMI ID
+  INSTANCE_TYPE="im4gn.4xlarge"     # arm64 instance type
+else
+  echo "Unsupported architecture: $ARCHITECTURE"
+  echo "Supported architectures: x86_64, arm64"
+  exit 1
+fi
 
 # Find VPC and security-group via `aws ec2 describe-security-groups`
 SECURITY_GROUP="sg-0f1980007115350db"
@@ -24,7 +29,6 @@ SUBNET_ID="subnet-0fc322a35969a58de"
 
 # arm64 instance is `im4gn.4xlarge`
 # x86_64 instance is `i3en.3xlarge`
-INSTANCE_TYPE="i3en.3xlarge"
 KEY_NAME="Pratyush-Gethen"
 
 INSTANCE_ID=$(aws ec2 run-instances \
