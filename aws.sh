@@ -33,6 +33,8 @@ SUBNET_ID="subnet-0fc322a35969a58de"
 # x86_64 instance is `i3en.3xlarge`
 KEY_NAME="Pratyush-Gethen"
 
+# If you want to use a spot-instance, add the following command
+# --instance-market-options 'MarketType=spot'
 INSTANCE_ID=$(aws ec2 run-instances \
   --image-id $IMAGE_ID \
   --count 1 \
@@ -40,7 +42,6 @@ INSTANCE_ID=$(aws ec2 run-instances \
   --key-name $KEY_NAME \
   --security-group-ids $SECURITY_GROUP \
   --subnet-id $SUBNET_ID \
-  --instance-market-options 'MarketType=spot'  \
   --network-interfaces "DeviceIndex=0,SubnetId=$SUBNET_ID,AssociatePublicIpAddress=true"\
   --block-device-mappings '[{"DeviceName":"/dev/xvda","Ebs":{"VolumeSize":30}}]' \
   --user-data file://server-setup.sh \
