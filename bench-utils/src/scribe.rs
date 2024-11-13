@@ -156,7 +156,7 @@ fn open_file(file_path: &Path) -> File {
 }
 
 fn clear_caches() {
-    #[cfg(any(target_os = "macos", target_os = "ios"))]
+    #[cfg(target_os = "macos")]
     {
         std::process::Command::new("sync")
             .status()
