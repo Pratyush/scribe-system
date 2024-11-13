@@ -159,8 +159,8 @@ for PROVER in "${PROVERS[@]}"; do
     case $PROVER in
         scribe)
             echo "Compiling scribe-prover and scribe-setup..."
-            cargo build --release --example scribe-prover --features print-trace
-            cargo build --release --example scribe-setup --features print-trace
+            cargo build --release --example scribe-prover
+            cargo build --release --example scribe-setup
             ;;
         hp)
             echo "Compiling hp-prover and hp-setup..."
@@ -408,6 +408,7 @@ if [[ "$EXPERIMENT_TYPE" == "m" || "$EXPERIMENT_TYPE" == "both" ]]; then
                 echo "Running prover $PROVER with memory limit $MEMORY_LIMIT and $THREAD_COUNT threads..."
 
                 # Construct the binary path and arguments
+                OLD_MEMORY_LIMIT=$MEMORY_LIMIT
                 case $PROVER in
                     scribe)
                         BINARY_PATH="../../target/release/examples/scribe-prover"
@@ -420,6 +421,7 @@ if [[ "$EXPERIMENT_TYPE" == "m" || "$EXPERIMENT_TYPE" == "both" ]]; then
                     gemini)
                         BINARY_PATH="../../target/release/examples/gemini-prover"
                         ARGS="$MIN_VARIABLES $MAX_VARIABLES"
+                        MEMORY_LIMIT="8G"  # Increase memory limit for gemini
                         ;;
                     plonky2)
                         BINARY_PATH="../../target/release/examples/plonky2-prover"
@@ -445,6 +447,7 @@ if [[ "$EXPERIMENT_TYPE" == "m" || "$EXPERIMENT_TYPE" == "both" ]]; then
 
                 # Run the prover with memory limits
                 run_with_memory_limits "$MEMORY_LIMIT" "$THREAD_COUNT" "$PROVER" "$BINARY_PATH" "$ARGS"
+                MEMORY_LIMIT=$OLD_MEMORY_LIMIT
             done
         done
     done

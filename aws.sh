@@ -14,7 +14,7 @@
 # This ID depends on the region.
 # arm64 ID is `ami-07472131ec292b5da`
 # x86_64 ID is `ami-0583d8c7a9c35822c`
-IMAGE_ID="ami-07472131ec292b5da"
+IMAGE_ID="ami-0583d8c7a9c35822c"
 
 # Find VPC and security-group via `aws ec2 describe-security-groups`
 SECURITY_GROUP="sg-0f1980007115350db"
@@ -22,7 +22,9 @@ SECURITY_GROUP="sg-0f1980007115350db"
 SUBNET_ID="subnet-0fc322a35969a58de"
 
 
-INSTANCE_TYPE="im4gn.4xlarge"
+# arm64 instance is `im4gn.4xlarge`
+# x86_64 instance is `i3en.3xlarge`
+INSTANCE_TYPE="i3en.3xlarge"
 KEY_NAME="Pratyush-Gethen"
 
 INSTANCE_ID=$(aws ec2 run-instances \
