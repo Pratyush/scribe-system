@@ -58,16 +58,15 @@ def run_command(command, env=None):
 
 def run_with_systemd(prover, thread_count, memory_limit, command, skip_memory_limit=False):
     """Runs a command using systemd-run with resource limits and yields output line by line."""
-    # Get the current time in seconds since the epoch
-    time = datetime.now(timezone.utc).now().microsecond
-
-    unit_name = f"{prover}_mem_{memory_limit}_threads_{thread_count}_{time}"
+    unit_name = f"{prover}_mem_{memory_limit}_threads_{thread_count}"
     env = os.environ.copy()
     env["RAYON_NUM_THREADS"] = str(thread_count)
     if skip_memory_limit:
         systemd_command = "sudo systemd-run " + \
             "--collect " + \
             "--scope " + \
+            f"-p \"MemoryMax=16G\" " + \
+            "-p \"MemorySwapMax=0\" " + \
             f"--unit=\"{unit_name}\" " + \
             f"{command}"
     else:
