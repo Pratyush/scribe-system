@@ -60,14 +60,9 @@ pub extern "C" fn bench_hp_prover(
     }
 }
 
+#[cfg(feature = "gemini")]
 #[no_mangle]
-pub extern "C" fn bench_gemini_prover(
-    min_num_vars: size_t,
-    max_num_vars: size_t,
-) -> size_t {
-    gemini::prover(
-        min_num_vars,
-        max_num_vars,
-    );
+pub extern "C" fn bench_gemini_prover(min_num_vars: size_t, max_num_vars: size_t) -> size_t {
+    gemini::prover(min_num_vars, max_num_vars);
     1
 }
