@@ -427,9 +427,9 @@ impl io::Seek for InnerFile {
     }
 }
 
-// #[cfg(any(target_os = "macos", target_os = "ios"))]
 fn file_set_nocache(file: &File) {
     #[cfg(target_os = "macos")]
+    // #[cfg(any(target_os = "macos", target_os = "ios"))]
     {
         use libc::{fcntl, F_NOCACHE};
         use std::os::unix::io::AsRawFd;

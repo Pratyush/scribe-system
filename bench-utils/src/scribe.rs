@@ -81,7 +81,6 @@ pub fn prover(
     max_nv: usize,
     supported_size: impl Into<Option<usize>>,
     file_dir_path: &Path,
-    remove_files: bool,
 ) -> Result<(), ScribeErrors> {
     let supported_size = supported_size.into().unwrap_or(max_nv);
     assert!(max_nv >= min_nv);
@@ -100,10 +99,13 @@ pub fn prover(
     let tmp_dir = std::env::temp_dir();
     for nv in min_nv..=max_nv {
         // Remove temporary files
-        if remove_files {
+        #[cfg(any(target_os = "ios", target_os = "linux"))]
+        {
             std::fs::read_dir(&tmp_dir).unwrap().for_each(|entry| {
                 let entry = entry.unwrap();
-                if !entry.file_name().to_string_lossy().contains("ck_") {
+                let is_not_ck = !entry.file_name().to_string_lossy().contains("ck_");
+                let is_scribe_file = entry.file_name().to_string_lossy().ends_with(".scribe");
+                if is_scribe_file && is_not_ck {
                     println!("Removing entry: {}", entry.path().to_string_lossy());
                     std::fs::remove_file(entry.path()).unwrap()
                 }

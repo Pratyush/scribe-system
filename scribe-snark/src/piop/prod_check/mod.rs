@@ -128,6 +128,14 @@ where
         let prod_x = compute_product_poly(&frac_poly)?;
 
         // generate challenge
+
+        #[cfg(target_os = "linux")]
+        let (frac_comm, prod_x_comm) = {
+            let frac_comm = PC::commit(pcs_param, &frac_poly).unwrap();
+            let prod_x_comm = PC::commit(pcs_param, &prod_x).unwrap();
+            (frac_comm, prod_x_comm)
+        };
+        #[cfg(not(target_os = "linux"))]
         let (frac_comm, prod_x_comm) = rayon::join(
             || PC::commit(pcs_param, &frac_poly).unwrap(),
             || PC::commit(pcs_param, &prod_x).unwrap(),

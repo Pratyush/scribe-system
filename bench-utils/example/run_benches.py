@@ -131,7 +131,6 @@ def run_benchmark(prover, thread_count, memory_limit, min_vars, max_vars, skip_m
         print(line)  # Print real-time output for visibility
         line = line.strip()
         match = pattern.search(line)
-        print("Pattern match: ", match)
         if match:
             num_variables = match.group(1)
             run_time = match.group(2)
