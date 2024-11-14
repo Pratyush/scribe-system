@@ -62,17 +62,21 @@ pub fn prover(
 
     let vanilla_gate = CustomizedGates::vanilla_plonk_gate();
     for nv in min_num_vars..=max_num_vars {
-        let circuit = timed!(
+        let pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(8)
+            .build()
+            .unwrap();
+        let circuit = pool.install(|| timed!(
             format!("HyperPlonk: Generating circuit for {nv}"),
             MockCircuit::<Fr>::new(1 << nv, &vanilla_gate)
-        );
+        ));
 
         let index = circuit.index;
 
-        let (pk, vk): (ProvingKey, VerifyingKey) = timed!(
+        let (pk, vk): (ProvingKey, VerifyingKey) = pool.install(|| timed!(
             format!("HyperPlonk: Generating pk/vk for {nv}",),
             HyperPlonk::preprocess(&index, &pc_srs).unwrap()
-        );
+        ));
 
         // generate a proof
         let proof = timed!(
