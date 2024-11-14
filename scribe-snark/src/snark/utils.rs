@@ -70,6 +70,8 @@ where
         let start = start_timer!(|| "Multi-open");
         let evals_time = start_timer!(|| "Evaluations");
         #[cfg(target_os = "linux")]
+        use rayon::prelude::*;
+        #[cfg(target_os = "linux")]
         let evals = self
             .polynomials
             .par_iter()
