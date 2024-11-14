@@ -89,23 +89,29 @@ where
                     None
                 } else {
                     let (a, b) = rayon::join(
-                        || result
-                            .par_chunks_exact(N)
-                            .map(|chunk| f(chunk))
-                            .with_min_len(1 << 10)
-                            .collect::<Vec<_>>()
-                            .into_par_iter(),
-                            || {
-                                
-                                T::deserialize_raw_batch(&mut *temp_buffer, work_buffer, BUFFER_SIZE, file).ok()
-                            }
+                        || {
+                            result
+                                .par_chunks_exact(N)
+                                .map(|chunk| f(chunk))
+                                .with_min_len(1 << 10)
+                                .collect::<Vec<_>>()
+                                .into_par_iter()
+                        },
+                        || {
+                            T::deserialize_raw_batch(
+                                &mut *temp_buffer,
+                                work_buffer,
+                                BUFFER_SIZE,
+                                file,
+                            )
+                            .ok()
+                        },
                     );
                     let _ = b?;
                     std::mem::swap(result, temp_buffer);
                     temp_buffer.clear();
                     Some(a)
                 }
-                
             },
             Self::Buffer { buffer, f } => {
                 if buffer.is_empty() {
