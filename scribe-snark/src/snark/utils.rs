@@ -8,7 +8,6 @@ use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::{end_timer, start_timer};
 use mle::VirtualPolynomial;
 use mle::MLE;
-use rayon::prelude::*;
 use scribe_streams::file_vec::FileVec;
 use scribe_streams::{iterator::BatchedIterator, serialize::RawPrimeField};
 

@@ -4,7 +4,7 @@ use crate::pc::PCScheme;
 use crate::snark::utils::PCAccumulator;
 use mle::{util::gen_eval_point, virtual_polynomial::VPAuxInfo, MLE};
 
-use crate::piop::perm_check_original::PermutationCheck;
+use crate::piop::perm_check::PermutationCheck;
 use crate::piop::prelude::ZeroCheck;
 use crate::snark::{
     errors::ScribeErrors,

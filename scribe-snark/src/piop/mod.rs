@@ -1,6 +1,5 @@
 pub mod errors;
-// pub mod perm_check;
-pub mod perm_check_original;
+pub mod perm_check;
 pub mod prelude;
 pub mod prod_check;
 pub mod structs;

@@ -1,4 +1,4 @@
-use crate::piop::{perm_check_original::PermutationProof, zero_check::ZeroCheckProof};
+use crate::piop::{perm_check::PermutationProof, zero_check::ZeroCheckProof};
 use crate::{pc::PCScheme, snark::custom_gate::CustomizedGates};
 use ark_ec::pairing::Pairing;
 use ark_ff::PrimeField;
