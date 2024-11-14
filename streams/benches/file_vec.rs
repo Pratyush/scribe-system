@@ -4,7 +4,7 @@ extern crate criterion;
 use ark_bls12_381::Fr;
 use ark_ff::Field;
 use ark_std::UniformRand;
-use criterion::{BenchmarkId, Criterion, Throughput};
+use criterion::{BatchSize, BenchmarkId, Criterion, Throughput};
 use scribe_streams::{file_vec::FileVec, iterator::BatchedIterator, BUFFER_SIZE};
 
 fn for_each_simple(c: &mut Criterion) {
@@ -92,9 +92,29 @@ fn into_iter_map(c: &mut Criterion) {
         group.throughput(Throughput::Elements(vec_size as u64));
         group.bench_with_input(BenchmarkId::from_parameter(vec_size), &size, |b, _| {
             let fv = FileVec::from_iter((0..vec_size).map(|_| e));
+            b.iter_batched(
+                || fv.deep_copy(),
+                |fv| fv.into_iter().map(|e| e.double()).for_each(|_| {}),
+                BatchSize::SmallInput,
+            );
+        });
+    }
+    group.finish();
+}
+
+fn iter_chunk_mapped(c: &mut Criterion) {
+    let num_threads = rayon::current_num_threads();
+    let mut group = c.benchmark_group(format!("fv::iter_chunk_mapped {num_threads}"));
+    let mut rng = &mut ark_std::test_rng();
+    for size in [1, 2, 4, 8, 16] {
+        let e = Fr::rand(&mut rng);
+        let vec_size = BUFFER_SIZE * size;
+        group.throughput(Throughput::Elements(vec_size as u64));
+        group.bench_with_input(BenchmarkId::from_parameter(vec_size), &size, |b, _| {
+            let fv = FileVec::from_iter((0..vec_size).map(|_| e));
             b.iter(|| {
-                let fv = fv.deep_copy();
-                fv.into_iter().map(|e| e.double()).for_each(|_| {})
+                fv.iter_chunk_mapped::<2, _, _>(|c| c[0] * c[1])
+                    .for_each(|_| {})
             });
         });
     }
@@ -107,6 +127,7 @@ criterion_group!(
     for_each_complex,
     from_batched_iter,
     iter_map,
-    into_iter_map
+    into_iter_map,
+    iter_chunk_mapped,
 );
 criterion_main!(file_vec);

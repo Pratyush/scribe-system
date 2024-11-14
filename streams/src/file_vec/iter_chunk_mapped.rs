@@ -17,6 +17,8 @@ where
         lifetime: PhantomData<&'a T>,
         work_buffer: AVec,
         work_buffer_2: Vec<T>,
+        temp_buffer: Vec<T>,
+        first: bool,
         f: F,
     },
     Buffer {
@@ -43,6 +45,8 @@ where
             lifetime: PhantomData,
             work_buffer,
             work_buffer_2: Vec::with_capacity(BUFFER_SIZE),
+            temp_buffer: Vec::with_capacity(BUFFER_SIZE),
+            first: true,
             f,
         }
     }
@@ -72,23 +76,36 @@ where
                 file,
                 work_buffer,
                 work_buffer_2: result,
+                temp_buffer,
                 f,
+                first,
                 ..
             } => {
-                result.clear();
-                T::deserialize_raw_batch(result, work_buffer, BUFFER_SIZE, file).ok()?;
+                if *first {
+                    T::deserialize_raw_batch(result, work_buffer, BUFFER_SIZE, &mut *file).ok()?;
+                    *first = false;
+                }
                 if result.is_empty() {
                     None
                 } else {
-                    Some(
-                        result
-                            .par_chunks(N)
+                    let (a, b) = rayon::join(
+                        || result
+                            .par_chunks_exact(N)
                             .map(|chunk| f(chunk))
-                            .with_min_len(1 << 7)
+                            .with_min_len(1 << 10)
                             .collect::<Vec<_>>()
                             .into_par_iter(),
-                    )
+                            || {
+                                
+                                T::deserialize_raw_batch(&mut *temp_buffer, work_buffer, BUFFER_SIZE, file).ok()
+                            }
+                    );
+                    let _ = b?;
+                    std::mem::swap(result, temp_buffer);
+                    temp_buffer.clear();
+                    Some(a)
                 }
+                
             },
             Self::Buffer { buffer, f } => {
                 if buffer.is_empty() {
@@ -96,7 +113,7 @@ where
                 } else {
                     Some(
                         std::mem::take(buffer)
-                            .par_chunks(N)
+                            .par_chunks_exact(N)
                             .map(|chunk| f(chunk))
                             .with_min_len(1 << 7)
                             .collect::<Vec<_>>()
