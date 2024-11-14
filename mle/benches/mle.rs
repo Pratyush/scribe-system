@@ -4,9 +4,9 @@ extern crate criterion;
 use ark_bls12_381::Fr;
 use ark_ff::Field;
 use ark_std::UniformRand;
-use criterion::{BenchmarkId, Criterion};
+use criterion::{BatchSize, BenchmarkId, Criterion, Throughput};
 use mle::{EqEvalIter, MLE};
-use scribe_streams::{iterator::BatchedIterator, LOG_BUFFER_SIZE};
+use scribe_streams::{iterator::BatchedIterator, BUFFER_SIZE, LOG_BUFFER_SIZE};
 
 fn eq(c: &mut Criterion) {
     let num_threads = rayon::current_num_threads();
@@ -143,6 +143,25 @@ fn add_assign_one(c: &mut Criterion) {
     group.finish();
 }
 
+fn fold_odd_even_in_place(c: &mut Criterion) {
+    let num_threads = rayon::current_num_threads();
+    let mut group = c.benchmark_group(format!("mle::fold_odd_even_in_place {num_threads}"));
+    let mut rng = &mut ark_std::test_rng();
+    for size in [1, 2, 4, 8, 16] {
+        let vec_size = BUFFER_SIZE * size;
+        group.throughput(Throughput::Elements(vec_size as u64));
+        group.bench_with_input(BenchmarkId::from_parameter(vec_size), &size, |b, _| {
+            let p = MLE::<Fr>::rand(vec_size.ilog2() as usize, &mut rng);
+            b.iter_batched(
+                || p.deep_copy(),
+                |mut p| p.fold_odd_even_in_place(|a, b| a + b),
+                BatchSize::SmallInput,
+            );
+        });
+    }
+    group.finish();
+}
+
 criterion_group!(
     iter,
     eq,
@@ -151,6 +170,7 @@ criterion_group!(
     eval_vec,
     add_assign,
     add_assign_coeff,
-    add_assign_one
+    add_assign_one,
+    fold_odd_even_in_place,
 );
 criterion_main!(iter);

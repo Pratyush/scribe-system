@@ -357,25 +357,6 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
         })
     }
 
-    #[inline(always)]
-    pub fn fold_odd_even_in_place(&mut self, f: impl Fn(&T, &T) -> T + Sync)
-    where
-        T: Send + Sync,
-    {
-        let mut temp_buffer = Vec::with_capacity(BUFFER_SIZE);
-        process_file!(self, |buffer: &mut Vec<T>| {
-            temp_buffer.clear();
-            temp_buffer.par_extend(
-                buffer
-                    .par_chunks(2)
-                    .with_min_len(1 << 7)
-                    .map(|chunk| f(&chunk[0], &chunk[1])),
-            );
-            std::mem::swap(buffer, &mut temp_buffer);
-            Some(())
-        })
-    }
-
     pub fn reinterpret_type<U>(mut self) -> FileVec<U>
     where
         T: Send + Sync + 'static,
