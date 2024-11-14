@@ -88,12 +88,12 @@ impl<F: RawPrimeField> SumCheckProver<F> for IOPProverState<F> {
                 // This ensures that the internal `Arc` is changed to point to a fresh file.
                 self.poly
                     .mles
-                    .iter_mut()
+                    .par_iter_mut()
                     .for_each(|mle| *mle = mle.fix_variables(&[r]));
             } else {
                 self.poly
                     .mles
-                    .iter_mut()
+                    .par_iter_mut()
                     .for_each(|mle| mle.fix_variables_in_place(&[r]));
             }
             end_timer!(fix_argument);
