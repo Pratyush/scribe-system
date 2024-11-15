@@ -68,8 +68,8 @@ def run_with_systemd(prover, thread_count, memory_limit, command, enforce_bw_lim
         systemd_command = "sudo systemd-run " + \
             "--collect " + \
             "--scope " + \
-            f"-p \"IOReadBandwidthMax='{TMPDIR} 10M' \" " + \
-            f"-p \"IOWriteBandwidthMax='{TMPDIR} 10M' \" " + \
+            f"-p IOReadBandwidthMax='{TMPDIR} 10M' " + \
+            f"-p IOWriteBandwidthMax='{TMPDIR} 10M' " + \
             f"-p \"MemoryMax={memory_limit}\" " + \
             "-p \"MemorySwapMax=0\" " + \
             f"--unit=\"{unit_name}\" " + \
