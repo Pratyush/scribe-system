@@ -12,6 +12,7 @@ ark-std = { version = "^0.4", features = ["parallel"] }
 scribe = { path = "../scribe-snark" }
 rayon = { version = "^1.5" }
 jemallocator = { version = "0.5.0" }
+jf-relation = { path = "../constraints/relation" }
 
 # HyperPlonk
 hp = { git = "https://github.com/EspressoSystems/hyperplonk/", package = "hyperplonk" }
@@ -44,32 +45,36 @@ crate-type = ["staticlib", "rlib"]
 
 [[example]]
 name = "scribe-setup"
-path = "example/scribe-setup.rs"
+path = "examples/scribe-setup.rs"
 
 [[example]]
 name = "scribe-prover"
-path = "example/scribe-prover.rs"
+path = "examples/scribe-prover.rs"
 
 [[example]]
 name = "hp-setup"
-path = "example/hp-setup.rs"
+path = "examples/hp-setup.rs"
 
 [[example]]
 name = "hp-prover"
-path = "example/hp-prover.rs"
+path = "examples/hp-prover.rs"
 
 [[example]]
 name = "gemini-prover"
-path = "example/gemini-prover.rs"
+path = "examples/gemini-prover.rs"
 required-features = ["gemini"]
 
 [[example]]
 name = "halo2-prover"
-path = "example/halo2-prover.rs"
+path = "examples/halo2-prover.rs"
 required-features = ["halo2"]
-
 
 [[example]]
 name = "plonky2-prover"
-path = "example/plonky2-prover.rs"
+path = "examples/plonky2-prover.rs"
 required-features = ["plonky2"]
+
+
+[[example]]
+name = "witness-synthesis"
+path = "examples/witness-synth.rs"
