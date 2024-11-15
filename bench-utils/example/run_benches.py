@@ -4,6 +4,8 @@ import os
 import subprocess
 from datetime import datetime, timezone
 
+TMPDIR = "/home/ec2-user/external/tmp"
+
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Run benchmarks with specified provers and configurations.")
     parser.add_argument("-m", "--min-variables", type=int, default=5, help="Set minimum number of variables.")
@@ -14,7 +16,7 @@ def parse_arguments():
     parser.add_argument("-t", "--threads", default="1,2,4,8", help="Comma-separated list of thread counts.")
     parser.add_argument("--data-file", help="Set base name for data file output.")
     parser.add_argument("--skip-setup", action="store_true", help="Skip the setup section.")
-    parser.add_argument("--no-limit", action="store_true", help="Run without memory limits for all but `scribe` and `gemini`.")
+    parser.add_argument("--bw-limit", action="store_true", help="Enforce a bandwidth limit of 10MB/s")
     return parser.parse_args()
 
 def run_command_direct(command, env=None):
@@ -56,16 +58,19 @@ def run_command(command, env=None):
     if return_code != 0:
         yield f"Command failed with return code {return_code}"
 
-def run_with_systemd(prover, thread_count, memory_limit, command, skip_memory_limit=False):
+def run_with_systemd(prover, thread_count, memory_limit, command, enforce_bw_limit=False):
     """Runs a command using systemd-run with resource limits and yields output line by line."""
     unit_name = f"{prover}_mem_{memory_limit}_threads_{thread_count}"
     env = os.environ.copy()
     env["RAYON_NUM_THREADS"] = str(thread_count)
-    if skip_memory_limit:
+    env["TMPDIR"] = TMPDIR
+    if enforce_bw_limit:
         systemd_command = "sudo systemd-run " + \
             "--collect " + \
             "--scope " + \
-            f"-p \"MemoryMax=16G\" " + \
+            f"-p \"IOReadBandwidthMax={TMPDIR} 10M \" " + \
+            f"-p \"IOWriteBandwidthMax={TMPDIR} 10M \" " + \
+            f"-p \"MemoryMax={memory_limit}\" " + \
             "-p \"MemorySwapMax=0\" " + \
             f"--unit=\"{unit_name}\" " + \
             f"{command}"
@@ -97,7 +102,7 @@ def compile_binaries(provers):
 
 def setup_provers(provers, min_vars, max_vars, setup_folder):
     env = os.environ.copy()
-    env["TMPDIR"] = "/home/ec2-user/external/tmp"
+    env["TMPDIR"] = TMPDIR
     for prover in provers:
         if prover == "scribe":
             print("Running setup for scribe...")
@@ -108,11 +113,11 @@ def setup_provers(provers, min_vars, max_vars, setup_folder):
         else:
             print(f"Setup for prover {prover} is not implemented.")
 
-def run_benchmark(prover, thread_count, memory_limit, min_vars, max_vars, skip_memory_limit, setup_folder, data):
+def run_benchmark(prover, thread_count, memory_limit, min_vars, max_vars, enforce_bw_limit, setup_folder, data):
     """Runs a single benchmark using systemd-run and logs results in real-time."""
     binary_path = f"../../target/release/examples/{prover}-prover"
     command = "env " + \
-        "TMPDIR=/home/ec2-user/external/tmp " + \
+        f"TMPDIR={TMPDIR} " + \
         f"RAYON_NUM_THREADS={thread_count} " + \
         f"{binary_path} {min_vars} {max_vars} {setup_folder}"
     print("")
@@ -124,10 +129,11 @@ def run_benchmark(prover, thread_count, memory_limit, min_vars, max_vars, skip_m
     print("----------------------------------------")
     
     run_time = None
-    skip_memory_limit = skip_memory_limit or prover in ["scribe", "gemini"]
+    if prover != "scribe":
+        enforce_bw_limit = False
 
     pattern = re.compile(r"Proving for (\d+) took: (\d+) us")
-    for line in run_with_systemd(prover, thread_count, memory_limit, command, skip_memory_limit):
+    for line in run_with_systemd(prover, thread_count, memory_limit, command, enforce_bw_limit):
         print(line)  # Print real-time output for visibility
         line = line.strip()
         match = pattern.search(line)
@@ -137,7 +143,7 @@ def run_benchmark(prover, thread_count, memory_limit, min_vars, max_vars, skip_m
             data.write(f"{prover},{num_variables},{thread_count},{memory_limit},{run_time}\n")
             data.flush()
 
-def run_benchmarks(provers, memory_limits, threads, min_vars, max_vars, skip_memory_limit, setup_folder, data_file):
+def run_benchmarks(provers, memory_limits, threads, min_vars, max_vars, enforce_bw_limit, setup_folder, data_file):
     """Runs benchmarks and logs results to data in real-time."""
     with open(data_file, "w") as data:
         data.write("prover,num_variables,threads,memory_limit,run_time\n")
@@ -145,7 +151,7 @@ def run_benchmarks(provers, memory_limits, threads, min_vars, max_vars, skip_mem
         for prover in provers:
             for thread in threads:
                 for mem_limit in memory_limits:
-                    run_benchmark(prover, thread, mem_limit, min_vars, max_vars, skip_memory_limit, setup_folder, data)
+                    run_benchmark(prover, thread, mem_limit, min_vars, max_vars, enforce_bw_limit, setup_folder, data)
 
 def main():
     args = parse_arguments()
@@ -166,7 +172,7 @@ def main():
     max_variables = args.max_variables
     setup_folder = args.setup_folder
     skip_setup = args.skip_setup
-    skip_memory_limit = args.no_limit
+    enforce_bw_limit = args.bw_limit
 
     # Setup
     if not skip_setup:
@@ -184,7 +190,7 @@ def main():
         threads, 
         min_variables, 
         max_variables, 
-        skip_memory_limit,
+        enforce_bw_limit,
         setup_folder, 
         data_file
     )
