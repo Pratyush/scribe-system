@@ -96,11 +96,11 @@ pub fn prover(
         srs
     };
 
-    let tmp_dir = std::env::temp_dir();
     for nv in min_nv..=max_nv {
         // Remove temporary files
         #[cfg(any(target_os = "ios", target_os = "linux"))]
         {
+            let tmp_dir = std::env::temp_dir();
             std::fs::read_dir(&tmp_dir).unwrap().for_each(|entry| {
                 let entry = entry.unwrap();
                 let is_not_ck = !entry.file_name().to_string_lossy().contains("ck_");
