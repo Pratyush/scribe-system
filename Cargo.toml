@@ -5,8 +5,6 @@ members = [
     "streams", 
     "mle",
     "constraints/relation", 
-    "constraints/merkle_tree", 
-    "constraints/rescue", 
 ]
 resolver = "2"
 
