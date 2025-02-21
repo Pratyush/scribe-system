@@ -1,4 +1,4 @@
-# Benchmarking Script
+# Prover benchmarks
 
 This script runs benchmarks for various cryptographic provers with configurable memory limits and thread counts. The results are logged to a data file.
 
@@ -36,7 +36,7 @@ This script runs benchmarks for various cryptographic provers with configurable 
 Run the script using:
 
 ```sh
-python3 benchmark.py [OPTIONS]
+python3 prover-benches.py [OPTIONS]
 ```
 
 ### Options
@@ -58,37 +58,37 @@ python3 benchmark.py [OPTIONS]
 #### Run benchmarks with default settings
 
 ```sh
-python3 benchmark.py
+python3 prover-benches.py
 ```
 
 #### Specify provers and memory limits
 
 ```sh
-python3 benchmark.py -p "scribe,hp" -l "1G,2G" -t "2,4"
+python3 prover-benches.py -p "scribe,hp" -l "1G,2G" -t "2,4"
 ```
 
 #### Skip setup phase
 
 ```sh
-python3 benchmark.py --skip-setup
+python3 prover-benches.py --skip-setup
 ```
 
 #### Specify a custom output data file
 
 ```sh
-python3 benchmark.py --data-file results.csv
+python3 prover-benches.py --data-file results.csv
 ```
 
 #### Enforce default bandwidth limit (200M)
 
 ```sh
-python3 benchmark.py --bw-limit
+python3 prover-benches.py --bw-limit
 ```
 
 #### Enforce a custom bandwidth limit (e.g., 150M)
 
 ```sh
-python3 benchmark.py --bw-limit 150M
+python3 prover-benches.py --bw-limit 150M
 ```
 
 ## Output Format
@@ -114,3 +114,42 @@ Here,
 - Results are saved in a timestamped file unless specified otherwise.
 - `--bw-limit` allows specifying a custom bandwidth limit; if omitted, no limit is enforced.
 - Currently the script hardcodes a particular temporary directory that is used for benchmarking Scribe. If you want to use a different directory, you will need to modify the script.
+
+# Witness synthesis benchmarks
+
+Another script in this directory, `synthesis-benches.py`, allows running a Rust binary with different parameters while monitoring memory usage.
+
+Run the script using:
+
+```sh
+python3 synthesis-benches.py [OPTIONS]
+```
+
+### Options
+
+| Option                 | Description                                                | Default Value |
+|------------------------|------------------------------------------------------------|---------------|
+| `-m`, `--min`          | Minimum number of variables                               | Required      |
+| `-M`, `--max`          | Maximum number of variables                               | Required      |
+| `-w`, `--work-set-size` | Size of the working set                                  | `2^17`        |
+| `-r`, `--replace-prob` | Probability with which the working set is updated        | `0.01`        |
+
+### Example Usage
+
+#### Run with a variable range from 5 to 10
+
+```sh
+python3 synthesis-benches.py -m 5 -M 10
+```
+
+#### Specify a custom working set size
+
+```sh
+python3 synthesis-benches.py -m 5 -M 10 -w 131072
+```
+
+#### Specify a different replacement probability
+
+```sh
+python3 synthesis-benches.py -m 5 -M 10 -r 0.05
+```
