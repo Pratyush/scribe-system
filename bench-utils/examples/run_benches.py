@@ -2,6 +2,9 @@ import re
 import argparse
 import os
 import subprocess
+import shutil
+import threading
+import time
 from datetime import datetime, timezone
 
 TMPDIR = "/home/ec2-user/external/tmp"
@@ -16,8 +19,19 @@ def parse_arguments():
     parser.add_argument("-t", "--threads", default="1,2,4,8", help="Comma-separated list of thread counts.")
     parser.add_argument("--data-file", help="Set base name for data file output.")
     parser.add_argument("--skip-setup", action="store_true", help="Skip the setup section.")
-    parser.add_argument("--bw-limit", action="store_true", help="Enforce a bandwidth limit of 10MB/s")
+    parser.add_argument("-b", "--bw-limit", nargs="?", default="100M", help="Enforce a bandwidth limit, specified in terms of <N>M, corresponding to a limit of N MB/s")
     return parser.parse_args()
+
+def get_tmpdir_usage():
+    """Get the current used space of TMPDIR in bytes."""
+    total, used, free = shutil.disk_usage(TMPDIR)
+    return used  # Returns the used size of TMPDIR in bytes
+
+def monitor_tmpdir_usage(stop_event, usage_list):
+    """Continuously monitor TMPDIR usage while the benchmark is running."""
+    while not stop_event.is_set():
+        usage_list.append(get_tmpdir_usage())
+        time.sleep(1)  # Adjust monitoring frequency as needed
 
 def run_command_direct(command, env=None):
     """Runs a shell command and logs the output."""
@@ -58,18 +72,18 @@ def run_command(command, env=None):
     if return_code != 0:
         yield f"Command failed with return code {return_code}"
 
-def run_with_systemd(prover, thread_count, memory_limit, command, enforce_bw_limit=False):
+def run_with_systemd(prover, thread_count, memory_limit, command, bw_limit=None):
     """Runs a command using systemd-run with resource limits and yields output line by line."""
     unit_name = f"{prover}_mem_{memory_limit}_threads_{thread_count}"
     env = os.environ.copy()
     env["RAYON_NUM_THREADS"] = str(thread_count)
     env["TMPDIR"] = TMPDIR
-    if enforce_bw_limit:
+    if bw_limit is not None:
         systemd_command = "sudo systemd-run " + \
             "--collect " + \
             "--scope " + \
-            f"-p IOReadBandwidthMax='{TMPDIR} 200M' " + \
-            f"-p IOWriteBandwidthMax='{TMPDIR} 200M' " + \
+            f"-p IOReadBandwidthMax='{TMPDIR} {bw_limit}' " + \
+            f"-p IOWriteBandwidthMax='{TMPDIR} {bw_limit}' " + \
             f"-p \"MemoryMax={memory_limit}\" " + \
             "-p \"MemorySwapMax=0\" " + \
             f"--unit=\"{unit_name}\" " + \
@@ -113,19 +127,27 @@ def setup_provers(provers, min_vars, max_vars, setup_folder):
         else:
             print(f"Setup for prover {prover} is not implemented.")
 
-def run_benchmark(prover, thread_count, memory_limit, min_vars, max_vars, enforce_bw_limit, setup_folder, data):
+def run_benchmark(prover, thread_count, memory_limit, min_vars, max_vars, bw_limit, setup_folder, data):
     """Runs a single benchmark using systemd-run and logs results in real-time."""
     binary_path = f"../../target/release/examples/{prover}-prover"
     command = "env " + \
         f"TMPDIR={TMPDIR} " + \
         f"RAYON_NUM_THREADS={thread_count} " + \
         f"{binary_path} {min_vars} {max_vars} {setup_folder}"
+    tmpdir_usage_list = []
+    stop_event = threading.Event()
+    
+    # Start a background thread to monitor TMPDIR usage
+    monitor_thread = threading.Thread(target=monitor_tmpdir_usage, args=(stop_event, tmpdir_usage_list))
+    monitor_thread.start()
+
     print("")
     print("----------------------------------------")
     print("Starting memory benchmark run:")
     print(f"Prover       : {prover}")
     print(f"Memory Limit : {memory_limit}")
     print(f"Threads      : {thread_count}")
+    print(f"Bandwidth    : {bw_limit if bw_limit else 'No limit'}")
     print("----------------------------------------")
     
     run_time = None
@@ -133,6 +155,8 @@ def run_benchmark(prover, thread_count, memory_limit, min_vars, max_vars, enforc
         enforce_bw_limit = False
 
     pattern = re.compile(r"Proving for (\d+) took: (\d+) us")
+    num_variables = None
+    run_time = None
     for line in run_with_systemd(prover, thread_count, memory_limit, command, enforce_bw_limit):
         print(line)  # Print real-time output for visibility
         line = line.strip()
@@ -140,18 +164,25 @@ def run_benchmark(prover, thread_count, memory_limit, min_vars, max_vars, enforc
         if match:
             num_variables = match.group(1)
             run_time = match.group(2)
-            data.write(f"{prover},{num_variables},{thread_count},{memory_limit},{run_time}\n")
-            data.flush()
+    # Stop the TMPDIR monitoring thread
+    stop_event.set()
+    monitor_thread.join()
+    
+    # Record the maximum TMPDIR usage
+    max_tmpdir_usage = max(tmpdir_usage_list) if tmpdir_usage_list else 0
+    data.write(f"{prover},{num_variables},{thread_count},{memory_limit},{bw_limit if bw_limit else 'None'},{max_tmpdir_usage},{run_time}\n")
+    data.flush()
 
-def run_benchmarks(provers, memory_limits, threads, min_vars, max_vars, enforce_bw_limit, setup_folder, data_file):
+def run_benchmarks(provers, memory_limits, threads, min_vars, max_vars, bw_limit, setup_folder, data_file):
     """Runs benchmarks and logs results to data in real-time."""
     with open(data_file, "w") as data:
-        data.write("prover,num_variables,threads,memory_limit,run_time\n")
+
+        data.write("prover,num_variables,threads,memory_limit,bandwidth,max_tmpdir_usage,run_time\n")
         
         for prover in provers:
             for thread in threads:
                 for mem_limit in memory_limits:
-                    run_benchmark(prover, thread, mem_limit, min_vars, max_vars, enforce_bw_limit, setup_folder, data)
+                    run_benchmark(prover, thread, mem_limit, min_vars, max_vars, bw_limit, setup_folder, data)
 
 def main():
     args = parse_arguments()
@@ -172,7 +203,7 @@ def main():
     max_variables = args.max_variables
     setup_folder = args.setup_folder
     skip_setup = args.skip_setup
-    enforce_bw_limit = args.bw_limit
+    bw_limit = args.bw_limit
 
     # Setup
     if not skip_setup:
@@ -190,7 +221,7 @@ def main():
         threads, 
         min_variables, 
         max_variables, 
-        enforce_bw_limit,
+        bw_limit,
         setup_folder, 
         data_file
     )
