@@ -136,10 +136,10 @@ pub fn prover(
                 let mut sizes = vec![get_size(file_dir_path).unwrap()];
                 while !stop_signal.load(std::sync::atomic::Ordering::Relaxed) {
                     let cur_size = get_size(file_dir_path).unwrap();
-                    println!("Current size: {cur_size} bytes");
                     if cur_size != *sizes.last().unwrap() {
                         sizes.push(cur_size);
                     }
+                    thread::sleep(std::time::Duration::from_secs(1));
                 }
                 return sizes;
             });
