@@ -1,18 +1,18 @@
+use crossbeam::thread;
 use std::sync::mpsc::channel;
 use std::{
     fs::{File, OpenOptions},
+    io::BufReader,
     path::Path,
-    io::BufReader, 
     time::{Duration, Instant},
 };
-use crossbeam::thread;
 
-use fs_extra::dir::get_size;
 use ark_bls12_381::Bls12_381;
 use ark_bls12_381::Fr;
 use ark_serialize::CanonicalDeserialize;
 use ark_serialize::CanonicalSerialize;
 use ark_std::test_rng;
+use fs_extra::dir::get_size;
 use scribe::pc::PCScheme;
 use scribe::snark::custom_gate::CustomizedGates;
 use scribe::snark::structs::{ProvingKey as _ProvingKey, VerifyingKey as _VerifyingKey};
@@ -133,13 +133,15 @@ pub fn prover(
         let proof = thread::scope(|s| {
             let dir_sizes = s.spawn(move |_| {
                 let mut sizes = vec![get_size(file_dir_path).unwrap()];
-                while rx.recv_timeout(Duration::from_millis(400)).is_err() {
+                while rx.recv_timeout(Duration::from_millis(1000)).is_err() {
                     let cur_size = get_size(file_dir_path).unwrap();
+                    println!("Current size: {cur_size} bytes");
                     if cur_size != *sizes.last().unwrap() {
                         sizes.push(cur_size);
                     }
                 }
-                return sizes});
+                return sizes;
+            });
             let proof = timed!(
                 format!("Scribe: Proving for {nv}",),
                 Scribe::prove(&pk, &public_inputs, &witnesses).unwrap()
@@ -152,9 +154,8 @@ pub fn prover(
                 max_dir_size.unwrap() - sizes.first().unwrap()
             );
             proof
-        }).unwrap();
-
-        
+        })
+        .unwrap();
 
         // Currently verifier doesn't work as we are using fake SRS
         //==========================================================
