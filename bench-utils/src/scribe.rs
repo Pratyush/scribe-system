@@ -1,6 +1,10 @@
+use fs_extra::dir::get_size;
+use std::sync::mpsc::channel;
 use std::{
+    fs,
     fs::{File, OpenOptions},
     path::Path,
+    time::{Duration, Instant},
 };
 use std::{io::BufReader, time::Instant};
 
@@ -43,7 +47,6 @@ pub fn setup(min_num_vars: usize, max_num_vars: usize, file_dir_path: &Path) {
         "Scribe: Serializing SRS",
         pc_srs.serialize_uncompressed(&mut srs_file).unwrap()
     );
-
     let vanilla_gate = CustomizedGates::vanilla_plonk_gate();
     for nv in min_num_vars..=max_num_vars {
         // generate and serialize circuit, pk, vk
@@ -126,10 +129,30 @@ pub fn prover(
         );
         clear_caches();
 
+        let (tx, rx) = channel();
+        let dir_sizes = thread::spawn(move || {
+            let sizes = vec![get_size(file_dir_path).unwrap()];
+            while rx.recv_timeout(Duration::from_millis(400)).is_err() {
+                let cur_size = get_size(file_dir_path).unwrap();
+                if cur_size != sizes.last().unwrap() {
+                    sizes.push(cur_size);
+                }
+            }
+            return sizes;
+        });
+
         let proof = timed!(
             format!("Scribe: Proving for {nv}",),
             Scribe::prove(&pk, &public_inputs, &witnesses).unwrap()
         );
+        tx.send(()).unwrap();
+        let sizes = dir_sizes.join().unwrap();
+        let max_dir_size = sizes.iter().max();
+        println!(
+            "Scribe: Directory size for {nv} is: {} bytes",
+            max_dir_size.unwrap() - sizes.first().unwrap()
+        );
+
         // Currently verifier doesn't work as we are using fake SRS
         //==========================================================
         // verify a proof

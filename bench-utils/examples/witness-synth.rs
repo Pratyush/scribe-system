@@ -1,6 +1,6 @@
-use ark_std::rand::Rng;
 use ark_bls12_381::Fr;
 use ark_ff::PrimeField;
+use ark_std::rand::Rng;
 use jf_relation::{Circuit, CircuitError, PlonkCircuit, Variable};
 
 pub fn add_random_gates<F: PrimeField, C: Circuit<F>>(
@@ -59,5 +59,11 @@ fn main() {
     let working_set_size: usize = args[1].parse().unwrap();
     let new_var_prob: f64 = args[2].parse().unwrap();
     let mut circuit = PlonkCircuit::<Fr>::new_in_prove_mode(false);
-    add_random_gates(&mut circuit, 1 << num_constraints, 1 << working_set_size, new_var_prob).unwrap();
+    add_random_gates(
+        &mut circuit,
+        1 << num_constraints,
+        1 << working_set_size,
+        new_var_prob,
+    )
+    .unwrap();
 }

@@ -48,7 +48,7 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
     fn new_file(file: InnerFile) -> Self {
         Self::File(file)
     }
-    
+
     #[inline(always)]
     pub fn new_buffer(buffer: Vec<T>) -> Self {
         Self::Buffer { buffer }
@@ -66,7 +66,7 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
         file.allocate_space(n * T::SIZE).unwrap();
         Self::File(file)
     }
-    
+
     pub fn len(&self) -> usize {
         match self {
             Self::File(file) => file.len() / T::SIZE,

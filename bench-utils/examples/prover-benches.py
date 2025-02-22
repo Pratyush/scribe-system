@@ -154,24 +154,28 @@ def run_benchmark(prover, thread_count, memory_limit, min_vars, max_vars, bw_lim
     if prover != "scribe":
         bw_limit = None
 
-    pattern = re.compile(r"Proving for (\d+) took: (\d+) us")
-    num_variables = None
-    run_time = None
+    prover_time_pattern = re.compile(r"Proving for (\d+) took: (\d+) us")
+    dir_size_pattern = re.compile(r"Directory size for (\d+) is: (\d+) bytes")
+    run_times = {}
+    dir_sizes = {}
     for line in run_with_systemd(prover, thread_count, memory_limit, command, bw_limit):
         print(line)  # Print real-time output for visibility
         line = line.strip()
-        match = pattern.search(line)
-        if match:
-            num_variables = match.group(1)
-            run_time = match.group(2)
-    # Stop the TMPDIR monitoring thread
-    stop_event.set()
-    monitor_thread.join()
-    
-    # Record the maximum TMPDIR usage
-    max_tmpdir_usage = max(tmpdir_usage_list) if tmpdir_usage_list else 0
-    data.write(f"{prover},{num_variables},{thread_count},{memory_limit},{bw_limit if bw_limit else 'None'},{max_tmpdir_usage},{run_time}\n")
-    data.flush()
+        prover_match = prover_time_pattern.search(line)
+        dir_size_match = dir_size_pattern.search(line)
+        if prover_match:
+            num_variables = prover_match.group(1)
+            run_time = prover_match.group(2)
+            run_times[num_variables] = run_time;
+        elif dir_size_match:
+            num_variables = dir_size_match.group(1)
+            dir_size = dir_size_match.group(2)
+            dir_sizes[num_variables] = dir_size;
+
+    for (num_variables, run_time) in run_times:
+        dir_size = dir_sizes[num_variables]
+        data.write(f"{prover},{num_variables},{thread_count},{memory_limit},{bw_limit if bw_limit else 'None'},{dir_size},{run_time}\n")
+        data.flush()
 
 def run_benchmarks(provers, memory_limits, threads, min_vars, max_vars, bw_limit, setup_folder, data_file):
     """Runs benchmarks and logs results to data in real-time."""
