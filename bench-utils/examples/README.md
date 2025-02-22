@@ -160,17 +160,17 @@ To reproduce the benchmarks, you can run the following commands:
 
 ```sh
 # Prover time without bandwidth limit
-python3 prover-benchmark.py -p scribe -l 2G -t 8,4,1 -m 12 -M 28
-python3 prover-benchmark.py -p hp -l 64G -t 8,4,1 -m 12 -M 24
-python3 prover-benchmark.py -p gemini -l 2G -t 8 -m 15 -M 26
+python3 prover-benches.py -p scribe -l 2G -t 8,4,1 -m 12 -M 28
+python3 prover-benches.py -p hp -l 64G -t 8,4,1 -m 12 -M 24
+python3 prover-benches.py -p gemini -l 2G -t 8 -m 15 -M 26
 
 # Prover time with bandwidth limit
-python3 prover-benchmark.py -p scribe -l 2G -t 8,4,1 -m 12 -M 24 --bw-limit 1600
-python3 prover-benchmark.py -p scribe -l 2G -t 8 -m 12 -M 24 --bw-limit 800
-python3 prover-benchmark.py -p scribe -l 2G -t 8 -m 12 -M 24 --bw-limit 400
-python3 prover-benchmark.py -p scribe -l 2G -t 8 -m 12 -M 24 --bw-limit 200
-python3 prover-benchmark.py -p scribe -l 2G -t 4 -m 12 -M 24 --bw-limit 200
-python3 prover-benchmark.py -p scribe -l 2G -t 1 -m 12 -M 24 --bw-limit 200
+python3 prover-benches.py -p scribe -l 2G -t 8,4,1 -m 12 -M 24 --bw-limit 1600
+python3 prover-benches.py -p scribe -l 2G -t 8 -m 12 -M 24 --bw-limit 800
+python3 prover-benches.py -p scribe -l 2G -t 8 -m 12 -M 24 --bw-limit 400
+python3 prover-benches.py -p scribe -l 2G -t 8 -m 12 -M 24 --bw-limit 200
+python3 prover-benches.py -p scribe -l 2G -t 4 -m 12 -M 24 --bw-limit 200
+python3 prover-benches.py -p scribe -l 2G -t 1 -m 12 -M 24 --bw-limit 200
 
 # Witness synthesis
 python3 synthesis-benches.py -m 15 -M 29 -w 15

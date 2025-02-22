@@ -19,7 +19,7 @@ def parse_arguments():
     parser.add_argument("-t", "--threads", default="1,2,4,8", help="Comma-separated list of thread counts.")
     parser.add_argument("--data-file", help="Set base name for data file output.")
     parser.add_argument("--skip-setup", action="store_true", help="Skip the setup section.")
-    parser.add_argument("-b", "--bw-limit", nargs="?", default="100M", help="Enforce a bandwidth limit, specified in terms of <N>M, corresponding to a limit of N MB/s")
+    parser.add_argument("-b", "--bw-limit", nargs="?", help="Enforce a bandwidth limit, specified in terms of <N>M, corresponding to a limit of N MB/s")
     return parser.parse_args()
 
 def get_tmpdir_usage():
@@ -152,12 +152,12 @@ def run_benchmark(prover, thread_count, memory_limit, min_vars, max_vars, bw_lim
     
     run_time = None
     if prover != "scribe":
-        enforce_bw_limit = False
+        bw_limit = None
 
     pattern = re.compile(r"Proving for (\d+) took: (\d+) us")
     num_variables = None
     run_time = None
-    for line in run_with_systemd(prover, thread_count, memory_limit, command, enforce_bw_limit):
+    for line in run_with_systemd(prover, thread_count, memory_limit, command, bw_limit):
         print(line)  # Print real-time output for visibility
         line = line.strip()
         match = pattern.search(line)
