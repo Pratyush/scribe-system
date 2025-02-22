@@ -130,7 +130,6 @@ pub fn prover(
         clear_caches();
 
         let tmp_dir_path = std::env::temp_dir();
-        println!("{:?}", tmp_dir_path);
         let proof = thread::scope(|s| {
             let stop_signal = Arc::new(AtomicBool::new(false));
             let stop_signal_2 = stop_signal.clone();
@@ -152,7 +151,6 @@ pub fn prover(
             stop_signal.store(true, std::sync::atomic::Ordering::Relaxed);
             let sizes = dir_sizes.join().unwrap();
             let max_dir_size = sizes.iter().max();
-            println!("Sizes.len(): {}", sizes.len());
             println!(
                 "Scribe: Directory size for {nv} is: {} bytes",
                 max_dir_size.unwrap() - sizes.first().unwrap()

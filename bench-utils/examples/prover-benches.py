@@ -155,7 +155,8 @@ def run_benchmark(prover, thread_count, memory_limit, min_vars, max_vars, bw_lim
             dir_size = dir_size_match.group(2)
             dir_sizes[num_variables] = dir_size;
 
-    for (num_variables, run_time) in run_times:
+    
+    for (num_variables, run_time) in dict(sorted(run_times.items())).items():
         dir_size = dir_sizes[num_variables]
         data.write(f"{prover},{num_variables},{thread_count},{memory_limit},{bw_limit if bw_limit else 'None'},{dir_size},{run_time}\n")
         data.flush()
