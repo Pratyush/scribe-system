@@ -129,14 +129,15 @@ pub fn prover(
         );
         clear_caches();
 
-        println!("{:?}", file_dir_path);
+        let tmp_dir_path = std::env::temp_dir();
+        println!("{:?}", tmp_dir_path);
         let proof = thread::scope(|s| {
             let stop_signal = Arc::new(AtomicBool::new(false));
             let stop_signal_2 = stop_signal.clone();
             let dir_sizes = s.spawn(move || {
-                let mut sizes = vec![get_size(file_dir_path).unwrap()];
+                let mut sizes = vec![get_size(&tmp_dir_path).unwrap()];
                 while !stop_signal_2.load(std::sync::atomic::Ordering::Relaxed) {
-                    let cur_size = get_size(file_dir_path).unwrap();
+                    let cur_size = get_size(&tmp_dir_path).unwrap();
                     if cur_size != *sizes.last().unwrap() {
                         sizes.push(cur_size);
                     }
