@@ -22,17 +22,6 @@ def parse_arguments():
     parser.add_argument("-b", "--bw-limit", nargs="?", help="Enforce a bandwidth limit, specified in terms of <N>M, corresponding to a limit of N MB/s")
     return parser.parse_args()
 
-def get_tmpdir_usage():
-    """Get the current used space of TMPDIR in bytes."""
-    total, used, free = shutil.disk_usage(TMPDIR)
-    return used  # Returns the used size of TMPDIR in bytes
-
-def monitor_tmpdir_usage(stop_event, usage_list):
-    """Continuously monitor TMPDIR usage while the benchmark is running."""
-    while not stop_event.is_set():
-        usage_list.append(get_tmpdir_usage())
-        time.sleep(1)  # Adjust monitoring frequency as needed
-
 def run_command_direct(command, env=None):
     """Runs a shell command and logs the output."""
     print(f"Running command: {command}")
@@ -134,13 +123,7 @@ def run_benchmark(prover, thread_count, memory_limit, min_vars, max_vars, bw_lim
         f"TMPDIR={TMPDIR} " + \
         f"RAYON_NUM_THREADS={thread_count} " + \
         f"{binary_path} {min_vars} {max_vars} {setup_folder}"
-    tmpdir_usage_list = []
-    stop_event = threading.Event()
     
-    # Start a background thread to monitor TMPDIR usage
-    monitor_thread = threading.Thread(target=monitor_tmpdir_usage, args=(stop_event, tmpdir_usage_list))
-    monitor_thread.start()
-
     print("")
     print("----------------------------------------")
     print("Starting memory benchmark run:")

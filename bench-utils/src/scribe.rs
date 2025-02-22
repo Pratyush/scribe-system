@@ -3,7 +3,7 @@ use std::{
     io::BufReader,
     path::Path,
     time::Instant,
-    sync::atomic::AtomicBool,
+    sync::{Arc, atomic::AtomicBool},
     thread,
 };
 
@@ -129,19 +129,20 @@ pub fn prover(
         );
         clear_caches();
 
-        let stop_signal = AtomicBool::new(false);
-
+        println!("{:?}", file_dir_path);
         let proof = thread::scope(|s| {
-            let dir_sizes = s.spawn(|| {
+            let stop_signal = Arc::new(AtomicBool::new(false));
+            let stop_signal_2 = stop_signal.clone();
+            let dir_sizes = s.spawn(move || {
                 let mut sizes = vec![get_size(file_dir_path).unwrap()];
-                while !stop_signal.load(std::sync::atomic::Ordering::Relaxed) {
+                while !stop_signal_2.load(std::sync::atomic::Ordering::Relaxed) {
                     let cur_size = get_size(file_dir_path).unwrap();
                     if cur_size != *sizes.last().unwrap() {
                         sizes.push(cur_size);
                     }
                     thread::sleep(std::time::Duration::from_secs(1));
                 }
-                return sizes;
+                sizes
             });
             let proof = timed!(
                 format!("Scribe: Proving for {nv}",),
