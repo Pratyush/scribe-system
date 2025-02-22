@@ -153,3 +153,27 @@ python3 synthesis-benches.py -m 5 -M 10 -w 131072
 ```sh
 python3 synthesis-benches.py -m 5 -M 10 -r 0.05
 ```
+
+# Reproducing benchmarks
+
+To reproduce the benchmarks, you can run the following commands:
+
+```sh
+# Prover time without bandwidth limit
+python3 prover-benchmark.py -p scribe -l 2G -t 8,4,1 -m 12 -M 28
+python3 prover-benchmark.py -p hp -l 64G -t 8,4,1 -m 12 -M 24
+python3 prover-benchmark.py -p gemini -l 2G -t 8 -m 15 -M 26
+
+# Prover time with bandwidth limit
+python3 prover-benchmark.py -p scribe -l 2G -t 8,4,1 -m 12 -M 24 --bw-limit 1600
+python3 prover-benchmark.py -p scribe -l 2G -t 8 -m 12 -M 24 --bw-limit 800
+python3 prover-benchmark.py -p scribe -l 2G -t 8 -m 12 -M 24 --bw-limit 400
+python3 prover-benchmark.py -p scribe -l 2G -t 8 -m 12 -M 24 --bw-limit 200
+python3 prover-benchmark.py -p scribe -l 2G -t 4 -m 12 -M 24 --bw-limit 200
+python3 prover-benchmark.py -p scribe -l 2G -t 1 -m 12 -M 24 --bw-limit 200
+
+# Witness synthesis
+python3 synthesis-benches.py -m 15 -M 29 -w 15
+python3 synthesis-benches.py -m 17 -M 29 -w 17
+python3 synthesis-benches.py -m 20 -M 29 -w 20
+```
