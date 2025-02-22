@@ -2,9 +2,9 @@ use std::{
     fs::{File, OpenOptions},
     io::BufReader,
     path::Path,
-    time::Instant,
-    sync::{Arc, atomic::AtomicBool},
+    sync::{atomic::AtomicBool, Arc},
     thread,
+    time::Instant,
 };
 
 use ark_bls12_381::Bls12_381;
@@ -133,8 +133,9 @@ pub fn prover(
         let proof = thread::scope(|s| {
             let stop_signal = Arc::new(AtomicBool::new(false));
             let stop_signal_2 = stop_signal.clone();
+            let initial_size = get_size(&tmp_dir_path).unwrap();
             let dir_sizes = s.spawn(move || {
-                let mut sizes = vec![get_size(&tmp_dir_path).unwrap()];
+                let mut sizes = vec![initial_size];
                 while !stop_signal_2.load(std::sync::atomic::Ordering::Relaxed) {
                     let cur_size = get_size(&tmp_dir_path).unwrap();
                     if cur_size != *sizes.last().unwrap() {
@@ -150,14 +151,13 @@ pub fn prover(
             );
             stop_signal.store(true, std::sync::atomic::Ordering::Relaxed);
             let sizes = dir_sizes.join().unwrap();
-            let max_dir_size = sizes.iter().max();
+            let max_dir_size = sizes.iter().max().unwrap();
             println!(
                 "Scribe: Directory size for {nv} is: {} bytes",
-                max_dir_size.unwrap() - sizes.first().unwrap()
+                max_dir_size - initial_size
             );
             proof
         });
-        
 
         // Currently verifier doesn't work as we are using fake SRS
         //==========================================================
