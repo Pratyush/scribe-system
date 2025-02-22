@@ -1,10 +1,10 @@
-use crossbeam::thread;
-use std::sync::mpsc::channel;
 use std::{
     fs::{File, OpenOptions},
     io::BufReader,
     path::Path,
-    time::{Duration, Instant},
+    time::Instant,
+    sync::atomic::AtomicBool,
+    thread,
 };
 
 use ark_bls12_381::Bls12_381;
@@ -129,11 +129,12 @@ pub fn prover(
         );
         clear_caches();
 
-        let (tx, rx) = channel();
+        let stop_signal = AtomicBool::new(false);
+
         let proof = thread::scope(|s| {
-            let dir_sizes = s.spawn(move |_| {
+            let dir_sizes = s.spawn(|| {
                 let mut sizes = vec![get_size(file_dir_path).unwrap()];
-                while rx.recv_timeout(Duration::from_millis(1000)).is_err() {
+                while !stop_signal.load(std::sync::atomic::Ordering::Relaxed) {
                     let cur_size = get_size(file_dir_path).unwrap();
                     println!("Current size: {cur_size} bytes");
                     if cur_size != *sizes.last().unwrap() {
@@ -146,7 +147,7 @@ pub fn prover(
                 format!("Scribe: Proving for {nv}",),
                 Scribe::prove(&pk, &public_inputs, &witnesses).unwrap()
             );
-            tx.send(()).unwrap();
+            stop_signal.store(true, std::sync::atomic::Ordering::Relaxed);
             let sizes = dir_sizes.join().unwrap();
             let max_dir_size = sizes.iter().max();
             println!(
@@ -154,8 +155,8 @@ pub fn prover(
                 max_dir_size.unwrap() - sizes.first().unwrap()
             );
             proof
-        })
-        .unwrap();
+        });
+        
 
         // Currently verifier doesn't work as we are using fake SRS
         //==========================================================
