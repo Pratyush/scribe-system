@@ -1,13 +1,13 @@
-use fs_extra::dir::get_size;
 use std::sync::mpsc::channel;
 use std::{
-    fs,
     fs::{File, OpenOptions},
     path::Path,
+    io::BufReader, 
     time::{Duration, Instant},
 };
-use std::{io::BufReader, time::Instant};
+use crossbeam::thread;
 
+use fs_extra::dir::get_size;
 use ark_bls12_381::Bls12_381;
 use ark_bls12_381::Fr;
 use ark_serialize::CanonicalDeserialize;
@@ -130,28 +130,31 @@ pub fn prover(
         clear_caches();
 
         let (tx, rx) = channel();
-        let dir_sizes = thread::spawn(move || {
-            let sizes = vec![get_size(file_dir_path).unwrap()];
-            while rx.recv_timeout(Duration::from_millis(400)).is_err() {
-                let cur_size = get_size(file_dir_path).unwrap();
-                if cur_size != sizes.last().unwrap() {
-                    sizes.push(cur_size);
+        let proof = thread::scope(|s| {
+            let dir_sizes = s.spawn(move |_| {
+                let mut sizes = vec![get_size(file_dir_path).unwrap()];
+                while rx.recv_timeout(Duration::from_millis(400)).is_err() {
+                    let cur_size = get_size(file_dir_path).unwrap();
+                    if cur_size != *sizes.last().unwrap() {
+                        sizes.push(cur_size);
+                    }
                 }
-            }
-            return sizes;
-        });
+                return sizes});
+            let proof = timed!(
+                format!("Scribe: Proving for {nv}",),
+                Scribe::prove(&pk, &public_inputs, &witnesses).unwrap()
+            );
+            tx.send(()).unwrap();
+            let sizes = dir_sizes.join().unwrap();
+            let max_dir_size = sizes.iter().max();
+            println!(
+                "Scribe: Directory size for {nv} is: {} bytes",
+                max_dir_size.unwrap() - sizes.first().unwrap()
+            );
+            proof
+        }).unwrap();
 
-        let proof = timed!(
-            format!("Scribe: Proving for {nv}",),
-            Scribe::prove(&pk, &public_inputs, &witnesses).unwrap()
-        );
-        tx.send(()).unwrap();
-        let sizes = dir_sizes.join().unwrap();
-        let max_dir_size = sizes.iter().max();
-        println!(
-            "Scribe: Directory size for {nv} is: {} bytes",
-            max_dir_size.unwrap() - sizes.first().unwrap()
-        );
+        
 
         // Currently verifier doesn't work as we are using fake SRS
         //==========================================================
