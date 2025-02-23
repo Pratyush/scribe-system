@@ -4,7 +4,6 @@ use std::{
     path::Path,
     sync::{atomic::AtomicBool, Arc},
     thread,
-    time::Instant,
 };
 
 use ark_bls12_381::Bls12_381;

@@ -1,7 +1,6 @@
 use std::{
     fs::{File, OpenOptions},
     path::Path,
-    time::Instant,
 };
 
 use ark_bls12_381::{Bls12_381, Fr};

@@ -1,5 +1,3 @@
-use std::time::Instant;
-
 use ark_bls12_381::{Bls12_381, Fr, G1Affine as G1, G2Affine as G2};
 use ark_ec::AffineRepr;
 use ark_gemini::iterable::dummy::dummy_r1cs_stream;

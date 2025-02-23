@@ -13,7 +13,7 @@ use halo2_proofs::{
     transcript::TranscriptWriterBuffer,
 };
 
-use std::{marker::PhantomData, time::Instant};
+use std::marker::PhantomData;
 
 /// This represents an advice column at a certain row in the ConstraintSystem
 #[derive(Copy, Clone, Debug)]

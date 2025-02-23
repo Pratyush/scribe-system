@@ -2,9 +2,10 @@ use std::{ffi::CStr, path::Path};
 
 use libc::{c_char, size_t};
 
+#[macro_export]
 macro_rules! timed {
     ($name:expr, $block:expr) => {{
-        let start = Instant::now();
+        let start = std::time::Instant::now();
         let result = { $block };
         let elapsed = start.elapsed().as_micros();
         println!("{} took: {:?} us", $name, elapsed);
