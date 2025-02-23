@@ -427,13 +427,12 @@ impl io::Seek for InnerFile {
     }
 }
 
-fn file_set_nocache(file: &File) {
+fn file_set_nocache(_file: &File) {
     #[cfg(target_os = "macos")]
-    // #[cfg(any(target_os = "macos", target_os = "ios"))]
     {
         use libc::{fcntl, F_NOCACHE};
         use std::os::unix::io::AsRawFd;
-        let fd = file.as_raw_fd();
+        let fd = _file.as_raw_fd();
         let result = unsafe { fcntl(fd, F_NOCACHE, 1) };
         assert_ne!(result, -1);
     }

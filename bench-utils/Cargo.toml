@@ -42,6 +42,7 @@ print-trace = ["scribe/print-trace"]
 gemini = ["ark-gemini"]
 plonky2 = ["dep:plonky2"]
 halo2 = [ "halo2_proofs", "group", "halo2_curves" ]
+asm = [ "ark-ff/asm" ]
 
 [lib]
 crate-type = ["staticlib", "rlib"]
