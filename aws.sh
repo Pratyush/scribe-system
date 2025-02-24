@@ -31,6 +31,11 @@ SECURITY_GROUP=$(aws ec2 describe-security-groups --filters 'Name=group-name,Val
 VPC_ID=$(aws ec2 describe-security-groups --filters 'Name=group-name,Values=scribe-sg' --query 'SecurityGroups[*].VpcId' --output text)
 
 # Find subnet-id via `aws ec2 describe-subnets --filter "Name=vpc-id,Values=$VPC_ID" --query '`
+SUBNET_ID=$(aws ec2 describe-subnets \
+  --filters Name=vpc-id,Values=$VPC_ID Name=tag:Name,Values="pennnet-snarky-vpc-1 Public01" \
+  --query 'Subnets[*].SubnetId' \
+  --output text)
+
 
 KEY_NAME="Pratyush-Gethen"
 
