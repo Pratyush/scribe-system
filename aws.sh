@@ -12,9 +12,11 @@ fi
 ARCHITECTURE=$1
 # Set AMI and instance type based on architecture
 if [ "$ARCHITECTURE" == "x86_64" ]; then
+  # x86_64 instance is `i3en.3xlarge`
   IMAGE_ID="ami-0583d8c7a9c35822c"  # x86_64 AMI ID
   INSTANCE_TYPE="i3en.3xlarge"       # x86_64 instance type
 elif [ "$ARCHITECTURE" == "arm64" ]; then
+  # arm64 instance is `im4gn.4xlarge`
   IMAGE_ID="ami-07472131ec292b5da"  # arm64 AMI ID
   INSTANCE_TYPE="im4gn.4xlarge"     # arm64 instance type
 else
@@ -24,13 +26,17 @@ else
 fi
 
 # Find VPC and security-group via `aws ec2 describe-security-groups`
-SECURITY_GROUP="sg-0f1980007115350db"
-# Find subnet-id via `aws ec2 describe-subnets --filter "Name=vpc-id,Values=<vpc-id>"`
-SUBNET_ID="subnet-0fc322a35969a58de"
+SECURITY_GROUP=$(aws ec2 describe-security-groups --filters 'Name=group-name,Values=scribe-sg' --query 'SecurityGroups[*].GroupId' --output text)
+
+VPC_ID=$(aws ec2 describe-security-groups --filters 'Name=group-name,Values=scribe-sg' --query 'SecurityGroups[*].VpcId' --output text)
+
+# Find subnet-id via `aws ec2 describe-subnets --filter "Name=vpc-id,Values=$VPC_ID" --query '`
+SUBNET_ID=$(aws ec2 describe-subnets \
+  --filters Name=vpc-id,Values=$VPC_ID Name=tag:Name,Values="pennnet-snarky-vpc-1 Public01" \
+  --query 'Subnets[*].SubnetId' \
+  --output text)
 
 
-# arm64 instance is `im4gn.4xlarge`
-# x86_64 instance is `i3en.3xlarge`
 KEY_NAME="Pratyush-Gethen"
 
 # If you want to use a spot-instance, add the following command

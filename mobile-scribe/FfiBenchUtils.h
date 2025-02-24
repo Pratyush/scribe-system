@@ -2,8 +2,6 @@
 //  FfiBenchUtils.h
 //  mobile-scribe
 //
-//  Created by Pratyush Mishra on 9/10/24.
-//
 
 #ifndef FfiBenchUtils_h
 #define FfiBenchUtils_h
