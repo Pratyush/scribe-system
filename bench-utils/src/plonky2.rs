@@ -30,8 +30,8 @@ fn build_circuit(size: usize) -> (CircuitBuilder<F, D>, PartialWitness<F>) {
     //
     // Provide initial values.
     let mut pw = PartialWitness::new();
-    pw.set_target(initial_a, F::TWO);
-    pw.set_target(initial_b, F::ONE);
+    pw.set_target(initial_a, F::TWO).unwrap();
+    pw.set_target(initial_b, F::ONE).unwrap();
 
     (builder, pw)
 }
@@ -46,7 +46,7 @@ pub fn prover(min_size: usize, max_size: usize) {
             build_circuit(1 << size)
         );
 
-        let num_gates = builder.num_gates();
+        let _num_gates = builder.num_gates();
         let (data, proof) = timed!(format!("Plonky2: Proving for {size}"), {
             let data = builder.build::<C>();
             let proof = data.prove(pw).unwrap();

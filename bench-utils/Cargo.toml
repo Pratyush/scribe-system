@@ -23,7 +23,7 @@ hp-subroutines = { git = "https://github.com/EspressoSystems/hyperplonk/", packa
 ark-gemini = { git = "https://github.com/pratyush/gemini/", optional = true, features = [ "parallel" ] }
 
 # Plonky2
-plonky2 = { version = "0.2.2", optional = true }
+plonky2 = { version = "1.0.2", optional = true }
 
 # Halo2
 halo2_proofs = { package = "halo2-axiom", version = "0.4.4", optional = true }
