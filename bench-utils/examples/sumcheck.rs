@@ -47,7 +47,7 @@ fn main() -> Result<(), PIOPError> {
         }
         let elapsed = start.elapsed();
 
-        println!("Sumcheck: Proving for {num_vars} variables took: {:?} us", elapsed / 5);
+        println!("Sumcheck: Proving for {num_vars} variables took: {:?} us", elapsed.as_micros() / 5);
 
         // 2. Verifying: Prepare a fresh transcript and verify the proof.
         let poly_info = poly.aux_info.clone();
