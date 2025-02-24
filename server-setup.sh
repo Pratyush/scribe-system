@@ -33,8 +33,3 @@ source "home/ec2-user/.cargo/env"
 source /home/ec2-user/.bashrc
 mkdir /home/ec2-user/external/tmp
 EOF
-
-# rustup default nightly
-
-# git clone git@github.com:Pratyush/streaming-snarks-system.git
-# set TMPDIR in streaming-snarks-systems/src/scribe/benches/run_bench.sh
