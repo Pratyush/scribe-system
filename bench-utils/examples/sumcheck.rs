@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use ark_bls12_381::Fr;
 use ark_ff::UniformRand;
 
@@ -38,10 +40,14 @@ fn main() -> Result<(), PIOPError> {
 
         // 1. Proving: Create a transcript and generate a sumcheck proof.
         let mut transcript = SumCheck::<Fr>::init_transcript();
-        let proof = timed!( 
-            format!("Sumcheck: Proving for {num_vars} variables"),
-            SumCheck::<Fr>::prove(&poly, &mut transcript)?
-        );
+        let start = Instant::now();
+        let proof = SumCheck::<Fr>::prove(&poly, &mut transcript)?;
+        for _ in 0..4 {
+            SumCheck::<Fr>::prove(&poly, &mut transcript)?;
+        }
+        let elapsed = start.elapsed();
+
+        println!("Sumcheck: Proving for {num_vars} variables took: {:?} us", elapsed / 5);
 
         // 2. Verifying: Prepare a fresh transcript and verify the proof.
         let poly_info = poly.aux_info.clone();
