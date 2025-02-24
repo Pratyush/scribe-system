@@ -1,6 +1,3 @@
-# Reminders to the maintainer
+# Scribe: Low-memory SNARKs via Read-Write Streaming
 
-Check the branch in github workflow templates
-Check the TODO's in the contributing.md
-
-Include panic = 'abort' in your release profiles within cargo.toml
+Please see the `bench-utils` README for instructions on how to run the benchmarks.
