@@ -1,8 +1,8 @@
 cff-version: 1.2.0
 message: "If you use this software, please cite it as below."
 authors:
-- name: "arkworks contributors"
-title: "arkworks zkSNARK ecosystem"
+- name: "scribe authors"
+title: "Scribe: Low-memory SNARKs via Read-Write Streaming"
 keywords:
   - zkSNARK
   - "elliptic curves"
@@ -11,4 +11,4 @@ license:
   - Apache-2.0
   - MIT
 type: software
-repository-code: "https://github.com/arkworks-rs"
+repository-code: "https://github.com/Pratyush/scribe-system"
