@@ -565,7 +565,7 @@ impl<T: SerializeRaw + DeserializeRaw> Drop for FileVec<T> {
         match self {
             Self::File(file) => match std::fs::remove_file(&file.path) {
                 Ok(_) => (),
-                Err(e) => eprintln!("Failed to remove file at path {:?}: {e:?}", file.path),
+                Err(e) => eprintln!("FileVec: Failed to remove file at path {:?}: {e:?}", file.path),
             },
             Self::Buffer { .. } => (),
         }
