@@ -3,22 +3,19 @@ use std::time::Instant;
 use ark_bls12_381::Fr;
 use ark_ff::UniformRand;
 
+use bench_utils::timed;
 /// Depending on your project organization, adjust these import paths.
 /// Here we assume that the library exposes:
 ///   - `SumCheck` (with methods `init_transcript`, `prove`, `verify`, and `extract_sum`)
 ///   - `VirtualPolynomial` (and its auxiliary types)
 ///   - `MLE` for generating random multilinear extensions.
-use mle::{
-    virtual_polynomial::VirtualPolynomial,
-    MLE,
-};
-use bench_utils::timed;
+use mle::{virtual_polynomial::VirtualPolynomial, MLE};
 use scribe::piop::{errors::PIOPError, sum_check::SumCheck};
 
 fn main() -> Result<(), PIOPError> {
     // Initialize randomness.
     let mut rng = ark_std::test_rng();
-    
+
     // Pick a random number of variables in the range [15, 25].
     for num_vars in 15..=25 {
         // Generate two random multilinear extensions (MLEs) over Fr.
@@ -47,7 +44,10 @@ fn main() -> Result<(), PIOPError> {
         }
         let elapsed = start.elapsed();
 
-        println!("Sumcheck: Proving for {num_vars} variables took: {:?} us", elapsed.as_micros() / 5);
+        println!(
+            "Sumcheck: Proving for {num_vars} variables took: {:?} us",
+            elapsed.as_micros() / 5
+        );
 
         // 2. Verifying: Prepare a fresh transcript and verify the proof.
         let poly_info = poly.aux_info.clone();
@@ -58,8 +58,6 @@ fn main() -> Result<(), PIOPError> {
         let evaluation = poly.evaluate(&subclaim.point)?;
         assert_eq!(evaluation, subclaim.expected_evaluation);
     }
-
-    
 
     Ok(())
 }

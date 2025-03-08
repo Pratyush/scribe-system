@@ -33,3 +33,9 @@ criterion = { version = "0.5" }
 
 [features]
 print-trace = [ "ark-std/print-trace" ] 
+
+
+[[bench]]
+name = "sumcheck"
+path = "benches/sumcheck.rs"
+harness = false

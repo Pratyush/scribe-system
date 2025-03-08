@@ -95,8 +95,8 @@ pub(crate) fn serialize_and_deserialize_raw_batch<
     write_work_buffer: &mut Vec<u8>,
     mut write_file: impl Write + Send,
     read_buffer: &mut Vec<T>,
-    read_work_buffer: &mut Vec<u8>,
-    mut read_file: impl Read + Send,
+    read_work_buffer: &mut AVec,
+    mut read_file: impl ReadN + Send,
     batch_size: usize,
 ) -> Result<(), io::Error> {
     // Serialize
@@ -115,9 +115,7 @@ pub(crate) fn serialize_and_deserialize_raw_batch<
         || -> Result<(), io::Error> {
             read_work_buffer.clear();
             read_buffer.clear();
-            (&mut read_file)
-                .take((T::SIZE * batch_size) as u64)
-                .read_to_end(read_work_buffer)?;
+            (&mut read_file).read_n(read_work_buffer, T::SIZE * batch_size)?;
             Ok(())
         },
     );
