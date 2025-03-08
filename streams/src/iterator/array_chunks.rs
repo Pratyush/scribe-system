@@ -1,4 +1,4 @@
-use std::{array, fmt::Debug};
+use std::fmt::Debug;
 
 use crate::BUFFER_SIZE;
 use rayon::prelude::*;
@@ -48,7 +48,7 @@ where
             );
             self.buffer
                 .par_chunks_exact(N)
-                .map(|chunk| array::from_fn(|i| chunk[i]))
+                .map(|chunk| chunk.try_into().unwrap())
                 .collect::<Vec<_>>()
                 .into_par_iter()
         })

@@ -732,11 +732,18 @@ impl<T: SerializeRaw + DeserializeRaw + Display> Display for FileVec<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::File(file) => {
+                use std::io::Read;
                 writeln!(f, "FileVec at {}: [", file.path.display())?;
                 let file = file.reopen_read_by_ref().unwrap();
                 let mut reader = std::io::BufReader::new(file);
-                while let Ok(item) = T::deserialize_raw(&mut reader) {
+                let mut buffer = vec![0u8; T::SIZE];
+                loop {
+                    if let Err(_) = reader.read_exact(buffer.as_mut_slice()) {
+                        break;
+                    }
+                    let item = T::deserialize_raw(&mut buffer.as_slice()).unwrap();
                     writeln!(f, "  {},", item)?;
+                    buffer.clear()
                 }
                 writeln!(f, "]")?;
                 Ok(())

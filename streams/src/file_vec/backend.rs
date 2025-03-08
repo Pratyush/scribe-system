@@ -25,7 +25,8 @@ pub trait ReadN: std::io::Read {
         unsafe {
             dest.set_len(n);
         }
-        dest.fill(0);
+        // TODO: figure out how to do this without undefined behaviour.
+        // dest.fill(0);
         let n = self.read(&mut dest[..n])?;
         dest.truncate(n);
         Ok(())
@@ -48,7 +49,7 @@ impl<'a> ReadN for &'a mut InnerFile {
         unsafe {
             dest.set_len(n);
         }
-        dest.fill(0);
+        // dest.fill(0);
         debug_assert_eq!(dest.len() % PAGE_SIZE, 0);
         let n = (&self.file).read(&mut dest[..])?;
         dest.truncate(n);
@@ -301,14 +302,17 @@ impl Read for &InnerFile {
     /// [changes]: io#platform-specific-behavior
     #[inline(always)]
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        let mut self_buffer = self.buffer.lock().unwrap();
-        self_buffer.clear();
-        self_buffer.extend_from_slice(&buf);
-        debug_assert_eq!(self_buffer.len(), buf.len());
-        debug_assert_eq!(self_buffer.len() % PAGE_SIZE, 0);
-        let e = (&self.file).read(&mut self_buffer)?;
-        buf.copy_from_slice(&self_buffer);
-        Ok(e)
+        if align_of_val(buf) % PAGE_SIZE == 0 {
+            // If the buffer is already aligned, we can read directly.
+            (&self.file).read(buf)
+        } else {
+            let mut self_buffer = self.buffer.lock().unwrap();
+            self_buffer.clear();
+            debug_assert_eq!(self_buffer.len() % PAGE_SIZE, 0);
+            let _ = (&self.file).read(&mut self_buffer)?;
+            let e = self_buffer.as_slice().read(buf)?;
+            Ok(e)
+        }
     }
 
     fn read_exact(&mut self, buf: &mut [u8]) -> io::Result<()> {

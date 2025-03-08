@@ -111,7 +111,7 @@ pub trait BatchedIterator: Sized {
     #[inline(always)]
     fn to_file_vec(self) -> FileVec<Self::Item>
     where
-        Self::Item: SerializeRaw + DeserializeRaw + std::fmt::Debug,
+        Self::Item: SerializeRaw + DeserializeRaw + std::fmt::Debug + Clone,
     {
         FileVec::from_batched_iter(self)
     }
@@ -120,8 +120,8 @@ pub trait BatchedIterator: Sized {
     fn unzip<A, B>(self) -> (FileVec<A>, FileVec<B>)
     where
         Self: BatchedIterator<Item = (A, B)>,
-        A: SerializeRaw + DeserializeRaw + Send + Sync,
-        B: SerializeRaw + DeserializeRaw + Send + Sync,
+        A: SerializeRaw + DeserializeRaw + Send + Sync + Clone,
+        B: SerializeRaw + DeserializeRaw + Send + Sync + Clone,
     {
         FileVec::<(A, B)>::unzip_helper(self)
     }

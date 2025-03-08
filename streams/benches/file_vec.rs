@@ -121,11 +121,30 @@ fn iter_chunk_mapped(c: &mut Criterion) {
     group.finish();
 }
 
+fn iter(c: &mut Criterion) {
+    let num_threads = rayon::current_num_threads();
+    let mut group = c.benchmark_group(format!("fv::iter {num_threads}"));
+    let mut rng = &mut ark_std::test_rng();
+    for size in [1, 2, 4, 8, 16] {
+        let e = Fr::rand(&mut rng);
+        let vec_size = BUFFER_SIZE * size;
+        group.throughput(Throughput::Elements(vec_size as u64));
+        group.bench_with_input(BenchmarkId::from_parameter(vec_size), &size, |b, _| {
+            let fv = FileVec::from_iter((0..vec_size).map(|_| e));
+            b.iter(|| {
+                fv.iter().for_each(|_| {})
+            });
+        });
+    }
+    group.finish();
+}
+
 criterion_group!(
     file_vec,
     for_each_simple,
     for_each_complex,
     from_batched_iter,
+    iter,
     iter_map,
     into_iter_map,
     iter_chunk_mapped,
