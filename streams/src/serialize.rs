@@ -43,7 +43,7 @@ pub trait SerializeRaw: Sized {
 
         work_buffer
             .par_chunks_mut(Self::SIZE)
-            .zip(result_buffer.par_iter())
+            .zip(result_buffer)
             .with_min_len(1 << 8)
             .for_each(|(chunk, val)| {
                 val.serialize_raw(chunk).unwrap();
@@ -71,10 +71,11 @@ pub trait DeserializeRaw: SerializeRaw + Sized + std::fmt::Debug + Copy {
         (&mut file).read_n(work_buffer, size * batch_size)?;
 
         if rayon::current_num_threads() == 1 {
-            let (head, mid, tail) = unsafe { work_buffer.align_to::<Self>() };
-            assert!(head.is_empty());
-            assert!(tail.is_empty());
-            result_buffer.extend_from_slice(mid);
+            result_buffer.extend(
+                work_buffer
+                    .chunks(size)
+                    .map(|mut chunk| Self::deserialize_raw(&mut chunk).unwrap()),
+            );
         } else {
             result_buffer.par_extend(
                 work_buffer
@@ -107,7 +108,7 @@ pub(crate) fn serialize_and_deserialize_raw_batch<
             }
             write_work_buffer
                 .par_chunks_mut(T::SIZE)
-                .zip(write_buffer.par_iter())
+                .zip(write_buffer)
                 .with_min_len(1 << 10)
                 .for_each(|(chunk, val)| val.serialize_raw(chunk).unwrap());
             Ok(())
