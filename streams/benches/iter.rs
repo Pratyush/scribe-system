@@ -5,8 +5,8 @@ use ark_bls12_381::Fr;
 use ark_ff::Field;
 use ark_std::UniformRand;
 use criterion::{BenchmarkId, Criterion, Throughput};
-use scribe_streams::{file_vec::FileVec, iterator::*};
 use scribe_streams::BUFFER_SIZE;
+use scribe_streams::{file_vec::FileVec, iterator::*};
 
 fn map(c: &mut Criterion) {
     let num_threads = rayon::current_num_threads();
@@ -74,7 +74,6 @@ fn zip_file(c: &mut Criterion) {
         let vec_size = BUFFER_SIZE * size;
         group.throughput(Throughput::Elements(vec_size as u64));
         group.bench_with_input(BenchmarkId::from_parameter(vec_size), &size, |b, _| {
-
             let one = FileVec::from_iter(std::iter::repeat(e).take(vec_size));
             let two = FileVec::from_iter(std::iter::repeat(e).take(vec_size));
             b.iter(|| {
@@ -121,5 +120,13 @@ fn array_chunks(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(iter, map, for_each, zip, zip_file, array_chunks, array_chunks_file);
+criterion_group!(
+    iter,
+    map,
+    for_each,
+    zip,
+    zip_file,
+    array_chunks,
+    array_chunks_file
+);
 criterion_main!(iter);

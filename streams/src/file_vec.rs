@@ -399,12 +399,11 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
                     FileVec::Buffer { buffer }
                 } else {
                     let mut byte_buffer = avec![0u8; buffer.len() * T::SIZE];
-                    byte_buffer
-                        .par_chunks_mut(T::SIZE)
-                        .zip(buffer)
-                        .for_each(|(mut chunk, item)| {
+                    byte_buffer.par_chunks_mut(T::SIZE).zip(buffer).for_each(
+                        |(mut chunk, item)| {
                             item.serialize_raw(&mut chunk).unwrap();
-                        });
+                        },
+                    );
 
                     let mut file = InnerFile::new_temp("");
                     file.write_all(&byte_buffer)
@@ -565,7 +564,10 @@ impl<T: SerializeRaw + DeserializeRaw> Drop for FileVec<T> {
         match self {
             Self::File(file) => match std::fs::remove_file(&file.path) {
                 Ok(_) => (),
-                Err(e) => eprintln!("FileVec: Failed to remove file at path {:?}: {e:?}", file.path),
+                Err(e) => eprintln!(
+                    "FileVec: Failed to remove file at path {:?}: {e:?}",
+                    file.path
+                ),
             },
             Self::Buffer { .. } => (),
         }

@@ -1,5 +1,8 @@
 use rayon::prelude::*;
-use std::{io, mem::{self, MaybeUninit}};
+use std::{
+    io,
+    mem::{self, MaybeUninit},
+};
 
 use ark_ec::{
     short_weierstrass::{Affine as SWAffine, SWCurveConfig},
@@ -288,7 +291,7 @@ impl<const N: usize> DeserializeRaw for BigInt<N> {
     fn deserialize_raw(reader: &mut &[u8]) -> Option<Self> {
         <[u64; N]>::deserialize_raw(reader).map(BigInt)
     }
-    
+
     fn deserialize_raw_batch(
         result_buffer: &mut Vec<Self>,
         work_buffer: &mut AVec,
@@ -298,7 +301,6 @@ impl<const N: usize> DeserializeRaw for BigInt<N> {
     where
         Self: Sync + Send,
     {
-
         work_buffer.clear();
         result_buffer.clear();
         let size = Self::SIZE;
@@ -344,7 +346,7 @@ impl<P: FpConfig<N>, const N: usize> DeserializeRaw for Fp<P, N> {
     fn deserialize_raw(reader: &mut &[u8]) -> Option<Self> {
         BigInt::deserialize_raw(reader).map(|x| Fp(x, core::marker::PhantomData))
     }
-    
+
     fn deserialize_raw_batch(
         result_buffer: &mut Vec<Self>,
         work_buffer: &mut AVec,
