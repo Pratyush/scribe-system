@@ -1,8 +1,5 @@
 use rayon::prelude::*;
-use std::{
-    io,
-    mem::{self, MaybeUninit},
-};
+use std::{io, mem::{self, MaybeUninit}};
 
 use ark_ec::{
     short_weierstrass::{Affine as SWAffine, SWCurveConfig},
@@ -19,7 +16,7 @@ use super::file_vec::AVec;
 pub trait SerializeRaw: Sized {
     const SIZE: usize = mem::size_of::<Self>();
 
-    fn serialize_raw<W: Write>(&self, writer: W) -> Result<(), io::Error>;
+    fn serialize_raw(&self, writer: &mut &mut [u8]) -> Option<()>;
 
     fn serialize_raw_batch(
         result_buffer: &[Self],
@@ -45,8 +42,8 @@ pub trait SerializeRaw: Sized {
             .par_chunks_mut(Self::SIZE)
             .zip(result_buffer)
             .with_min_len(1 << 8)
-            .for_each(|(chunk, val)| {
-                val.serialize_raw(chunk).unwrap();
+            .for_each(|(mut chunk, val)| {
+                val.serialize_raw(&mut chunk).unwrap();
             });
         file.write_all(work_buffer)?;
         Ok(())
@@ -110,7 +107,7 @@ pub(crate) fn serialize_and_deserialize_raw_batch<
                 .par_chunks_mut(T::SIZE)
                 .zip(write_buffer)
                 .with_min_len(1 << 10)
-                .for_each(|(chunk, val)| val.serialize_raw(chunk).unwrap());
+                .for_each(|(mut chunk, val)| val.serialize_raw(&mut chunk).unwrap());
             Ok(())
         },
         || -> Result<(), io::Error> {
@@ -157,8 +154,9 @@ macro_rules! impl_uint {
     ($type:ty) => {
         impl SerializeRaw for $type {
             #[inline(always)]
-            fn serialize_raw<W: Write>(&self, mut writer: W) -> Result<(), io::Error> {
-                writer.write_all(&self.to_le_bytes())
+
+            fn serialize_raw(&self, writer: &mut &mut [u8]) -> Option<()> {
+                writer.write_all(&self.to_le_bytes()).ok()
             }
         }
 
@@ -181,8 +179,8 @@ impl_uint!(u64);
 impl SerializeRaw for bool {
     const SIZE: usize = 1;
     #[inline(always)]
-    fn serialize_raw<W: Write>(&self, mut writer: W) -> Result<(), io::Error> {
-        writer.write_all(&[*self as u8])
+    fn serialize_raw(&self, writer: &mut &mut [u8]) -> Option<()> {
+        writer.write_all(&[*self as u8]).ok()
     }
 }
 
@@ -198,8 +196,8 @@ impl DeserializeRaw for bool {
 impl SerializeRaw for usize {
     const SIZE: usize = core::mem::size_of::<u64>();
     #[inline(always)]
-    fn serialize_raw<W: Write>(&self, mut writer: W) -> Result<(), io::Error> {
-        writer.write_all(&(*self as u64).to_le_bytes())
+    fn serialize_raw(&self, writer: &mut &mut [u8]) -> Option<()> {
+        writer.write_all(&(*self as u64).to_le_bytes()).ok()
     }
 }
 
@@ -216,11 +214,11 @@ impl<T: SerializeRaw, const N: usize> SerializeRaw for [T; N] {
     const SIZE: usize = T::SIZE * N;
 
     #[inline(always)]
-    fn serialize_raw<W: Write>(&self, mut writer: W) -> Result<(), io::Error> {
+    fn serialize_raw(&self, mut writer: &mut &mut [u8]) -> Option<()> {
         for item in self.iter() {
             item.serialize_raw(&mut writer)?;
         }
-        Ok(())
+        Some(())
     }
 }
 
@@ -247,9 +245,9 @@ macro_rules! impl_tuple {
             };
 
             #[inline(always)]
-            fn serialize_raw<W: Write>(&self, mut writer: W) -> Result<(), io::Error> {
+            fn serialize_raw(&self, mut writer: &mut &mut [u8]) -> Option<()> {
                 $(self.$no.serialize_raw(&mut writer)?;)*
-                Ok(())
+                Some(())
             }
         }
 
@@ -280,7 +278,7 @@ impl_tuple!(A:0, B:1, C:2, D:3, E:4,);
 impl<const N: usize> SerializeRaw for BigInt<N> {
     const SIZE: usize = N * 8;
     #[inline(always)]
-    fn serialize_raw<W: Write>(&self, writer: W) -> Result<(), io::Error> {
+    fn serialize_raw(&self, writer: &mut &mut [u8]) -> Option<()> {
         self.0.serialize_raw(writer)
     }
 }
@@ -336,7 +334,7 @@ impl<P: FpConfig<N>, const N: usize> SerializeRaw for Fp<P, N> {
     const SIZE: usize = N * 8;
 
     #[inline(always)]
-    fn serialize_raw<W: Write>(&self, writer: W) -> Result<(), io::Error> {
+    fn serialize_raw(&self, writer: &mut &mut [u8]) -> Option<()> {
         self.0.serialize_raw(writer)
     }
 }
@@ -384,7 +382,7 @@ where
     const SIZE: usize = 2 * P::BaseField::SIZE;
 
     #[inline(always)]
-    fn serialize_raw<W: Write>(&self, mut writer: W) -> Result<(), io::Error> {
+    fn serialize_raw(&self, mut writer: &mut &mut [u8]) -> Option<()> {
         self.x.serialize_raw(&mut writer)?;
         self.y.serialize_raw(writer)
     }
@@ -409,7 +407,7 @@ where
     const SIZE: usize = 2 * P::BaseField::SIZE;
 
     #[inline(always)]
-    fn serialize_raw<W: Write>(&self, mut writer: W) -> Result<(), io::Error> {
+    fn serialize_raw(&self, mut writer: &mut &mut [u8]) -> Option<()> {
         self.x.serialize_raw(&mut writer)?;
         self.y.serialize_raw(writer)
     }
@@ -439,7 +437,7 @@ mod tests {
     use ark_std::UniformRand;
     fn test_serialize<T: PartialEq + core::fmt::Debug + SerializeRaw + DeserializeRaw>(data: T) {
         let mut serialized = vec![0; T::SIZE];
-        data.serialize_raw(&mut serialized[..]).unwrap();
+        data.serialize_raw(&mut &mut serialized[..]).unwrap();
         let de = T::deserialize_raw(&mut &serialized[..]).unwrap();
         assert_eq!(data, de);
     }

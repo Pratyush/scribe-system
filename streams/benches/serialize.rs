@@ -11,7 +11,7 @@ fn serialize_fr(c: &mut Criterion) {
         let mut vec = Vec::with_capacity(Fr::SIZE);
         let f = Fr::rand(&mut ark_std::test_rng());
         b.iter(|| {
-            f.serialize_raw(&mut vec).unwrap();
+            f.serialize_raw(&mut vec.as_mut_slice()).unwrap();
             vec.clear();
         });
     });
@@ -19,7 +19,7 @@ fn serialize_fr(c: &mut Criterion) {
     c.bench_function("Deserialize bls12_381::Fr", |b| {
         let mut vec = Vec::with_capacity(Fr::SIZE);
         let f = Fr::rand(&mut ark_std::test_rng());
-        f.serialize_raw(&mut vec).unwrap();
+        f.serialize_raw(&mut vec.as_mut_slice()).unwrap();
         b.iter(|| Fr::deserialize_raw(&mut &vec[..]).unwrap());
     });
 }
@@ -29,7 +29,7 @@ fn serialize_fq(c: &mut Criterion) {
         let mut vec = Vec::with_capacity(Fq::SIZE);
         let f = Fq::rand(&mut ark_std::test_rng());
         b.iter(|| {
-            f.serialize_raw(&mut vec).unwrap();
+            f.serialize_raw(&mut vec.as_mut_slice()).unwrap();
             vec.clear();
         });
     });
@@ -37,7 +37,7 @@ fn serialize_fq(c: &mut Criterion) {
     c.bench_function("Deserialize bls12_381::Fq", |b| {
         let mut vec = Vec::with_capacity(Fq::SIZE);
         let f = Fq::rand(&mut ark_std::test_rng());
-        f.serialize_raw(&mut vec).unwrap();
+        f.serialize_raw(&mut vec.as_mut_slice()).unwrap();
         b.iter(|| Fq::deserialize_raw(&mut &vec[..]).unwrap());
     });
 }
@@ -47,14 +47,14 @@ fn serialize_g1(c: &mut Criterion) {
         let mut vec = Vec::with_capacity(G1Affine::SIZE);
         let g = G1Affine::rand(&mut ark_std::test_rng());
         b.iter(|| {
-            g.serialize_raw(&mut vec).unwrap();
+            g.serialize_raw(&mut vec.as_mut_slice()).unwrap();
             vec.clear();
         });
     });
     c.bench_function("Deserialize bls12_381::G1", |b| {
         let mut vec = Vec::with_capacity(G1Affine::SIZE);
         let f = G1Affine::rand(&mut ark_std::test_rng());
-        f.serialize_raw(&mut vec).unwrap();
+        f.serialize_raw(&mut vec.as_mut_slice()).unwrap();
         b.iter(|| G1Affine::deserialize_raw(&mut &vec[..]).unwrap());
     });
 }

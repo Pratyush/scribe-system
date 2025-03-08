@@ -297,7 +297,7 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
                     .par_chunks_mut(size)
                     .zip(&buffer)
                     .with_min_len(1 << 10)
-                    .try_for_each(|(chunk, item)| item.serialize_raw(chunk))
+                    .try_for_each(|(mut chunk, item)| item.serialize_raw(&mut chunk))
                     .unwrap();
                 let buf_len = buffer.len();
                 buffer.clear();
@@ -316,7 +316,7 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
                 .par_chunks_mut(size)
                 .zip(&buffer)
                 .with_min_len(1 << 10)
-                .try_for_each(|(chunk, item)| item.serialize_raw(chunk))
+                .try_for_each(|(mut chunk, item)| item.serialize_raw(&mut chunk))
                 .unwrap();
             file.write_all(&byte_buffer[..buffer.len() * size])
                 .expect("failed to write to file");
@@ -402,8 +402,8 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
                     byte_buffer
                         .par_chunks_mut(T::SIZE)
                         .zip(buffer)
-                        .for_each(|(chunk, item)| {
-                            item.serialize_raw(chunk).unwrap();
+                        .for_each(|(mut chunk, item)| {
+                            item.serialize_raw(&mut chunk).unwrap();
                         });
 
                     let mut file = InnerFile::new_temp("");
@@ -469,9 +469,9 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
                 let b = writer_2.par_chunks_mut(size_b).zip(&bufs.1);
 
                 a.zip(b)
-                    .try_for_each(|((c_a, a), (c_b, b))| {
-                        a.serialize_raw(c_a)?;
-                        b.serialize_raw(c_b)
+                    .try_for_each(|((mut c_a, a), (mut c_b, b))| {
+                        a.serialize_raw(&mut c_a)?;
+                        b.serialize_raw(&mut c_b)
                     })
                     .unwrap();
                 let buf_a_len = bufs.0.len();
@@ -495,12 +495,12 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
             writer_1
                 .par_chunks_mut(size_a)
                 .zip(&bufs.0)
-                .try_for_each(|(chunk, a)| a.serialize_raw(chunk))
+                .try_for_each(|(mut chunk, a)| a.serialize_raw(&mut chunk))
                 .unwrap();
             writer_2
                 .par_chunks_mut(size_b)
                 .zip(&bufs.1)
-                .try_for_each(|(chunk, b)| b.serialize_raw(chunk))
+                .try_for_each(|(mut chunk, b)| b.serialize_raw(&mut chunk))
                 .unwrap();
             let buf_a_len = bufs.0.len();
             let buf_b_len = bufs.1.len();
