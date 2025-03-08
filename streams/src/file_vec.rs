@@ -297,7 +297,7 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
                     .par_chunks_mut(size)
                     .zip(&buffer)
                     .with_min_len(1 << 10)
-                    .try_for_each(|(chunk, item)| item.serialize_raw(chunk))
+                    .try_for_each(|(mut chunk, item)| item.serialize_raw(&mut chunk))
                     .unwrap();
                 let buf_len = buffer.len();
                 buffer.clear();
@@ -316,7 +316,7 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
                 .par_chunks_mut(size)
                 .zip(&buffer)
                 .with_min_len(1 << 10)
-                .try_for_each(|(chunk, item)| item.serialize_raw(chunk))
+                .try_for_each(|(mut chunk, item)| item.serialize_raw(&mut chunk))
                 .unwrap();
             file.write_all(&byte_buffer[..buffer.len() * size])
                 .expect("failed to write to file");
@@ -399,12 +399,11 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
                     FileVec::Buffer { buffer }
                 } else {
                     let mut byte_buffer = avec![0u8; buffer.len() * T::SIZE];
-                    byte_buffer
-                        .par_chunks_mut(T::SIZE)
-                        .zip(buffer)
-                        .for_each(|(chunk, item)| {
-                            item.serialize_raw(chunk).unwrap();
-                        });
+                    byte_buffer.par_chunks_mut(T::SIZE).zip(buffer).for_each(
+                        |(mut chunk, item)| {
+                            item.serialize_raw(&mut chunk).unwrap();
+                        },
+                    );
 
                     let mut file = InnerFile::new_temp("");
                     file.write_all(&byte_buffer)
@@ -469,9 +468,9 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
                 let b = writer_2.par_chunks_mut(size_b).zip(&bufs.1);
 
                 a.zip(b)
-                    .try_for_each(|((c_a, a), (c_b, b))| {
-                        a.serialize_raw(c_a)?;
-                        b.serialize_raw(c_b)
+                    .try_for_each(|((mut c_a, a), (mut c_b, b))| {
+                        a.serialize_raw(&mut c_a)?;
+                        b.serialize_raw(&mut c_b)
                     })
                     .unwrap();
                 let buf_a_len = bufs.0.len();
@@ -495,12 +494,12 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
             writer_1
                 .par_chunks_mut(size_a)
                 .zip(&bufs.0)
-                .try_for_each(|(chunk, a)| a.serialize_raw(chunk))
+                .try_for_each(|(mut chunk, a)| a.serialize_raw(&mut chunk))
                 .unwrap();
             writer_2
                 .par_chunks_mut(size_b)
                 .zip(&bufs.1)
-                .try_for_each(|(chunk, b)| b.serialize_raw(chunk))
+                .try_for_each(|(mut chunk, b)| b.serialize_raw(&mut chunk))
                 .unwrap();
             let buf_a_len = bufs.0.len();
             let buf_b_len = bufs.1.len();
@@ -565,7 +564,10 @@ impl<T: SerializeRaw + DeserializeRaw> Drop for FileVec<T> {
         match self {
             Self::File(file) => match std::fs::remove_file(&file.path) {
                 Ok(_) => (),
-                Err(e) => eprintln!("Failed to remove file at path {:?}: {e:?}", file.path),
+                Err(e) => eprintln!(
+                    "FileVec: Failed to remove file at path {:?}: {e:?}",
+                    file.path
+                ),
             },
             Self::Buffer { .. } => (),
         }
@@ -732,11 +734,18 @@ impl<T: SerializeRaw + DeserializeRaw + Display> Display for FileVec<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::File(file) => {
+                use std::io::Read;
                 writeln!(f, "FileVec at {}: [", file.path.display())?;
                 let file = file.reopen_read_by_ref().unwrap();
                 let mut reader = std::io::BufReader::new(file);
-                while let Ok(item) = T::deserialize_raw(&mut reader) {
+                let mut buffer = vec![0u8; T::SIZE];
+                loop {
+                    if let Err(_) = reader.read_exact(buffer.as_mut_slice()) {
+                        break;
+                    }
+                    let item = T::deserialize_raw(&mut buffer.as_slice()).unwrap();
                     writeln!(f, "  {},", item)?;
+                    buffer.clear()
                 }
                 writeln!(f, "]")?;
                 Ok(())
