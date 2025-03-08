@@ -305,7 +305,7 @@ impl Read for &InnerFile {
         self_buffer.clear();
         self_buffer.extend_from_slice(&buf);
         debug_assert_eq!(self_buffer.len(), buf.len());
-        debug_assert_eq!(self_buffer.len() % PAGE_SIZE, 0);
+        debug_assert_eq!(self_buffer.len() % PAGE_SIZE, 0, "Buffer length: {}", self_buffer.len());
         let e = (&self.file).read(&mut self_buffer)?;
         buf.copy_from_slice(&self_buffer);
         Ok(e)
