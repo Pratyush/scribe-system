@@ -56,6 +56,30 @@ impl<'a> ReadN for &'a mut InnerFile {
     }
 }
 
+impl<'a> ReadN for &'a InnerFile {
+    /// Reads `n` bytes from the file into `dest`.
+    /// This assumes that `dest` is of length `n`.
+    /// Clears `dest` before reading.
+    ///
+    /// If `self` contains `m` bytes, for `m < n`, this function will fill `dest` with `m` bytes and return `Ok(())`.
+    fn read_n(&mut self, dest: &mut AVec, n: usize) -> std::io::Result<()> {
+        debug_assert_eq!(dest.len(), 0);
+        unsafe {
+            dest.set_len(0);
+        }
+        dest.reserve(n);
+        // Safety: `dest` is empty and has capacity `n`.
+        unsafe {
+            dest.set_len(n);
+        }
+        dest.fill(0);
+        debug_assert_eq!(dest.len() % PAGE_SIZE, 0);
+        let n = (&self.file).read(&mut dest[..])?;
+        dest.truncate(n);
+        Ok(())
+    }
+}
+
 impl<'a> ReadN for &'a [u8] {}
 
 #[cfg(any(target_os = "macos", target_os = "ios"))]

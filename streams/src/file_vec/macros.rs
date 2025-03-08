@@ -3,10 +3,10 @@ macro_rules! process_file {
         match $self {
             FileVec::File(file) => {
                 let file_len = file.metadata().unwrap().len();
-                let mut reader = &mut *file;
+                let reader = &*file;
 
                 let mut read_buffer = Vec::with_capacity(BUFFER_SIZE);
-                let mut read_byte_buffer = Vec::with_capacity(T::SIZE * BUFFER_SIZE);
+                let mut read_byte_buffer = AVec::with_capacity(PAGE_SIZE, T::SIZE * BUFFER_SIZE);
 
                 let mut write_buffer = Vec::with_capacity(BUFFER_SIZE);
                 let mut write_byte_buffer = vec![0u8; T::SIZE * BUFFER_SIZE];
@@ -31,7 +31,7 @@ macro_rules! process_file {
                         &mut writer,
                         &mut read_buffer,
                         &mut read_byte_buffer,
-                        &mut reader,
+                        reader,
                         BUFFER_SIZE,
                     );
 
