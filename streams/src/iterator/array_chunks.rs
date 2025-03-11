@@ -30,6 +30,7 @@ impl<I: BatchedIterator, const N: usize> ArrayChunks<I, N> {
 impl<I, const N: usize> BatchedIterator for ArrayChunks<I, N>
 where
     I: BatchedIterator,
+    I::Batch: IndexedParallelIterator<Item = I::Item>,
     I::Item: Debug + Copy,
     [I::Item; N]: Send + Sync,
 {
@@ -46,11 +47,10 @@ where
                 0,
                 "Buffer size must be divisible by N"
             );
-            self.buffer
-                .par_chunks_exact(N)
-                .map(|chunk| chunk.try_into().unwrap())
-                .collect::<Vec<_>>()
-                .into_par_iter()
+            let (head, mid, tail) = unsafe { self.buffer.align_to::<[I::Item; N]>() };
+            assert!(head.is_empty(), "Buffer must be aligned to [I::Item; N]");
+            assert!(tail.is_empty(), "Buffer must be aligned to [I::Item; N]");
+            mid.par_iter().copied().with_min_len(1 << 10).collect::<Vec<_>>().into_par_iter()
         })
     }
 
