@@ -1,5 +1,5 @@
 use super::BUFFER_SIZE;
-use crate::serialize::{DeserializeRaw, SerializeRaw};
+use crate::{iterator::batched_map::BatchedMap, serialize::{DeserializeRaw, SerializeRaw}};
 use rayon::prelude::*;
 use std::iter::Sum;
 
@@ -9,6 +9,7 @@ pub mod array_chunks;
 pub mod chain_many;
 pub mod flat_map;
 pub mod from_fn;
+pub mod batched_map;
 pub mod map;
 pub mod repeat;
 pub mod take;
@@ -42,6 +43,16 @@ pub trait BatchedIterator: Sized {
     {
         Map { iter: self, f }
     }
+    
+    #[inline(always)]
+    fn batched_map<U, BatchU,  F>(self, f: F) -> BatchedMap<Self, U, BatchU, F> 
+    where
+        U: Send + Sync,
+        F: FnMut(Self::Batch) -> BatchU + Send + Sync,
+        BatchU: ParallelIterator<Item = U>,
+    {
+        BatchedMap::new(self, f)
+    }
 
     #[inline(always)]
     fn for_each(mut self, f: impl Fn(Self::Item) + Send + Sync + Clone) {
@@ -56,6 +67,8 @@ pub trait BatchedIterator: Sized {
             f(batch)
         }
     }
+    
+    
 
     #[inline(always)]
     fn zip<I2: BatchedIterator>(self, other: I2) -> Zip<Self, I2> {

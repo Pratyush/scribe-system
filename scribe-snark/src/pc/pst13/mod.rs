@@ -272,12 +272,14 @@ where
     let ignored = prover_param.num_vars - nv + 1;
     let mut f = polynomial.evals();
     let mut r;
-    let mut q;
 
     let mut proofs = Vec::new();
 
-    let mut scalars_buf = Vec::with_capacity(scribe_streams::BUFFER_SIZE);
     let mut bases_buf = Vec::with_capacity(scribe_streams::BUFFER_SIZE);
+    let mut q_and_g_buf = Vec::with_capacity(scribe_streams::BUFFER_SIZE);
+    let mut q_buf = Vec::with_capacity(scribe_streams::BUFFER_SIZE);
+    let mut r_buf = Vec::with_capacity(scribe_streams::BUFFER_SIZE);
+
     for (_i, (&point_at_k, gi)) in point
         .iter()
         .zip(prover_param.powers_of_g[ignored..ignored + nv].iter())
@@ -287,44 +289,41 @@ where
 
         let ith_round_eval = start_timer!(|| format!("{_i}-th round eval"));
 
+        // TODO: merge this loops with the next loop.
         // TODO: confirm that FileVec in prior round's q and r are auto dropped via the Drop trait once q and r are assigned new FileVec
-        (q, r) = f
+        
+        let mut commitment = E::G1::zero();
+        r = f
             .iter()
             .array_chunks::<2>()
-            .map(|chunk| {
-                let q_bit = chunk[1] - chunk[0];
-                let r_bit = chunk[0] + q_bit * point_at_k;
-                (q_bit, r_bit)
-            })
-            .unzip();
+            .zip(gi.iter())
+            .batched_map(|batch| {
+                use rayon::prelude::*;
 
+                q_buf.clear();
+                q_and_g_buf.clear();
+                bases_buf.clear();
+                r_buf.clear();
+                batch.into_par_iter().map(|([a, b], g)| {
+                    let q_bit = b - a;
+                    let r_bit = a + q_bit * point_at_k;
+                    ((q_bit, g), r_bit)
+                }).unzip_into_vecs(&mut q_and_g_buf, &mut r_buf);
+
+                q_and_g_buf.par_iter().copied().unzip_into_vecs(&mut q_buf, &mut bases_buf);
+
+                commitment += E::G1::msm_unchecked(&bases_buf, &q_buf);
+
+                r_buf.to_vec().into_par_iter()
+            })
+            .to_file_vec();
+
+        let commitment = commitment.into_affine();
         f = &r;
 
         end_timer!(ith_round_eval);
 
-        let msm_timer =
-            start_timer!(|| format!("msm of size {} at round {}", 1 << (nv - 1 - _i), _i));
-
-        // let commitment = PST13::commit(prover_param, &MLE::from_evals(q, nv - 1 - i))?;
-
-        let commitment = {
-            let mut scalars = q.iter();
-            let mut bases = gi.iter();
-            let mut commitment = E::G1::zero();
-            while let (Some(scalar_batch), Some(base_batch)) =
-                (scalars.next_batch(), bases.next_batch())
-            {
-                scalars_buf.clear();
-                bases_buf.clear();
-                scalars_buf.par_extend(scalar_batch);
-                bases_buf.par_extend(base_batch);
-                commitment += E::G1::msm_unchecked(&bases_buf, &scalars_buf);
-            }
-            commitment.into_affine()
-        };
-
         proofs.push(commitment);
-        end_timer!(msm_timer);
 
         end_timer!(ith_round);
     }
