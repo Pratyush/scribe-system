@@ -105,7 +105,7 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
     where
         T: Send + Sync,
     {
-        if let Self::Buffer { .. } = self {
+        if let Self::File { .. } = self {
             let mut buffer = Vec::with_capacity(BUFFER_SIZE);
             process_file!(self, |b: &mut Vec<T>| {
                 buffer.par_extend(b.par_drain(..));
