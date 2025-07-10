@@ -16,6 +16,7 @@ use ark_std::{
     borrow::Borrow, end_timer, format, marker::PhantomData, rand::Rng, start_timer, vec::Vec, One,
     Zero,
 };
+use itertools::Itertools;
 use mle::MLE;
 use rayon::iter::ParallelExtend;
 use scribe_streams::iterator::BatchedIterator;
@@ -92,21 +93,20 @@ where
         ck: impl Borrow<Self::CommitterKey>,
         poly: &Self::Polynomial,
     ) -> Result<Self::Commitment, PCError> {
-        let prover_param = ck.borrow();
+        let ck = ck.borrow();
         let poly_num_vars = poly.num_vars();
 
-        let commit_timer = start_timer!(|| format!("commit poly nv = {}", poly_num_vars));
-        if prover_param.num_vars < poly_num_vars {
+        let commit_timer = start_timer!(|| format!("commit poly nv = {poly_num_vars}"));
+        if ck.num_vars < poly_num_vars {
             return Err(PCError::InvalidParameters(format!(
-                "MLE length ({}) exceeds param limit ({})",
-                poly_num_vars, prover_param.num_vars
+                "MLE length ({poly_num_vars}) exceeds param limit ({})", ck.num_vars
             )));
         }
-        let ignored = prover_param.num_vars - poly_num_vars;
+        let ignored = ck.num_vars - poly_num_vars;
 
         let commitment = {
             let mut poly_evals = poly.evals().iter();
-            let mut srs = prover_param.powers_of_g[ignored].iter();
+            let mut srs = ck.powers_of_g[ignored].iter();
             let mut f_buf = Vec::with_capacity(scribe_streams::BUFFER_SIZE);
             let mut g_buf = Vec::with_capacity(scribe_streams::BUFFER_SIZE);
             let mut commitment = E::G1::zero();
@@ -122,6 +122,56 @@ where
 
         end_timer!(commit_timer);
         Ok(Commitment(commitment))
+    }
+    
+    /// Generate commitments to a batch of polynomials.
+    ///
+    /// This function takes `2^num_vars` number of scalar multiplications over
+    /// G1.
+    fn batch_commit(
+        ck: impl Borrow<Self::CommitterKey>,
+        polys: &[Self::Polynomial],
+    ) -> Result<Vec<Self::Commitment>, PCError> {
+        let ck = ck.borrow();
+
+        if polys.is_empty() {
+            return Ok(vec![]);
+        }
+        let ck_num_vars = ck.num_vars;
+        let max_num_vars = polys
+            .iter()
+            .map(|p| p.num_vars())
+            .max()
+            .unwrap();
+
+        let mut f_buf = Vec::with_capacity(scribe_streams::BUFFER_SIZE);
+        let mut g_buf = Vec::with_capacity(scribe_streams::BUFFER_SIZE);
+        let mut commitments = vec![E::G1::zero(); polys.len()];
+        polys.iter().enumerate().group_by(|(_, p)| p.num_vars()).into_iter().try_for_each(|(num_vars, group)| {
+            if ck_num_vars < num_vars {
+                return Err(PCError::InvalidParameters(format!(
+                    "MLE length ({max_num_vars}) exceeds param limit ({ck_num_vars})"
+                )));
+            }
+
+            let ignored = ck_num_vars - num_vars;
+            let mut srs = ck.powers_of_g[ignored].iter();
+            let mut poly_evals = group.map(|(i, p)| (i, p.evals().iter())).collect::<Vec<_>>();
+            while let Some(g) = srs.next_batch() {
+                g_buf.clear();
+                g_buf.par_extend(g);
+                for (i, poly) in poly_evals.iter_mut() {
+                    f_buf.clear();
+                    if let Some(p) = poly.next_batch() {
+                        f_buf.par_extend(p);
+                        commitments[*i] += E::G1::msm_unchecked(&g_buf, &f_buf);
+                    }
+                }
+            }
+            Ok(())
+        })?;
+        
+        Ok(commitments.into_iter().map(|c| Commitment(c.into_affine())).collect())
     }
 
     /// On input a polynomial `p` and a point `point`, outputs a proof for the

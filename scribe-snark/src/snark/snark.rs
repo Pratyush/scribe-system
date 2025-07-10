@@ -17,8 +17,6 @@ use ark_ec::pairing::Pairing;
 use scribe_streams::serialize::RawPrimeField;
 
 use ark_std::{end_timer, log2, start_timer, One, Zero};
-use rayon::iter::IntoParallelRefIterator;
-use rayon::iter::ParallelIterator;
 
 use std::marker::PhantomData;
 
@@ -49,22 +47,16 @@ where
 
         // build permutation oracles
         let permutation_oracles = index.permutation.clone();
-        let permutation_commit_time = start_timer!(|| "commit permutation oracles");
-        let permutation_commitments = permutation_oracles
-            .par_iter()
-            .map(|poly| PC::commit(&pc_ck, poly))
-            .collect::<Result<_, _>>()?;
-        end_timer!(permutation_commit_time);
-
-        // commit selector oracles
         let selector_oracles = index.selectors.clone();
 
-        let selector_commit_time = start_timer!(|| "commit selector oracles");
-        let selector_commitments = selector_oracles
-            .par_iter()
-            .map(|poly| PC::commit(&pc_ck, poly))
-            .collect::<Result<_, _>>()?;
-        end_timer!(selector_commit_time);
+        let commit_time = start_timer!(|| "commit permutation and selector oracles");
+        let permutation_and_selector_polys = [&permutation_oracles[..], &selector_oracles[..]].concat();
+        let permutation_and_selector_commitments = PC::batch_commit(&pc_ck, &permutation_and_selector_polys)?;
+        
+        let (permutation_commitments, selector_commitments) = permutation_and_selector_commitments.split_at(permutation_oracles.len());
+        let permutation_commitments = permutation_commitments.to_vec();
+        let selector_commitments = selector_commitments.to_vec();
+        end_timer!(commit_time);
 
         end_timer!(start);
 
@@ -159,16 +151,7 @@ where
         // =======================================================================
         let step = start_timer!(|| "commit witnesses");
 
-        #[cfg(target_os = "linux")]
-        let witness_commits = witnesses
-            .iter()
-            .map(|x| PC::commit(&pk.pc_ck, x).unwrap())
-            .collect::<Vec<_>>();
-        #[cfg(not(target_os = "linux"))]
-        let witness_commits = witnesses
-            .par_iter()
-            .map(|x| PC::commit(&pk.pc_ck, x).unwrap())
-            .collect::<Vec<_>>();
+        let witness_commits = PC::batch_commit(&pk.pc_ck, witnesses)?;
         for w_com in witness_commits.iter() {
             transcript.append_serializable_element(b"w", w_com)?;
         }
