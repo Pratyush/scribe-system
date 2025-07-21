@@ -165,6 +165,7 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
     pub fn iter_with_buf<'a>(&'a self, buf: &'a mut Vec<T>) -> IterWithBuf<'a, T> {
         match self {
             Self::File(file) => {
+                buf.clear();
                 let file = file.reopen_read_by_ref().expect("failed to reopen file");
                 IterWithBuf::new_file_with_buf(file, buf)
             },

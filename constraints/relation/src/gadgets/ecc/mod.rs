@@ -728,7 +728,7 @@ mod test {
         F: RawPrimeField,
         P: Config<BaseField = F>,
     {
-        let mut rng = jf_utils::test_rng();
+        let mut rng = ark_std::test_rng();
         let p1 = Affine::<P>::rand(&mut rng);
         let p2 = Affine::<P>::rand(&mut rng);
         let p3 = (p1 + p2).into_affine();
@@ -792,7 +792,7 @@ mod test {
         F: RawPrimeField,
         P: Config<BaseField = F>,
     {
-        let mut rng = jf_utils::test_rng();
+        let mut rng = ark_std::test_rng();
         let p1 = Affine::<P>::rand(&mut rng);
         let p2 = Affine::<P>::rand(&mut rng);
         let p3 = Affine::<P>::rand(&mut rng);
@@ -860,7 +860,7 @@ mod test {
         let b0_var = circuit.create_boolean_variable(b0)?;
         let b1_var = circuit.create_boolean_variable(b1)?;
 
-        let mut rng = jf_utils::test_rng();
+        let mut rng = ark_std::test_rng();
         let p1 = Affine::<P>::rand(&mut rng);
         let p2 = Affine::<P>::rand(&mut rng);
         let p3 = Affine::<P>::rand(&mut rng);
@@ -889,7 +889,7 @@ mod test {
         F: RawPrimeField,
         P: Config<BaseField = F>,
     {
-        let mut rng = jf_utils::test_rng();
+        let mut rng = ark_std::test_rng();
         let p = Affine::<P>::rand(&mut rng);
 
         let mut circuit = PlonkCircuit::<F>::new_in_prove_mode(true);
@@ -940,7 +940,7 @@ mod test {
         F: RawPrimeField,
         P: Config<BaseField = F>,
     {
-        let mut rng = jf_utils::test_rng();
+        let mut rng = ark_std::test_rng();
         let p1 = Affine::<P>::rand(&mut rng);
         let p2 = p1;
         let p3 = Affine::<P>::rand(&mut rng);
@@ -1011,7 +1011,7 @@ mod test {
                 .for_each(|neighbors| assert!(neighbors[1] == neighbors[0].double().double()));
         }
 
-        let mut rng = jf_utils::test_rng();
+        let mut rng = ark_std::test_rng();
 
         let base = Affine::<P>::rand(&mut rng);
         let base2 = base.into_group().double();
@@ -1079,7 +1079,7 @@ mod test {
         F: RawPrimeField,
         P: Config<BaseField = F>,
     {
-        let mut rng = jf_utils::test_rng();
+        let mut rng = ark_std::test_rng();
         let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_in_prove_mode(true);
 
         for _ in 0..6 {
@@ -1114,7 +1114,7 @@ mod test {
         F: RawPrimeField,
         P: Config<BaseField = F>,
     {
-        let mut rng = jf_utils::test_rng();
+        let mut rng = ark_std::test_rng();
         let mut circuit: PlonkCircuit<F> = PlonkCircuit::new_in_prove_mode(true);
         let base = Affine::<P>::rand(&mut rng);
         let scalar_var = circuit.create_variable(scalar)?;
@@ -1136,7 +1136,7 @@ mod test {
         F: RawPrimeField,
         P: Config<BaseField = F>,
     {
-        let mut rng = jf_utils::test_rng();
+        let mut rng = ark_std::test_rng();
         let p0 = Affine::<P>::rand(&mut rng);
         let p1 = Affine::<P>::rand(&mut rng);
         let p2 = Affine::<P>::rand(&mut rng);

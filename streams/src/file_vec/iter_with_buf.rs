@@ -20,6 +20,7 @@ pub enum IterWithBuf<'a, T: SerializeRaw + DeserializeRaw + 'static> {
         work_buffer: AVec,
     },
     Buffer {
+        last: bool,
         buffer: &'a mut Vec<T>,
     },
 }
@@ -37,7 +38,10 @@ impl<'a, T: SerializeRaw + DeserializeRaw> IterWithBuf<'a, T> {
     }
 
     pub fn new_buffer(buffer: &'a mut Vec<T>) -> Self {
-        Self::Buffer { buffer }
+        Self::Buffer {
+            buffer,
+            last: false,
+        }
     }
 }
 
@@ -66,10 +70,11 @@ impl<'a, T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy + Debug
                     Some((*buffer).par_iter().copied().with_min_len(1 << 7))
                 }
             },
-            Self::Buffer { buffer } => {
-                if buffer.is_empty() {
+            Self::Buffer { buffer, last } => {
+                if *last {
                     None
                 } else {
+                    *last = true;
                     Some((*buffer).par_iter().copied().with_min_len(1 << 7))
                 }
             },
@@ -79,7 +84,13 @@ impl<'a, T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy + Debug
     fn len(&self) -> Option<usize> {
         let len = match self {
             Self::File { file, .. } => file.len() / T::SIZE,
-            Self::Buffer { buffer } => buffer.len(),
+            Self::Buffer { buffer, last } => {
+                if *last {
+                    0
+                } else {
+                    buffer.len()
+                }
+            },
         };
         Some(len)
     }

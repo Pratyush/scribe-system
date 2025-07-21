@@ -331,8 +331,8 @@ mod test {
     use ark_ed_on_bls12_377::Fq as FqEd377;
     use ark_ed_on_bls12_381::Fq as FqEd381;
     use ark_ed_on_bn254::Fq as FqEd254;
+    use ark_std::test_rng;
     use ark_std::{vec, vec::Vec};
-    use jf_utils::test_rng;
 
     #[test]
     fn test_quad_poly_gate() -> Result<(), CircuitError> {

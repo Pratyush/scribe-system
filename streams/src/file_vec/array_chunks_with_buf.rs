@@ -22,6 +22,7 @@ where
         work_buffer_2: &'a mut Vec<T>,
     },
     Buffer {
+        last: bool,
         buffer: Vec<T>,
     },
 }
@@ -51,7 +52,10 @@ where
         assert!(BUFFER_SIZE % N == 0, "BUFFER_SIZE must be divisible by N");
         assert_eq!(std::mem::align_of::<[T; N]>(), std::mem::align_of::<T>());
         assert_eq!(std::mem::size_of::<[T; N]>(), N * std::mem::size_of::<T>());
-        Self::Buffer { buffer }
+        Self::Buffer {
+            buffer,
+            last: false,
+        }
     }
 }
 
@@ -98,8 +102,8 @@ where
                     Some(slice.par_iter().copied().with_min_len(1 << 10))
                 }
             },
-            Self::Buffer { buffer } => {
-                if buffer.is_empty() {
+            Self::Buffer { buffer, last } => {
+                if *last {
                     None
                 } else {
                     assert_eq!(buffer.len() % N, 0, "slice length must be divisible by N");
@@ -111,6 +115,7 @@ where
                             m,
                         )
                     };
+                    *last = true;
 
                     Some(slice.par_iter().copied().with_min_len(1 << 10))
                 }
@@ -121,7 +126,13 @@ where
     fn len(&self) -> Option<usize> {
         let len = match self {
             Self::File { file, .. } => file.len() / T::SIZE,
-            Self::Buffer { buffer } => buffer.len(),
+            Self::Buffer { buffer, last } => {
+                if *last {
+                    0
+                } else {
+                    buffer.len()
+                }
+            },
         };
         Some(len / N)
     }

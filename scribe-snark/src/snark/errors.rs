@@ -3,11 +3,10 @@ use crate::piop::errors::PIOPError;
 use crate::transcript::TranscriptError;
 use ark_serialize::SerializationError;
 use ark_std::string::String;
-use displaydoc::Display;
 use mle::errors::ArithError;
 
 /// A `enum` specifying the possible failure modes of scribe.
-#[derive(Display, Debug)]
+#[derive(Debug)]
 pub enum ScribeErrors {
     /// Invalid Prover: {0}
     InvalidProver(String),

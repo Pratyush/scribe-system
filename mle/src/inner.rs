@@ -283,8 +283,8 @@ impl<F: RawField> Inner<F> {
                     .zipped_for_each(p.evals.iter_with_buf(&mut buf), |a, b| *a *= b);
                 acc
             });
-
-        (polys, product_poly.evals.iter_with_buf(&mut buf).sum())
+        let result = (polys, product_poly.evals.iter_with_buf(&mut buf).sum());
+        result
     }
 
     pub fn rand_product_summing_to_zero<R: ark_std::rand::RngCore>(
