@@ -234,7 +234,7 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
         }
     }
 
-    pub fn array_chunks<const N: usize>(&self) -> ArrayChunks<T, N>
+    pub fn array_chunks<const N: usize>(&self) -> ArrayChunks<'_, T, N>
     where
         T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy,
     {

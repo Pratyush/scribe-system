@@ -3,7 +3,6 @@ use std::time::Instant;
 use ark_bls12_381::Fr;
 use ark_ff::UniformRand;
 
-use bench_utils::timed;
 /// Depending on your project organization, adjust these import paths.
 /// Here we assume that the library exposes:
 ///   - `SumCheck` (with methods `init_transcript`, `prove`, `verify`, and `extract_sum`)

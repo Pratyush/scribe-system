@@ -175,7 +175,7 @@ impl InnerFile {
         let (file, path) = Builder::new()
             .prefix(&prefix)
             .suffix(".scribe")
-            .keep(true)
+            .disable_cleanup(true)
             .make(|p| options.open(p))
             .expect("failed to open file")
             .keep()

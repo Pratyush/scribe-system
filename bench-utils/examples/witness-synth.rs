@@ -1,7 +1,7 @@
 use ark_bls12_381::Fr;
 use ark_ff::PrimeField;
 use ark_std::rand::Rng;
-use jf_relation::{Circuit, CircuitError, PlonkCircuit, Variable};
+use jf_relation::{Circuit, CircuitError, PlonkCircuit};
 
 pub fn add_random_gates<F: PrimeField, C: Circuit<F>>(
     circuit: &mut C,
