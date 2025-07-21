@@ -1,4 +1,4 @@
-use crate::{errors::ArithError, virtual_mle::VirtualMLE, MLE};
+use crate::{MLE, errors::ArithError, virtual_mle::VirtualMLE};
 use ark_serialize::CanonicalSerialize;
 use ark_std::{
     end_timer,
@@ -28,10 +28,10 @@ use std::{cmp::max, marker::PhantomData};
 /// - flattened_ml_extensions stores the multilinear extension representation of
 ///   f0, f1, f2, f3 and f4
 /// - products is
-///     \[
-///         (c0, \[0, 1, 2\]),
-///         (c1, \[3, 4\])
-///     \]
+///   \[
+///       (c0, \[0, 1, 2\]),
+///       (c1, \[3, 4\])
+///   \]
 /// - raw_pointers_lookup_table maps fi to i
 ///
 #[derive(Clone)]
@@ -255,7 +255,7 @@ impl<F: RawPrimeField> VirtualPolynomial<F> {
         }
 
         #[cfg(debug_assertions)]
-        println!("final rand sum: {:?}", sum);
+        println!("final rand sum: {sum:?}");
 
         end_timer!(start);
         Ok((poly, sum))
@@ -277,11 +277,6 @@ impl<F: RawPrimeField> VirtualPolynomial<F> {
             let coefficient = F::rand(rng);
             poly.add_mles(product.into_iter(), coefficient)?;
         }
-
-        #[cfg(debug_assertions)]
-        poly.products.iter().for_each(|(_, p)| {
-            println!("rand_zero product: {:?}", p);
-        });
 
         Ok(poly)
     }
@@ -472,7 +467,7 @@ impl<F: RawPrimeField> VirtualPolynomial<F> {
         let mut sum = F::zero();
         for (c, p) in &self.products {
             let element_wise_product = p.iter().fold(
-                FileVec::from_iter(std::iter::repeat(F::one()).take(1 << self.num_vars())),
+                FileVec::from_iter(std::iter::repeat_n(F::one(), 1 << self.num_vars())),
                 |mut acc, &i| {
                     acc.zipped_for_each(evals[i].iter(), |a, b| *a *= b);
                     acc

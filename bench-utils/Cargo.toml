@@ -4,11 +4,11 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-ark-ff = { version = "^0.4", features = ["parallel"] }
-ark-ec = { version = "^0.4", features = ["parallel"] }
-ark-bls12-381 = { version = "^0.4" }
-ark-serialize = { version = "^0.4" }
-ark-std = { version = "^0.4", features = ["parallel", "std"] }
+ark-ff = { version = "^0.5", features = ["parallel"] }
+ark-ec = { version = "0.5", features = ["parallel"] }
+ark-bls12-381 = { version = "0.5" }
+ark-serialize = { version = "0.5" }
+ark-std = { version = "0.5", features = ["parallel", "std"] }
 scribe = { path = "../scribe-snark" }
 mle = { path = "../mle" }
 rayon = { version = "^1.5" }
@@ -18,6 +18,8 @@ jf-relation = { path = "../constraints/relation" }
 # HyperPlonk
 hp = { git = "https://github.com/EspressoSystems/hyperplonk/", package = "hyperplonk" }
 hp-subroutines = { git = "https://github.com/EspressoSystems/hyperplonk/", package = "subroutines" }
+ark-bls12-381-04 = { package = "ark-bls12-381", version = "0.4" }
+ark-serialize-04 = { package = "ark-serialize", version = "0.4" }
 
 # Gemini
 ark-gemini = { git = "https://github.com/pratyush/gemini/", optional = true, features = [ "parallel" ] }

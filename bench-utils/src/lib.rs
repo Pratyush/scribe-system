@@ -23,7 +23,7 @@ pub mod plonky2;
 pub mod scribe;
 
 #[no_mangle]
-pub extern "C" fn bench_scribe_prover(
+pub unsafe extern "C" fn bench_scribe_prover(
     min_num_vars: size_t,
     max_num_vars: size_t,
     supported_size: size_t,
@@ -43,7 +43,7 @@ pub extern "C" fn bench_scribe_prover(
 }
 
 #[no_mangle]
-pub extern "C" fn bench_hp_prover(
+pub unsafe extern "C" fn bench_hp_prover(
     min_num_vars: size_t,
     max_num_vars: size_t,
     supported_size: size_t,

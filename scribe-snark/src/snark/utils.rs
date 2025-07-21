@@ -1,13 +1,13 @@
-use crate::pc::structs::Commitment;
 use crate::pc::PCScheme;
+use crate::pc::structs::Commitment;
 use crate::snark::{custom_gate::CustomizedGates, errors::ScribeErrors, structs::ScribeConfig};
 use crate::transcript::IOPTranscript;
 use ark_ec::pairing::Pairing;
 use ark_ff::PrimeField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::{end_timer, start_timer};
-use mle::VirtualPolynomial;
 use mle::MLE;
+use mle::VirtualPolynomial;
 use scribe_streams::file_vec::FileVec;
 use scribe_streams::{iterator::BatchedIterator, serialize::RawPrimeField};
 
@@ -28,12 +28,12 @@ where
     E: Pairing,
     E::ScalarField: RawPrimeField,
     PC: PCScheme<
-        E,
-        Polynomial = MLE<E::ScalarField>,
-        Point = Vec<E::ScalarField>,
-        Evaluation = E::ScalarField,
-        Commitment = Commitment<E>,
-    >,
+            E,
+            Polynomial = MLE<E::ScalarField>,
+            Point = Vec<E::ScalarField>,
+            Evaluation = E::ScalarField,
+            Commitment = Commitment<E>,
+        >,
 {
     /// Create an empty accumulator.
     pub(super) fn new(num_var: usize) -> Self {
@@ -153,10 +153,7 @@ pub(crate) fn prover_sanity_check<F: RawPrimeField + CanonicalDeserialize + Cano
         .zip(witnesses[0].evals().iter())
         .for_each(|(pi, w)| {
             if pi != w {
-                panic!(
-                    "Public input does not match witness[0]: got {:?}, expect {:?}",
-                    pi, w
-                );
+                panic!("Public input does not match witness[0]: got {pi:?}, expect {w:?}",);
             }
         });
 

@@ -2,33 +2,35 @@ use crate::{
     iterator::BatchedIteratorAssocTypes,
     serialize::{DeserializeRaw, SerializeRaw},
 };
-use rayon::{prelude::*, vec::IntoIter};
-use std::marker::PhantomData;
+use rayon::{
+    iter::{Copied, MinLen},
+    prelude::*,
+    slice::Iter,
+};
 
 use crate::{BUFFER_SIZE, iterator::BatchedIterator};
 
 use super::{AVec, avec, backend::InnerFile};
 
-pub enum ArrayChunks<'a, T, const N: usize>
+pub enum ArrayChunksWithBuf<'a, T, const N: usize>
 where
     T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy,
 {
     File {
         file: InnerFile,
-        lifetime: PhantomData<&'a T>,
         work_buffer: AVec,
-        work_buffer_2: Vec<T>,
+        work_buffer_2: &'a mut Vec<T>,
     },
     Buffer {
         buffer: Vec<T>,
     },
 }
 
-impl<'a, T, const N: usize> ArrayChunks<'a, T, N>
+impl<'a, T, const N: usize> ArrayChunksWithBuf<'a, T, N>
 where
     T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy,
 {
-    pub fn new_file(file: InnerFile) -> Self {
+    pub fn new_file(file: InnerFile, buf: &'a mut Vec<T>) -> Self {
         assert!(N > 0, "N must be greater than 0");
         assert!(BUFFER_SIZE % N == 0, "BUFFER_SIZE must be divisible by N");
         assert_eq!(std::mem::align_of::<[T; N]>(), std::mem::align_of::<T>());
@@ -36,11 +38,11 @@ where
 
         let mut work_buffer = avec![];
         work_buffer.reserve(T::SIZE * BUFFER_SIZE);
+        buf.clear();
         Self::File {
             file,
-            lifetime: PhantomData,
             work_buffer,
-            work_buffer_2: Vec::with_capacity(BUFFER_SIZE),
+            work_buffer_2: buf,
         }
     }
 
@@ -53,15 +55,15 @@ where
     }
 }
 
-impl<'a, T, const N: usize> BatchedIteratorAssocTypes for ArrayChunks<'a, T, N>
+impl<'a, T, const N: usize> BatchedIteratorAssocTypes for ArrayChunksWithBuf<'a, T, N>
 where
     T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy,
 {
     type Item = [T; N];
-    type Batch<'b> = IntoIter<[T; N]>;
+    type Batch<'b> = MinLen<Copied<Iter<'b, [T; N]>>>;
 }
 
-impl<'a, T, const N: usize> BatchedIterator for ArrayChunks<'a, T, N>
+impl<'a, T, const N: usize> BatchedIterator for ArrayChunksWithBuf<'a, T, N>
 where
     T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy,
 {
@@ -79,28 +81,38 @@ where
                 if work_buffer_2.is_empty() {
                     None
                 } else {
-                    Some(
-                        work_buffer_2
-                            .par_chunks(N)
-                            .map(|chunk| <[T; N]>::try_from(chunk).unwrap())
-                            .with_min_len(1 << 10)
-                            .collect::<Vec<_>>()
-                            .into_par_iter(),
-                    )
+                    assert_eq!(
+                        work_buffer_2.len() % N,
+                        0,
+                        "slice length must be divisible by N"
+                    );
+                    let m = work_buffer_2.len() / N;
+                    let slice;
+                    unsafe {
+                        slice = std::slice::from_raw_parts(
+                            work_buffer_2.as_slice().as_ptr() as *const [T; N],
+                            m,
+                        )
+                    };
+
+                    Some(slice.par_iter().copied().with_min_len(1 << 10))
                 }
             },
             Self::Buffer { buffer } => {
                 if buffer.is_empty() {
                     None
                 } else {
-                    Some(
-                        std::mem::take(buffer)
-                            .par_chunks(N)
-                            .map(|chunk| <[T; N]>::try_from(chunk).unwrap())
-                            .with_min_len(1 << 7)
-                            .collect::<Vec<_>>()
-                            .into_par_iter(),
-                    )
+                    assert_eq!(buffer.len() % N, 0, "slice length must be divisible by N");
+                    let m = buffer.len() / N;
+                    let slice;
+                    unsafe {
+                        slice = std::slice::from_raw_parts(
+                            buffer.as_slice().as_ptr() as *const [T; N],
+                            m,
+                        )
+                    };
+
+                    Some(slice.par_iter().copied().with_min_len(1 << 10))
                 }
             },
         }

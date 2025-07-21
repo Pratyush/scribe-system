@@ -8,7 +8,7 @@ use crate::{
 };
 use ark_ec::pairing::Pairing;
 use ark_std::{end_timer, start_timer};
-use mle::{virtual_polynomial::VPAuxInfo, MLE};
+use mle::{MLE, virtual_polynomial::VPAuxInfo};
 use scribe_streams::serialize::RawPrimeField;
 
 use super::prod_check::{ProductCheckProof, ProductCheckSubClaim};
@@ -135,13 +135,13 @@ where
 mod test {
     use super::PermutationCheck;
     use crate::{
-        pc::{pst13::PST13, PCScheme},
+        pc::{PCScheme, pst13::PST13},
         piop::errors::PIOPError,
     };
     use ark_bls12_381::Bls12_381;
     use ark_ec::pairing::Pairing;
     use ark_std::test_rng;
-    use mle::{virtual_polynomial::VPAuxInfo, MLE};
+    use mle::{MLE, virtual_polynomial::VPAuxInfo};
     use scribe_streams::serialize::RawPrimeField;
     use std::marker::PhantomData;
 
@@ -235,10 +235,10 @@ mod test {
             let gs = vec![MLE::rand(nv, &mut rng), MLE::rand(nv, &mut rng)];
             // s_perm is the identity map
 
-            assert!(test_permutation_check_helper::<Bls12_381, Kzg>(
-                &pcs_param, &fs, &gs, &id_perms
-            )
-            .is_err());
+            assert!(
+                test_permutation_check_helper::<Bls12_381, Kzg>(&pcs_param, &fs, &gs, &id_perms)
+                    .is_err()
+            );
         }
 
         Ok(())

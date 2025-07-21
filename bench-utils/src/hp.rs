@@ -3,8 +3,8 @@ use std::{
     path::Path,
 };
 
-use ark_bls12_381::{Bls12_381, Fr};
-use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
+use ark_bls12_381_04::{Bls12_381, Fr};
+use ark_serialize_04::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::test_rng;
 use hp::{
     prelude::{CustomizedGates, HyperPlonkErrors, MockCircuit},
@@ -36,6 +36,7 @@ pub fn setup(_min_num_vars: usize, max_num_vars: usize, file_dir_path: &Path) {
     let srs_file = OpenOptions::new()
         .write(true)
         .create(true)
+        .truncate(true)
         .open(&srs_filename)
         .unwrap();
     let mut srs_file = std::io::BufWriter::new(srs_file);

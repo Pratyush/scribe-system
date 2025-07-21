@@ -39,6 +39,7 @@ pub fn setup(min_num_vars: usize, max_num_vars: usize, file_dir_path: &Path) {
     let srs_file = OpenOptions::new()
         .write(true)
         .create(true)
+        .truncate(true)
         .open(&srs_path)
         .unwrap();
     let mut srs_file = std::io::BufWriter::new(srs_file);
@@ -163,7 +164,7 @@ pub fn prover(
         // verify a proof
         let result = timed!(
             format!("Scribe: Verifying for {nv}"),
-            Scribe::verify(&pk.vk(), &public_inputs, &proof).unwrap()
+            Scribe::verify(pk.vk(), &public_inputs, &proof).unwrap()
         );
         if !result {
             eprintln!("Verification failed for {nv}");

@@ -220,10 +220,10 @@ mod test {
     use super::*;
     use crate::snark::mock::MockCircuit;
 
-    use crate::snark::{errors::ScribeErrors, Scribe};
+    use crate::snark::{Scribe, errors::ScribeErrors};
 
-    use crate::pc::pst13::PST13;
     use crate::pc::PCScheme;
+    use crate::pc::pst13::PST13;
     use ark_bls12_381::Bls12_381;
     use ark_bls12_381::Fr;
     use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};

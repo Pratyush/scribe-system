@@ -304,8 +304,8 @@ mod test {
     use super::interpolate_uni_poly;
     use crate::piop::errors::PIOPError;
     use ark_bls12_381::Fr;
-    use ark_poly::{univariate::DensePolynomial, DenseUVPolynomial, Polynomial};
-    use ark_std::{vec::Vec, UniformRand};
+    use ark_poly::{DenseUVPolynomial, Polynomial, univariate::DensePolynomial};
+    use ark_std::{UniformRand, vec::Vec};
 
     #[test]
     fn test_interpolation() -> Result<(), PIOPError> {

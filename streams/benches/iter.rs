@@ -2,7 +2,7 @@
 extern crate criterion;
 
 use ark_bls12_381::Fr;
-use ark_ff::Field;
+use ark_ff::AdditiveGroup;
 use ark_std::UniformRand;
 use criterion::{BenchmarkId, Criterion, Throughput};
 use scribe_streams::BUFFER_SIZE;

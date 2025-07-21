@@ -6,7 +6,7 @@ use ark_ff::Field;
 use ark_std::UniformRand;
 use criterion::{BatchSize, BenchmarkId, Criterion, Throughput};
 use mle::{EqEvalIter, MLE};
-use scribe_streams::{iterator::BatchedIterator, BUFFER_SIZE, LOG_BUFFER_SIZE};
+use scribe_streams::{BUFFER_SIZE, LOG_BUFFER_SIZE, iterator::BatchedIterator};
 
 fn eq(c: &mut Criterion) {
     let num_threads = rayon::current_num_threads();

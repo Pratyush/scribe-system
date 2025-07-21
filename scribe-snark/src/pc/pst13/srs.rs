@@ -1,11 +1,11 @@
-use crate::pc::{errors::PCError, pst13::util::eq_extension, StructuredReferenceString};
-use ark_ec::{pairing::Pairing, scalar_mul::fixed_base::FixedBase, CurveGroup};
-use ark_ff::{Field, PrimeField};
+use crate::pc::{StructuredReferenceString, errors::PCError, pst13::util::eq_extension};
+use ark_ec::{CurveGroup, pairing::Pairing, scalar_mul::BatchMulPreprocessing};
+use ark_ff::Field;
 use ark_poly::DenseMultilinearExtension;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, SerializationError, Valid};
 use ark_std::{
-    collections::LinkedList, end_timer, format, rand::Rng, start_timer, string::ToString, vec::Vec,
-    UniformRand,
+    UniformRand, collections::LinkedList, end_timer, format, rand::Rng, start_timer,
+    string::ToString, vec::Vec,
 };
 use core::iter::FromIterator;
 use rayon::prelude::*;
@@ -95,7 +95,7 @@ where
         for i in 0..len {
             powers_of_g.push(Arc::new(FileVec::deserialize_with_mode_and_prefix(
                 &mut reader,
-                &format!("ck_{i}"),
+                format!("ck_{i}"),
                 compress,
                 validate,
             )?));
@@ -167,7 +167,7 @@ where
         Self::CommitterKey {
             powers_of_g: self.prover_param.powers_of_g[to_reduce..]
                 .iter()
-                .map(|x| Arc::clone(x))
+                .map(Arc::clone)
                 .collect(),
             g: self.prover_param.g,
             h: self.prover_param.h,
@@ -196,8 +196,7 @@ where
     ) -> Result<(Self::CommitterKey, Self::VerifierKey), PCError> {
         if supported_num_vars > self.prover_param.num_vars {
             return Err(PCError::InvalidParameters(format!(
-                "SRS does not support target number of vars {}",
-                supported_num_vars
+                "SRS does not support target number of vars {supported_num_vars}",
             )));
         }
 
@@ -205,7 +204,7 @@ where
         let ck = Self::CommitterKey {
             powers_of_g: self.prover_param.powers_of_g[to_reduce..]
                 .iter()
-                .map(|x| Arc::clone(x))
+                .map(Arc::clone)
                 .collect(),
             g: self.prover_param.g,
             h: self.prover_param.h,
@@ -240,7 +239,6 @@ where
         let mut powers_of_g = Vec::new();
 
         let t: Vec<_> = (0..num_vars).map(|_| E::ScalarField::rand(rng)).collect();
-        let scalar_bits = E::ScalarField::MODULUS_BIT_SIZE as usize;
 
         let mut eq: LinkedList<DenseMultilinearExtension<E::ScalarField>> =
             LinkedList::from_iter(eq_extension(&t));
@@ -263,15 +261,9 @@ where
             pp_powers.extend(pp_k_powers);
             total_scalars += 1 << (num_vars - i);
         }
-        let window_size = FixedBase::get_mul_window_size(total_scalars);
-        let g_table = FixedBase::get_window_table(scalar_bits, window_size, g);
+        let g_table = BatchMulPreprocessing::new(g, total_scalars);
 
-        let pp_g = E::G1::normalize_batch(&FixedBase::msm(
-            scalar_bits,
-            window_size,
-            &g_table,
-            &pp_powers,
-        ));
+        let pp_g = g_table.batch_mul(&pp_powers);
 
         let mut start = 0;
         for i in 0..num_vars {
@@ -312,9 +304,8 @@ where
 
         let vp_generation_timer = start_timer!(|| "VP generation");
         let h_mask = {
-            let window_size = FixedBase::get_mul_window_size(num_vars);
-            let h_table = FixedBase::get_window_table(scalar_bits, window_size, h);
-            E::G2::normalize_batch(&FixedBase::msm(scalar_bits, window_size, &h_table, &t))
+            let h_table = BatchMulPreprocessing::new(h, num_vars);
+            h_table.batch_mul(&t)
         };
 
         end_timer!(vp_generation_timer);
@@ -384,8 +375,8 @@ mod tests {
     use ark_bls12_381::Bls12_381;
 
     use ark_ec::bls12::Bls12;
-    use ark_std::test_rng;
     use ark_std::UniformRand;
+    use ark_std::test_rng;
     type E = Bls12_381;
 
     #[test]

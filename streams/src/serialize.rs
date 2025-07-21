@@ -5,9 +5,9 @@ use std::{
 };
 
 use ark_ec::{
+    AffineRepr,
     short_weierstrass::{Affine as SWAffine, SWCurveConfig},
     twisted_edwards::{Affine as TEAffine, TECurveConfig},
-    AffineRepr,
 };
 use ark_ff::{BigInt, Field, Fp, FpConfig, PrimeField};
 use ark_serialize::{Read, Write};
@@ -68,7 +68,7 @@ pub trait DeserializeRaw: SerializeRaw + Sized + std::fmt::Debug + Copy {
         work_buffer.clear();
         result_buffer.clear();
         let size = Self::SIZE;
-        (&mut file).read_n(work_buffer, size * batch_size)?;
+        file.read_n(work_buffer, size * batch_size)?;
 
         if rayon::current_num_threads() == 1 {
             result_buffer.extend(
@@ -93,7 +93,7 @@ pub(crate) fn serialize_and_deserialize_raw_batch<
     T: SerializeRaw + DeserializeRaw + Sync + Send,
 >(
     write_buffer: &[T],
-    write_work_buffer: &mut Vec<u8>,
+    write_work_buffer: &mut [u8],
     mut write_file: impl Write + Send,
     read_buffer: &mut Vec<T>,
     read_work_buffer: &mut AVec,
@@ -116,7 +116,7 @@ pub(crate) fn serialize_and_deserialize_raw_batch<
         || -> Result<(), io::Error> {
             read_work_buffer.clear();
             read_buffer.clear();
-            (&mut read_file).read_n(read_work_buffer, T::SIZE * batch_size)?;
+            read_file.read_n(read_work_buffer, T::SIZE * batch_size)?;
             Ok(())
         },
     );
@@ -217,9 +217,9 @@ impl<T: SerializeRaw, const N: usize> SerializeRaw for [T; N] {
     const SIZE: usize = T::SIZE * N;
 
     #[inline(always)]
-    fn serialize_raw(&self, mut writer: &mut &mut [u8]) -> Option<()> {
+    fn serialize_raw(&self, writer: &mut &mut [u8]) -> Option<()> {
         for item in self.iter() {
-            item.serialize_raw(&mut writer)?;
+            item.serialize_raw(writer)?;
         }
         Some(())
     }
@@ -227,10 +227,10 @@ impl<T: SerializeRaw, const N: usize> SerializeRaw for [T; N] {
 
 impl<T: DeserializeRaw + Copy, const N: usize> DeserializeRaw for [T; N] {
     #[inline(always)]
-    fn deserialize_raw(mut reader: &mut &[u8]) -> Option<Self> {
+    fn deserialize_raw(reader: &mut &[u8]) -> Option<Self> {
         let mut array = [MaybeUninit::uninit(); N];
         for a in array.iter_mut().take(N) {
-            *a = MaybeUninit::new(T::deserialize_raw(&mut reader)?);
+            *a = MaybeUninit::new(T::deserialize_raw(reader)?);
         }
         Some(array.map(|item| unsafe { item.assume_init() }))
     }
@@ -304,7 +304,7 @@ impl<const N: usize> DeserializeRaw for BigInt<N> {
         work_buffer.clear();
         result_buffer.clear();
         let size = Self::SIZE;
-        (&mut file).read_n(work_buffer, size * batch_size)?;
+        file.read_n(work_buffer, size * batch_size)?;
         let (head, mid, tail) = unsafe { work_buffer.align_to::<BigInt<N>>() };
         assert!(head.is_empty());
         assert!(tail.is_empty());
@@ -359,7 +359,7 @@ impl<P: FpConfig<N>, const N: usize> DeserializeRaw for Fp<P, N> {
         work_buffer.clear();
         result_buffer.clear();
         let size = Self::SIZE;
-        (&mut file).read_n(work_buffer, size * batch_size)?;
+        file.read_n(work_buffer, size * batch_size)?;
         let (head, mid, tail) = unsafe { work_buffer.align_to::<Fp<P, N>>() };
         assert!(head.is_empty());
         assert!(tail.is_empty());
@@ -384,8 +384,8 @@ where
     const SIZE: usize = 2 * P::BaseField::SIZE;
 
     #[inline(always)]
-    fn serialize_raw(&self, mut writer: &mut &mut [u8]) -> Option<()> {
-        self.x.serialize_raw(&mut writer)?;
+    fn serialize_raw(&self, writer: &mut &mut [u8]) -> Option<()> {
+        self.x.serialize_raw(writer)?;
         self.y.serialize_raw(writer)
     }
 }
@@ -395,8 +395,8 @@ where
     P::BaseField: DeserializeRaw,
 {
     #[inline(always)]
-    fn deserialize_raw(mut reader: &mut &[u8]) -> Option<Self> {
-        let x = P::BaseField::deserialize_raw(&mut reader)?;
+    fn deserialize_raw(reader: &mut &[u8]) -> Option<Self> {
+        let x = P::BaseField::deserialize_raw(reader)?;
         let y = P::BaseField::deserialize_raw(reader)?;
         Some(Self::new_unchecked(x, y))
     }
@@ -409,8 +409,8 @@ where
     const SIZE: usize = 2 * P::BaseField::SIZE;
 
     #[inline(always)]
-    fn serialize_raw(&self, mut writer: &mut &mut [u8]) -> Option<()> {
-        self.x.serialize_raw(&mut writer)?;
+    fn serialize_raw(&self, writer: &mut &mut [u8]) -> Option<()> {
+        self.x.serialize_raw(writer)?;
         self.y.serialize_raw(writer)
     }
 }
@@ -420,8 +420,8 @@ where
     P::BaseField: DeserializeRaw,
 {
     #[inline(always)]
-    fn deserialize_raw(mut reader: &mut &[u8]) -> Option<Self> {
-        let x = P::BaseField::deserialize_raw(&mut reader)?;
+    fn deserialize_raw(reader: &mut &[u8]) -> Option<Self> {
+        let x = P::BaseField::deserialize_raw(reader)?;
         let y = P::BaseField::deserialize_raw(reader)?;
         Some(Self::new_unchecked(x, y))
     }
@@ -432,7 +432,7 @@ impl<P: TECurveConfig> RawAffine for TEAffine<P> where P::BaseField: SerializeRa
 
 #[cfg(test)]
 mod tests {
-    use crate::{file_vec::backend::avec, BUFFER_SIZE};
+    use crate::{BUFFER_SIZE, file_vec::backend::avec};
 
     use super::*;
     use ark_bls12_381::Fr;

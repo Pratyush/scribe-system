@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use crate::BUFFER_SIZE;
+use crate::{BUFFER_SIZE, iterator::BatchedIteratorAssocTypes};
 use rayon::prelude::*;
 
 use super::BatchedIterator;
@@ -27,18 +27,26 @@ impl<I: BatchedIterator, const N: usize> ArrayChunks<I, N> {
     }
 }
 
-impl<I, const N: usize> BatchedIterator for ArrayChunks<I, N>
+impl<I, const N: usize> BatchedIteratorAssocTypes for ArrayChunks<I, N>
 where
     I: BatchedIterator,
-    I::Batch: IndexedParallelIterator<Item = I::Item>,
+    for<'a> I::Batch<'a>: IndexedParallelIterator<Item = I::Item>,
     I::Item: Debug + Copy,
     [I::Item; N]: Send + Sync,
 {
     type Item = [I::Item; N];
-    type Batch = rayon::vec::IntoIter<[I::Item; N]>;
+    type Batch<'a> = rayon::vec::IntoIter<[I::Item; N]>;
+}
 
+impl<I, const N: usize> BatchedIterator for ArrayChunks<I, N>
+where
+    I: BatchedIterator,
+    for<'a> I::Batch<'a>: IndexedParallelIterator<Item = I::Item>,
+    I::Item: Debug + Copy,
+    [I::Item; N]: Send + Sync,
+{
     #[inline]
-    fn next_batch(&mut self) -> Option<Self::Batch> {
+    fn next_batch<'a>(&'a mut self) -> Option<Self::Batch<'a>> {
         self.iter.next_batch().map(|i| {
             self.buffer.clear();
             self.buffer.par_extend(i);
@@ -50,7 +58,11 @@ where
             let (head, mid, tail) = unsafe { self.buffer.align_to::<[I::Item; N]>() };
             assert!(head.is_empty(), "Buffer must be aligned to [I::Item; N]");
             assert!(tail.is_empty(), "Buffer must be aligned to [I::Item; N]");
-            mid.par_iter().copied().with_min_len(1 << 10).collect::<Vec<_>>().into_par_iter()
+            mid.par_iter()
+                .copied()
+                .with_min_len(1 << 10)
+                .collect::<Vec<_>>()
+                .into_par_iter()
         })
     }
 

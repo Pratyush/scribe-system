@@ -10,7 +10,7 @@ use ark_std::{end_timer, rand::RngCore, start_timer};
 
 use crate::inner::Inner;
 use scribe_streams::{
-    file_vec::FileVec, iterator::BatchedIterator, serialize::RawField, LOG_BUFFER_SIZE,
+    LOG_BUFFER_SIZE, file_vec::FileVec, iterator::BatchedIterator, serialize::RawField,
 };
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
@@ -256,7 +256,7 @@ impl<F: RawField> MulAssign<F> for MLE<F> {
     }
 }
 
-impl<'a, F: RawField> Mul<F> for &'a MLE<F> {
+impl<F: RawField> Mul<F> for &MLE<F> {
     type Output = MLE<F>;
 
     #[inline(always)]
@@ -407,9 +407,9 @@ mod test {
     use crate::util::build_eq_x_r_vec;
     use ark_bls12_381::Fr;
     use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-    use ark_std::test_rng;
     use ark_std::UniformRand;
-    use scribe_streams::{file_vec::FileVec, iterator::BatchedIterator, LOG_BUFFER_SIZE};
+    use ark_std::test_rng;
+    use scribe_streams::{LOG_BUFFER_SIZE, file_vec::FileVec, iterator::BatchedIterator};
 
     #[test]
     fn multi_eq_x_r() {

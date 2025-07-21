@@ -1,22 +1,22 @@
+use crate::pc::PCScheme;
 use crate::pc::pst13::batching::BatchProof;
 use crate::pc::structs::Commitment;
-use crate::pc::PCScheme;
 use crate::snark::utils::PCAccumulator;
-use mle::{util::gen_eval_point, virtual_polynomial::VPAuxInfo, MLE};
+use mle::{MLE, util::gen_eval_point, virtual_polynomial::VPAuxInfo};
 
 use crate::piop::perm_check::PermutationCheck;
 use crate::piop::prelude::ZeroCheck;
 use crate::snark::{
+    Scribe,
     errors::ScribeErrors,
     structs::{Index, Proof, ProvingKey, VerifyingKey},
     utils::{build_f, eval_f, eval_perm_gate, prover_sanity_check},
-    Scribe,
 };
 use crate::transcript::IOPTranscript;
 use ark_ec::pairing::Pairing;
 use scribe_streams::serialize::RawPrimeField;
 
-use ark_std::{end_timer, log2, start_timer, One, Zero};
+use ark_std::{One, Zero, end_timer, log2, start_timer};
 
 use std::marker::PhantomData;
 
@@ -25,13 +25,13 @@ where
     E: Pairing,
     E::ScalarField: RawPrimeField,
     PC: PCScheme<
-        E,
-        Polynomial = MLE<E::ScalarField>,
-        Point = Vec<E::ScalarField>,
-        Evaluation = E::ScalarField,
-        Commitment = Commitment<E>,
-        BatchProof = BatchProof<E, PC>,
-    >,
+            E,
+            Polynomial = MLE<E::ScalarField>,
+            Point = Vec<E::ScalarField>,
+            Evaluation = E::ScalarField,
+            Commitment = Commitment<E>,
+            BatchProof = BatchProof<E, PC>,
+        >,
 {
     pub fn preprocess(
         index: &Index<E::ScalarField>,
@@ -50,10 +50,13 @@ where
         let selector_oracles = index.selectors.clone();
 
         let commit_time = start_timer!(|| "commit permutation and selector oracles");
-        let permutation_and_selector_polys = [&permutation_oracles[..], &selector_oracles[..]].concat();
-        let permutation_and_selector_commitments = PC::batch_commit(&pc_ck, &permutation_and_selector_polys)?;
-        
-        let (permutation_commitments, selector_commitments) = permutation_and_selector_commitments.split_at(permutation_oracles.len());
+        let permutation_and_selector_polys =
+            [&permutation_oracles[..], &selector_oracles[..]].concat();
+        let permutation_and_selector_commitments =
+            PC::batch_commit(&pc_ck, &permutation_and_selector_polys)?;
+
+        let (permutation_commitments, selector_commitments) =
+            permutation_and_selector_commitments.split_at(permutation_oracles.len());
         let permutation_commitments = permutation_commitments.to_vec();
         let selector_commitments = selector_commitments.to_vec();
         end_timer!(commit_time);
@@ -133,7 +136,7 @@ where
         let mut transcript = IOPTranscript::<E::ScalarField>::new(b"scribe");
 
         #[cfg(debug_assertions)]
-        prover_sanity_check(&pk.config(), pub_input, witnesses.to_vec())?;
+        prover_sanity_check(pk.config(), pub_input, witnesses.to_vec())?;
 
         // witness assignment of length 2^n
         let num_vars = pk.config().num_variables();
@@ -175,7 +178,7 @@ where
         let fx = build_f(
             &pk.config().gate_func,
             pk.config().num_variables(),
-            &pk.selector_oracles(),
+            pk.selector_oracles(),
             witnesses,
         )?;
 
@@ -192,7 +195,7 @@ where
             &pk.pc_ck,
             witnesses,
             witnesses,
-            &pk.permutation_oracles(),
+            pk.permutation_oracles(),
             &mut transcript,
         )?;
         let perm_check_point = &perm_check_proof.zero_check_proof.point;
@@ -418,7 +421,7 @@ where
         let zero_check_aux_info = VPAuxInfo::<E::ScalarField> {
             max_degree: vk.config.gate_func.degree(),
             num_variables: num_vars,
-            phantom: PhantomData::default(),
+            phantom: PhantomData,
         };
         // push witness to transcript
         for w_com in proof.witness_commits.iter() {
@@ -570,8 +573,7 @@ where
         let expect_pi_eval = pi_poly.evaluate(&r_pi[..]).unwrap();
         if expect_pi_eval != *pi_eval {
             return Err(ScribeErrors::InvalidProver(format!(
-                "Public input eval mismatch: got {}, expect {}",
-                pi_eval, expect_pi_eval,
+                "Public input eval mismatch: got {pi_eval}, expect {expect_pi_eval}",
             )));
         }
         let r_pi_padded = [r_pi, vec![E::ScalarField::zero(); num_vars - ell]].concat();
@@ -607,9 +609,9 @@ mod tests {
     use scribe_streams::serialize::RawAffine;
 
     use ark_bls12_381::Bls12_381;
-    use ark_std::rand::rngs::StdRng;
-    use ark_std::rand::SeedableRng;
     use ark_std::One;
+    use ark_std::rand::SeedableRng;
+    use ark_std::rand::rngs::StdRng;
 
     #[test]
     fn test_scribe_e2e() -> Result<(), ScribeErrors> {

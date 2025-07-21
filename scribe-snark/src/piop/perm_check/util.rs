@@ -32,27 +32,33 @@ pub(super) fn computer_nums_and_denoms<F: RawPrimeField>(
 
     let s_ids = MLE::<F>::identity_permutation_mles(num_vars, fxs.len());
 
-    let (numerators, denominators) = (fxs, gxs, &s_ids, perms)
+    let fxs = fxs.iter().map(|fx| (fx, vec![])).collect::<Vec<_>>();
+    let gxs = gxs.iter().map(|gx| (gx, vec![])).collect::<Vec<_>>();
+    let s_ids = s_ids.iter().map(|s_id| (s_id, vec![])).collect::<Vec<_>>();
+    let perms = perms.iter().map(|perm| (perm, vec![])).collect::<Vec<_>>();
+    let (numerators, denominators) = (fxs, gxs, s_ids, perms)
         .into_par_iter()
-        .map(|(fx, gx, s_id, perm)| {
-            let (numerator, denominator) = fx
-                .evals()
-                .iter()
-                .zip(gx.evals().iter())
-                .zip(s_id.evals().iter())
-                .zip(perm.evals().iter())
-                .map(|(((f, g), s_id), perm)| {
-                    let numerator = f + *beta * s_id + gamma;
-                    let denominator = g + *beta * perm + gamma;
-                    (numerator, denominator)
-                })
-                .unzip();
+        .map(
+            |((fx, mut b1), (gx, mut b2), (s_id, mut b3), (perm, mut b4))| {
+                let (numerator, denominator) = fx
+                    .evals()
+                    .iter_with_buf(&mut b1)
+                    .zip(gx.evals().iter_with_buf(&mut b2))
+                    .zip(s_id.evals().iter_with_buf(&mut b3))
+                    .zip(perm.evals().iter_with_buf(&mut b4))
+                    .map(|(((f, g), s_id), perm)| {
+                        let numerator = f + *beta * s_id + gamma;
+                        let denominator = g + *beta * perm + gamma;
+                        (numerator, denominator)
+                    })
+                    .unzip();
 
-            (
-                MLE::from_evals(numerator, num_vars),
-                MLE::from_evals(denominator, num_vars),
-            )
-        })
+                (
+                    MLE::from_evals(numerator, num_vars),
+                    MLE::from_evals(denominator, num_vars),
+                )
+            },
+        )
         .unzip();
 
     end_timer!(start);

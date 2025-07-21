@@ -1,14 +1,16 @@
 use std::marker::PhantomData;
 
+use crate::iterator::BatchedIteratorAssocTypes;
+
 use super::BatchedIterator;
 use rayon::prelude::*;
 
-pub struct BatchedMap<I, U, BatchU, F> 
+pub struct BatchedMap<I, U, BatchU, F>
 where
-    I: BatchedIterator, 
-    U: Send + Sync, 
-    BatchU: ParallelIterator<Item = U>, 
-    F: FnMut(I::Batch) -> BatchU + Send + Sync
+    I: BatchedIterator,
+    U: Send + Sync,
+    BatchU: ParallelIterator<Item = U>,
+    for<'a> F: FnMut(I::Batch<'a>) -> BatchU + Send + Sync,
 {
     pub iter: I,
     pub f: F,
@@ -20,13 +22,10 @@ impl<I, U, BatchU, F> BatchedMap<I, U, BatchU, F>
 where
     I: BatchedIterator,
     U: Send + Sync,
-    BatchU: ParallelIterator<Item = U>, 
-    F: FnMut(I::Batch) -> BatchU + Send + Sync,
+    BatchU: ParallelIterator<Item = U>,
+    for<'a> F: FnMut(I::Batch<'a>) -> BatchU + Send + Sync,
 {
-    pub fn new(
-        iter: I,
-        f: F,
-    ) -> Self {
+    pub fn new(iter: I, f: F) -> Self {
         Self {
             iter,
             f,
@@ -36,18 +35,26 @@ where
     }
 }
 
+impl<I, U, BatchU, F> BatchedIteratorAssocTypes for BatchedMap<I, U, BatchU, F>
+where
+    I: BatchedIterator,
+    U: Send + Sync,
+    BatchU: ParallelIterator<Item = U>,
+    for<'a> F: FnMut(I::Batch<'a>) -> BatchU + Send + Sync,
+{
+    type Item = U;
+    type Batch<'a> = BatchU;
+}
+
 impl<I, U, BatchU, F> BatchedIterator for BatchedMap<I, U, BatchU, F>
 where
     I: BatchedIterator,
     U: Send + Sync,
-    BatchU: ParallelIterator<Item = U>, 
-    F: FnMut(I::Batch) -> BatchU + Send + Sync,
+    BatchU: ParallelIterator<Item = U>,
+    for<'a> F: FnMut(I::Batch<'a>) -> BatchU + Send + Sync,
 {
-    type Item = U;
-    type Batch = BatchU;
-
     #[inline]
-    fn next_batch(&mut self) -> Option<Self::Batch> {
+    fn next_batch<'a>(&'a mut self) -> Option<Self::Batch<'a>> {
         self.iter.next_batch().map(|i| (self.f)(i))
     }
 

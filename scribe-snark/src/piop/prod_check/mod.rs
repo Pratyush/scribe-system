@@ -9,7 +9,7 @@ use crate::{
 };
 use ark_ec::pairing::Pairing;
 use ark_ff::{One, Zero};
-use mle::{virtual_polynomial::VPAuxInfo, MLE};
+use mle::{MLE, virtual_polynomial::VPAuxInfo};
 use scribe_streams::serialize::RawPrimeField;
 
 use ark_std::{end_timer, start_timer};
@@ -191,17 +191,17 @@ where
 mod test {
     use super::ProductCheck;
     use crate::{
-        pc::{pst13::PST13, PCScheme},
+        pc::{PCScheme, pst13::PST13},
         piop::errors::PIOPError,
     };
     use ark_bls12_381::{Bls12_381, Fr};
     use ark_ec::pairing::Pairing;
-    use ark_std::test_rng;
     use ark_std::UniformRand;
-    use mle::{virtual_polynomial::VPAuxInfo, MLE};
+    use ark_std::test_rng;
+    use mle::{MLE, virtual_polynomial::VPAuxInfo};
     use scribe_streams::file_vec::FileVec;
-    use scribe_streams::iterator::zip_many;
     use scribe_streams::iterator::BatchedIterator;
+    use scribe_streams::iterator::zip_many;
     use scribe_streams::serialize::RawPrimeField;
     use std::marker::PhantomData;
 

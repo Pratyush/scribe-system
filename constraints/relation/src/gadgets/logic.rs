@@ -7,8 +7,8 @@
 //! Logic related circuit implementations
 
 use crate::{
-    gates::{CondSelectGate, LogicOrGate, LogicOrOutputGate},
     BoolVar, Circuit, CircuitError, PlonkCircuit, Variable,
+    gates::{CondSelectGate, LogicOrGate, LogicOrOutputGate},
 };
 use ark_std::{boxed::Box, string::ToString};
 use scribe_streams::serialize::RawPrimeField;
@@ -385,9 +385,11 @@ mod test {
         *circuit.witness_mut(bit_false.into()) = F::one();
         assert!(circuit.check_circuit_satisfiability(&[]).is_err());
         // Check variable out of bound error.
-        assert!(circuit
-            .conditional_select(bit_false, circuit.num_vars(), x_1)
-            .is_err());
+        assert!(
+            circuit
+                .conditional_select(bit_false, circuit.num_vars(), x_1)
+                .is_err()
+        );
 
         // build two fixed circuits with different variable assignments, checking that
         // the arithmetized extended permutation polynomial is variable

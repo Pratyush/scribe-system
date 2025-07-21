@@ -116,8 +116,8 @@ mod test {
     use super::ZeroCheck;
     use crate::piop::errors::PIOPError;
     use ark_bls12_381::Fr;
-    use ark_std::rand::rngs::StdRng;
     use ark_std::rand::SeedableRng;
+    use ark_std::rand::rngs::StdRng;
     use mle::VirtualPolynomial;
 
     fn test_zerocheck(

@@ -7,10 +7,10 @@
 //! Elliptic curve related gates and gadgets. Including both native and
 //! non-native fields.
 
-use crate::{gates::*, BoolVar, Circuit, CircuitError, PlonkCircuit, Variable};
+use crate::{BoolVar, Circuit, CircuitError, PlonkCircuit, Variable, gates::*};
 use ark_ec::{
-    twisted_edwards::{Affine, Projective, TECurveConfig as Config},
     AffineRepr, CurveConfig, CurveGroup, ScalarMul,
+    twisted_edwards::{Affine, Projective, TECurveConfig as Config},
 };
 use ark_ff::PrimeField;
 use ark_std::{borrow::ToOwned, boxed::Box, string::ToString, vec, vec::Vec};
@@ -544,15 +544,14 @@ fn compute_base_points<E: ScalarMul>(base: &E, len: usize) -> Result<[Vec<E>; 3]
 #[cfg(test)]
 mod test {
     use super::*;
-    use ark_bls12_377::{g1::Config as Param761, Fq as Fq377};
-    use ark_ec::{twisted_edwards::TECurveConfig as Config, Group};
+    use ark_bls12_377::{Fq as Fq377, g1::Config as Param761};
+    use ark_ec::twisted_edwards::TECurveConfig as Config;
     use ark_ed_on_bls12_377::{EdwardsConfig as Param377, Fq as FqEd377};
     use ark_ed_on_bls12_381::{EdwardsConfig as Param381, Fq as FqEd381};
     use ark_ed_on_bls12_381_bandersnatch::{EdwardsConfig as Param381b, Fq as FqEd381b};
     use ark_ed_on_bn254::{EdwardsConfig as Param254, Fq as FqEd354};
-    use ark_ff::{One, UniformRand, Zero};
+    use ark_ff::{AdditiveGroup, BigInteger, One, UniformRand, Zero};
     use ark_std::str::FromStr;
-    use jf_utils::fr_to_fq;
 
     #[test]
     fn test_is_neutral() -> Result<(), CircuitError> {
@@ -580,9 +579,11 @@ mod test {
         *circuit.witness_mut(p1.0) = F::one();
         assert!(circuit.check_circuit_satisfiability(&[]).is_err());
         // Check variable out of bound error.
-        assert!(circuit
-            .is_neutral_point::<P>(&PointVariable(circuit.num_vars(), circuit.num_vars() - 1))
-            .is_err());
+        assert!(
+            circuit
+                .is_neutral_point::<P>(&PointVariable(circuit.num_vars(), circuit.num_vars() - 1))
+                .is_err()
+        );
 
         let __circuit_1 = build_is_neutral_circuit::<F, P>(TEPoint(F::zero(), F::one()))?;
         let __circuit_2 = build_is_neutral_circuit::<F, P>(TEPoint(F::one(), F::zero()))?;
@@ -615,12 +616,14 @@ mod test {
             circuit.enforce_on_curve::<$param>(&p3)?;
             assert!(circuit.check_circuit_satisfiability(&[]).is_err());
             // Check variable out of bound error.
-            assert!(circuit
-                .enforce_on_curve::<$param>(&PointVariable(
-                    circuit.num_vars(),
-                    circuit.num_vars() - 1
-                ))
-                .is_err());
+            assert!(
+                circuit
+                    .enforce_on_curve::<$param>(&PointVariable(
+                        circuit.num_vars(),
+                        circuit.num_vars() - 1
+                    ))
+                    .is_err()
+            );
 
             let __circuit_1 =
                 build_enforce_on_curve_circuit::<_, $param>(TEPoint($fq::zero(), $fq::one()))?;
@@ -741,9 +744,11 @@ mod test {
         *circuit.witness_mut(p3_var.0) = F::zero();
         assert!(circuit.check_circuit_satisfiability(&[]).is_err());
         // Check variable out of bound error.
-        assert!(circuit
-            .ecc_add::<P>(&PointVariable(0, 0), &PointVariable(1, circuit.num_vars()))
-            .is_err());
+        assert!(
+            circuit
+                .ecc_add::<P>(&PointVariable(0, 0), &PointVariable(1, circuit.num_vars()))
+                .is_err()
+        );
 
         let p1 = Affine::<P>::rand(&mut rng);
         let p2 = Affine::<P>::rand(&mut rng);
@@ -896,9 +901,11 @@ mod test {
         *circuit.witness_mut(p2_var.0) = F::zero();
         assert!(circuit.check_circuit_satisfiability(&[]).is_err());
         // Check variable out of bound error.
-        assert!(circuit
-            .enforce_point_equal(&PointVariable(0, 0), &PointVariable(1, circuit.num_vars()))
-            .is_err());
+        assert!(
+            circuit
+                .enforce_point_equal(&PointVariable(0, 0), &PointVariable(1, circuit.num_vars()))
+                .is_err()
+        );
 
         let new_p = Affine::<P>::rand(&mut rng);
         let __circuit_1 = build_point_equal_circuit(TEPoint::from(p), TEPoint::from(p))?;
@@ -951,9 +958,11 @@ mod test {
         *circuit.witness_mut(p2_var.0) = F::zero();
         assert!(circuit.check_circuit_satisfiability(&[]).is_err());
         // Check variable out of bound error.
-        assert!(circuit
-            .is_point_equal(&PointVariable(0, 0), &PointVariable(1, circuit.num_vars()))
-            .is_err());
+        assert!(
+            circuit
+                .is_point_equal(&PointVariable(0, 0), &PointVariable(1, circuit.num_vars()))
+                .is_err()
+        );
 
         let __circuit_1 =
             build_is_equal_point_circuit(TEPoint::from(p1), TEPoint::from(p2), TEPoint::from(p3))?;
@@ -1044,6 +1053,27 @@ mod test {
         test_fixed_based_scalar_mul_helper::<Fq377, Param761>()
     }
 
+    /// Convert a scalar field element to a base field element.
+    /// Mod reduction is not performed since the conversion occurs
+    /// for fields on a same curve.
+    pub fn fr_to_fq<F, P>(scalar: &P::ScalarField) -> F
+    where
+        F: PrimeField,
+        P: CurveConfig<BaseField = F>,
+    {
+        // sanity checks:
+        // ensure | jubjub scalar field | <= | BLS Scalar field |
+        // jubjub scalar field:
+        // 6554484396890773809930967563523245729705921265872317281365359162392183254199
+        // BLS12-381 scalar field:
+        // 52435875175126190479447740508185965837690552500527637822603658699938581184513
+        // jubjub377 scalar field:
+        // 2111115437357092606062206234695386632838870926408408195193685246394721360383
+        // BLS12-377 scalar field:
+        // 8444461749428370424248824938781546531375899335154063827935233455917409239041
+        F::from_le_bytes_mod_order(&scalar.into_bigint().to_bytes_le())
+    }
+
     fn test_fixed_based_scalar_mul_helper<F, P>() -> Result<(), CircuitError>
     where
         F: RawPrimeField,
@@ -1066,9 +1096,11 @@ mod test {
         *circuit.witness_mut(2) = F::rand(&mut rng);
         assert!(circuit.check_circuit_satisfiability(&[]).is_err());
         // Check variable out of bound error.
-        assert!(circuit
-            .fixed_base_scalar_mul(circuit.num_vars(), &Affine::<P>::rand(&mut rng))
-            .is_err());
+        assert!(
+            circuit
+                .fixed_base_scalar_mul(circuit.num_vars(), &Affine::<P>::rand(&mut rng))
+                .is_err()
+        );
 
         let __circuit_1 = build_fixed_based_scalar_mul_circuit::<F, P>(F::from(87u32))?;
         let __circuit_2 = build_fixed_based_scalar_mul_circuit::<F, P>(F::from(2u32))?;
@@ -1124,13 +1156,15 @@ mod test {
         // wrong witness should fail
         *circuit.witness_mut(p1_var.0) = F::rand(&mut rng);
         assert!(circuit.check_circuit_satisfiability(&[]).is_err());
-        assert!(circuit
-            .binary_point_vars_select(
-                false_var,
-                &p0_var,
-                &PointVariable(p1_var.0, circuit.num_vars()),
-            )
-            .is_err());
+        assert!(
+            circuit
+                .binary_point_vars_select(
+                    false_var,
+                    &p0_var,
+                    &PointVariable(p1_var.0, circuit.num_vars()),
+                )
+                .is_err()
+        );
 
         let _circuit_1 = build_binary_point_vars_select_circuit::<F>(
             true,

@@ -5,7 +5,6 @@ version = "0.4.4"
 authors = { workspace = true }
 edition = { workspace = true }
 license = { workspace = true }
-rust-version = { workspace = true }
 
 [dependencies]
 ark-ff = { workspace =  true }
@@ -28,8 +27,8 @@ displaydoc = { workspace = true }
 derivative = { workspace = true }
 rayon = { workspace = true }
 
-downcast-rs = { version = "1.2.0", default-features = false }
+downcast-rs = { version = "2", default-features = false }
 dyn-clone = "^1.0"
-itertools = { version = "0.13.0", default-features = false }
+itertools = { version = "0.14.0", default-features = false }
 jf-utils = { version = "0.4.4", git = "https://github.com/EspressoSystems/jellyfish", tag = "0.4.5", default-features = false }
 num-bigint = { workspace = true }

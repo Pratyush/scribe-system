@@ -1,24 +1,23 @@
+use crate::pc::PCScheme;
 use crate::pc::errors::PCError;
 use crate::pc::structs::Commitment;
-use crate::pc::PCScheme;
 use crate::piop::{prelude::SumCheck, structs::IOPProof};
 use crate::transcript::IOPTranscript;
 use mle::{
-    eq_eval,
+    MLE, VirtualMLE, eq_eval,
     util::build_eq_x_r_vec,
     virtual_polynomial::{VPAuxInfo, VirtualPolynomial},
-    VirtualMLE, MLE,
 };
 use scribe_streams::{
-    iterator::{zip_many, BatchedIterator},
+    iterator::{BatchedIterator, zip_many},
     serialize::RawPrimeField,
 };
 
 use ark_ec::pairing::Pairing;
-use ark_ec::{scalar_mul::variable_base::VariableBaseMSM, CurveGroup};
+use ark_ec::{CurveGroup, scalar_mul::variable_base::VariableBaseMSM};
 
+use ark_std::{One, Zero, end_timer, log2, start_timer};
 use ark_std::{collections::BTreeMap, marker::PhantomData};
-use ark_std::{end_timer, log2, start_timer, One, Zero};
 
 use itertools::Itertools;
 
@@ -55,11 +54,11 @@ where
     E: Pairing,
     E::ScalarField: RawPrimeField,
     PC: PCScheme<
-        E,
-        Polynomial = MLE<E::ScalarField>,
-        Point = Vec<E::ScalarField>,
-        Evaluation = E::ScalarField,
-    >,
+            E,
+            Polynomial = MLE<E::ScalarField>,
+            Point = Vec<E::ScalarField>,
+            Evaluation = E::ScalarField,
+        >,
 {
     let open_timer = start_timer!(|| format!("multi open {} points", points.len()));
 
@@ -232,7 +231,7 @@ where
     let mut sum_check_vp = VirtualPolynomial::new(num_vars);
     for (merged_tilde_g, tilde_eq) in merged_tilde_gs.iter().zip(tilde_eqs.clone()) {
         sum_check_vp.add_virtual_mles(
-            [merged_tilde_g.clone().into(), tilde_eq.into()],
+            [merged_tilde_g.clone().into(), tilde_eq],
             E::ScalarField::one(),
         )?;
     }
@@ -294,12 +293,12 @@ where
     E: Pairing,
     E::ScalarField: RawPrimeField,
     PC: PCScheme<
-        E,
-        Polynomial = MLE<E::ScalarField>,
-        Point = Vec<E::ScalarField>,
-        Evaluation = E::ScalarField,
-        Commitment = Commitment<E>,
-    >,
+            E,
+            Polynomial = MLE<E::ScalarField>,
+            Point = Vec<E::ScalarField>,
+            Evaluation = E::ScalarField,
+            Commitment = Commitment<E>,
+        >,
 {
     let open_timer = start_timer!(|| "batch verification");
 
@@ -360,12 +359,12 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::pc::pst13::srs::SRS;
-    use crate::pc::pst13::PST13;
     use crate::pc::StructuredReferenceString;
+    use crate::pc::pst13::PST13;
+    use crate::pc::pst13::srs::SRS;
     use ark_bls12_381::Bls12_381 as E;
     use ark_ec::pairing::Pairing;
-    use ark_std::{rand::Rng, test_rng, vec::Vec, UniformRand};
+    use ark_std::{UniformRand, rand::Rng, test_rng, vec::Vec};
     use mle::util::get_batched_nv;
 
     type Fr = <E as Pairing>::ScalarField;

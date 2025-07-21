@@ -1,9 +1,12 @@
-use crate::serialize::{DeserializeRaw, SerializeRaw};
+use crate::{
+    iterator::BatchedIteratorAssocTypes,
+    serialize::{DeserializeRaw, SerializeRaw},
+};
 use rayon::{iter::MinLen, prelude::*, vec::IntoIter as VecIntoIter};
 
-use crate::{iterator::BatchedIterator, BUFFER_SIZE};
+use crate::{BUFFER_SIZE, iterator::BatchedIterator};
 
-use super::{avec, backend::InnerFile, AVec};
+use super::{AVec, avec, backend::InnerFile};
 
 pub enum IntoIter<T: SerializeRaw + DeserializeRaw + 'static> {
     File { file: InnerFile, work_buffer: AVec },
@@ -23,15 +26,18 @@ impl<T: SerializeRaw + DeserializeRaw> IntoIter<T> {
         Self::Buffer { buffer }
     }
 }
+impl<T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy> BatchedIteratorAssocTypes
+    for IntoIter<T>
+{
+    type Item = T;
+    type Batch<'a> = MinLen<VecIntoIter<T>>;
+}
 
 impl<T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy> BatchedIterator
     for IntoIter<T>
 {
-    type Item = T;
-    type Batch = MinLen<VecIntoIter<T>>;
-
     #[inline]
-    fn next_batch(&mut self) -> Option<Self::Batch> {
+    fn next_batch<'a>(&'a mut self) -> Option<Self::Batch<'a>> {
         match self {
             IntoIter::File {
                 file, work_buffer, ..

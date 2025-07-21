@@ -8,7 +8,7 @@
 use ark_ff::Field;
 use ark_std::boxed::Box;
 use core::fmt;
-use downcast_rs::{impl_downcast, Downcast};
+use downcast_rs::{Downcast, impl_downcast};
 use dyn_clone::DynClone;
 
 use crate::constants::{GATE_WIDTH, N_MUL_SELECTORS};

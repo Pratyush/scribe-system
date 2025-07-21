@@ -1,15 +1,18 @@
 use super::BUFFER_SIZE;
-use crate::{iterator::batched_map::BatchedMap, serialize::{DeserializeRaw, SerializeRaw}};
+use crate::{
+    iterator::batched_map::BatchedMap,
+    serialize::{DeserializeRaw, SerializeRaw},
+};
 use rayon::prelude::*;
 use std::iter::Sum;
 
 use super::file_vec::FileVec;
 
 pub mod array_chunks;
+pub mod batched_map;
 pub mod chain_many;
 pub mod flat_map;
 pub mod from_fn;
-pub mod batched_map;
 pub mod map;
 pub mod repeat;
 pub mod take;
@@ -26,11 +29,12 @@ pub use take::Take;
 pub use zip::Zip;
 pub use zip_many::ZipMany;
 
-pub trait BatchedIterator: Sized {
+pub trait BatchedIteratorAssocTypes: Sized {
     type Item: Send + Sync;
-    type Batch: ParallelIterator<Item = Self::Item>;
-
-    fn next_batch(&mut self) -> Option<Self::Batch>;
+    type Batch<'a>: ParallelIterator<Item = Self::Item>;
+}
+pub trait BatchedIterator: BatchedIteratorAssocTypes {
+    fn next_batch<'a>(&'a mut self) -> Option<Self::Batch<'a>>;
 
     fn len(&self) -> Option<usize> {
         None
@@ -43,12 +47,12 @@ pub trait BatchedIterator: Sized {
     {
         Map { iter: self, f }
     }
-    
+
     #[inline(always)]
-    fn batched_map<U, BatchU,  F>(self, f: F) -> BatchedMap<Self, U, BatchU, F> 
+    fn batched_map<U, BatchU, F>(self, f: F) -> BatchedMap<Self, U, BatchU, F>
     where
         U: Send + Sync,
-        F: FnMut(Self::Batch) -> BatchU + Send + Sync,
+        for<'a> F: FnMut(Self::Batch<'a>) -> BatchU + Send + Sync,
         BatchU: ParallelIterator<Item = U>,
     {
         BatchedMap::new(self, f)
@@ -60,15 +64,6 @@ pub trait BatchedIterator: Sized {
             batch.for_each(f.clone());
         }
     }
-
-    #[inline(always)]
-    fn batched_for_each(mut self, f: impl Fn(Self::Batch) + Send + Sync + Clone) {
-        while let Some(batch) = self.next_batch() {
-            f(batch)
-        }
-    }
-    
-    
 
     #[inline(always)]
     fn zip<I2: BatchedIterator>(self, other: I2) -> Zip<Self, I2> {
@@ -90,7 +85,7 @@ pub trait BatchedIterator: Sized {
     #[inline(always)]
     fn array_chunks<const N: usize>(self) -> ArrayChunks<Self, N>
     where
-        Self::Batch: IndexedParallelIterator,
+        for<'a> Self::Batch<'a>: IndexedParallelIterator,
     {
         ArrayChunks::new(self)
     }
@@ -112,11 +107,9 @@ pub trait BatchedIterator: Sized {
         let mut res = Vec::with_capacity(BUFFER_SIZE);
         while let Some(batch) = self.next_batch() {
             res.clear();
-            res.par_extend(batch.fold_with(identity(), |a, b| fold_op(a, b)));
+            res.par_extend(batch.fold_with(identity(), &fold_op));
             res.push(acc);
-            acc = res
-                .par_drain(..res.len())
-                .reduce(|| identity(), |a, b| reduce_op(a, b));
+            acc = res.par_drain(..res.len()).reduce(&identity, &reduce_op);
         }
         acc
     }
@@ -143,7 +136,7 @@ pub trait BatchedIterator: Sized {
     #[inline(always)]
     fn to_vec(mut self) -> Vec<Self::Item>
     where
-        Self::Batch: IndexedParallelIterator,
+        for<'a> Self::Batch<'a>: IndexedParallelIterator,
     {
         let mut vec = Vec::new();
         while let Some(batch) = self.next_batch() {
@@ -209,15 +202,14 @@ pub fn from_iter<I: IntoIterator>(iter: I) -> BatchAdapter<I::IntoIter> {
     BatchAdapter::from(iter.into_iter())
 }
 
-impl<I: Iterator> BatchedIterator for BatchAdapter<I>
-where
-    I::Item: Send + Sync,
-{
+impl<I: Iterator<Item: Send + Sync>> BatchedIteratorAssocTypes for BatchAdapter<I> {
     type Item = I::Item;
-    type Batch = rayon::vec::IntoIter<I::Item>;
+    type Batch<'a> = rayon::vec::IntoIter<I::Item>;
+}
 
+impl<I: Iterator<Item: Send + Sync>> BatchedIterator for BatchAdapter<I> {
     #[inline(always)]
-    fn next_batch(&mut self) -> Option<Self::Batch> {
+    fn next_batch<'a>(&'a mut self) -> Option<Self::Batch<'a>> {
         let batch: Vec<_> = self.iter.by_ref().take(BUFFER_SIZE).collect();
         if batch.is_empty() {
             None

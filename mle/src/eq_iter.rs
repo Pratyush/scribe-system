@@ -2,13 +2,16 @@ use ark_ff::Field;
 use rayon::{iter::MinLen, prelude::*};
 
 use crate::util::eq_eval;
-use scribe_streams::{iterator::BatchedIterator, BUFFER_SIZE};
+use scribe_streams::{
+    BUFFER_SIZE,
+    iterator::{BatchedIterator, BatchedIteratorAssocTypes},
+};
 
 /// An iterator that generates the evaluations of the polynomial
 /// eq(r, y || x) over the Boolean hypercube.
 ///
 /// Here y = `self.fixed_vars`, and r = `self.r`.
-pub struct EqEvalIter<F> {
+pub struct EqEvalIterInner<F> {
     multiplier: F,
     cur_index: usize,
     r: Vec<F>,
@@ -19,7 +22,7 @@ pub struct EqEvalIter<F> {
     r_only_boolean: usize,
 }
 
-impl<F: Field> EqEvalIter<F> {
+impl<F: Field> EqEvalIterInner<F> {
     pub fn new(r: Vec<F>) -> Self {
         Self::new_with_multiplier(r, F::one())
     }
@@ -56,7 +59,7 @@ impl<F: Field> EqEvalIter<F> {
             .map(|(one_minus_r, r_inv)| one_minus_r * r_inv)
             .collect::<Vec<_>>();
 
-        EqEvalIter {
+        Self {
             cur_index: 0,
             multiplier,
             r,
@@ -74,13 +77,8 @@ impl<F: Field> EqEvalIter<F> {
         let multiplier = eq_eval(first_r, &fixed_vars).unwrap();
         Self::new_with_multiplier(rest_r.to_vec(), multiplier)
     }
-}
 
-impl<F: Field> BatchedIterator for EqEvalIter<F> {
-    type Item = F;
-    type Batch = MinLen<rayon::vec::IntoIter<F>>;
-
-    fn next_batch(&mut self) -> Option<Self::Batch> {
+    pub fn next_batch_helper(&mut self, result: &mut Vec<F>) -> Option<()> {
         let nv = self.r.len();
         let total_num_evals = 1 << nv;
         if self.cur_index >= total_num_evals {
@@ -89,20 +87,152 @@ impl<F: Field> BatchedIterator for EqEvalIter<F> {
             let batch_size = total_num_evals.min(BUFFER_SIZE);
             let batch_start = self.cur_index;
             let batch_end = self.cur_index + batch_size;
+            result.clear();
 
-            let result = (batch_start..batch_end)
-                .into_par_iter()
-                .step_by(CHUNK_SIZE)
-                .flat_map(|c_start| {
-                    let c_end = c_start + CHUNK_SIZE.min(batch_size);
-                    let starting_value =
-                        compute_starting_value(&self, c_start, c_end) * self.multiplier;
-                    p(&self, starting_value, c_start, c_end)
-                })
-                .collect::<Vec<_>>();
+            result.par_extend(
+                (batch_start..batch_end)
+                    .into_par_iter()
+                    .step_by(CHUNK_SIZE)
+                    .flat_map(|c_start| {
+                        let c_end = c_start + CHUNK_SIZE.min(batch_size);
+                        let starting_value =
+                            self.compute_starting_value(c_start, c_end) * self.multiplier;
+                        self.p(starting_value, c_start, c_end)
+                    }),
+            );
             self.cur_index += batch_size;
-            Some(result.into_par_iter().with_min_len(1 << 7))
+            Some(())
         }
+    }
+
+    /// Computes the starting value for chunk `chunk_idx` by using the product
+    /// of `r` and `one_minus_r` vectors and the binary decomposition of `chunk_idx * chunk_size - 1`
+    #[inline]
+    fn compute_starting_value(&self, c_start: usize, c_end: usize) -> F {
+        // Compute the location where `c` differs from `r` in the boolean locations;
+        // Flipping those bits will give us the first index where the value is non-zero.
+        let new_c = c_start | self.r_only_boolean;
+        if !((c_start..c_end).contains(&new_c)) {
+            F::zero()
+        } else {
+            let mut m = F::one();
+            for j in 0..self.r.len() {
+                if (new_c >> j) & 1 == 0 {
+                    m *= self.one_minus_r[j];
+                } else {
+                    m *= self.r[j];
+                }
+            }
+            m
+        }
+    }
+
+    fn p(&self, starting_value: F, start: usize, end: usize) -> Vec<F> {
+        let nv = self.r.len();
+        let mut next_m = starting_value;
+        (start..end)
+            .map(|i| {
+                let next_i = i + 1;
+                let this_m = next_m;
+                let this_is_zero = ((i & self.boolean_mask) ^ self.r_only_boolean) != 0;
+
+                for j in 0..nv {
+                    let r_j_is_boolean = (self.boolean_mask & (1 << j)) != 0;
+                    if r_j_is_boolean {
+                        continue;
+                    }
+                    let cur_bit = i & (1 << j);
+                    let next_bit = next_i & (1 << j);
+                    if cur_bit != next_bit {
+                        if cur_bit == 0 {
+                            next_m *= self.zero_values[j];
+                            break;
+                        } else {
+                            next_m *= self.one_values[j];
+                        }
+                    }
+                }
+
+                if this_is_zero { F::zero() } else { this_m }
+            })
+            .collect()
+    }
+}
+
+/// An iterator that generates the evaluations of the polynomial
+/// eq(r, y || x) over the Boolean hypercube.
+///
+/// Here y = `self.fixed_vars`, and r = `self.r`.
+pub struct EqEvalIter<F>(EqEvalIterInner<F>);
+
+impl<F: Field> EqEvalIter<F> {
+    pub fn new(r: Vec<F>) -> Self {
+        Self(EqEvalIterInner::new(r))
+    }
+
+    pub fn new_with_multiplier(r: Vec<F>, multiplier: F) -> Self {
+        Self(EqEvalIterInner::new_with_multiplier(r, multiplier))
+    }
+
+    pub fn new_with_fixed_vars(r: Vec<F>, fixed_vars: Vec<F>) -> Self {
+        Self(EqEvalIterInner::new_with_fixed_vars(r, fixed_vars))
+    }
+}
+
+impl<F: Field> BatchedIteratorAssocTypes for EqEvalIter<F> {
+    type Item = F;
+    type Batch<'a> = MinLen<rayon::vec::IntoIter<F>>;
+}
+
+impl<F: Field> BatchedIterator for EqEvalIter<F> {
+    fn next_batch<'a>(&'a mut self) -> Option<Self::Batch<'a>> {
+        let mut result = Vec::new();
+        self.0.next_batch_helper(&mut result)?;
+        Some(result.into_par_iter().with_min_len(1 << 7))
+    }
+}
+
+/// An iterator that generates the evaluations of the polynomial
+/// eq(r, y || x) over the Boolean hypercube.
+///
+/// Here y = `self.fixed_vars`, and r = `self.r`.
+pub struct EqEvalIterWithBuf<'a, F> {
+    inner: EqEvalIterInner<F>,
+    buffer: &'a mut Vec<F>,
+}
+
+impl<'a, F: Field> EqEvalIterWithBuf<'a, F> {
+    pub fn new(r: Vec<F>, buffer: &'a mut Vec<F>) -> Self {
+        Self {
+            inner: EqEvalIterInner::new(r),
+            buffer,
+        }
+    }
+
+    pub fn new_with_multiplier(r: Vec<F>, multiplier: F, buffer: &'a mut Vec<F>) -> Self {
+        Self {
+            inner: EqEvalIterInner::new_with_multiplier(r, multiplier),
+            buffer,
+        }
+    }
+
+    pub fn new_with_fixed_vars(r: Vec<F>, fixed_vars: Vec<F>, buffer: &'a mut Vec<F>) -> Self {
+        Self {
+            inner: EqEvalIterInner::new_with_fixed_vars(r, fixed_vars),
+            buffer,
+        }
+    }
+}
+
+impl<'a, F: Field> BatchedIteratorAssocTypes for EqEvalIterWithBuf<'a, F> {
+    type Item = F;
+    type Batch<'b> = MinLen<rayon::iter::Copied<rayon::slice::Iter<'b, F>>>;
+}
+
+impl<'a, F: Field> BatchedIterator for EqEvalIterWithBuf<'a, F> {
+    fn next_batch<'b>(&'b mut self) -> Option<Self::Batch<'b>> {
+        self.inner.next_batch_helper(self.buffer)?;
+        Some(self.buffer.par_iter().copied().with_min_len(1 << 7))
     }
 }
 
@@ -112,68 +242,11 @@ const CHUNK_SIZE: usize = if BUFFER_SIZE < (1 << 14) {
     1 << 14
 };
 
-fn p<F: Field>(iter: &EqEvalIter<F>, starting_value: F, start: usize, end: usize) -> Vec<F> {
-    let nv = iter.r.len();
-    let mut next_m = starting_value;
-    (start..end)
-        .map(|i| {
-            let next_i = i + 1;
-            let this_m = next_m;
-            let this_is_zero = ((i & iter.boolean_mask) ^ iter.r_only_boolean) != 0;
-
-            for j in 0..nv {
-                let r_j_is_boolean = (iter.boolean_mask & (1 << j)) != 0;
-                if r_j_is_boolean {
-                    continue;
-                }
-                let cur_bit = i & (1 << j);
-                let next_bit = next_i & (1 << j);
-                if cur_bit != next_bit {
-                    if cur_bit == 0 {
-                        next_m *= iter.zero_values[j];
-                        break;
-                    } else {
-                        next_m *= iter.one_values[j];
-                    }
-                }
-            }
-
-            if this_is_zero {
-                F::zero()
-            } else {
-                this_m
-            }
-        })
-        .collect()
-}
-
-/// Computes the starting value for chunk `chunk_idx` by using the product
-/// of `r` and `one_minus_r` vectors and the binary decomposition of `chunk_idx * chunk_size - 1`
-#[inline]
-fn compute_starting_value<F: Field>(iter: &EqEvalIter<F>, c_start: usize, c_end: usize) -> F {
-    // Compute the location where `c` differs from `r` in the boolean locations;
-    // Flipping those bits will give us the first index where the value is non-zero.
-    let new_c = c_start | iter.r_only_boolean;
-    if !((c_start..c_end).contains(&new_c)) {
-        F::zero()
-    } else {
-        let mut m = F::one();
-        for j in 0..iter.r.len() {
-            if (new_c >> j) & 1 == 0 {
-                m *= iter.one_minus_r[j];
-            } else {
-                m *= iter.r[j];
-            }
-        }
-        m
-    }
-}
-
 #[cfg(test)]
 mod test {
     use crate::{EqEvalIter, MLE};
     use ark_bls12_381::Fr;
-    use ark_std::{test_rng, UniformRand};
+    use ark_std::{UniformRand, test_rng};
     use scribe_streams::iterator::BatchedIterator;
 
     #[test]

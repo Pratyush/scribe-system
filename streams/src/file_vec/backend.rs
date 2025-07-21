@@ -33,7 +33,7 @@ pub trait ReadN: std::io::Read {
     }
 }
 
-impl<'a> ReadN for &'a mut InnerFile {
+impl ReadN for &mut InnerFile {
     /// Reads `n` bytes from the file into `dest`.
     /// This assumes that `dest` is of length `n`.
     /// Clears `dest` before reading.
@@ -57,7 +57,7 @@ impl<'a> ReadN for &'a mut InnerFile {
     }
 }
 
-impl<'a> ReadN for &'a InnerFile {
+impl ReadN for &InnerFile {
     /// Reads `n` bytes from the file into `dest`.
     /// This assumes that `dest` is of length `n`.
     /// Clears `dest` before reading.
@@ -81,7 +81,7 @@ impl<'a> ReadN for &'a InnerFile {
     }
 }
 
-impl<'a> ReadN for &'a [u8] {}
+impl ReadN for &[u8] {}
 
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 pub const PAGE_SIZE: usize = 16384;
@@ -223,7 +223,7 @@ impl InnerFile {
         let fd = self.file.as_raw_fd();
         #[cfg(target_os = "linux")]
         {
-            use libc::{fallocate, FALLOC_FL_KEEP_SIZE};
+            use libc::{FALLOC_FL_KEEP_SIZE, fallocate};
             let result = unsafe { fallocate(fd, FALLOC_FL_KEEP_SIZE, 0, len as i64) };
             if result == 0 {
                 Ok(())
@@ -233,7 +233,7 @@ impl InnerFile {
         }
         #[cfg(any(target_os = "macos", target_os = "ios"))]
         {
-            use libc::{c_void, fcntl, off_t, F_ALLOCATEALL, F_ALLOCATECONTIG, F_PREALLOCATE};
+            use libc::{F_ALLOCATEALL, F_ALLOCATECONTIG, F_PREALLOCATE, c_void, fcntl, off_t};
             // Prepare the allocation request
             let mut alloc_struct = libc::fstore_t {
                 fst_flags: F_ALLOCATECONTIG,
@@ -281,6 +281,10 @@ impl InnerFile {
     #[inline(always)]
     pub fn len(&self) -> usize {
         self.metadata().expect("failed to get metadata").len() as usize
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 
     #[inline(always)]
@@ -342,7 +346,7 @@ impl Read for &InnerFile {
     fn read_exact(&mut self, buf: &mut [u8]) -> io::Result<()> {
         let mut self_buffer = self.buffer.lock().unwrap();
         self_buffer.clear();
-        self_buffer.extend_from_slice(&buf);
+        self_buffer.extend_from_slice(buf);
         debug_assert_eq!(self_buffer.len(), buf.len());
         debug_assert_eq!(self_buffer.len() % PAGE_SIZE, 0);
         (&self.file).read_exact(&mut self_buffer)?;
@@ -394,7 +398,7 @@ impl Write for &InnerFile {
         } else {
             let mut self_buffer = self.buffer.lock().unwrap();
             self_buffer.clear();
-            self_buffer.extend_from_slice(&buf);
+            self_buffer.extend_from_slice(buf);
             (&self.file).write(&self_buffer)
         }
     }
@@ -408,7 +412,7 @@ impl Write for &InnerFile {
         } else {
             let mut self_buffer = self.buffer.lock().unwrap();
             self_buffer.clear();
-            self_buffer.extend_from_slice(&buf);
+            self_buffer.extend_from_slice(buf);
             (&self.file).write_all(&self_buffer)
         }
     }
@@ -458,7 +462,7 @@ impl io::Seek for InnerFile {
 fn file_set_nocache(_file: &File) {
     #[cfg(target_os = "macos")]
     {
-        use libc::{fcntl, F_NOCACHE};
+        use libc::{F_NOCACHE, fcntl};
         use std::os::unix::io::AsRawFd;
         let fd = _file.as_raw_fd();
         let result = unsafe { fcntl(fd, F_NOCACHE, 1) };

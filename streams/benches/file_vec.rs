@@ -2,10 +2,10 @@
 extern crate criterion;
 
 use ark_bls12_381::Fr;
-use ark_ff::Field;
+use ark_ff::{AdditiveGroup, Field};
 use ark_std::UniformRand;
 use criterion::{BatchSize, BenchmarkId, Criterion, Throughput};
-use scribe_streams::{file_vec::FileVec, iterator::BatchedIterator, BUFFER_SIZE};
+use scribe_streams::{BUFFER_SIZE, file_vec::FileVec, iterator::BatchedIterator};
 
 fn for_each_simple(c: &mut Criterion) {
     let num_threads = rayon::current_num_threads();

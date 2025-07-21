@@ -1,6 +1,9 @@
-use crate::{EqEvalIter, MLE};
-use rayon::iter::MinLen;
-use scribe_streams::{iterator::BatchedIterator, serialize::RawPrimeField};
+use crate::{EqEvalIter, MLE, eq_iter::EqEvalIterWithBuf};
+use rayon::iter::{Copied, MinLen};
+use scribe_streams::{
+    iterator::{BatchedIterator, BatchedIteratorAssocTypes},
+    serialize::RawPrimeField,
+};
 
 use crate::util::eq_eval;
 
@@ -53,6 +56,19 @@ impl<F: RawPrimeField> VirtualMLE<F> {
             } => VirtualMLEIter::EqAtPoint(EqEvalIter::new_with_fixed_vars(
                 point.clone(),
                 fixed_vars.to_vec(),
+            )),
+        }
+    }
+
+    pub fn evals_with_buf<'a>(&'a self, buf: &'a mut Vec<F>) -> VirtualMLEIterWithBuf<'a, F> {
+        match self {
+            Self::MLE(mle) => VirtualMLEIterWithBuf::MLE(mle.evals().iter_with_buf(buf)),
+            Self::EqAtPoint {
+                point, fixed_vars, ..
+            } => VirtualMLEIterWithBuf::EqAtPoint(EqEvalIterWithBuf::new_with_fixed_vars(
+                point.clone(),
+                fixed_vars.to_vec(),
+                buf,
             )),
         }
     }
@@ -112,14 +128,35 @@ pub enum VirtualMLEIter<'a, F: RawPrimeField> {
     EqAtPoint(EqEvalIter<F>),
 }
 
-impl<'a, F: RawPrimeField> BatchedIterator for VirtualMLEIter<'a, F> {
+impl<'a, F: RawPrimeField> BatchedIteratorAssocTypes for VirtualMLEIter<'a, F> {
     type Item = F;
-    type Batch = MinLen<rayon::vec::IntoIter<F>>;
+    type Batch<'b> = MinLen<rayon::vec::IntoIter<F>>;
+}
 
-    fn next_batch(&mut self) -> Option<Self::Batch> {
+impl<'a, F: RawPrimeField> BatchedIterator for VirtualMLEIter<'a, F> {
+    fn next_batch<'b>(&'b mut self) -> Option<Self::Batch<'b>> {
         match self {
             VirtualMLEIter::MLE(mle) => mle.next_batch(),
             VirtualMLEIter::EqAtPoint(e) => e.next_batch(),
+        }
+    }
+}
+
+pub enum VirtualMLEIterWithBuf<'a, F: RawPrimeField> {
+    MLE(scribe_streams::file_vec::IterWithBuf<'a, F>),
+    EqAtPoint(EqEvalIterWithBuf<'a, F>),
+}
+
+impl<'a, F: RawPrimeField> BatchedIteratorAssocTypes for VirtualMLEIterWithBuf<'a, F> {
+    type Item = F;
+    type Batch<'b> = MinLen<Copied<rayon::slice::Iter<'b, F>>>;
+}
+
+impl<'a, F: RawPrimeField> BatchedIterator for VirtualMLEIterWithBuf<'a, F> {
+    fn next_batch<'b>(&'b mut self) -> Option<Self::Batch<'b>> {
+        match self {
+            Self::MLE(mle) => mle.next_batch(),
+            Self::EqAtPoint(e) => e.next_batch(),
         }
     }
 }

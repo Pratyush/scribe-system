@@ -3,7 +3,7 @@ use std::ops::{AddAssign, MulAssign};
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::{
     end_timer, log2,
-    rand::{rngs::StdRng, SeedableRng},
+    rand::{SeedableRng, rngs::StdRng},
     start_timer,
 };
 use mle::MLE;
@@ -152,10 +152,10 @@ mod test {
     use std::io::{Seek, Write};
 
     use super::*;
-    use crate::pc::pst13::srs::SRS;
-    use crate::pc::pst13::PST13;
     use crate::pc::PCScheme;
-    use crate::snark::{errors::ScribeErrors, Scribe};
+    use crate::pc::pst13::PST13;
+    use crate::pc::pst13::srs::SRS;
+    use crate::snark::{Scribe, errors::ScribeErrors};
     use ark_bls12_381::Bls12_381;
     use ark_bls12_381::Fr;
     use ark_std::test_rng;

@@ -1,39 +1,48 @@
 use rayon::prelude::*;
 
+use crate::iterator::BatchedIteratorAssocTypes;
+
 use super::BatchedIterator;
 
 pub struct ChainMany<I> {
     iters: Vec<I>,
+    cur_index: usize,
 }
 
 impl<I> ChainMany<I> {
-    pub fn new(mut iters: Vec<I>) -> Self {
-        iters.reverse();
-        Self { iters }
+    pub fn new(iters: Vec<I>) -> Self {
+        Self {
+            iters,
+            cur_index: 0,
+        }
     }
+}
+
+impl<I> BatchedIteratorAssocTypes for ChainMany<I>
+where
+    I: BatchedIterator,
+    I::Item: Clone,
+    for<'a> I::Batch<'a>: IndexedParallelIterator,
+{
+    type Item = I::Item;
+    type Batch<'a> = I::Batch<'a>;
 }
 
 impl<I> BatchedIterator for ChainMany<I>
 where
     I: BatchedIterator,
     I::Item: Clone,
-    I::Batch: IndexedParallelIterator,
+    for<'a> I::Batch<'a>: IndexedParallelIterator,
 {
-    type Item = I::Item;
-    type Batch = I::Batch;
-
     #[inline]
-    fn next_batch(&mut self) -> Option<Self::Batch> {
-        let batch = self.iters.last_mut()?.next_batch();
-        if let Some(batch) = batch {
-            Some(batch)
-        } else {
-            drop(batch);
-            // The iterator is empty, so we remove it from the list of iterators.
-            // If there are no more iterators, we return None.
-            self.iters.pop()?;
-            self.next_batch()
+    fn next_batch<'a>(&'a mut self) -> Option<Self::Batch<'a>> {
+        for iter in &mut self.iters[self.cur_index..] {
+            if let Some(batch) = iter.next_batch() {
+                return Some(batch);
+            }
+            self.cur_index += 1;
         }
+        None
     }
 
     fn len(&self) -> Option<usize> {
@@ -44,8 +53,8 @@ where
 #[cfg(test)]
 mod tests {
     use crate::{
-        iterator::{chain_many, BatchAdapter, BatchedIterator},
         BUFFER_SIZE,
+        iterator::{BatchAdapter, BatchedIterator, chain_many},
     };
 
     #[test]

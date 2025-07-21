@@ -5,12 +5,12 @@ use crate::piop::{
     errors::PIOPError,
     structs::{IOPProverMessage, IOPProverState},
 };
-use ark_ff::{batch_inversion, PrimeField};
+use ark_ff::{PrimeField, batch_inversion};
 use ark_std::{end_timer, start_timer, vec::Vec};
 use mle::virtual_polynomial::VirtualPolynomial;
 use rayon::prelude::*;
 use scribe_streams::{
-    iterator::{zip_many, BatchedIterator},
+    iterator::{BatchedIterator, zip_many},
     serialize::RawPrimeField,
 };
 
@@ -115,9 +115,11 @@ impl<F: RawPrimeField> SumCheckProver<F> for IOPProverState<F> {
             .products
             .par_iter()
             .map(|(coefficient, products)| {
+                let mut buffers = vec![vec![]; products.len()];
                 let mut polys_in_product = products
                     .iter()
-                    .map(|&f| self.poly.mles[f].evals().array_chunks::<2>())
+                    .zip(&mut buffers)
+                    .map(|(&f, b)| self.poly.mles[f].evals_with_buf(b).array_chunks::<2>())
                     .collect::<Vec<_>>();
                 let mut sum = match polys_in_product.len() {
                     1 => {
@@ -172,9 +174,7 @@ impl<F: RawPrimeField> SumCheckProver<F> for IOPProverState<F> {
                         extrapolate(points, weights, &sum, &at)
                     })
                     .collect::<Vec<_>>();
-                sum.into_iter()
-                    .chain(extrapolation.into_iter())
-                    .collect::<Vec<_>>()
+                sum.into_iter().chain(extrapolation).collect::<Vec<_>>()
             })
             .collect::<Vec<_>>();
         for sum in sums {

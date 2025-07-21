@@ -8,12 +8,12 @@ use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::rand::RngCore;
 use rayon::prelude::*;
 
-use crate::EqEvalIter;
+use crate::eq_iter::EqEvalIterWithBuf;
 use scribe_streams::{
-    file_vec::FileVec,
-    iterator::{from_fn, repeat, BatchedIterator},
-    serialize::RawField,
     LOG_BUFFER_SIZE,
+    file_vec::FileVec,
+    iterator::{BatchedIterator, from_fn, repeat},
+    serialize::RawField,
 };
 
 #[derive(Debug, Hash, PartialEq, Eq, CanonicalDeserialize, CanonicalSerialize)]
@@ -173,11 +173,23 @@ impl<F: RawField> Inner<F> {
     /// Returns `None` if the point has the wrong length.
     #[inline]
     pub fn evaluate(&self, point: &[F]) -> Option<F> {
+        self.evaluate_with_bufs(point, &mut vec![], &mut vec![])
+    }
+
+    /// Evaluates `self` at the given point.
+    /// Returns `None` if the point has the wrong length.
+    #[inline]
+    pub fn evaluate_with_bufs(
+        &self,
+        point: &[F],
+        self_buf: &mut Vec<F>,
+        eq_buf: &mut Vec<F>,
+    ) -> Option<F> {
         if point.len() == self.num_vars {
             Some(
                 self.evals
-                    .iter()
-                    .zip(EqEvalIter::new(point.to_vec()))
+                    .iter_with_buf(self_buf)
+                    .zip(EqEvalIterWithBuf::new(point.to_vec(), eq_buf))
                     .map(|(a, b)| a * b)
                     .sum(),
             )
@@ -199,7 +211,10 @@ impl<F: RawField> Inner<F> {
             FileVec::File { .. } => {
                 self.evals = self
                     .evals
-                    .iter_chunk_mapped::<2, _, _>(|chunk| f(&chunk[0], &chunk[1]))
+                    .iter_chunk_mapped_with_buf::<2, _, _>(
+                        |chunk| f(&chunk[0], &chunk[1]),
+                        &mut vec![],
+                    )
                     .to_file_vec();
             },
             FileVec::Buffer { ref mut buffer } => {
@@ -222,7 +237,7 @@ impl<F: RawField> Inner<F> {
         assert!((1 << self.num_vars) % 2 == 0);
         let evals = self
             .evals
-            .iter_chunk_mapped::<2, _, _>(|chunk| f(&chunk[0], &chunk[1]))
+            .iter_chunk_mapped_with_buf::<2, _, _>(|chunk| f(&chunk[0], &chunk[1]), &mut vec![])
             .to_file_vec();
         Self {
             evals,
@@ -260,14 +275,16 @@ impl<F: RawField> Inner<F> {
         let polys = (0..degree)
             .map(|_| Self::rand(num_vars, rng))
             .collect::<Vec<_>>();
+        let mut buf = vec![];
         let product_poly = polys
             .iter()
             .fold(Self::constant(F::one(), num_vars), |mut acc, p| {
-                acc.evals.zipped_for_each(p.evals.iter(), |a, b| *a *= b);
+                acc.evals
+                    .zipped_for_each(p.evals.iter_with_buf(&mut buf), |a, b| *a *= b);
                 acc
             });
 
-        (polys, product_poly.evals.iter().sum())
+        (polys, product_poly.evals.iter_with_buf(&mut buf).sum())
     }
 
     pub fn rand_product_summing_to_zero<R: ark_std::rand::RngCore>(
@@ -286,7 +303,7 @@ impl<F: RawField> MulAssign<Self> for Inner<F> {
     #[inline(always)]
     fn mul_assign(&mut self, other: Self) {
         self.evals
-            .zipped_for_each(other.evals.iter(), |a, b| *a *= b);
+            .zipped_for_each(other.evals.iter_with_buf(&mut vec![]), |a, b| *a *= b);
     }
 }
 
@@ -294,7 +311,7 @@ impl<'a, F: RawField> MulAssign<&'a Self> for Inner<F> {
     #[inline(always)]
     fn mul_assign(&mut self, other: &'a Self) {
         self.evals
-            .zipped_for_each(other.evals.iter(), |a, b| *a *= b);
+            .zipped_for_each(other.evals.iter_with_buf(&mut vec![]), |a, b| *a *= b);
     }
 }
 
@@ -302,7 +319,7 @@ impl<F: RawField> AddAssign<Self> for Inner<F> {
     #[inline(always)]
     fn add_assign(&mut self, other: Self) {
         self.evals
-            .zipped_for_each(other.evals.iter(), |a, b| *a += b);
+            .zipped_for_each(other.evals.iter_with_buf(&mut vec![]), |a, b| *a += b);
     }
 }
 
@@ -310,7 +327,7 @@ impl<'a, F: RawField> AddAssign<&'a Self> for Inner<F> {
     #[inline(always)]
     fn add_assign(&mut self, other: &'a Self) {
         self.evals
-            .zipped_for_each(other.evals.iter(), |a, b| *a += b);
+            .zipped_for_each(other.evals.iter_with_buf(&mut vec![]), |a, b| *a += b);
     }
 }
 
@@ -318,7 +335,7 @@ impl<F: RawField> SubAssign<Self> for Inner<F> {
     #[inline(always)]
     fn sub_assign(&mut self, other: Self) {
         self.evals
-            .zipped_for_each(other.evals.iter(), |a, b| *a -= b);
+            .zipped_for_each(other.evals.iter_with_buf(&mut vec![]), |a, b| *a -= b);
     }
 }
 
@@ -326,7 +343,7 @@ impl<'a, F: RawField> SubAssign<&'a Self> for Inner<F> {
     #[inline(always)]
     fn sub_assign(&mut self, other: &'a Self) {
         self.evals
-            .zipped_for_each(other.evals.iter(), |a, b| *a -= b);
+            .zipped_for_each(other.evals.iter_with_buf(&mut vec![]), |a, b| *a -= b);
     }
 }
 
@@ -337,7 +354,7 @@ impl<F: RawField> MulAssign<(F, Self)> for Inner<F> {
             *self *= other;
         } else {
             self.evals
-                .zipped_for_each(other.evals.iter(), |a, b| *a *= f * b);
+                .zipped_for_each(other.evals.iter_with_buf(&mut vec![]), |a, b| *a *= f * b);
         }
     }
 }
@@ -349,7 +366,7 @@ impl<'a, F: RawField> MulAssign<(F, &'a Self)> for Inner<F> {
             *self *= other;
         } else {
             self.evals
-                .zipped_for_each(other.evals.iter(), |a, b| *a *= f * b);
+                .zipped_for_each(other.evals.iter_with_buf(&mut vec![]), |a, b| *a *= f * b);
         }
     }
 }
@@ -363,14 +380,18 @@ impl<F: RawField> MulAssign<F> for Inner<F> {
     }
 }
 
-impl<'a, F: RawField> Mul<F> for &'a Inner<F> {
+impl<F: RawField> Mul<F> for &Inner<F> {
     type Output = Inner<F>;
     #[inline(always)]
     fn mul(self, f: F) -> Self::Output {
         if f.is_one() {
             self.deep_copy()
         } else {
-            let evals = self.evals.iter().map(|a| f * a).to_file_vec();
+            let evals = self
+                .evals
+                .iter_with_buf(&mut vec![])
+                .map(|a| f * a)
+                .to_file_vec();
             Inner::from_evals(evals, self.num_vars)
         }
     }
@@ -383,7 +404,7 @@ impl<F: RawField> AddAssign<(F, Self)> for Inner<F> {
             *self += other;
         } else {
             self.evals
-                .zipped_for_each(other.evals.iter(), |a, b| *a += f * b);
+                .zipped_for_each(other.evals.iter_with_buf(&mut vec![]), |a, b| *a += f * b);
         }
     }
 }
@@ -395,7 +416,7 @@ impl<'a, F: RawField> AddAssign<(F, &'a Self)> for Inner<F> {
             *self += other;
         } else {
             self.evals
-                .zipped_for_each(other.evals.iter(), |a, b| *a += f * b);
+                .zipped_for_each(other.evals.iter_with_buf(&mut vec![]), |a, b| *a += f * b);
         }
     }
 }
@@ -407,7 +428,7 @@ impl<F: RawField> SubAssign<(F, Self)> for Inner<F> {
             *self -= other;
         } else {
             self.evals
-                .zipped_for_each(other.evals.iter(), |a, b| *a -= f * b);
+                .zipped_for_each(other.evals.iter_with_buf(&mut vec![]), |a, b| *a -= f * b);
         }
     }
 }
@@ -419,7 +440,7 @@ impl<'a, F: RawField> SubAssign<(F, &'a Self)> for Inner<F> {
             *self -= other;
         } else {
             self.evals
-                .zipped_for_each(other.evals.iter(), |a, b| *a -= f * b);
+                .zipped_for_each(other.evals.iter_with_buf(&mut vec![]), |a, b| *a -= f * b);
         }
     }
 }
@@ -440,8 +461,8 @@ mod tests {
 
     use crate::MLE;
     use scribe_streams::{
-        iterator::{BatchAdapter, BatchedIterator},
         LOG_BUFFER_SIZE,
+        iterator::{BatchAdapter, BatchedIterator},
     };
 
     #[test]

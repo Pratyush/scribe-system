@@ -2,69 +2,75 @@ use crate::{
     iterator::BatchedIteratorAssocTypes,
     serialize::{DeserializeRaw, SerializeRaw},
 };
-use rayon::{iter::MinLen, prelude::*, vec::IntoIter};
-use std::{fmt::Debug, marker::PhantomData};
+use rayon::{
+    iter::{Copied, MinLen},
+    prelude::*,
+    slice::Iter,
+};
+use std::fmt::Debug;
 
 use crate::{BUFFER_SIZE, iterator::BatchedIterator};
 
 use super::{AVec, avec, backend::InnerFile};
 
-pub enum Iter<'a, T: SerializeRaw + DeserializeRaw + 'static> {
+pub enum IterWithBuf<'a, T: SerializeRaw + DeserializeRaw + 'static> {
     File {
         file: InnerFile,
-        lifetime: PhantomData<&'a T>,
+        buffer: &'a mut Vec<T>,
         work_buffer: AVec,
     },
     Buffer {
-        buffer: Vec<T>,
+        buffer: &'a mut Vec<T>,
     },
 }
 
-impl<'a, T: SerializeRaw + DeserializeRaw> Iter<'a, T> {
-    pub fn new_file(file: InnerFile) -> Self {
+impl<'a, T: SerializeRaw + DeserializeRaw> IterWithBuf<'a, T> {
+    pub fn new_file_with_buf(file: InnerFile, buffer: &'a mut Vec<T>) -> Self {
         let mut work_buffer = avec![];
         work_buffer.reserve(T::SIZE * BUFFER_SIZE);
+        buffer.clear();
         Self::File {
             file,
-            lifetime: PhantomData,
+            buffer,
             work_buffer,
         }
     }
 
-    pub fn new_buffer(buffer: Vec<T>) -> Self {
+    pub fn new_buffer(buffer: &'a mut Vec<T>) -> Self {
         Self::Buffer { buffer }
     }
 }
 
 impl<'a, T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy + Debug>
-    BatchedIteratorAssocTypes for Iter<'a, T>
+    BatchedIteratorAssocTypes for IterWithBuf<'a, T>
 {
     type Item = T;
-    type Batch<'b> = MinLen<IntoIter<T>>;
+    type Batch<'b> = MinLen<Copied<Iter<'b, T>>>;
 }
 
 impl<'a, T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy + Debug> BatchedIterator
-    for Iter<'a, T>
+    for IterWithBuf<'a, T>
 {
     #[inline]
     fn next_batch<'b>(&'b mut self) -> Option<Self::Batch<'b>> {
         match self {
-            Iter::File {
-                file, work_buffer, ..
+            Self::File {
+                file,
+                work_buffer,
+                buffer,
             } => {
-                let mut result = Vec::with_capacity(BUFFER_SIZE);
-                T::deserialize_raw_batch(&mut result, work_buffer, BUFFER_SIZE, file).ok()?;
-                if result.is_empty() {
-                    None
-                } else {
-                    Some(result.into_par_iter().with_min_len(1 << 7))
-                }
-            },
-            Iter::Buffer { buffer } => {
+                T::deserialize_raw_batch(buffer, work_buffer, BUFFER_SIZE, file).ok()?;
                 if buffer.is_empty() {
                     None
                 } else {
-                    Some(std::mem::take(buffer).into_par_iter().with_min_len(1 << 7))
+                    Some((*buffer).par_iter().copied().with_min_len(1 << 7))
+                }
+            },
+            Self::Buffer { buffer } => {
+                if buffer.is_empty() {
+                    None
+                } else {
+                    Some((*buffer).par_iter().copied().with_min_len(1 << 7))
                 }
             },
         }
