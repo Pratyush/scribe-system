@@ -455,7 +455,7 @@ impl<F: RawField> Display for Inner<F> {
 mod tests {
     use ark_bls12_381::Fr;
     use ark_ff::Field;
-    use ark_poly::{DenseMultilinearExtension, MultilinearExtension};
+    use ark_poly::{DenseMultilinearExtension, MultilinearExtension, Polynomial};
     use ark_std::UniformRand;
     use rayon::prelude::*;
 
@@ -475,7 +475,7 @@ mod tests {
                 .map(|_| Fr::rand(&mut rng))
                 .collect::<Vec<_>>();
             let mle = MLE::from_evals_vec(lde.to_evaluations(), num_vars);
-            let eval = lde.evaluate(&point).unwrap();
+            let eval = lde.evaluate(&point);
             let eval_2 = mle.evaluate(&point).unwrap();
             let lde_evals = BatchAdapter::from(lde.to_evaluations().into_iter());
             mle.evals()

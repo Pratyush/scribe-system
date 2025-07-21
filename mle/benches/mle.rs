@@ -2,7 +2,7 @@
 extern crate criterion;
 
 use ark_bls12_381::Fr;
-use ark_ff::Field;
+use ark_ff::{AdditiveGroup, Field};
 use ark_std::UniformRand;
 use criterion::{BatchSize, BenchmarkId, Criterion, Throughput};
 use mle::{EqEvalIter, MLE};
@@ -77,7 +77,6 @@ fn eval_vec(c: &mut Criterion) {
     }
 
     fn fix_one_variable_helper(data: &[Fr], nv: usize, point: &Fr) -> Vec<Fr> {
-        use ark_ff::Field;
         use rayon::prelude::*;
         let mut res = vec![Fr::ZERO; 1 << (nv - 1)];
         res.par_iter_mut().enumerate().for_each(|(i, x)| {
