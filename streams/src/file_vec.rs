@@ -20,9 +20,7 @@ use rayon::prelude::*;
 
 pub use self::iter::Iter;
 pub use self::iter_with_buf::IterWithBuf;
-pub use self::{
-    array_chunks::ArrayChunks, into_iter::IntoIter, iter_chunk_mapped::IterChunkMapped,
-};
+pub use self::{array_chunks::ArrayChunks, iter_chunk_mapped::IterChunkMapped};
 
 use super::{
     BUFFER_SIZE,
@@ -33,7 +31,7 @@ mod array_chunks;
 mod array_chunks_with_buf;
 pub mod backend;
 pub use backend::*;
-mod into_iter;
+// mod into_iter;
 mod iter;
 mod iter_chunk_mapped;
 mod iter_chunk_mapped_with_buf;
@@ -267,25 +265,6 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
                 ArrayChunksWithBuf::new_file(file, buf)
             },
             Self::Buffer { buffer } => ArrayChunksWithBuf::new_buffer(buffer.clone()),
-        }
-    }
-
-    #[inline(always)]
-    pub fn into_iter(mut self) -> IntoIter<T>
-    where
-        T: Clone,
-    {
-        match &mut self {
-            Self::File(file) => {
-                let file = std::mem::replace(file, InnerFile::empty())
-                    .reopen_read()
-                    .unwrap();
-                IntoIter::new_file(file)
-            },
-            Self::Buffer { buffer } => {
-                let buffer = core::mem::take(buffer);
-                IntoIter::new_buffer(buffer)
-            },
         }
     }
 

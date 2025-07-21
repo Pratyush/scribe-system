@@ -29,7 +29,7 @@ fn file_vec_for_each() {
             x.square_in_place();
         });
         let vec: Vec<_> = (0..size).map(|i| Fr::from(i).square()).collect();
-        let vec2 = fv.into_iter().to_vec();
+        let vec2 = fv.iter().to_vec();
         for (fv, vec) in vec2.iter().zip(vec) {
             assert_eq!(*fv, vec);
         }

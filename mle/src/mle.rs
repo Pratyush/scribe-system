@@ -388,7 +388,7 @@ fn eq_x_r_helper<F: RawField>(r: &[F]) -> Option<FileVec<F>> {
     } else {
         let prev = eq_x_r_helper(&r[1..])?;
         let result = prev
-            .into_iter()
+            .iter()
             .map(|cur| {
                 let tmp = r[0] * cur;
                 [cur - tmp, tmp]
@@ -418,7 +418,7 @@ mod test {
             let r: Vec<Fr> = (0..num_vars).map(|_| Fr::rand(&mut test_rng())).collect();
             let eq_1 = MLE::eq_x_r(&r);
             let eq_2 = FileVec::from_iter(build_eq_x_r_vec(&r).unwrap().into_iter());
-            eq_1.to_evals().zipped_for_each(eq_2.into_iter(), |a, b| {
+            eq_1.to_evals().zipped_for_each(eq_2.iter(), |a, b| {
                 assert_eq!(*a, b);
             });
         }

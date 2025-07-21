@@ -61,7 +61,7 @@ mod test {
         let iter = FileVec::from_iter(0..BUFFER_SIZE * 2);
         assert_eq!(iter.iter().take(5).to_vec(), (0..5).collect::<Vec<_>>());
         assert_eq!(
-            iter.into_iter().take(BUFFER_SIZE).to_vec(),
+            iter.iter().take(BUFFER_SIZE).to_vec(),
             (0..BUFFER_SIZE).collect::<Vec<_>>()
         );
     }

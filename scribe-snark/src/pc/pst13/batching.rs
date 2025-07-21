@@ -102,6 +102,7 @@ where
     }
     let mut v = v.into_iter().collect::<Vec<_>>();
     v.sort_by_key(|(point, _)| point_indices[point]);
+    let mut buf = vec![];
     let merged_tilde_gs = v
         .into_iter()
         .map(|(_, coeffs_and_polys)| {
@@ -206,7 +207,7 @@ where
                     }
                 })
                 .reduce(|mut acc, p| {
-                    acc.zipped_for_each(p.into_iter(), |a, b| *a += b);
+                    acc.zipped_for_each(p.iter_with_buf(&mut buf), |a, b| *a += b);
                     acc
                 })
                 .unwrap();

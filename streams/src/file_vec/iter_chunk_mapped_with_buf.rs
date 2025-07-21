@@ -116,7 +116,7 @@ where
                     None
                 } else {
                     result_buffer.clear();
-                    let (_, _) = rayon::join(
+                    let (_, b) = rayon::join(
                         || {
                             result
                                 .par_chunks_exact(N)
@@ -134,6 +134,7 @@ where
                             .ok()
                         },
                     );
+                    b?;
                     std::mem::swap(result, temp_buffer);
                     temp_buffer.clear();
                     Some((*result_buffer).par_iter().copied().with_min_len(1 << 10))

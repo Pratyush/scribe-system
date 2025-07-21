@@ -147,25 +147,6 @@ impl InnerFile {
         }
     }
 
-    #[doc(hidden)]
-    #[inline(always)]
-    pub(super) fn empty() -> Self {
-        let mut options = OpenOptions::new();
-        options.read(true).create(true);
-        let (file, path) = Builder::new()
-            .suffix(".scribe")
-            .tempfile()
-            .expect("failed to open file")
-            .keep()
-            .expect("failed to keep file");
-        let buffer: AVec = AVec::new(PAGE_SIZE);
-        Self {
-            file,
-            buffer: Arc::new(Mutex::new(buffer)),
-            path,
-        }
-    }
-
     #[inline(always)]
     pub fn new_temp(prefix: impl AsRef<OsStr>) -> Self {
         let mut options = OpenOptions::new();
