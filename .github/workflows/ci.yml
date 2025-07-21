@@ -14,7 +14,7 @@ jobs:
     steps:
 
     - name: Checkout
-      uses: actions/checkout@v1
+      uses: actions/checkout@v4
     - name: Install Rust
       uses: actions-rs/toolchain@v1
       with:
@@ -41,7 +41,7 @@ jobs:
           - nightly
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Install Rust (${{ matrix.rust }})
         uses: actions-rs/toolchain@v1
@@ -91,16 +91,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
-      - name: Install Rust (${{ matrix.rust }})
+      - name: Install Rust 
         uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
           target: thumbv6m-none-eabi
           override: true
 
-      - name: Install Rust ARM64 (${{ matrix.rust }})
+      - name: Install Rust ARM64
         uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
