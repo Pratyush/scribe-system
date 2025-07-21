@@ -168,3 +168,37 @@ where
         Some(len)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use ark_bls12_381::Fr;
+    use ark_std::{UniformRand, test_rng};
+
+    use crate::{file_vec::FileVec, iterator::BatchedIterator};
+
+    #[test]
+    fn test_iter_chunk_mapped_vs_with_buf() {
+        let mut rng = test_rng();
+
+        for log_size in 1..=20 {
+            let size = 1 << log_size;
+            let input: Vec<Fr> = (0..size).map(|_| Fr::rand(&mut rng)).collect();
+            let fv = FileVec::from_iter(input.clone());
+
+            let expected = input
+                .chunks_exact(2)
+                .map(|c| c[0] + c[1])
+                .collect::<Vec<_>>();
+
+            let output_standard = fv.iter_chunk_mapped::<2, _, _>(|c| c[0] + c[1]).to_vec();
+
+            let mut buf = vec![];
+            let output_with_buf = fv
+                .iter_chunk_mapped_with_buf::<2, _, _>(|c| c[0] + c[1], &mut buf)
+                .to_vec();
+
+            assert_eq!(output_standard, output_with_buf, "Mismatch for size {size}",);
+            assert_eq!(expected, output_with_buf, "Mismatch for size {size}",);
+        }
+    }
+}

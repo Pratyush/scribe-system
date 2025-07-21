@@ -71,7 +71,7 @@ impl<'a, T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy + Debug
                 }
             },
             Self::Buffer { buffer, last } => {
-                if *last {
+                if *last || buffer.is_empty() {
                     None
                 } else {
                     *last = true;
@@ -93,5 +93,32 @@ impl<'a, T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy + Debug
             },
         };
         Some(len)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use ark_bls12_381::Fr;
+    use ark_std::{UniformRand, test_rng};
+
+    use crate::{file_vec::FileVec, iterator::BatchedIterator};
+
+    #[test]
+    fn test_iter_vs_with_buf() {
+        let mut rng = test_rng();
+
+        for log_size in 1..=20 {
+            let size = 1 << log_size;
+            let input: Vec<Fr> = (0..size).map(|_| Fr::rand(&mut rng)).collect();
+            let fv = FileVec::from_iter(input.clone());
+
+            let output_standard = fv.iter().to_vec();
+
+            let mut buf = vec![];
+            let output_with_buf = fv.iter_with_buf(&mut buf).to_vec();
+
+            assert_eq!(output_standard, output_with_buf, "Mismatch for size {size}",);
+            assert_eq!(input, output_with_buf, "Mismatch for size {size}",);
+        }
     }
 }

@@ -84,3 +84,25 @@ impl<T: SerializeRaw + DeserializeRaw> Drop for IntoIter<T> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use ark_bls12_381::Fr;
+    use ark_std::{UniformRand, test_rng};
+
+    use crate::{file_vec::FileVec, iterator::BatchedIterator};
+
+    #[test]
+    fn test_consistency() {
+        let mut rng = test_rng();
+
+        for log_size in 1..=20 {
+            let size = 1 << log_size;
+            let input: Vec<Fr> = (0..size).map(|_| Fr::rand(&mut rng)).collect();
+            let fv = FileVec::from_iter(input.clone());
+            let output = fv.into_iter().to_vec();
+
+            assert_eq!(input, output);
+        }
+    }
+}
