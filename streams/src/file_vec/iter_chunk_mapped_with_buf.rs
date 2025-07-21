@@ -106,6 +106,8 @@ where
                 first,
                 ..
             } => {
+                work_buffer.clear();
+                temp_buffer.clear();
                 if *first {
                     T::deserialize_raw_batch(result, work_buffer, BUFFER_SIZE, &mut *file).ok()?;
                     *first = false;
@@ -114,7 +116,7 @@ where
                     None
                 } else {
                     result_buffer.clear();
-                    let (_, b) = rayon::join(
+                    let (_, _) = rayon::join(
                         || {
                             result
                                 .par_chunks_exact(N)
@@ -132,7 +134,6 @@ where
                             .ok()
                         },
                     );
-                    b?;
                     std::mem::swap(result, temp_buffer);
                     temp_buffer.clear();
                     Some((*result_buffer).par_iter().copied().with_min_len(1 << 10))
@@ -152,6 +153,7 @@ where
                         .map(&*f)
                         .with_min_len(1 << 7)
                         .collect_into_vec(result_buffer);
+                    buffer.clear();
                     Some(result_buffer.par_iter().copied().with_min_len(1 << 7))
                 }
             },
