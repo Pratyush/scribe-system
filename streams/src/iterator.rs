@@ -18,6 +18,7 @@ pub mod repeat;
 pub mod take;
 pub mod zip;
 pub mod zip_many;
+pub mod zip_with_buf;
 
 pub use array_chunks::ArrayChunks;
 pub use chain_many::ChainMany;
@@ -28,6 +29,7 @@ pub use repeat::Repeat;
 pub use take::Take;
 pub use zip::Zip;
 pub use zip_many::ZipMany;
+pub use zip_with_buf::ZipWithBuf;
 
 pub trait BatchedIteratorAssocTypes: Sized {
     type Item: Send + Sync;
@@ -67,10 +69,16 @@ pub trait BatchedIterator: BatchedIteratorAssocTypes {
 
     #[inline(always)]
     fn zip<I2: BatchedIterator>(self, other: I2) -> Zip<Self, I2> {
-        Zip {
-            iter1: self,
-            iter2: other,
-        }
+        Zip::new(self, other)
+    }
+
+    fn zip_with_bufs<'a, I2: BatchedIterator>(
+        self,
+        other: I2,
+        buf1: &'a mut Vec<Self::Item>,
+        buf2: &'a mut Vec<I2::Item>,
+    ) -> ZipWithBuf<'a, Self, I2> {
+        ZipWithBuf::new(self, other, buf1, buf2)
     }
 
     #[inline(always)]

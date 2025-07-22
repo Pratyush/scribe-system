@@ -189,7 +189,11 @@ impl<F: RawField> Inner<F> {
             Some(
                 self.evals
                     .iter_with_buf(self_buf)
-                    .zip(EqEvalIterWithBuf::new(point.to_vec(), eq_buf))
+                    .zip_with_bufs(
+                        EqEvalIterWithBuf::new(point.to_vec(), eq_buf),
+                        &mut vec![],
+                        &mut vec![],
+                    )
                     .map(|(a, b)| a * b)
                     .sum(),
             )

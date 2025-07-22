@@ -163,7 +163,7 @@ where
 
     fn len(&self) -> Option<usize> {
         let len = match self {
-            Self::File { file, .. } => file.len() / T::SIZE / N,
+            Self::File { file, .. } => (file.len() - file.position()) / T::SIZE / N,
             Self::Buffer { buffer, .. } => buffer.len() / N,
         };
         Some(len)

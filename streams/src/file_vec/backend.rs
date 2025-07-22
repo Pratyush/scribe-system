@@ -3,7 +3,7 @@ use std::os::unix::fs::OpenOptionsExt;
 use std::{
     ffi::OsStr,
     fs::{File, OpenOptions},
-    io::{self, IoSlice, Read, Write},
+    io::{self, IoSlice, Read, Seek, Write},
     path::PathBuf,
     sync::{Arc, Mutex},
 };
@@ -248,8 +248,6 @@ impl InnerFile {
                 }
             }
 
-            // Set the file size to the desired length
-            // self.file.set_len(len as u64)?;
             Ok(())
         }
     }
@@ -262,6 +260,10 @@ impl InnerFile {
     #[inline(always)]
     pub fn len(&self) -> usize {
         self.metadata().expect("failed to get metadata").len() as usize
+    }
+
+    pub fn position(&self) -> usize {
+        (&self.file).stream_position().unwrap() as usize
     }
 
     pub fn is_empty(&self) -> bool {

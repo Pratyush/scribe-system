@@ -7,12 +7,18 @@ use super::{BUFFER_SIZE, BatchedIterator};
 
 pub type SVec<T> = SmallVec<[T; 6]>;
 
-pub struct ZipMany<I> {
+pub struct ZipMany<I: BatchedIterator> {
     iters: Vec<I>,
 }
 
-impl<I> ZipMany<I> {
+impl<I: BatchedIterator> ZipMany<I> {
     pub fn new(iters: Vec<I>) -> Self {
+        let iters_min = iters.iter().map(|i| i.len()).min();
+        let iters_max = iters.iter().map(|i| i.len()).max();
+        assert_eq!(
+            iters_min, iters_max,
+            "All iterators must have the same length"
+        );
         Self { iters }
     }
 }

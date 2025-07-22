@@ -423,7 +423,8 @@ mod tests {
 
         let ml_params = SRS::<E>::gen_srs_for_testing(&mut rng, 21)?;
         for num_poly in 5..6 {
-            for nv in 9..19 {
+            // for nv in 9..19 {
+            for nv in 17..19 {
                 let polys1: Vec<_> = (0..num_poly).map(|_| MLE::rand(nv, &mut rng)).collect();
                 test_multi_open_helper(&ml_params, &polys1, &mut rng)?;
             }

@@ -86,6 +86,14 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
         self.len() == 0
     }
 
+    pub fn is_buffer(&self) -> bool {
+        matches!(self, Self::Buffer { .. })
+    }
+
+    pub fn is_file(&self) -> bool {
+        matches!(self, Self::File { .. })
+    }
+
     // #[inline(always)]
     // pub fn with_prefix(prefix: impl AsRef<OsStr>) -> Self {
     //     let file = InnerFile::new_temp(prefix);

@@ -287,6 +287,10 @@ where
     let mut q_buf = Vec::with_capacity(scribe_streams::BUFFER_SIZE);
     let mut r_buf = Vec::with_capacity(scribe_streams::BUFFER_SIZE);
 
+    let mut buf = Vec::with_capacity(scribe_streams::BUFFER_SIZE);
+    let mut buf_2 = Vec::with_capacity(scribe_streams::BUFFER_SIZE);
+    let mut buf_3 = Vec::with_capacity(scribe_streams::BUFFER_SIZE);
+    let mut buf_4 = Vec::with_capacity(scribe_streams::BUFFER_SIZE);
     for (_i, (&point_at_k, gi)) in point
         .iter()
         .zip(prover_param.powers_of_g[ignored..ignored + nv].iter())
@@ -294,16 +298,12 @@ where
     {
         let ith_round = start_timer!(|| format!("{_i}-th round"));
 
-        let ith_round_eval = start_timer!(|| format!("{_i}-th round eval"));
-
-        // TODO: merge this loops with the next loop.
         // TODO: confirm that FileVec in prior round's q and r are auto dropped via the Drop trait once q and r are assigned new FileVec
 
         let mut commitment = E::G1::zero();
         r = f
-            .iter()
-            .array_chunks::<2>()
-            .zip(gi.iter())
+            .array_chunks_with_buf::<2>(&mut buf)
+            .zip_with_bufs(gi.iter_with_buf(&mut buf_2), &mut buf_3, &mut buf_4)
             .batched_map(|batch| {
                 use rayon::prelude::*;
 
@@ -314,9 +314,9 @@ where
                 batch
                     .into_par_iter()
                     .map(|([a, b], g)| {
-                        let q_bit = b - a;
-                        let r_bit = a + q_bit * point_at_k;
-                        ((q_bit, g), r_bit)
+                        let q = b - a;
+                        let r = a + q * point_at_k;
+                        ((q, g), r)
                     })
                     .unzip_into_vecs(&mut q_and_g_buf, &mut r_buf);
 
@@ -331,12 +331,8 @@ where
             })
             .to_file_vec();
 
-        let commitment = commitment.into_affine();
         f = &r;
-
-        end_timer!(ith_round_eval);
-
-        proofs.push(commitment);
+        proofs.push(commitment.into_affine());
 
         end_timer!(ith_round);
     }

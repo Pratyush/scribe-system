@@ -75,7 +75,7 @@ where
                 ..
             } => {
                 work_buffer_2.clear();
-                T::deserialize_raw_batch(work_buffer_2, work_buffer, BUFFER_SIZE, file).ok()?;
+                T::deserialize_raw_batch(work_buffer_2, work_buffer, BUFFER_SIZE * N, file).ok()?;
                 if work_buffer_2.is_empty() {
                     None
                 } else {
@@ -108,7 +108,7 @@ where
 
     fn len(&self) -> Option<usize> {
         let len = match self {
-            Self::File { file, .. } => file.len() / T::SIZE,
+            Self::File { file, .. } => (file.len() - file.position()) / T::SIZE / N,
             Self::Buffer { buffer } => buffer.len(),
         };
         Some(len / N)

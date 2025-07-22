@@ -62,3 +62,34 @@ where
         self.iter.len()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use ark_bls12_381::Fr;
+    use ark_std::{UniformRand, test_rng};
+
+    use crate::{file_vec::FileVec, iterator::BatchedIterator};
+
+    #[test]
+    fn test_batched_map_matches_standard_map() {
+        let mut rng = test_rng();
+
+        for log_size in 1..=20 {
+            let size = 1 << log_size;
+            let input: Vec<Fr> = (0..size).map(|_| Fr::rand(&mut rng)).collect();
+            let fv = FileVec::from_iter(input.clone());
+
+            let expected: Vec<_> = input.iter().map(|x| *x + Fr::from(3u64)).collect();
+
+            let result = fv
+                .iter()
+                .batched_map(|batch| {
+                    use rayon::prelude::*;
+                    batch.map(|x| x + Fr::from(3u64))
+                })
+                .to_vec();
+
+            assert_eq!(result, expected, "Mismatch for size {size}");
+        }
+    }
+}
