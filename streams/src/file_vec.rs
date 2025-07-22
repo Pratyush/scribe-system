@@ -31,11 +31,12 @@ mod array_chunks;
 mod array_chunks_with_buf;
 pub mod backend;
 pub use backend::*;
-// mod into_iter;
 mod iter;
 mod iter_chunk_mapped;
 mod iter_chunk_mapped_with_buf;
 mod iter_with_buf;
+
+pub(self) mod double_buffered;
 
 #[macro_use]
 mod macros;
