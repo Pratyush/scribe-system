@@ -1,13 +1,12 @@
-use std::io;
 use crossbeam::channel::Receiver;
+use std::io;
 
 use crate::{
-  BUFFER_SIZE,  serialize::{DeserializeRaw, SerializeRaw},
+    BUFFER_SIZE,
+    serialize::{DeserializeRaw, SerializeRaw},
 };
 
 use super::{AVec, avec, backend::InnerFile};
-
-
 
 pub struct DoubleBufferedReader<T> {
     file: Option<InnerFile>,
@@ -19,7 +18,7 @@ pub struct DoubleBufferedReader<T> {
 }
 
 impl<T: SerializeRaw + DeserializeRaw + 'static> DoubleBufferedReader<T> {
-    pub(super) fn new(file: InnerFile) -> Self { 
+    pub(super) fn new(file: InnerFile) -> Self {
         let mut bytes = avec![];
         bytes.reserve(T::SIZE * BUFFER_SIZE);
 
@@ -33,26 +32,19 @@ impl<T: SerializeRaw + DeserializeRaw + 'static> DoubleBufferedReader<T> {
             pending: None,
             first_read: true,
         }
-
     }
 }
 
 impl<T: SerializeRaw + DeserializeRaw + Send + Sync + 'static> DoubleBufferedReader<T> {
-    
     pub(super) fn is_first_read(&self) -> bool {
         self.first_read
     }
-    
+
     /// If we have no data buffered yet and haven’t hit EOF, do a *synchronous* read.
-    pub(super) fn do_first_read(&mut self) -> Result<(), io::Error>{
+    pub(super) fn do_first_read(&mut self) -> Result<(), io::Error> {
         if self.first_read && !self.end_of_file {
             if let Some(f) = self.file.as_mut() {
-                T::deserialize_raw_batch(
-                    &mut self.t_s,
-                    &mut self.bytes,
-                    BUFFER_SIZE,
-                    f,
-                )?;
+                T::deserialize_raw_batch(&mut self.t_s, &mut self.bytes, BUFFER_SIZE, f)?;
                 if self.t_s.is_empty() {
                     self.end_of_file = true;
                 }
@@ -77,7 +69,7 @@ impl<T: SerializeRaw + DeserializeRaw + Send + Sync + 'static> DoubleBufferedRea
             }
         }
     }
-    
+
     /// Starts a background thread to read the next batch of data.
     pub(super) fn start_prefetch(&mut self) {
         if self.end_of_file {
@@ -102,7 +94,7 @@ impl<T: SerializeRaw + DeserializeRaw + Send + Sync + 'static> DoubleBufferedRea
         std::mem::swap(&mut self.t_s, buffer);
     }
 
-    pub(super) fn len(&self) -> Option<usize> { 
+    pub(super) fn len(&self) -> Option<usize> {
         self.file
             .as_ref()
             .map(|f| (f.len() - f.position()) / T::SIZE)

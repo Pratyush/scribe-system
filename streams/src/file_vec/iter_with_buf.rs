@@ -1,5 +1,7 @@
 use crate::{
-    file_vec::{double_buffered::DoubleBufferedReader, backend::InnerFile}, iterator::{BatchedIterator, BatchedIteratorAssocTypes}, serialize::{DeserializeRaw, SerializeRaw}
+    file_vec::{backend::InnerFile, double_buffered::DoubleBufferedReader},
+    iterator::{BatchedIterator, BatchedIteratorAssocTypes},
+    serialize::{DeserializeRaw, SerializeRaw},
 };
 use rayon::{
     iter::{Copied, MinLen},
@@ -10,7 +12,7 @@ use std::fmt::Debug;
 
 pub enum IterWithBuf<'a, T: SerializeRaw + DeserializeRaw + 'static> {
     File {
-        reader:   DoubleBufferedReader<T>,
+        reader: DoubleBufferedReader<T>,
         output_buffer: &'a mut Vec<T>,
     },
     Buffer {
@@ -24,7 +26,8 @@ impl<'a, T: SerializeRaw + DeserializeRaw> IterWithBuf<'a, T> {
         let reader = DoubleBufferedReader::new(file);
         buffer.clear();
         Self::File {
-            reader, output_buffer: buffer,
+            reader,
+            output_buffer: buffer,
         }
     }
 
@@ -46,15 +49,14 @@ impl<'a, T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy + Debug
 impl<'a, T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy + Debug> BatchedIterator
     for IterWithBuf<'a, T>
 {
-
-    // We want to use double-buffering to avoid blocking the main thread while reading 
+    // We want to use double-buffering to avoid blocking the main thread while reading
     // from the file. In this way, we can process the data that we have read, while
     // the next batch is being read in the background.
-    // 
+    //
     // Our strategy is as follows. For the first read, we of course have to read it synchronously.
     // After that, however, we will spawn a thread that reads the next batch in the background.
     // To communicate the result of the I/O thread, we will use a channel.
-    // 
+    //
     #[inline]
     fn next_batch<'b>(&'b mut self) -> Option<Self::Batch<'b>> {
         match self {
@@ -75,7 +77,7 @@ impl<'a, T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy + Debug
                 }
                 // Swap out the batch stored in the reader with the output buffer
                 reader.swap_t_buffer(output_buffer);
-                
+
                 if output_buffer.is_empty() {
                     // If the output buffer is empty, we have reached the end of the file
                     return None;
@@ -85,7 +87,6 @@ impl<'a, T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy + Debug
                 reader.start_prefetch();
 
                 Some(output_buffer.par_iter().copied().with_min_len(1 << 7))
-                
             },
             Self::Buffer { buffer, last } => {
                 if *last || buffer.is_empty() {
@@ -100,7 +101,7 @@ impl<'a, T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy + Debug
 
     fn len(&self) -> Option<usize> {
         match self {
-            Self::File {reader, .. } => reader.len(),
+            Self::File { reader, .. } => reader.len(),
             Self::Buffer { buffer, last } => {
                 if *last {
                     Some(0)
@@ -132,7 +133,11 @@ mod tests {
 
             let mut buf = vec![];
             let output_with_buf = fv.iter_with_buf(&mut buf).to_vec();
-            assert_eq!(output_standard.len(), output_with_buf.len(), "Length mismatch for size {size}",);
+            assert_eq!(
+                output_standard.len(),
+                output_with_buf.len(),
+                "Length mismatch for size {size}",
+            );
             assert_eq!(output_standard, output_with_buf, "Mismatch for size {size}",);
             assert_eq!(input, output_with_buf, "Mismatch for size {size}",);
         }

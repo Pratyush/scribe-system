@@ -1,13 +1,11 @@
 use crate::{
-    iterator::BatchedIteratorAssocTypes,
+    BUFFER_SIZE,
+    file_vec::{backend::InnerFile, double_buffered::DoubleBufferedReader},
+    iterator::{BatchedIterator, BatchedIteratorAssocTypes},
     serialize::{DeserializeRaw, SerializeRaw},
 };
 use rayon::{prelude::*, vec::IntoIter};
 use std::marker::PhantomData;
-
-use crate::{BUFFER_SIZE, iterator::BatchedIterator};
-
-use super::{AVec, avec, backend::InnerFile};
 
 pub enum IterChunkMapped<'a, T, U, F, const N: usize>
 where
@@ -16,12 +14,9 @@ where
     F: for<'b> Fn(&[T]) -> U + Sync + Send,
 {
     File {
-        file: InnerFile,
+        reader: DoubleBufferedReader<T>,
         lifetime: PhantomData<&'a T>,
-        work_buffer: AVec,
-        work_buffer_2: Vec<T>,
-        temp_buffer: Vec<T>,
-        first: bool,
+        output: Vec<T>,
         f: F,
     },
     Buffer {
@@ -41,15 +36,12 @@ where
         assert!(BUFFER_SIZE % N == 0, "BUFFER_SIZE must be divisible by N");
         assert_eq!(std::mem::align_of::<[T; N]>(), std::mem::align_of::<T>());
         assert_eq!(std::mem::size_of::<[T; N]>(), N * std::mem::size_of::<T>());
-        let mut work_buffer = avec![];
-        work_buffer.reserve(T::SIZE * BUFFER_SIZE);
+        let reader = DoubleBufferedReader::new(file);
+        let output = Vec::with_capacity(BUFFER_SIZE);
         Self::File {
-            file,
+            reader,
             lifetime: PhantomData,
-            work_buffer,
-            work_buffer_2: Vec::with_capacity(BUFFER_SIZE),
-            temp_buffer: Vec::with_capacity(BUFFER_SIZE),
-            first: true,
+            output,
             f,
         }
     }
@@ -83,45 +75,28 @@ where
     fn next_batch<'b>(&'b mut self) -> Option<Self::Batch<'b>> {
         match self {
             Self::File {
-                file,
-                work_buffer,
-                work_buffer_2: result,
-                temp_buffer,
-                f,
-                first,
-                ..
+                reader, f, output, ..
             } => {
-                if *first {
-                    T::deserialize_raw_batch(result, work_buffer, BUFFER_SIZE, &mut *file).ok()?;
-                    *first = false;
-                }
-                if result.is_empty() {
-                    None
+                output.clear();
+                if reader.is_first_read() {
+                    reader.do_first_read().ok()?;
                 } else {
-                    let (a, b) = rayon::join(
-                        || {
-                            result
-                                .par_chunks_exact(N)
-                                .map(&*f)
-                                .with_min_len(1 << 10)
-                                .collect::<Vec<_>>()
-                                .into_par_iter()
-                        },
-                        || {
-                            T::deserialize_raw_batch(
-                                &mut *temp_buffer,
-                                work_buffer,
-                                BUFFER_SIZE,
-                                file,
-                            )
-                            .ok()
-                        },
-                    );
-                    b?;
-                    std::mem::swap(result, temp_buffer);
-                    temp_buffer.clear();
-                    Some(a)
+                    reader.get_prefetched_batch();
                 }
+
+                reader.swap_t_buffer(output);
+                if output.is_empty() {
+                    return None;
+                }
+                reader.start_prefetch();
+
+                let output = output
+                    .par_chunks_exact(N)
+                    .map(&*f)
+                    .with_min_len(1 << 10)
+                    .collect::<Vec<_>>()
+                    .into_par_iter();
+                Some(output)
             },
             Self::Buffer { buffer, f } => {
                 if buffer.is_empty() {
@@ -141,11 +116,10 @@ where
     }
 
     fn len(&self) -> Option<usize> {
-        let len = match self {
-            Self::File { file, .. } => (file.len() - file.position()) / T::SIZE / N,
-            Self::Buffer { buffer, .. } => buffer.len() / N,
-        };
-        Some(len)
+        match self {
+            Self::File { reader, .. } => reader.len().map(|s| s / N),
+            Self::Buffer { buffer, .. } => Some(buffer.len() / N),
+        }
     }
 }
 

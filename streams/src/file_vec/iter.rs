@@ -1,6 +1,8 @@
 use crate::{
     BUFFER_SIZE,
-    file_vec::{double_buffered::DoubleBufferedReader, backend::InnerFile}, iterator::{BatchedIterator, BatchedIteratorAssocTypes}, serialize::{DeserializeRaw, SerializeRaw}
+    file_vec::{backend::InnerFile, double_buffered::DoubleBufferedReader},
+    iterator::{BatchedIterator, BatchedIteratorAssocTypes},
+    serialize::{DeserializeRaw, SerializeRaw},
 };
 use rayon::{iter::MinLen, prelude::*, vec::IntoIter};
 use std::{fmt::Debug, marker::PhantomData};
@@ -42,9 +44,7 @@ impl<'a, T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy + Debug
     #[inline]
     fn next_batch<'b>(&'b mut self) -> Option<Self::Batch<'b>> {
         match self {
-            Iter::File {
-                reader, ..
-            } => {
+            Iter::File { reader, .. } => {
                 let mut output_buffer = Vec::with_capacity(BUFFER_SIZE);
                 if reader.is_first_read() {
                     // If this is the first read, we have to do it synchronously
@@ -58,7 +58,7 @@ impl<'a, T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy + Debug
                 }
                 // Swap out the batch stored in the reader with the output buffer
                 reader.swap_t_buffer(&mut output_buffer);
-                
+
                 if output_buffer.is_empty() {
                     // If the output buffer is empty, we have reached the end of the file
                     return None;
@@ -68,7 +68,6 @@ impl<'a, T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy + Debug
                 reader.start_prefetch();
 
                 Some(output_buffer.into_par_iter().with_min_len(1 << 7))
-
             },
             Iter::Buffer { buffer } => {
                 if buffer.is_empty() {
