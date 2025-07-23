@@ -20,7 +20,7 @@ pub trait ReadN {
 pub trait WriteAligned {
     /// Write all elements from `src` into `self.
     fn write_all(&mut self, src: &AVec) -> std::io::Result<()>;
-    
+
     fn flush(&mut self) -> std::io::Result<()>;
 }
 
@@ -131,10 +131,7 @@ impl InnerFile {
         let file = options.open(&path).expect("failed to open file");
 
         file_set_nocache(&file);
-        Self {
-            file,
-            path,
-        }
+        Self { file, path }
     }
 
     #[inline(always)]
@@ -147,10 +144,7 @@ impl InnerFile {
         let file = options.open(&path).expect("failed to open file");
 
         file_set_nocache(&file);
-        Self {
-            file,
-            path,
-        }
+        Self { file, path }
     }
 
     #[inline(always)]
@@ -170,10 +164,7 @@ impl InnerFile {
 
         file_set_nocache(&file);
 
-        Self {
-            file,
-            path,
-        }
+        Self { file, path }
     }
 
     #[inline(always)]
@@ -285,9 +276,6 @@ impl InnerFile {
             path: self.path.clone(),
         })
     }
-    
-    
-    
 }
 
 impl WriteAligned for InnerFile {
@@ -309,7 +297,7 @@ impl WriteAligned for &InnerFile {
         assert_eq!(align_of_val(buf) % PAGE_SIZE, 0);
         (&self.file).write_all(buf)
     }
-    
+
     fn flush(&mut self) -> std::io::Result<()> {
         (&self.file).flush()
     }
@@ -331,9 +319,13 @@ impl io::Seek for &InnerFile {
     fn seek(&mut self, s: io::SeekFrom) -> io::Result<u64> {
         match s {
             io::SeekFrom::Start(pos) => {
-                assert_eq!(pos % PAGE_SIZE as u64, 0, "Seek position must be a multiple of PAGE_SIZE");
-            }
-            _ => unimplemented!()
+                assert_eq!(
+                    pos % PAGE_SIZE as u64,
+                    0,
+                    "Seek position must be a multiple of PAGE_SIZE"
+                );
+            },
+            _ => unimplemented!(),
         }
         (&self.file).seek(s)
     }
@@ -349,9 +341,13 @@ impl io::Seek for InnerFile {
     fn seek(&mut self, s: io::SeekFrom) -> io::Result<u64> {
         match s {
             io::SeekFrom::Start(pos) => {
-                assert_eq!(pos % PAGE_SIZE as u64, 0, "Seek position must be a multiple of PAGE_SIZE");
-            }
-            _ => unimplemented!()
+                assert_eq!(
+                    pos % PAGE_SIZE as u64,
+                    0,
+                    "Seek position must be a multiple of PAGE_SIZE"
+                );
+            },
+            _ => unimplemented!(),
         }
         self.file.seek(s)
     }

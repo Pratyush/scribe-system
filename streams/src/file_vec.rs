@@ -812,12 +812,9 @@ impl<T: SerializeRaw + DeserializeRaw + Display + Send + Sync + 'static> Display
         match self {
             Self::File(file) => {
                 writeln!(f, "FileVec at {}: [", file.path.display())?;
-                self.iter()
-                    .to_vec()
-                    .into_iter()
-                    .for_each(|item| {
-                        writeln!(f, "  {item},").unwrap();
-                    });
+                self.iter().to_vec().into_iter().for_each(|item| {
+                    writeln!(f, "  {item},").unwrap();
+                });
                 writeln!(f, "]")?;
                 Ok(())
             },

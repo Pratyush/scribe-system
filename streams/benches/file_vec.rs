@@ -76,7 +76,11 @@ fn iter_map(c: &mut Criterion) {
         group.throughput(Throughput::Elements(vec_size as u64));
         group.bench_with_input(BenchmarkId::from_parameter(vec_size), &size, |b, _| {
             let fv = FileVec::from_iter((0..vec_size).map(|_| e));
-            b.iter(|| fv.iter().map(|e| e.square().square().square()).for_each(|_| {}));
+            b.iter(|| {
+                fv.iter()
+                    .map(|e| e.square().square().square())
+                    .for_each(|_| {})
+            });
         });
     }
     group.finish();

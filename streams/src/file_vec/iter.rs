@@ -89,8 +89,8 @@ impl<'a, T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy + Debug
 
 #[cfg(test)]
 mod tests {
-    use ark_bls12_381::Fr;
     use crate::{file_vec::FileVec, iterator::BatchedIterator};
+    use ark_bls12_381::Fr;
 
     #[test]
     fn test_consistency() {

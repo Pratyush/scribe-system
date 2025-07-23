@@ -1,5 +1,8 @@
 use crossbeam::channel::Receiver;
-use std::{collections::VecDeque, io::{self, Seek, SeekFrom}};
+use std::{
+    collections::VecDeque,
+    io::{self, Seek, SeekFrom},
+};
 
 use crate::{
     BUFFER_SIZE,
@@ -16,7 +19,7 @@ pub struct DoubleBufferedReader<T> {
     // and to avoid blocking the main thread while reading from the file.
 
     // `ready` contains the buffers that have been read and are ready to be processed.
-    ready:   VecDeque<Buffers<T>>,
+    ready: VecDeque<Buffers<T>>,
     // `pending` contains the buffers that are being read in the background.
     pending: VecDeque<Receiver<Buffers<T>>>,
     // The next offset in the file to read from.
@@ -29,10 +32,9 @@ pub struct DoubleBufferedReader<T> {
 const PREFETCH_DEPTH: usize = 1;
 
 struct Buffers<T> {
-    pub(super) t_s: Vec<T>,      // capacity = BUFFER_SIZE
-    bytes: AVec,        // capacity = BUFFER_SIZE * T::SIZE
+    pub(super) t_s: Vec<T>, // capacity = BUFFER_SIZE
+    bytes: AVec,            // capacity = BUFFER_SIZE * T::SIZE
 }
-
 
 impl<T: SerializeRaw + DeserializeRaw> Buffers<T> {
     #[inline]
@@ -43,7 +45,8 @@ impl<T: SerializeRaw + DeserializeRaw> Buffers<T> {
         let t_s = Vec::<T>::with_capacity(BUFFER_SIZE);
         Self { t_s, bytes }
     }
-    
+
+    #[allow(unused)]
     #[inline]
     fn empty() -> Self {
         Self {
@@ -51,7 +54,7 @@ impl<T: SerializeRaw + DeserializeRaw> Buffers<T> {
             bytes: avec![],
         }
     }
-    
+
     #[inline]
     fn clear(&mut self) {
         self.t_s.clear();
@@ -78,7 +81,6 @@ impl<T: SerializeRaw + DeserializeRaw + 'static> DoubleBufferedReader<T> {
 }
 
 impl<T: SerializeRaw + DeserializeRaw + Send + Sync + 'static> DoubleBufferedReader<T> {
-
     const BYTES_PER_BLOCK: u64 = (BUFFER_SIZE * T::SIZE) as u64;
 
     #[inline]
@@ -90,7 +92,12 @@ impl<T: SerializeRaw + DeserializeRaw + Send + Sync + 'static> DoubleBufferedRea
     #[inline]
     pub(super) fn do_first_read(&mut self) -> Result<(), io::Error> {
         if self.is_first_read() && !self.end_of_file {
-            T::deserialize_raw_batch(&mut self.current.t_s, &mut self.current.bytes, BUFFER_SIZE, &mut self.file)?;
+            T::deserialize_raw_batch(
+                &mut self.current.t_s,
+                &mut self.current.bytes,
+                BUFFER_SIZE,
+                &mut self.file,
+            )?;
             if self.current.t_s.is_empty() {
                 self.end_of_file = true;
             }
@@ -98,18 +105,20 @@ impl<T: SerializeRaw + DeserializeRaw + Send + Sync + 'static> DoubleBufferedRea
         }
         Ok(())
     }
-    
-    
-    
-    pub fn start_prefetches(&mut self) {
-        if self.end_of_file { return; }
 
-        while (self.ready.len() + self.pending.len()) < PREFETCH_DEPTH && 
-            self.next_offset_bytes < self.file.len() as u64
+    pub fn start_prefetches(&mut self) {
+        if self.end_of_file {
+            return;
+        }
+
+        while (self.ready.len() + self.pending.len()) < PREFETCH_DEPTH
+            && self.next_offset_bytes < self.file.len() as u64
         {
-            let mut file = self.file.reopen_read_by_ref()
+            let mut file = self
+                .file
+                .reopen_read_by_ref()
                 .expect("failed to reopen file for reading");
-            
+
             let offset = self.next_offset_bytes;
             self.next_offset_bytes += Self::BYTES_PER_BLOCK;
 
@@ -119,7 +128,7 @@ impl<T: SerializeRaw + DeserializeRaw + Send + Sync + 'static> DoubleBufferedRea
             let (tx, rx) = crossbeam::channel::bounded(1);
             self.pending.push_back(rx);
             rayon::spawn(move || {
-            // We can move the file head to the next offset.
+                // We can move the file head to the next offset.
                 if file.seek(SeekFrom::Start(offset)).is_ok() {
                     let _ = T::deserialize_raw_batch(
                         &mut buffer.t_s,
@@ -137,20 +146,22 @@ impl<T: SerializeRaw + DeserializeRaw + Send + Sync + 'static> DoubleBufferedRea
     /// move finished jobs from `pending` ➜ `ready`
     pub fn harvest(&mut self) {
         let mut harvested_at_least_one = false;
-        while let Some(rx) = self.pending.front() && !harvested_at_least_one {
+        while let Some(rx) = self.pending.front()
+            && !harvested_at_least_one
+        {
             match rx.try_recv() {
                 Ok(bufs) => {
                     self.ready.push_back(bufs);
                     self.pending.pop_front();
                     harvested_at_least_one = true;
-                }
+                },
                 Err(crossbeam::channel::TryRecvError::Empty) => {
                     continue;
                 },
                 Err(_) => {
                     self.pending.pop_front();
                     self.end_of_file = true;
-                }
+                },
             }
         }
     }
@@ -167,7 +178,7 @@ impl<T: SerializeRaw + DeserializeRaw + Send + Sync + 'static> DoubleBufferedRea
         }
 
         if self.current.t_s.is_empty() {
-            return None
+            return None;
         } else {
             std::mem::swap(&mut self.current.t_s, buffer);
         }

@@ -79,11 +79,7 @@ where
                 if t_n_buffer.is_empty() {
                     None
                 } else {
-                    Some(
-                        t_n_buffer
-                            .to_vec()
-                            .into_par_iter(),
-                    )
+                    Some(t_n_buffer.to_vec().into_par_iter())
                 }
             },
             Self::Buffer { buffer } => {
