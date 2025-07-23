@@ -24,7 +24,7 @@ pub trait SerializeRaw: Sized {
     fn serialize_raw_batch(
         result_buffer: &[Self],
         work_buffer: &mut AVec,
-        mut file: impl Write,
+        mut file: impl crate::file_vec::WriteAligned,
     ) -> Result<(), io::Error>
     where
         Self: Sync + Send + Sized,
@@ -93,8 +93,8 @@ pub(crate) fn serialize_and_deserialize_raw_batch<
     T: SerializeRaw + DeserializeRaw + Sync + Send,
 >(
     write_buffer: &[T],
-    write_work_buffer: &mut [u8],
-    mut write_file: impl Write + Send,
+    write_work_buffer: &mut AVec,
+    mut write_file: impl crate::file_vec::WriteAligned + Send,
     read_buffer: &mut Vec<T>,
     read_work_buffer: &mut AVec,
     mut read_file: impl ReadN + Send,
@@ -122,8 +122,9 @@ pub(crate) fn serialize_and_deserialize_raw_batch<
     );
     write_to_buf?;
     read_to_buf?;
+    write_work_buffer.truncate(write_buffer.len() * T::SIZE);
     let (write_to_file, read_from_buf) = rayon::join(
-        || write_file.write_all(&write_work_buffer[..write_buffer.len() * T::SIZE]),
+        || write_file.write_all(&write_work_buffer),
         || -> Result<(), io::Error> {
             if rayon::current_num_threads() == 1 {
                 read_buffer.extend(

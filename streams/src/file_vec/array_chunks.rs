@@ -17,7 +17,7 @@ where
         file: InnerFile,
         lifetime: PhantomData<&'a T>,
         work_buffer: AVec,
-        work_buffer_2: Vec<T>,
+        t_n_buffer: Vec<[T; N]>,
     },
     Buffer {
         buffer: Vec<T>,
@@ -40,7 +40,7 @@ where
             file,
             lifetime: PhantomData,
             work_buffer,
-            work_buffer_2: Vec::with_capacity(BUFFER_SIZE),
+            t_n_buffer: Vec::with_capacity(BUFFER_SIZE),
         }
     }
 
@@ -71,20 +71,17 @@ where
             Self::File {
                 file,
                 work_buffer,
-                work_buffer_2,
+                t_n_buffer,
                 ..
             } => {
-                work_buffer_2.clear();
-                T::deserialize_raw_batch(work_buffer_2, work_buffer, BUFFER_SIZE * N, file).ok()?;
-                if work_buffer_2.is_empty() {
+                t_n_buffer.clear();
+                <[T; N]>::deserialize_raw_batch(t_n_buffer, work_buffer, BUFFER_SIZE, file).ok()?;
+                if t_n_buffer.is_empty() {
                     None
                 } else {
                     Some(
-                        work_buffer_2
-                            .par_chunks(N)
-                            .map(|chunk| <[T; N]>::try_from(chunk).unwrap())
-                            .with_min_len(1 << 10)
-                            .collect::<Vec<_>>()
+                        t_n_buffer
+                            .to_vec()
                             .into_par_iter(),
                     )
                 }

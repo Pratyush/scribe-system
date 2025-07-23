@@ -19,7 +19,7 @@ where
     File {
         file: InnerFile,
         work_buffer: AVec,
-        work_buffer_2: &'a mut Vec<T>,
+        t_n_buffer: &'a mut Vec<[T; N]>,
     },
     Buffer {
         last: bool,
@@ -31,7 +31,7 @@ impl<'a, T, const N: usize> ArrayChunksWithBuf<'a, T, N>
 where
     T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy,
 {
-    pub fn new_file(file: InnerFile, buf: &'a mut Vec<T>) -> Self {
+    pub fn new_file(file: InnerFile, buf: &'a mut Vec<[T; N]>) -> Self {
         assert!(N > 0, "N must be greater than 0");
         assert!(BUFFER_SIZE % N == 0, "BUFFER_SIZE must be divisible by N");
         assert_eq!(std::mem::align_of::<[T; N]>(), std::mem::align_of::<T>());
@@ -43,7 +43,7 @@ where
         Self::File {
             file,
             work_buffer,
-            work_buffer_2: buf,
+            t_n_buffer: buf,
         }
     }
 
@@ -77,29 +77,15 @@ where
             Self::File {
                 file,
                 work_buffer,
-                work_buffer_2,
+                t_n_buffer,
                 ..
             } => {
-                work_buffer_2.clear();
-                T::deserialize_raw_batch(work_buffer_2, work_buffer, BUFFER_SIZE * N, file).ok()?;
-                if work_buffer_2.is_empty() {
+                t_n_buffer.clear();
+                <[T; N]>::deserialize_raw_batch(t_n_buffer, work_buffer, BUFFER_SIZE, file).ok()?;
+                if t_n_buffer.is_empty() {
                     None
                 } else {
-                    assert_eq!(
-                        work_buffer_2.len() % N,
-                        0,
-                        "slice length must be divisible by N"
-                    );
-                    let m = work_buffer_2.len() / N;
-                    let slice;
-                    unsafe {
-                        slice = std::slice::from_raw_parts(
-                            work_buffer_2.as_slice().as_ptr() as *const [T; N],
-                            m,
-                        )
-                    };
-
-                    Some(slice.par_iter().copied().with_min_len(1 << 10))
+                    Some(t_n_buffer.par_iter().copied().with_min_len(1 << 10))
                 }
             },
             Self::Buffer { buffer, last } => {

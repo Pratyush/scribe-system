@@ -101,14 +101,14 @@ where
                 if reader.is_first_read() {
                     reader.do_first_read().ok()?;
                 } else {
-                    reader.get_prefetched_batch();
+                    reader.harvest();
                 }
 
-                reader.swap_t_buffer(output);
+                reader.read_output(output);
                 if output.is_empty() {
                     return None;
                 }
-                reader.start_prefetch();
+                reader.start_prefetches();
 
                 output
                     .par_chunks_exact(N)

@@ -54,10 +54,10 @@ impl<'a, T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy + Debug
                     }
                 } else {
                     // If this is not the first read, we can use the prefetched batch
-                    reader.get_prefetched_batch();
+                    reader.harvest();
                 }
                 // Swap out the batch stored in the reader with the output buffer
-                reader.swap_t_buffer(&mut output_buffer);
+                reader.read_output(&mut output_buffer);
 
                 if output_buffer.is_empty() {
                     // If the output buffer is empty, we have reached the end of the file
@@ -65,7 +65,7 @@ impl<'a, T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy + Debug
                 }
 
                 // 3. overlap I/O for the *next* batch
-                reader.start_prefetch();
+                reader.start_prefetches();
 
                 Some(output_buffer.into_par_iter().with_min_len(1 << 7))
             },
@@ -90,22 +90,21 @@ impl<'a, T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy + Debug
 #[cfg(test)]
 mod tests {
     use ark_bls12_381::Fr;
-    use ark_std::{UniformRand, test_rng};
-
     use crate::{file_vec::FileVec, iterator::BatchedIterator};
 
     #[test]
     fn test_consistency() {
-        let mut rng = test_rng();
-
         for log_size in 1..=20 {
             let size = 1 << log_size;
-            let input: Vec<Fr> = (0..size).map(|_| Fr::rand(&mut rng)).collect();
+            let input: Vec<Fr> = (0..size).map(|i| Fr::from(i)).collect();
             let fv = FileVec::from_iter(input.clone());
 
-            let output_standard = fv.iter().to_vec();
+            let output = fv.iter().to_vec();
+            for (i, (out, inp)) in output.chunks(100).zip(input.chunks(100)).enumerate() {
+                assert_eq!(out, inp, "Mismatch for size {size} at chunk {i}");
+            }
 
-            assert_eq!(output_standard, input, "Mismatch for size {size}",);
+            assert_eq!(output, input, "Mismatch for size {size}",);
         }
     }
 }

@@ -73,10 +73,10 @@ impl<'a, T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy + Debug
                     }
                 } else {
                     // If this is not the first read, we can use the prefetched batch
-                    reader.get_prefetched_batch();
+                    reader.harvest();
                 }
                 // Swap out the batch stored in the reader with the output buffer
-                reader.swap_t_buffer(output_buffer);
+                reader.read_output(output_buffer);
 
                 if output_buffer.is_empty() {
                     // If the output buffer is empty, we have reached the end of the file
@@ -84,7 +84,7 @@ impl<'a, T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy + Debug
                 }
 
                 // 3. overlap I/O for the *next* batch
-                reader.start_prefetch();
+                reader.start_prefetches();
 
                 Some(output_buffer.par_iter().copied().with_min_len(1 << 7))
             },

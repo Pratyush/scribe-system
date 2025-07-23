@@ -61,9 +61,9 @@ pub trait BatchedIterator: BatchedIteratorAssocTypes {
     }
 
     #[inline(always)]
-    fn for_each(mut self, f: impl Fn(Self::Item) + Send + Sync + Clone) {
+    fn for_each(mut self, f: impl Fn(Self::Item) + Send + Sync) {
         while let Some(batch) = self.next_batch() {
-            batch.for_each(f.clone());
+            batch.for_each(&f);
         }
     }
 
