@@ -70,13 +70,13 @@ fn iter_map(c: &mut Criterion) {
     let num_threads = rayon::current_num_threads();
     let mut group = c.benchmark_group(format!("fv::iter_map {num_threads}"));
     let mut rng = &mut ark_std::test_rng();
-    for size in [1, 2, 4, 8, 16] {
+    for size in [1, 2, 4, 8, 16, 32, 64] {
         let e = Fr::rand(&mut rng);
         let vec_size = BUFFER_SIZE * size;
         group.throughput(Throughput::Elements(vec_size as u64));
         group.bench_with_input(BenchmarkId::from_parameter(vec_size), &size, |b, _| {
             let fv = FileVec::from_iter((0..vec_size).map(|_| e));
-            b.iter(|| fv.iter().map(|e| e.double()).for_each(|_| {}));
+            b.iter(|| fv.iter().map(|e| e.square().square().square()).for_each(|_| {}));
         });
     }
     group.finish();
@@ -86,7 +86,7 @@ fn iter_with_buf_map(c: &mut Criterion) {
     let num_threads = rayon::current_num_threads();
     let mut group = c.benchmark_group(format!("fv::iter_with_buf_map {num_threads}"));
     let mut rng = &mut ark_std::test_rng();
-    for size in [1, 2, 4, 8, 16] {
+    for size in [1, 2, 4, 8, 16, 32, 64] {
         let e = Fr::rand(&mut rng);
         let vec_size = BUFFER_SIZE * size;
         group.throughput(Throughput::Elements(vec_size as u64));
@@ -95,7 +95,7 @@ fn iter_with_buf_map(c: &mut Criterion) {
             let mut buf = vec![];
             b.iter(|| {
                 fv.iter_with_buf(&mut buf)
-                    .map(|e| e.double())
+                    .map(|e| e.square().square().square())
                     .for_each(|_| {})
             });
         });
