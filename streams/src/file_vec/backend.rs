@@ -294,7 +294,6 @@ impl WriteAligned for &InnerFile {
     #[inline(always)]
     fn write_all(&mut self, buf: &AVec) -> io::Result<()> {
         debug_assert_eq!(buf.len() % PAGE_SIZE, 0);
-        assert_eq!(align_of_val(buf) % PAGE_SIZE, 0);
         (&self.file).write_all(buf)
     }
 
