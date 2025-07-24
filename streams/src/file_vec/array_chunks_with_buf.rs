@@ -1,6 +1,6 @@
 use crate::{
-    iterator::BatchedIteratorAssocTypes,
-    serialize::{DeserializeRaw, SerializeRaw},
+    file_vec::{backend::InnerFile, double_buffered::DoubleBufferedReader}, iterator::BatchedIteratorAssocTypes, serialize::{DeserializeRaw, SerializeRaw},
+    BUFFER_SIZE, iterator::BatchedIterator,
 };
 use rayon::{
     iter::{Copied, MinLen},
@@ -8,17 +8,12 @@ use rayon::{
     slice::Iter,
 };
 
-use crate::{BUFFER_SIZE, iterator::BatchedIterator};
-
-use super::{AVec, avec, backend::InnerFile};
-
 pub enum ArrayChunksWithBuf<'a, T, const N: usize>
 where
     T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy,
 {
     File {
-        file: InnerFile,
-        work_buffer: AVec,
+        reader: DoubleBufferedReader<[T; N]>,
         t_n_buffer: &'a mut Vec<[T; N]>,
     },
     Buffer {
@@ -36,13 +31,12 @@ where
         assert!(BUFFER_SIZE % N == 0, "BUFFER_SIZE must be divisible by N");
         assert_eq!(std::mem::align_of::<[T; N]>(), std::mem::align_of::<T>());
         assert_eq!(std::mem::size_of::<[T; N]>(), N * std::mem::size_of::<T>());
+        
+        let reader = DoubleBufferedReader::new(file);
 
-        let mut work_buffer = avec![];
-        work_buffer.reserve(T::SIZE * BUFFER_SIZE);
         buf.clear();
         Self::File {
-            file,
-            work_buffer,
+            reader,
             t_n_buffer: buf,
         }
     }
@@ -75,18 +69,25 @@ where
     fn next_batch<'b>(&'b mut self) -> Option<Self::Batch<'b>> {
         match self {
             Self::File {
-                file,
-                work_buffer,
+                reader,
                 t_n_buffer,
-                ..
             } => {
                 t_n_buffer.clear();
-                <[T; N]>::deserialize_raw_batch(t_n_buffer, work_buffer, BUFFER_SIZE, file).ok()?;
-                if t_n_buffer.is_empty() {
-                    None
+
+                if reader.is_first_read() {
+                    reader.do_first_read().ok()?;
                 } else {
-                    Some(t_n_buffer.par_iter().copied().with_min_len(1 << 10))
+                    reader.harvest();
                 }
+
+                reader.read_output(t_n_buffer);
+
+                if t_n_buffer.is_empty() {
+                    return None;
+                }
+                reader.start_prefetches();
+
+                Some(t_n_buffer.par_iter().copied().with_min_len(1 << 10))
             },
             Self::Buffer { buffer, last } => {
                 if *last || buffer.is_empty() {
@@ -110,17 +111,17 @@ where
     }
 
     fn len(&self) -> Option<usize> {
-        let len = match self {
-            Self::File { file, .. } => (file.len() - file.position()) / (T::SIZE * N),
+        match self {
+            Self::File { reader, .. } => reader.len(),
             Self::Buffer { buffer, last } => {
-                if *last {
+                let len = if *last {
                     0
                 } else {
                     buffer.len()
-                }
+                };
+                Some(len / N)
             },
-        };
-        Some(len / N)
+        }
     }
 }
 

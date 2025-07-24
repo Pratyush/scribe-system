@@ -1,22 +1,16 @@
 use crate::{
-    iterator::BatchedIteratorAssocTypes,
-    serialize::{DeserializeRaw, SerializeRaw},
+    file_vec::{backend::InnerFile, double_buffered::DoubleBufferedReader}, iterator::BatchedIteratorAssocTypes, serialize::{DeserializeRaw, SerializeRaw},BUFFER_SIZE, iterator::BatchedIterator
 };
-use rayon::{prelude::*, vec::IntoIter};
+use rayon::{iter::MinLen, prelude::*, vec::IntoIter};
 use std::marker::PhantomData;
-
-use crate::{BUFFER_SIZE, iterator::BatchedIterator};
-
-use super::{AVec, avec, backend::InnerFile};
 
 pub enum ArrayChunks<'a, T, const N: usize>
 where
     T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy,
 {
     File {
-        file: InnerFile,
+        reader: DoubleBufferedReader<[T; N]>,
         lifetime: PhantomData<&'a T>,
-        work_buffer: AVec,
         t_n_buffer: Vec<[T; N]>,
     },
     Buffer {
@@ -34,12 +28,10 @@ where
         assert_eq!(std::mem::align_of::<[T; N]>(), std::mem::align_of::<T>());
         assert_eq!(std::mem::size_of::<[T; N]>(), N * std::mem::size_of::<T>());
 
-        let mut work_buffer = avec![];
-        work_buffer.reserve(T::SIZE * BUFFER_SIZE);
+        let reader = DoubleBufferedReader::new(file);
         Self::File {
-            file,
+            reader,
             lifetime: PhantomData,
-            work_buffer,
             t_n_buffer: Vec::with_capacity(BUFFER_SIZE),
         }
     }
@@ -58,7 +50,8 @@ where
     T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy,
 {
     type Item = [T; N];
-    type Batch<'b> = IntoIter<[T; N]>;
+
+    type Batch<'b> = MinLen<IntoIter<[T; N]>>;
 }
 
 impl<'a, T, const N: usize> BatchedIterator for ArrayChunks<'a, T, N>
@@ -69,18 +62,26 @@ where
     fn next_batch<'b>(&'b mut self) -> Option<Self::Batch<'b>> {
         match self {
             Self::File {
-                file,
-                work_buffer,
+                reader,
                 t_n_buffer,
                 ..
             } => {
                 t_n_buffer.clear();
-                <[T; N]>::deserialize_raw_batch(t_n_buffer, work_buffer, BUFFER_SIZE, file).ok()?;
-                if t_n_buffer.is_empty() {
-                    None
+
+                if reader.is_first_read() {
+                    reader.do_first_read().ok()?;
                 } else {
-                    Some(t_n_buffer.to_vec().into_par_iter())
+                    reader.harvest();
                 }
+
+                reader.read_output(t_n_buffer);
+
+                if t_n_buffer.is_empty() {
+                    return None;
+                }
+                reader.start_prefetches();
+
+                Some(t_n_buffer.to_vec().into_par_iter().with_min_len(1 << 10))
             },
             Self::Buffer { buffer } => {
                 if buffer.is_empty() {
@@ -90,9 +91,10 @@ where
                         std::mem::take(buffer)
                             .par_chunks(N)
                             .map(|chunk| <[T; N]>::try_from(chunk).unwrap())
-                            .with_min_len(1 << 7)
+                            .with_min_len(1 << 10)
                             .collect::<Vec<_>>()
-                            .into_par_iter(),
+                            .into_par_iter()
+                            .with_min_len(1 << 10),
                     )
                 }
             },
@@ -100,11 +102,10 @@ where
     }
 
     fn len(&self) -> Option<usize> {
-        let len = match self {
-            Self::File { file, .. } => (file.len() - file.position()) / T::SIZE / N,
-            Self::Buffer { buffer } => buffer.len(),
-        };
-        Some(len / N)
+        match self {
+            Self::File { reader, .. } => reader.len(),
+            Self::Buffer { buffer } => Some(buffer.len() / N),
+        }
     }
 }
 
