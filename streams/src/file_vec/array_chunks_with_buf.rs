@@ -1,6 +1,9 @@
 use crate::{
-    file_vec::{backend::InnerFile, double_buffered::DoubleBufferedReader}, iterator::BatchedIteratorAssocTypes, serialize::{DeserializeRaw, SerializeRaw},
-    BUFFER_SIZE, iterator::BatchedIterator,
+    BUFFER_SIZE,
+    file_vec::{backend::InnerFile, double_buffered::DoubleBufferedReader},
+    iterator::BatchedIterator,
+    iterator::BatchedIteratorAssocTypes,
+    serialize::{DeserializeRaw, SerializeRaw},
 };
 use rayon::{
     iter::{Copied, MinLen},
@@ -31,7 +34,7 @@ where
         assert!(BUFFER_SIZE % N == 0, "BUFFER_SIZE must be divisible by N");
         assert_eq!(std::mem::align_of::<[T; N]>(), std::mem::align_of::<T>());
         assert_eq!(std::mem::size_of::<[T; N]>(), N * std::mem::size_of::<T>());
-        
+
         let reader = DoubleBufferedReader::new(file);
 
         buf.clear();
@@ -68,10 +71,7 @@ where
     #[inline]
     fn next_batch<'b>(&'b mut self) -> Option<Self::Batch<'b>> {
         match self {
-            Self::File {
-                reader,
-                t_n_buffer,
-            } => {
+            Self::File { reader, t_n_buffer } => {
                 t_n_buffer.clear();
 
                 if reader.is_first_read() {
@@ -114,11 +114,7 @@ where
         match self {
             Self::File { reader, .. } => reader.len(),
             Self::Buffer { buffer, last } => {
-                let len = if *last {
-                    0
-                } else {
-                    buffer.len()
-                };
+                let len = if *last { 0 } else { buffer.len() };
                 Some(len / N)
             },
         }

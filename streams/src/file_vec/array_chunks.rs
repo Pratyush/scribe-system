@@ -1,5 +1,9 @@
 use crate::{
-    file_vec::{backend::InnerFile, double_buffered::DoubleBufferedReader}, iterator::BatchedIteratorAssocTypes, serialize::{DeserializeRaw, SerializeRaw},BUFFER_SIZE, iterator::BatchedIterator
+    BUFFER_SIZE,
+    file_vec::{backend::InnerFile, double_buffered::DoubleBufferedReader},
+    iterator::BatchedIterator,
+    iterator::BatchedIteratorAssocTypes,
+    serialize::{DeserializeRaw, SerializeRaw},
 };
 use rayon::{iter::MinLen, prelude::*, vec::IntoIter};
 use std::marker::PhantomData;
@@ -62,9 +66,7 @@ where
     fn next_batch<'b>(&'b mut self) -> Option<Self::Batch<'b>> {
         match self {
             Self::File {
-                reader,
-                t_n_buffer,
-                ..
+                reader, t_n_buffer, ..
             } => {
                 t_n_buffer.clear();
 
