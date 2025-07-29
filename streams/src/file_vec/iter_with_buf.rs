@@ -1,5 +1,6 @@
 use crate::{
-    file_vec::{backend::InnerFile, double_buffered::DoubleBufferedReader},
+    BUFFER_SIZE,
+    file_vec::{backend::InnerFile, double_buffered::BuffersRef},
     iterator::{BatchedIterator, BatchedIteratorAssocTypes},
     serialize::{DeserializeRaw, SerializeRaw},
 };
@@ -12,8 +13,8 @@ use std::fmt::Debug;
 
 pub enum IterWithBuf<'a, T: SerializeRaw + DeserializeRaw + 'static> {
     File {
-        reader: DoubleBufferedReader<T>,
-        output_buffer: &'a mut Vec<T>,
+        file: InnerFile,
+        buffer: BuffersRef<'a, T>,
     },
     Buffer {
         last: bool,
@@ -23,12 +24,9 @@ pub enum IterWithBuf<'a, T: SerializeRaw + DeserializeRaw + 'static> {
 
 impl<'a, T: SerializeRaw + DeserializeRaw> IterWithBuf<'a, T> {
     pub fn new_file_with_buf(file: InnerFile, buffer: &'a mut Vec<T>) -> Self {
-        let reader = DoubleBufferedReader::new(file);
         buffer.clear();
-        Self::File {
-            reader,
-            output_buffer: buffer,
-        }
+        let buffer = BuffersRef::new(buffer);
+        Self::File { file, buffer }
     }
 
     pub fn new_buffer(buffer: &'a mut Vec<T>) -> Self {
@@ -60,33 +58,14 @@ impl<'a, T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy + Debug
     #[inline]
     fn next_batch<'b>(&'b mut self) -> Option<Self::Batch<'b>> {
         match self {
-            Self::File {
-                reader,
-                output_buffer,
-            } => {
-                output_buffer.clear();
-                if reader.is_first_read() {
-                    // If this is the first read, we have to do it synchronously
-                    if let Err(e) = reader.do_first_read() {
-                        eprintln!("Error during first read: {e}");
-                        return None;
-                    }
-                } else {
-                    // If this is not the first read, we can use the prefetched batch
-                    reader.harvest();
-                }
-                // Swap out the batch stored in the reader with the output buffer
-                reader.read_output(output_buffer);
-
-                if output_buffer.is_empty() {
-                    // If the output buffer is empty, we have reached the end of the file
+            Self::File { file, buffer } => {
+                buffer.clear();
+                T::deserialize_raw_batch(&mut buffer.t_s, &mut buffer.bytes, BUFFER_SIZE, file)
+                    .ok()?;
+                if buffer.t_s.is_empty() {
                     return None;
                 }
-
-                // 3. overlap I/O for the *next* batch
-                reader.start_prefetches();
-
-                Some(output_buffer.par_iter().copied().with_min_len(1 << 7))
+                Some(buffer.t_s.par_iter().copied().with_min_len(1 << 7))
             },
             Self::Buffer { buffer, last } => {
                 if *last || buffer.is_empty() {
@@ -101,7 +80,7 @@ impl<'a, T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy + Debug
 
     fn len(&self) -> Option<usize> {
         match self {
-            Self::File { reader, .. } => reader.len(),
+            Self::File { file, .. } => Some((file.len() - file.position()) / T::SIZE),
             Self::Buffer { buffer, last } => {
                 if *last {
                     Some(0)

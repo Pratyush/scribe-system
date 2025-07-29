@@ -1,6 +1,6 @@
 use crate::{
     BUFFER_SIZE,
-    file_vec::{backend::InnerFile, double_buffered::DoubleBufferedReader},
+    file_vec::{backend::InnerFile, double_buffered::Buffers},
     iterator::{BatchedIterator, BatchedIteratorAssocTypes},
     serialize::{DeserializeRaw, SerializeRaw},
 };
@@ -18,9 +18,9 @@ where
     F: for<'b> Fn(&[T]) -> U + Sync + Send,
 {
     File {
-        reader: DoubleBufferedReader<T>,
+        buffer: Buffers<T>,
+        file: InnerFile,
         lifetime: PhantomData<&'a T>,
-        output: Vec<T>,
         result_buffer: &'a mut Vec<U>,
         f: F,
     },
@@ -43,12 +43,11 @@ where
         assert_eq!(std::mem::align_of::<[T; N]>(), std::mem::align_of::<T>());
         assert_eq!(std::mem::size_of::<[T; N]>(), N * std::mem::size_of::<T>());
         result_buffer.clear();
-        let reader = DoubleBufferedReader::new(file);
-        let output = Vec::with_capacity(BUFFER_SIZE);
+        let buffer = Buffers::new();
         Self::File {
-            reader,
+            file,
+            buffer,
             lifetime: PhantomData,
-            output,
             result_buffer,
             f,
         }
@@ -89,28 +88,23 @@ where
     fn next_batch<'b>(&'b mut self) -> Option<Self::Batch<'b>> {
         match self {
             Self::File {
-                reader,
-                output,
+                file,
+                buffer,
                 result_buffer,
                 f,
                 ..
             } => {
-                output.clear();
+                buffer.clear();
                 result_buffer.clear();
 
-                if reader.is_first_read() {
-                    reader.do_first_read().ok()?;
-                } else {
-                    reader.harvest();
-                }
-
-                reader.read_output(output);
-                if output.is_empty() {
+                T::deserialize_raw_batch(&mut buffer.t_s, &mut buffer.bytes, BUFFER_SIZE, file)
+                    .ok()?;
+                if buffer.t_s.is_empty() {
                     return None;
                 }
-                reader.start_prefetches();
 
-                output
+                buffer
+                    .t_s
                     .par_chunks_exact(N)
                     .map(&*f)
                     .with_min_len(1 << 10)
@@ -140,7 +134,7 @@ where
 
     fn len(&self) -> Option<usize> {
         match self {
-            Self::File { reader, .. } => reader.len().map(|s| s / N),
+            Self::File { file, .. } => Some((file.len() - file.position()) / (N * T::SIZE)),
             Self::Buffer { buffer, .. } => Some(buffer.len() / N),
         }
     }
@@ -150,6 +144,7 @@ where
 mod tests {
     use ark_bls12_381::Fr;
     use ark_std::{UniformRand, test_rng};
+    use rayon::prelude::*;
 
     use crate::{file_vec::FileVec, iterator::BatchedIterator};
 
@@ -176,6 +171,44 @@ mod tests {
 
             assert_eq!(output_standard, output_with_buf, "Mismatch for size {size}",);
             assert_eq!(expected, output_with_buf, "Mismatch for size {size}",);
+        }
+    }
+
+    #[test]
+    fn test_multi_iter_chunk_mapped_to_file_vec() {
+        let mut rng = test_rng();
+
+        for log_size in 1..=20 {
+            let size = 1 << log_size;
+            let input: Vec<Fr> = (0..size).map(|_| Fr::rand(&mut rng)).collect();
+            let fv1 = FileVec::from_iter(input.clone());
+            let fv2 = FileVec::from_iter(input.clone());
+            let fv_s = [fv1, fv2];
+
+            let output_standard: Vec<_> = fv_s
+                .par_iter()
+                .map(|fv| {
+                    fv.iter_chunk_mapped::<2, _, _>(|c| c[0] + c[1])
+                        .to_file_vec()
+                })
+                .collect();
+
+            let output_with_buf = fv_s
+                .par_iter()
+                .map(|fv| {
+                    let mut buf = vec![];
+                    fv.iter_chunk_mapped_with_buf::<2, _, _>(|c| c[0] + c[1], &mut buf)
+                        .to_file_vec()
+                })
+                .collect::<Vec<_>>();
+            for (out_std, out_buf) in output_standard.iter().zip(output_with_buf.iter()) {
+                let vec_std = out_std.iter().to_vec();
+                let vec_buf = out_buf.iter().to_vec();
+                assert_eq!(
+                    vec_std, vec_buf,
+                    "Mismatch in FileVec outputs for size {size}"
+                );
+            }
         }
     }
 }

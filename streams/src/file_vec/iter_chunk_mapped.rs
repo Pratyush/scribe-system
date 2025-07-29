@@ -1,6 +1,6 @@
 use crate::{
     BUFFER_SIZE,
-    file_vec::{backend::InnerFile, double_buffered::DoubleBufferedReader},
+    file_vec::{backend::InnerFile, double_buffered::Buffers},
     iterator::{BatchedIterator, BatchedIteratorAssocTypes},
     serialize::{DeserializeRaw, SerializeRaw},
 };
@@ -14,9 +14,9 @@ where
     F: for<'b> Fn(&[T]) -> U + Sync + Send,
 {
     File {
-        reader: DoubleBufferedReader<T>,
+        buffer: Buffers<T>,
+        file: InnerFile,
         lifetime: PhantomData<&'a T>,
-        output: Vec<T>,
         f: F,
     },
     Buffer {
@@ -36,12 +36,11 @@ where
         assert!(BUFFER_SIZE % N == 0, "BUFFER_SIZE must be divisible by N");
         assert_eq!(std::mem::align_of::<[T; N]>(), std::mem::align_of::<T>());
         assert_eq!(std::mem::size_of::<[T; N]>(), N * std::mem::size_of::<T>());
-        let reader = DoubleBufferedReader::new(file);
-        let output = Vec::with_capacity(BUFFER_SIZE);
+        let buffer = Buffers::new();
         Self::File {
-            reader,
+            buffer,
+            file,
             lifetime: PhantomData,
-            output,
             f,
         }
     }
@@ -75,22 +74,17 @@ where
     fn next_batch<'b>(&'b mut self) -> Option<Self::Batch<'b>> {
         match self {
             Self::File {
-                reader, f, output, ..
+                file, buffer, f, ..
             } => {
-                output.clear();
-                if reader.is_first_read() {
-                    reader.do_first_read().ok()?;
-                } else {
-                    reader.harvest();
-                }
+                buffer.clear();
+                T::deserialize_raw_batch(&mut buffer.t_s, &mut buffer.bytes, BUFFER_SIZE, file)
+                    .ok()?;
 
-                reader.read_output(output);
-                if output.is_empty() {
+                if buffer.t_s.is_empty() {
                     return None;
                 }
-                reader.start_prefetches();
-
-                let output = output
+                let output = buffer
+                    .t_s
                     .par_chunks_exact(N)
                     .map(&*f)
                     .with_min_len(1 << 10)
@@ -117,7 +111,7 @@ where
 
     fn len(&self) -> Option<usize> {
         match self {
-            Self::File { reader, .. } => reader.len().map(|s| s / N),
+            Self::File { file, .. } => Some((file.len() - file.position()) / (N * T::SIZE)),
             Self::Buffer { buffer, .. } => Some(buffer.len() / N),
         }
     }

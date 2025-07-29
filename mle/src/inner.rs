@@ -239,10 +239,20 @@ impl<F: RawField> Inner<F> {
     #[inline]
     pub fn fold_odd_even(&self, f: impl Fn(&F, &F) -> F + Sync) -> Self {
         assert!((1 << self.num_vars) % 2 == 0);
-        let evals = self
-            .evals
-            .iter_chunk_mapped_with_buf::<2, _, _>(|chunk| f(&chunk[0], &chunk[1]), &mut vec![])
-            .to_file_vec();
+        let evals = match self.evals {
+            FileVec::File { .. } => self
+                .evals
+                .iter_chunk_mapped_with_buf::<2, _, _>(|chunk| f(&chunk[0], &chunk[1]), &mut vec![])
+                .to_file_vec(),
+            FileVec::Buffer { ref buffer } => {
+                let buffer = buffer
+                    .par_chunks(2)
+                    .map(|chunk| f(&chunk[0], &chunk[1]))
+                    .with_min_len(1 << 8)
+                    .collect();
+                FileVec::new_buffer(buffer)
+            },
+        };
         Self {
             evals,
             num_vars: self.num_vars - 1,
