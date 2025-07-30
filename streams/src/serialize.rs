@@ -127,7 +127,7 @@ pub(crate) fn serialize_and_deserialize_raw_batch<
     let (write_to_file, read_from_buf) = rayon::join(
         || {
             if !write_buffer.is_empty() {
-                write_file.write_all(&*write_work_buffer)               
+                write_file.write_all(&*write_work_buffer)
             } else {
                 Ok(())
             }
