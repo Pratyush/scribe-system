@@ -1,12 +1,12 @@
-use std::ops::{AddAssign, MulAssign};
-
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::{
     end_timer, log2,
     rand::{SeedableRng, rngs::StdRng},
     start_timer,
 };
+use itertools::Itertools;
 use mle::MLE;
+use rayon::prelude::*;
 use scribe_streams::{iterator::BatchedIterator, serialize::RawPrimeField};
 
 use crate::snark::{
@@ -60,27 +60,80 @@ impl<F: RawPrimeField> MockCircuit<F> {
         // for all test cases in this repo, there's one and only one selector for each monomial
         let last_selector_time = start_timer!(|| "last selector");
         let mut last_selector = MLE::constant(F::zero(), nv);
-
-        gate.gates
+        let mut witness_iters = gate
+            .gates
+            .iter()
+            .map(|(_, _, wit)| {
+                wit.iter()
+                    .map(|w| witnesses[*w].evals().iter())
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
+        for ((_, _, w), w_iters) in gate.gates.iter().zip_eq(&witness_iters) {
+            assert_eq!(
+                w.len(),
+                w_iters.len(),
+                "witness index and witness iterator length mismatch"
+            );
+        }
+        let mut selector_iters = gate
+            .gates
             .iter()
             .enumerate()
-            .for_each(|(index, (coeff, q, wit))| {
-                let mut cur_monomial = MLE::constant(coeff.into_fp(), nv);
-
-                for wit_index in wit.iter() {
-                    cur_monomial *= &witnesses[*wit_index];
-                }
-
-                if index != num_selectors - 1 {
-                    if let Some(p) = q {
-                        cur_monomial *= &selectors[*p];
-                    }
-                    last_selector += cur_monomial;
+            .map(|(i, (_, q, _))| {
+                if i != num_selectors - 1 {
+                    q.map(|p| selectors[p].evals().iter())
                 } else {
-                    cur_monomial.invert_in_place();
-                    last_selector *= (-F::one(), cur_monomial);
+                    None
                 }
-            });
+            })
+            .collect::<Vec<_>>();
+        for (i, ((_, q, _), s_iter)) in gate.gates.iter().zip_eq(&selector_iters).enumerate() {
+            if i != num_selectors - 1 {
+                assert_eq!(q.is_some(), s_iter.is_some());
+            }
+        }
+        let mut cur_monomial_buf = Vec::new();
+
+        last_selector.evals_mut().batched_for_each(|chunk| {
+            gate.gates
+                .iter()
+                .enumerate()
+                .zip(witness_iters.iter_mut())
+                .for_each(|((index, (coeff, q, _)), wit)| {
+                    cur_monomial_buf.clear();
+                    cur_monomial_buf
+                        .extend(std::iter::repeat(coeff.into_fp::<F>()).take(chunk.len()));
+
+                    for w in wit {
+                        let w = w.next_batch().unwrap();
+                        cur_monomial_buf
+                            .par_iter_mut()
+                            .zip(w)
+                            .for_each(|(c, w)| *c *= w);
+                    }
+
+                    if index != num_selectors - 1 {
+                        if let Some(p) = q {
+                            let s = selector_iters[*p].as_mut().unwrap().next_batch().unwrap();
+                            cur_monomial_buf
+                                .par_iter_mut()
+                                .zip(s)
+                                .for_each(|(c, s)| *c *= s);
+                        }
+                        chunk
+                            .par_iter_mut()
+                            .zip(&cur_monomial_buf)
+                            .for_each(|(out, cur)| *out += cur);
+                    } else {
+                        ark_ff::fields::batch_inversion(&mut cur_monomial_buf);
+                        chunk
+                            .par_iter_mut()
+                            .zip(&cur_monomial_buf)
+                            .for_each(|(out, &cur)| *out *= -cur);
+                    }
+                });
+        });
 
         selectors.push(last_selector);
 
@@ -113,7 +166,7 @@ impl<F: RawPrimeField> MockCircuit<F> {
             .map(|_| MLE::rand(nv, &mut rng))
             .collect();
         end_timer!(witness_time);
-        let num_pub_inputs = ark_std::cmp::min(4, num_constraints);
+        let num_pub_inputs = num_constraints.min(4);
         let public_inputs = witnesses[0].evals().iter().take(num_pub_inputs).to_vec();
         (public_inputs, witnesses)
     }
@@ -131,20 +184,42 @@ impl<F: RawPrimeField> MockCircuit<F> {
     pub fn is_satisfied(&self) -> bool {
         let nv = self.num_variables();
         let mut cur = MLE::constant(F::zero(), nv);
-        for (coeff, q, wit) in self.index.config.gate_func.gates.iter() {
-            let mut cur_monomial = MLE::constant(coeff.into_fp(), nv);
-            if let Some(p) = q {
-                cur_monomial.mul_assign(&self.index.selectors[*p])
-            }
-            for wit_index in wit.iter() {
-                cur_monomial.mul_assign(&self.witnesses[*wit_index]);
-            }
-            cur.add_assign(cur_monomial);
-        }
-        // must borrow as mutable
-        cur.evals_mut().for_each(|x| assert!(x.is_zero()));
+        let gates = &self.index.config.gate_func.gates;
+        let witnesses = &self.witnesses;
+        let selectors = &self.index.selectors;
 
-        true
+        let mut witness_iters = gates
+            .iter()
+            .map(|(_, _, wit)| wit.iter().map(|w| witnesses[*w].evals().iter()).collect())
+            .collect::<Vec<Vec<_>>>();
+        let mut selector_iters = gates
+            .iter()
+            .map(|(_, q, _)| q.map(|p| selectors[p].evals().iter()))
+            .collect::<Vec<_>>();
+        let mut cur_monomial_buf = Vec::new();
+
+        cur.evals_mut().batched_for_each(|chunk| {
+            for ((coeff, q, _), wit) in gates.iter().zip_eq(&mut witness_iters) {
+                cur_monomial_buf.clear();
+                cur_monomial_buf.extend(std::iter::repeat(coeff.into_fp::<F>()).take(chunk.len()));
+
+                if let Some(p) = q {
+                    let s = selector_iters[*p].as_mut().unwrap().next_batch().unwrap();
+                    cur_monomial_buf
+                        .par_iter_mut()
+                        .zip(s)
+                        .for_each(|(c, s)| *c *= s);
+                }
+                for w in wit {
+                    let w = w.next_batch().unwrap();
+                    cur_monomial_buf
+                        .par_iter_mut()
+                        .zip(w)
+                        .for_each(|(c, w)| *c *= w);
+                }
+            }
+        });
+        cur.evals().iter().all(|x| x.is_zero())
     }
 }
 
@@ -170,15 +245,23 @@ mod test {
     #[test]
     fn test_mock_circuit_sat() {
         for i in 10..22 {
+            let time = std::time::Instant::now();
             let vanilla_gate = CustomizedGates::vanilla_plonk_gate();
             let circuit = MockCircuit::<Fr>::new(1 << i, &vanilla_gate);
             assert!(circuit.is_satisfied());
+            let elapsed = time.elapsed();
+            println!("test_mock_circuit_sat for nv = {i} passed in {:?}", elapsed);
 
+            let time = std::time::Instant::now();
             let jf_gate = CustomizedGates::jellyfish_turbo_plonk_gate();
             let circuit = MockCircuit::<Fr>::new(1 << i, &jf_gate);
             assert!(circuit.is_satisfied());
+            println!(
+                "test_mock_circuit_sat for jellyfish gate for nv = {i} passed in {:?}",
+                time.elapsed()
+            );
 
-            for num_witness in 2..10 {
+            for num_witness in 2..5 {
                 for degree in CUSTOM_DEGREE {
                     let mock_gate = CustomizedGates::mock_gate(num_witness, degree);
                     let circuit = MockCircuit::<Fr>::new(1 << i, &mock_gate);

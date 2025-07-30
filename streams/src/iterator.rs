@@ -122,6 +122,15 @@ pub trait BatchedIterator: BatchedIteratorAssocTypes {
         acc
     }
 
+    fn all(mut self, pred: impl Fn(Self::Item) -> bool + Send + Sync) -> bool {
+        while let Some(batch) = self.next_batch() {
+            if !batch.all(&pred) {
+                return false;
+            }
+        }
+        true
+    }
+
     #[inline(always)]
     fn to_file_vec(self) -> FileVec<Self::Item>
     where
@@ -189,7 +198,7 @@ pub fn repeat<T: Send + Sync + Copy>(iter: T, count: usize) -> Repeat<T> {
 #[inline(always)]
 pub fn from_fn<T: Send + Sync, F>(func: F, max: usize) -> FromFn<F>
 where
-    F: Fn(usize) -> Option<T> + Send + Sync + Copy,
+    F: Fn(usize) -> Option<T> + Send + Sync,
 {
     FromFn::new(func, max)
 }

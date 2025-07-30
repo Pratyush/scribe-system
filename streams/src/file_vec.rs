@@ -472,7 +472,7 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
         }
     }
 
-    pub fn batched_for_each(&mut self, f: impl Fn(&mut Vec<T>) + Send + Sync)
+    pub fn batched_for_each(&mut self, mut f: impl FnMut(&mut Vec<T>) + Send + Sync)
     where
         T: Send + Sync,
     {
