@@ -239,6 +239,7 @@ impl<F: RawField> Inner<F> {
     #[inline]
     pub fn fold_odd_even(&self, f: impl Fn(&F, &F) -> F + Sync) -> Self {
         assert!((1 << self.num_vars) % 2 == 0);
+
         let evals = match self.evals {
             FileVec::File { .. } => self
                 .evals

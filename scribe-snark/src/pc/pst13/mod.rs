@@ -17,7 +17,7 @@ use ark_std::{
 };
 use itertools::Itertools;
 use mle::MLE;
-use rayon::iter::ParallelExtend;
+use rayon::prelude::*;
 use scribe_streams::iterator::BatchedIterator;
 use scribe_streams::serialize::{RawAffine, RawPrimeField};
 use srs::{CommitterKey, SRS, VerifierKey};
@@ -114,8 +114,8 @@ where
             while let (Some(p), Some(g)) = (poly_evals.next_batch(), srs.next_batch()) {
                 f_buf.clear();
                 g_buf.clear();
-                f_buf.par_extend(p);
-                g_buf.par_extend(g);
+                p.collect_into_vec(&mut f_buf);
+                g.collect_into_vec(&mut g_buf);
                 commitment += E::G1::msm_unchecked(&g_buf, &f_buf);
             }
             commitment.into_affine()
@@ -163,11 +163,11 @@ where
                     .collect::<Vec<_>>();
                 while let Some(g) = srs.next_batch() {
                     g_buf.clear();
-                    g_buf.par_extend(g);
+                    g.collect_into_vec(&mut g_buf);
                     for (i, poly) in poly_evals.iter_mut() {
                         f_buf.clear();
                         if let Some(p) = poly.next_batch() {
-                            f_buf.par_extend(p);
+                            p.collect_into_vec(&mut f_buf);
                             commitments[*i] += E::G1::msm_unchecked(&g_buf, &f_buf);
                         }
                     }

@@ -190,6 +190,11 @@ impl<F: Field> BatchedIterator for EqEvalIter<F> {
         self.0.next_batch_helper(&mut result)?;
         Some(result.into_par_iter().with_min_len(1 << 7))
     }
+
+    fn len(&self) -> Option<usize> {
+        let nv = self.0.r.len();
+        Some((1usize << nv).saturating_sub(self.0.cur_index))
+    }
 }
 
 /// An iterator that generates the evaluations of the polynomial
@@ -231,8 +236,14 @@ impl<'a, F: Field> BatchedIteratorAssocTypes for EqEvalIterWithBuf<'a, F> {
 
 impl<'a, F: Field> BatchedIterator for EqEvalIterWithBuf<'a, F> {
     fn next_batch<'b>(&'b mut self) -> Option<Self::Batch<'b>> {
-        self.inner.next_batch_helper(self.buffer)?;
+        self.buffer.clear();
+        self.inner.next_batch_helper(&mut self.buffer)?;
         Some(self.buffer.par_iter().copied().with_min_len(1 << 7))
+    }
+
+    fn len(&self) -> Option<usize> {
+        let nv = self.inner.r.len();
+        Some((1usize << nv).saturating_sub(self.inner.cur_index))
     }
 }
 

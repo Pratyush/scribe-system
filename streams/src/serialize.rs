@@ -77,12 +77,11 @@ pub trait DeserializeRaw: SerializeRaw + Sized + std::fmt::Debug + Copy {
                     .map(|mut chunk| Self::deserialize_raw(&mut chunk).unwrap()),
             );
         } else {
-            result_buffer.par_extend(
-                work_buffer
-                    .par_chunks(size)
-                    .with_min_len(1 << 10)
-                    .map(|mut chunk| Self::deserialize_raw(&mut chunk).unwrap()),
-            );
+            work_buffer
+                .par_chunks(size)
+                .with_min_len(1 << 10)
+                .map(|mut chunk| Self::deserialize_raw(&mut chunk).unwrap())
+                .collect_into_vec(result_buffer);
         }
 
         Ok(())
@@ -134,12 +133,11 @@ pub(crate) fn serialize_and_deserialize_raw_batch<
                 );
                 Ok(())
             } else {
-                read_buffer.par_extend(
-                    read_work_buffer
-                        .par_chunks(T::SIZE)
-                        .with_min_len(1 << 10)
-                        .map(|mut chunk| T::deserialize_raw(&mut chunk).unwrap()),
-                );
+                read_work_buffer
+                    .par_chunks(T::SIZE)
+                    .with_min_len(1 << 10)
+                    .map(|mut chunk| T::deserialize_raw(&mut chunk).unwrap())
+                    .collect_into_vec(read_buffer);
                 Ok(())
             }
         },

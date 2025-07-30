@@ -49,7 +49,8 @@ where
     fn next_batch<'a>(&'a mut self) -> Option<Self::Batch<'a>> {
         self.iter.next_batch().map(|i| {
             self.buffer.clear();
-            self.buffer.par_extend(i);
+            i.collect_into_vec(&mut self.buffer);
+            println!("Buffer length: {}", self.buffer.len());
             assert_eq!(
                 self.buffer.len() % N,
                 0,
@@ -68,7 +69,7 @@ where
     }
 
     fn len(&self) -> Option<usize> {
-        self.iter.len().map(|len| len / N)
+        dbg!(self.iter.len()).map(|len| len / N)
     }
 }
 

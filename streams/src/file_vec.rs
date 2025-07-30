@@ -129,7 +129,7 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
         if let Self::File { .. } = self {
             let mut buffer = Vec::with_capacity(BUFFER_SIZE);
             process_file!(self, |b: &mut Vec<T>| {
-                buffer.par_extend(b.par_drain(..));
+                b.par_drain(..).collect_into_vec(&mut buffer);
                 Some(())
             });
             *self = FileVec::Buffer { buffer };
