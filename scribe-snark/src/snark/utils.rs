@@ -195,7 +195,7 @@ pub(crate) fn build_f<F: RawPrimeField>(
     let mut res = VirtualPolynomial::<F>::new(num_vars);
 
     for (coeff, selector, witnesses) in gates.gates.iter() {
-        let coeff_fr = coeff.into_fp();
+        let coeff = coeff.into_fp();
         let mut mle_list = vec![];
         if let Some(s) = *selector {
             mle_list.push(selector_mles[s].clone())
@@ -203,7 +203,7 @@ pub(crate) fn build_f<F: RawPrimeField>(
         for &witness in witnesses.iter() {
             mle_list.push(witness_mles[witness].clone())
         }
-        res.add_mles(mle_list, coeff_fr)?;
+        res.add_mles(mle_list, coeff)?;
     }
 
     Ok(res)

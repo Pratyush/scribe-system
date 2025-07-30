@@ -50,7 +50,6 @@ where
         self.iter.next_batch().map(|i| {
             self.buffer.clear();
             i.collect_into_vec(&mut self.buffer);
-            println!("Buffer length: {}", self.buffer.len());
             assert_eq!(
                 self.buffer.len() % N,
                 0,
@@ -69,7 +68,7 @@ where
     }
 
     fn len(&self) -> Option<usize> {
-        dbg!(self.iter.len()).map(|len| len / N)
+        self.iter.len().map(|len| len / N)
     }
 }
 

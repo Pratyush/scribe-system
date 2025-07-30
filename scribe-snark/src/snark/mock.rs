@@ -60,7 +60,6 @@ impl<F: RawPrimeField> MockCircuit<F> {
         // for all test cases in this repo, there's one and only one selector for each monomial
         let last_selector_time = start_timer!(|| "last selector");
         let mut last_selector = MLE::constant(F::zero(), nv);
-        end_timer!(last_selector_time);
 
         gate.gates
             .iter()
@@ -76,14 +75,16 @@ impl<F: RawPrimeField> MockCircuit<F> {
                     if let Some(p) = q {
                         cur_monomial *= &selectors[*p];
                     }
-                    last_selector.add_assign(cur_monomial);
+                    last_selector += cur_monomial;
                 } else {
                     cur_monomial.invert_in_place();
-                    last_selector.mul_assign((-F::one(), cur_monomial));
+                    last_selector *= (-F::one(), cur_monomial);
                 }
             });
 
         selectors.push(last_selector);
+
+        end_timer!(last_selector_time);
         let num_pub_input = ark_std::cmp::min(4, num_constraints);
 
         let config = ScribeConfig {
@@ -216,7 +217,7 @@ mod test {
         let mut rng = test_rng();
         let pcs_srs = PST13::<Bls12_381>::gen_srs_for_testing(&mut rng, SUPPORTED_SIZE)?;
         for nv in MIN_NUM_VARS..MAX_NUM_VARS {
-            println!("test_mock_circuit_zkp for nv = {nv}");
+            println!("\n\n\n test_mock_circuit_zkp for nv = {nv} \n\n\n");
             let vanilla_gate = CustomizedGates::vanilla_plonk_gate();
             test_mock_circuit_zkp_helper(nv, &vanilla_gate, &pcs_srs)?;
         }

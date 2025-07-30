@@ -121,9 +121,17 @@ pub(crate) fn serialize_and_deserialize_raw_batch<
     );
     write_to_buf?;
     read_to_buf?;
-    write_work_buffer.truncate(write_buffer.len() * T::SIZE);
+    if !write_buffer.is_empty() {
+        write_work_buffer.truncate(write_buffer.len() * T::SIZE);
+    }
     let (write_to_file, read_from_buf) = rayon::join(
-        || write_file.write_all(&write_work_buffer),
+        || {
+            if !write_buffer.is_empty() {
+                write_file.write_all(&*write_work_buffer)               
+            } else {
+                Ok(())
+            }
+        },
         || -> Result<(), io::Error> {
             if rayon::current_num_threads() == 1 {
                 read_buffer.extend(

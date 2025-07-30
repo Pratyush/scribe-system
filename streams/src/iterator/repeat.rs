@@ -24,11 +24,7 @@ where
         if self.count == 0 {
             return None;
         }
-        let batch_size = if self.count < BUFFER_SIZE {
-            self.count
-        } else {
-            BUFFER_SIZE
-        };
+        let batch_size = self.count.min(BUFFER_SIZE);
         self.count -= batch_size;
         Some(rayon::iter::repeatn(self.iter, batch_size))
     }

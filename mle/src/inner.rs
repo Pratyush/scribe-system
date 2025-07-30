@@ -317,48 +317,60 @@ impl<F: RawField> Inner<F> {
 impl<F: RawField> MulAssign<Self> for Inner<F> {
     #[inline(always)]
     fn mul_assign(&mut self, other: Self) {
-        self.evals
-            .zipped_for_each(other.evals.iter_with_buf(&mut vec![]), |a, b| *a *= b);
+        self.evals =  self.evals.iter_with_buf(&mut vec![])
+            .zip_with_bufs(other.evals.iter_with_buf(&mut vec![]), &mut vec![], &mut vec![])
+            .map(|(a, b)| a * b)
+            .to_file_vec();
     }
 }
 
 impl<'a, F: RawField> MulAssign<&'a Self> for Inner<F> {
     #[inline(always)]
     fn mul_assign(&mut self, other: &'a Self) {
-        self.evals
-            .zipped_for_each(other.evals.iter_with_buf(&mut vec![]), |a, b| *a *= b);
+        self.evals =  self.evals.iter_with_buf(&mut vec![])
+            .zip_with_bufs(other.evals.iter_with_buf(&mut vec![]), &mut vec![], &mut vec![])
+            .map(|(a, b)| a * b)
+            .to_file_vec();
     }
 }
 
 impl<F: RawField> AddAssign<Self> for Inner<F> {
     #[inline(always)]
     fn add_assign(&mut self, other: Self) {
-        self.evals
-            .zipped_for_each(other.evals.iter_with_buf(&mut vec![]), |a, b| *a += b);
+        self.evals = self.evals.iter_with_buf(&mut vec![])
+            .zip_with_bufs(other.evals.iter_with_buf(&mut vec![]), &mut vec![], &mut vec![])
+            .map(|(a, b)| a + b)
+            .to_file_vec();
     }
 }
 
 impl<'a, F: RawField> AddAssign<&'a Self> for Inner<F> {
     #[inline(always)]
     fn add_assign(&mut self, other: &'a Self) {
-        self.evals
-            .zipped_for_each(other.evals.iter_with_buf(&mut vec![]), |a, b| *a += b);
+        self.evals = self.evals.iter_with_buf(&mut vec![])
+            .zip_with_bufs(other.evals.iter_with_buf(&mut vec![]), &mut vec![], &mut vec![])
+            .map(|(a, b)| a + b)
+            .to_file_vec();
     }
 }
 
 impl<F: RawField> SubAssign<Self> for Inner<F> {
     #[inline(always)]
     fn sub_assign(&mut self, other: Self) {
-        self.evals
-            .zipped_for_each(other.evals.iter_with_buf(&mut vec![]), |a, b| *a -= b);
+        self.evals = self.evals.iter_with_buf(&mut vec![])
+            .zip_with_bufs(other.evals.iter_with_buf(&mut vec![]), &mut vec![], &mut vec![])
+            .map(|(a, b)| a - b)
+            .to_file_vec();
     }
 }
 
 impl<'a, F: RawField> SubAssign<&'a Self> for Inner<F> {
     #[inline(always)]
     fn sub_assign(&mut self, other: &'a Self) {
-        self.evals
-            .zipped_for_each(other.evals.iter_with_buf(&mut vec![]), |a, b| *a -= b);
+        self.evals = self.evals.iter_with_buf(&mut vec![])
+            .zip_with_bufs(other.evals.iter_with_buf(&mut vec![]), &mut vec![], &mut vec![])
+            .map(|(a, b)| a - b)
+            .to_file_vec();
     }
 }
 
@@ -367,9 +379,16 @@ impl<F: RawField> MulAssign<(F, Self)> for Inner<F> {
     fn mul_assign(&mut self, (f, other): (F, Self)) {
         if f.is_one() {
             *self *= other;
+        } else if f == -F::one() {
+            self.evals = self.evals.iter_with_buf(&mut vec![])
+                .zip_with_bufs(other.evals.iter_with_buf(&mut vec![]), &mut vec![], &mut vec![])
+                .map(|(a, b)| a * -b)
+                .to_file_vec();
         } else {
-            self.evals
-                .zipped_for_each(other.evals.iter_with_buf(&mut vec![]), |a, b| *a *= f * b);
+            self.evals = self.evals.iter_with_buf(&mut vec![])
+                .zip_with_bufs(other.evals.iter_with_buf(&mut vec![]), &mut vec![], &mut vec![])
+                .map(|(a, b)| a * f * b)
+                .to_file_vec();
         }
     }
 }
@@ -379,9 +398,16 @@ impl<'a, F: RawField> MulAssign<(F, &'a Self)> for Inner<F> {
     fn mul_assign(&mut self, (f, other): (F, &'a Self)) {
         if f.is_one() {
             *self *= other;
+        } else if f == -F::one() {
+            self.evals = self.evals.iter_with_buf(&mut vec![])
+                .zip_with_bufs(other.evals.iter_with_buf(&mut vec![]), &mut vec![], &mut vec![])
+                .map(|(a, b)| a * -b)
+                .to_file_vec();
         } else {
-            self.evals
-                .zipped_for_each(other.evals.iter_with_buf(&mut vec![]), |a, b| *a *= f * b);
+            self.evals = self.evals.iter_with_buf(&mut vec![])
+                .zip_with_bufs(other.evals.iter_with_buf(&mut vec![]), &mut vec![], &mut vec![])
+                .map(|(a, b)| a * f * b)
+                .to_file_vec();
         }
     }
 }
@@ -534,5 +560,24 @@ mod tests {
         });
 
         res
+    }
+    
+    #[test]
+    fn add_assign() {
+        let mut rng = ark_std::test_rng();
+        for num_vars in LOG_BUFFER_SIZE..=(LOG_BUFFER_SIZE + 5) {
+            let num_vars = num_vars as usize;
+            let lde1 = DenseMultilinearExtension::<Fr>::rand(num_vars, &mut rng);
+            let lde2 = DenseMultilinearExtension::<Fr>::rand(num_vars, &mut rng);
+            let mut mle1 = MLE::from_evals_vec(lde1.to_evaluations(), num_vars);
+            let mle2 = MLE::from_evals_vec(lde2.to_evaluations(), num_vars);
+            mle1 += &mle2;
+            let lde_sum = &lde1 + &lde2;
+            let mle_sum = MLE::from_evals_vec(lde_sum.to_evaluations(), num_vars);
+            mle1.evals()
+                .iter()
+                .zip(mle_sum.evals().iter())
+                .for_each(|(a, b)| assert_eq!(a, b));
+        }
     }
 }

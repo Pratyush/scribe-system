@@ -115,11 +115,12 @@ impl<F: RawPrimeField> SumCheckProver<F> for IOPProverState<F> {
             .products
             .par_iter()
             .map(|(coefficient, products)| {
-                let mut buffers = vec![vec![]; products.len()];
+                let mut buffers: Vec<Vec<F>> = vec![vec![]; products.len()];
                 let mut polys_in_product = products
                     .iter()
                     .zip(&mut buffers)
-                    .map(|(&f, b)| self.poly.mles[f].evals_with_buf(b).array_chunks::<2>())
+                    // .map(|(&f, b)| self.poly.mles[f].evals_with_buf(b).array_chunks::<2>())
+                    .map(|(&f, b)| self.poly.mles[f].evals().array_chunks::<2>())
                     .collect::<Vec<_>>();
                 let mut sum = match polys_in_product.len() {
                     1 => {

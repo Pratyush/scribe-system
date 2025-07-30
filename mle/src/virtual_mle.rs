@@ -178,15 +178,15 @@ impl<'a, F: RawPrimeField> BatchedIterator for VirtualMLEIterWithBuf<'a, F> {
 impl<F: RawPrimeField> std::fmt::Debug for VirtualMLE<F> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            VirtualMLE::MLE(_mle) => write!(f, "VirtualMLE::MLE(..)"),
+            VirtualMLE::MLE(_mle) => write!(f, "VirtualMLE::MLE(is_file = {}; len = {})", _mle.evals().is_file(), _mle.evals().len()),
             VirtualMLE::EqAtPoint {
                 num_vars,
-                point,
                 fixed_vars,
+                ..
             } => write!(
                 f,
-                "VirtualMLE::EqAtPoint(num_vars: {}, point: {:?}, fixed_vars: {:?})",
-                num_vars, point, fixed_vars
+                "VirtualMLE::EqAtPoint(num_vars: {}, fixed_vars: {:?})",
+                num_vars, fixed_vars.len()
             ),
         }
     }
