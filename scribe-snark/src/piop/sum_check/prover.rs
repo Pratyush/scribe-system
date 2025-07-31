@@ -315,7 +315,7 @@ fn summation_helper<F: PrimeField, T: BorrowMut<[[F; 2]]>>(
             // Furthermore, we have that g(r + 1) - g(r) = a * (r + 1 - r) + b - b = a.
             let products = products.borrow_mut();
             // Now, products[i] = [g_i(r), a_i]
-            evals_of_product[0] = products
+            evals_of_product[0] += products
                 .iter_mut()
                 .map(|[even, odd]| {
                     *odd -= *even;
@@ -328,7 +328,7 @@ fn summation_helper<F: PrimeField, T: BorrowMut<[[F; 2]]>>(
             // The idea is as follows: given the evaluation at r + j, we can compute the evaluation at r + (j + 1) as g_i(r + j + 1) = g_i(r + j) + a_i.
             // Inside the loop, we perform exactly this calculation; step denotes the `a` values.
             evals_of_product[1..].iter_mut().for_each(|eval| {
-                *eval = products
+                *eval += products
                     .iter_mut()
                     .map(|[g_r_j, a]| {
                         let g_r_j_plus_1 = *g_r_j + a;
