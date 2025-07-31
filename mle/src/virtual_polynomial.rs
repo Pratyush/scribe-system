@@ -1,7 +1,7 @@
 use crate::{MLE, errors::ArithError, virtual_mle::VirtualMLE};
 use ark_serialize::CanonicalSerialize;
 use ark_std::{
-    end_timer,
+    UniformRand, end_timer,
     rand::{Rng, RngCore},
     start_timer,
 };
@@ -256,6 +256,37 @@ impl<F: RawPrimeField> VirtualPolynomial<F> {
 
         end_timer!(start);
         Ok((poly, sum))
+    }
+
+    /// Sample a random virtual polynomial, return the polynomial and its sum.
+    pub fn rand_with_shared_terms<R: RngCore>(
+        nv: usize,
+        num_multiplicands_range: (usize, usize),
+        num_products: usize,
+        rng: &mut R,
+    ) -> Result<Self, ArithError> {
+        let start = start_timer!(|| "sample random virtual polynomial");
+
+        let mut poly = VirtualPolynomial::new(nv);
+        let shared_1 = MLE::rand(nv, rng);
+        let shared_2 = MLE::rand(nv, rng);
+        for _ in 0..num_products {
+            let num_multiplicands =
+                rng.gen_range(num_multiplicands_range.0..num_multiplicands_range.1);
+            let (mut product, _) = MLE::rand_product_with_sum(nv, num_multiplicands, rng);
+            let coefficient = F::rand(rng);
+            let use_1 = bool::rand(rng);
+            if use_1 {
+                product.push(shared_1.clone());
+            } else {
+                product.push(shared_2.clone());
+            }
+
+            poly.add_mles(product.into_iter(), coefficient)?;
+        }
+
+        end_timer!(start);
+        Ok(poly)
     }
 
     /// Sample a random virtual polynomial that evaluates to zero everywhere

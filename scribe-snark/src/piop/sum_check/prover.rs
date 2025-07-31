@@ -7,12 +7,10 @@ use crate::piop::{
 };
 use ark_ff::{PrimeField, batch_inversion};
 use ark_std::{end_timer, start_timer, vec::Vec};
+use itertools::Itertools;
 use mle::virtual_polynomial::VirtualPolynomial;
 use rayon::prelude::*;
-use scribe_streams::{
-    iterator::{BatchedIterator, zip_many},
-    serialize::RawPrimeField,
-};
+use scribe_streams::{iterator::BatchedIterator, serialize::RawPrimeField};
 
 impl<F: RawPrimeField> SumCheckProver<F> for IOPProverState<F> {
     type VirtualPolynomial = VirtualPolynomial<F>;
@@ -107,74 +105,65 @@ impl<F: RawPrimeField> SumCheckProver<F> for IOPProverState<F> {
         self.round += 1;
 
         let mut products_sum = vec![F::zero(); self.poly.aux_info.max_degree + 1];
+        let mut iter_bufs = vec![vec![]; self.poly.mles.len()];
+        let mut mle_iters = self
+            .poly
+            .mles
+            .iter()
+            .zip(&mut iter_bufs)
+            .map(|(mle, buf)| mle.evals_with_buf(buf).array_chunks::<2>())
+            .collect::<Vec<_>>();
+        let mut buffers = vec![vec![]; self.poly.mles.len()];
+        let mut running_sums = None;
+
+        while next_mle_batch(&mut mle_iters, &mut buffers).is_some() {
+            let sums = self
+                .poly
+                .products
+                .par_iter()
+                .map(|(coefficient, products)| {
+                    let polys_in_product = products
+                        .iter()
+                        .map(|&i| buffers[i].par_iter().copied())
+                        .collect();
+                    let sums_of_evals_of_products =
+                        compute_sums_of_evals_of_products(polys_in_product);
+                    (coefficient, sums_of_evals_of_products, products.len())
+                })
+                .collect::<Vec<_>>();
+            match running_sums.as_mut() {
+                None => running_sums = Some(sums),
+                Some(r) => {
+                    r.iter_mut()
+                        .zip(sums)
+                        .for_each(|((_, running_sums, _), (_, cur_sums, _))| {
+                            running_sums
+                                .iter_mut()
+                                .zip(cur_sums)
+                                .for_each(|(acc, value)| *acc += value);
+                        })
+                },
+            }
+        }
+        let sums = running_sums.expect("at least one batch should be processed");
 
         // Step 2: generate sum for the partial evaluated polynomial:
         // f(r_1, ... r_m,, x_{m+1}... x_n)
-        let sums = self
-            .poly
-            .products
-            .par_iter()
-            .map(|(coefficient, products)| {
-                let mut buffers: Vec<Vec<F>> = vec![vec![]; products.len()];
-                let mut polys_in_product = products
-                    .iter()
-                    .zip(&mut buffers)
-                    .map(|(&f, b)| self.poly.mles[f].evals_with_buf(b).array_chunks::<2>())
-                    .collect::<Vec<_>>();
-                let mut sum = match polys_in_product.len() {
-                    1 => {
-                        let a = polys_in_product.pop().unwrap();
-                        summation_helper(a.map(|x| [x]), 1)
-                    },
-                    2 => {
-                        let a = polys_in_product.pop().unwrap();
-                        let b = polys_in_product.pop().unwrap();
-                        summation_helper(a.zip(b).map(|(x, y)| [x, y]), 2)
-                    },
-                    3 => {
-                        let a = polys_in_product.pop().unwrap();
-                        let b = polys_in_product.pop().unwrap();
-                        let c = polys_in_product.pop().unwrap();
-                        summation_helper(a.zip(b).zip(c).map(|((x, y), z)| [x, y, z]), 3)
-                    },
-                    4 => {
-                        let a = polys_in_product.pop().unwrap();
-                        let b = polys_in_product.pop().unwrap();
-                        let c = polys_in_product.pop().unwrap();
-                        let d = polys_in_product.pop().unwrap();
-                        summation_helper(
-                            a.zip(b).zip(c).zip(d).map(|(((x, y), z), w)| [x, y, z, w]),
-                            4,
-                        )
-                    },
-                    5 => {
-                        let a = polys_in_product.pop().unwrap();
-                        let b = polys_in_product.pop().unwrap();
-                        let c = polys_in_product.pop().unwrap();
-                        let d = polys_in_product.pop().unwrap();
-                        let e = polys_in_product.pop().unwrap();
-                        summation_helper(
-                            a.zip(b)
-                                .zip(c)
-                                .zip(d)
-                                .zip(e)
-                                .map(|((((x, y), z), w), v)| [x, y, z, w, v]),
-                            5,
-                        )
-                    },
-                    n => summation_helper(zip_many(polys_in_product), n),
-                };
 
+        let sums = sums
+            .into_par_iter()
+            .map(|(coefficient, mut sum, product_size)| {
                 sum.iter_mut().for_each(|sum| *sum *= *coefficient);
-                let extrapolation = (0..self.poly.aux_info.max_degree - products.len())
+                let extrapolation = (0..self.poly.aux_info.max_degree - product_size)
                     .into_par_iter()
                     .map(|i| {
-                        let (points, weights) = &self.extrapolation_aux[products.len() - 1];
-                        let at = F::from((products.len() + 1 + i) as u64);
+                        let (points, weights) = &self.extrapolation_aux[product_size - 1];
+                        let at = F::from((product_size + 1 + i) as u64);
                         extrapolate(points, weights, &sum, &at)
                     })
                     .collect::<Vec<_>>();
-                sum.into_iter().chain(extrapolation).collect::<Vec<_>>()
+                sum.par_extend(extrapolation);
+                sum
             })
             .collect::<Vec<_>>();
         for sum in sums {
@@ -193,31 +182,172 @@ impl<F: RawPrimeField> SumCheckProver<F> for IOPProverState<F> {
     }
 }
 
+fn next_mle_batch<F: PrimeField, I: BatchedIterator<Item = [F; 2]> + Sync + Send>(
+    mle_iters: &mut [I],
+    buffers: &mut [Vec<[F; 2]>],
+) -> Option<()>
+where
+    for<'a> I::Batch<'a>: rayon::iter::IndexedParallelIterator<Item = [F; 2]>,
+{
+    mle_iters
+        .par_iter_mut()
+        .zip(buffers)
+        .map(|(iter, buf)| {
+            buf.clear();
+            if let Some(b) = iter.next_batch() {
+                b.collect_into_vec(buf);
+                Some(())
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+fn compute_sums_of_evals_of_products<F: PrimeField>(
+    mut polys_in_product: Vec<impl IndexedParallelIterator<Item = [F; 2]> + Send + Sync>,
+) -> Vec<F> {
+    let len = polys_in_product.len();
+    match polys_in_product.len() {
+        1 => {
+            let a: (_,) = polys_in_product.drain(..).collect_tuple().unwrap();
+            summation_helper(a.into_par_iter().map(|(x,)| [x]), len)
+        },
+        2 => {
+            let x: (_, _) = polys_in_product.drain(..).collect_tuple().unwrap();
+            summation_helper(x.into_par_iter().map(|(x, y)| [x, y]), len)
+        },
+        3 => {
+            let x: (_, _, _) = polys_in_product.drain(..).collect_tuple().unwrap();
+            summation_helper(x.into_par_iter().map(|(x, y, z)| [x, y, z]), len)
+        },
+        4 => {
+            let x: (_, _, _, _) = polys_in_product.drain(..).collect_tuple().unwrap();
+            summation_helper(x.into_par_iter().map(|(x, y, z, w)| [x, y, z, w]), len)
+        },
+        5 => {
+            let x: (_, _, _, _, _) = polys_in_product.drain(..).collect_tuple().unwrap();
+            summation_helper(
+                x.into_par_iter().map(|(a, b, c, d, e)| [a, b, c, d, e]),
+                len,
+            )
+        },
+        6 => {
+            let x: (_, _, _, _, _, _) = polys_in_product.drain(..).collect_tuple().unwrap();
+            summation_helper(
+                x.into_par_iter()
+                    .map(|(a, b, c, d, e, f)| [a, b, c, d, e, f]),
+                len,
+            )
+        },
+
+        7 => {
+            let x: (_, _, _, _, _, _, _) = polys_in_product.drain(..).collect_tuple().unwrap();
+            summation_helper(
+                x.into_par_iter()
+                    .map(|(a, b, c, d, e, f, g)| [a, b, c, d, e, f, g]),
+                len,
+            )
+        },
+
+        8 => {
+            let x: (_, _, _, _, _, _, _, _) = polys_in_product.drain(..).collect_tuple().unwrap();
+            summation_helper(
+                x.into_par_iter()
+                    .map(|(a, b, c, d, e, f, g, h)| [a, b, c, d, e, f, g, h]),
+                len,
+            )
+        },
+        9 => {
+            let x: (_, _, _, _, _, _, _, _, _) =
+                polys_in_product.drain(..).collect_tuple().unwrap();
+            summation_helper(
+                x.into_par_iter()
+                    .map(|(a, b, c, d, e, f, g, h, i)| [a, b, c, d, e, f, g, h, i]),
+                len,
+            )
+        },
+        10 => {
+            let x: (_, _, _, _, _, _, _, _, _, _) =
+                polys_in_product.drain(..).collect_tuple().unwrap();
+            summation_helper(
+                x.into_par_iter()
+                    .map(|(a, b, c, d, e, f, g, h, i, j)| [a, b, c, d, e, f, g, h, i, j]),
+                len,
+            )
+        },
+        11 => {
+            let x: (_, _, _, _, _, _, _, _, _, _, _) =
+                polys_in_product.drain(..).collect_tuple().unwrap();
+            summation_helper(
+                x.into_par_iter()
+                    .map(|(a, b, c, d, e, f, g, h, i, j, k)| [a, b, c, d, e, f, g, h, i, j, k]),
+                len,
+            )
+        },
+        12 => {
+            let x: (_, _, _, _, _, _, _, _, _, _, _, _) =
+                polys_in_product.drain(..).collect_tuple().unwrap();
+            summation_helper(
+                x.into_par_iter()
+                    .map(|(a, b, c, d, e, f, g, h, i, j, k, l)| {
+                        [a, b, c, d, e, f, g, h, i, j, k, l]
+                    }),
+                len,
+            )
+        },
+        _ => unimplemented!("products with more than 12 polynomials are not supported yet"),
+    }
+}
+
 fn summation_helper<F: PrimeField, T: BorrowMut<[[F; 2]]>>(
-    zipped: impl BatchedIterator<Item = T>,
+    zipped: impl IndexedParallelIterator<Item = T>,
     len: usize,
 ) -> Vec<F> {
-    zipped.fold(
-        || vec![F::zero(); len + 1],
-        |mut acc, mut products| {
+    let zero_vec = || vec![F::zero(); len + 1];
+    let mut res = zipped
+        .fold_with(zero_vec(), |mut evals_of_product, mut products| {
+            // each entry in products is the evaluation of the following affine polynomial
+            // g(X) = \sum_b p(r, X, b),
+            // at the pair of points (r, r + 1) in [0, 2^n].
+            //
+            // Since g(X) is affine, we can write it as g(X) = a * X + b.
+            // Furthermore, we have that g(r + 1) - g(r) = a * (r + 1 - r) + b - b = a.
             let products = products.borrow_mut();
-            products.iter_mut().for_each(|[even, odd]| {
-                *odd -= *even;
+            // Now, products[i] = [g_i(r), a_i]
+            evals_of_product[0] = products
+                .iter_mut()
+                .map(|[even, odd]| {
+                    *odd -= *even;
+                    *even
+                })
+                .product::<F>();
+
+            // We are computing the evaluations of the product polynomial at the point `r`
+            // This loop computes the rest of the evaluations at points r + 1, r + 2, ..., r + len
+            // The idea is as follows: given the evaluation at r + j, we can compute the evaluation at r + (j + 1) as g_i(r + j + 1) = g_i(r + j) + a_i.
+            // Inside the loop, we perform exactly this calculation; step denotes the `a` values.
+            evals_of_product[1..].iter_mut().for_each(|eval| {
+                *eval = products
+                    .iter_mut()
+                    .map(|[g_r_j, a]| {
+                        let g_r_j_plus_1 = *g_r_j + a;
+                        *g_r_j = g_r_j_plus_1;
+                        *g_r_j
+                    })
+                    .product::<F>();
             });
-            acc[0] += products.iter().map(|[e, _]| *e).product::<F>();
-            acc[1..].iter_mut().for_each(|acc| {
-                products.iter_mut().for_each(|[eval, step]| *eval += step);
-                *acc += products.iter().map(|[e, _]| e).product::<F>();
-            });
-            acc // by the bit
-        },
-        |mut sum, partial| {
+            evals_of_product
+        })
+        .collect::<Vec<_>>();
+    res.push(zero_vec());
+    res.par_drain(..res.len())
+        .reduce(zero_vec, |mut sum, partial| {
             sum.iter_mut()
                 .zip(partial)
                 .for_each(|(sum, partial)| *sum += partial);
-            sum // sum for half of the bits
-        },
-    )
+            sum
+        })
 }
 
 fn barycentric_weights<F: PrimeField>(points: &[F]) -> Vec<F> {
@@ -239,23 +369,25 @@ fn barycentric_weights<F: PrimeField>(points: &[F]) -> Vec<F> {
 }
 
 fn extrapolate<F: PrimeField>(points: &[F], weights: &[F], evals: &[F], at: &F) -> F {
-    let (coeffs, sum_inv) = {
-        let mut coeffs = points
-            .par_iter()
-            .map(|point| *at - point)
-            .collect::<Vec<_>>();
-        batch_inversion(&mut coeffs);
-        coeffs
-            .par_iter_mut()
-            .zip(weights)
-            .for_each(|(coeff, weight)| *coeff *= weight);
-        let sum_inv = coeffs.par_iter().sum::<F>().inverse().unwrap_or_default();
-        (coeffs, sum_inv)
-    };
-    coeffs
+    let mut coeffs = points
         .par_iter()
+        .map(|point| *at - point)
+        .collect::<Vec<_>>();
+    batch_inversion(&mut coeffs);
+    let (denom_inv, num) = coeffs
+        .into_par_iter()
+        .zip(weights)
         .zip(evals)
-        .map(|(coeff, eval)| *coeff * eval)
-        .sum::<F>()
-        * sum_inv
+        .map(|((coeff, weight), e)| {
+            let cur_coeff = coeff * weight;
+            (cur_coeff, *e * cur_coeff)
+        })
+        .reduce(
+            || (F::zero(), F::zero()),
+            |(acc_coeff, acc_eval), (cur_coeff, cur_eval)| {
+                (acc_coeff + cur_coeff, acc_eval + cur_eval)
+            },
+        );
+    let denom_inv = denom_inv.inverse().unwrap_or_default();
+    num * denom_inv
 }
