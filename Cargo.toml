@@ -38,6 +38,7 @@ itertools = { version = "0.14" }
 digest = { version = "0.10.7" }
 hashbrown = {version = "0.15" }
 num-bigint = { version = "0.4.0", default-features = false }
+paste = { version = "1.0" }
 
 
 

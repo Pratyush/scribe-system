@@ -21,6 +21,7 @@ merlin = "3.0.0"
 smallvec = "1.6"
 libc = { version = "0.2.101" }
 itertools = { workspace = true }
+paste = { workspace = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 aligned-vec = { version = "0.6.1" }

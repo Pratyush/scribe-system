@@ -246,62 +246,39 @@ type T9<T> = (T, T, T, T, T, T, T, T, T);
 type T10<T> = (T, T, T, T, T, T, T, T, T, T);
 type T11<T> = (T, T, T, T, T, T, T, T, T, T, T);
 type T12<T> = (T, T, T, T, T, T, T, T, T, T, T, T);
+macro_rules! sum {
+    ($n:literal, $polys_in_product:expr) => {{
+        paste::paste! {
+            // e.g. for $n = 8 this becomes:  let x: T8<_> = …
+            let x: [<T $n>]<_> =
+                $polys_in_product.drain(..).collect_tuple().unwrap();
+
+            // Call the *function* `summation_helper`.  The `$crate::`
+            // prefix avoids accidentally recursing back into the macro.
+            summation_helper(
+                x.into_par_iter().map(<[_; $n]>::from),
+                $n,
+            )
+        }
+    }};
+}
 
 fn compute_sums_of_evals_of_products<F: PrimeField>(
     mut polys_in_product: Vec<impl IndexedParallelIterator<Item = [F; 2]> + Send + Sync>,
 ) -> Vec<F> {
-    let len = polys_in_product.len();
     match polys_in_product.len() {
-        1 => {
-            let x: T1<_> = polys_in_product.drain(..).collect_tuple().unwrap();
-            summation_helper(x.into_par_iter().map(<[_; 1]>::from), len)
-        },
-        2 => {
-            let x: T2<_> = polys_in_product.drain(..).collect_tuple().unwrap();
-            summation_helper(x.into_par_iter().map(<[_; 2]>::from), len)
-        },
-        3 => {
-            let x: T3<_> = polys_in_product.drain(..).collect_tuple().unwrap();
-            summation_helper(x.into_par_iter().map(<[_; 3]>::from), len)
-        },
-        4 => {
-            let x: T4<_> = polys_in_product.drain(..).collect_tuple().unwrap();
-            summation_helper(x.into_par_iter().map(<[_; 4]>::from), len)
-        },
-        5 => {
-            let x: T5<_> = polys_in_product.drain(..).collect_tuple().unwrap();
-            summation_helper(x.into_par_iter().map(<[_; 5]>::from), len)
-        },
-        6 => {
-            let x: T6<_> = polys_in_product.drain(..).collect_tuple().unwrap();
-            summation_helper(x.into_par_iter().map(<[_; 6]>::from), len)
-        },
-
-        7 => {
-            let x: T7<_> = polys_in_product.drain(..).collect_tuple().unwrap();
-            summation_helper(x.into_par_iter().map(<[_; 7]>::from), len)
-        },
-
-        8 => {
-            let x: T8<_> = polys_in_product.drain(..).collect_tuple().unwrap();
-            summation_helper(x.into_par_iter().map(<[_; 8]>::from), len)
-        },
-        9 => {
-            let x: T9<_> = polys_in_product.drain(..).collect_tuple().unwrap();
-            summation_helper(x.into_par_iter().map(<[_; 9]>::from), len)
-        },
-        10 => {
-            let x: T10<_> = polys_in_product.drain(..).collect_tuple().unwrap();
-            summation_helper(x.into_par_iter().map(<[_; 10]>::from), len)
-        },
-        11 => {
-            let x: T11<_> = polys_in_product.drain(..).collect_tuple().unwrap();
-            summation_helper(x.into_par_iter().map(<[_; 11]>::from), len)
-        },
-        12 => {
-            let x: T12<_> = polys_in_product.drain(..).collect_tuple().unwrap();
-            summation_helper(x.into_par_iter().map(<[_; 12]>::from), len)
-        },
+        1 => sum!(1, polys_in_product),
+        2 => sum!(2, polys_in_product),
+        3 => sum!(3, polys_in_product),
+        4 => sum!(4, polys_in_product),
+        5 => sum!(5, polys_in_product),
+        6 => sum!(6, polys_in_product),
+        7 => sum!(7, polys_in_product),
+        8 => sum!(8, polys_in_product),
+        9 => sum!(9, polys_in_product),
+        10 => sum!(10, polys_in_product),
+        11 => sum!(11, polys_in_product),
+        12 => sum!(12, polys_in_product),
         _ => unimplemented!("products with more than 12 polynomials are not supported yet"),
     }
 }
