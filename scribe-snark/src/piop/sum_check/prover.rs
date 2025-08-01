@@ -234,6 +234,7 @@ where
         })
         .collect()
 }
+
 type T1<T> = (T,);
 type T2<T> = (T, T);
 type T3<T> = (T, T, T);
@@ -249,12 +250,8 @@ type T12<T> = (T, T, T, T, T, T, T, T, T, T, T, T);
 macro_rules! sum {
     ($n:literal, $polys_in_product:expr) => {{
         paste::paste! {
-            // e.g. for $n = 8 this becomes:  let x: T8<_> = …
             let x: [<T $n>]<_> =
                 $polys_in_product.drain(..).collect_tuple().unwrap();
-
-            // Call the *function* `summation_helper`.  The `$crate::`
-            // prefix avoids accidentally recursing back into the macro.
             summation_helper(
                 x.into_par_iter().map(<[_; $n]>::from),
                 $n,
