@@ -38,6 +38,7 @@ impl<F: RawPrimeField> SumCheckProver<F> for IOPProverState<F> {
                 true => {
                     let points = (0..1 + degree as u64).map(F::from).collect::<Vec<_>>();
                     let weights = barycentric_weights(&points);
+                    // Compute lagrange coefficients for extrapolation.
                     let points = (0..(max_degree - degree))
                         .into_par_iter()
                         .map(|j| {
@@ -116,12 +117,12 @@ impl<F: RawPrimeField> SumCheckProver<F> for IOPProverState<F> {
                 self.poly
                     .mles
                     .par_iter_mut()
-                    .for_each(|mle| *mle = mle.fix_variables(&[r]));
+                    .for_each(|m| *m = m.fix_variables(&[r]));
             } else {
                 self.poly
                     .mles
                     .par_iter_mut()
-                    .for_each(|mle| mle.fix_variables_in_place(&[r]));
+                    .for_each(|m| m.fix_variables_in_place(&[r]));
             }
             end_timer!(fix_argument);
         } else if self.round > 0 {
@@ -140,7 +141,7 @@ impl<F: RawPrimeField> SumCheckProver<F> for IOPProverState<F> {
             .mles
             .iter()
             .zip(&mut iter_bufs)
-            .map(|(mle, buf)| mle.evals_with_buf(buf).array_chunks::<2>())
+            .map(|(m, b)| m.evals_with_buf(b).array_chunks::<2>())
             .collect::<Vec<_>>();
         let mut buffers = vec![vec![]; self.poly.mles.len()];
         let mut running_sums = None;
@@ -162,16 +163,12 @@ impl<F: RawPrimeField> SumCheckProver<F> for IOPProverState<F> {
                 .collect::<Vec<_>>();
             match running_sums.as_mut() {
                 None => running_sums = Some(sums),
-                Some(r) => {
-                    r.iter_mut()
-                        .zip(sums)
-                        .for_each(|((_, running_sums, _), (_, cur_sums, _))| {
-                            running_sums
-                                .iter_mut()
-                                .zip(cur_sums)
-                                .for_each(|(acc, value)| *acc += value);
-                        })
-                },
+                Some(r) => r
+                    .iter_mut()
+                    .zip(sums)
+                    .for_each(|((_, running, _), (_, cur, _))| {
+                        running.iter_mut().zip(cur).for_each(|(a, v)| *a += v);
+                    }),
             }
         }
         let sums = running_sums.expect("at least one batch should be processed");
@@ -249,86 +246,53 @@ fn compute_sums_of_evals_of_products<F: PrimeField>(
         },
         2 => {
             let x: (_, _) = polys_in_product.drain(..).collect_tuple().unwrap();
-            summation_helper(x.into_par_iter().map(|(x, y)| [x, y]), len)
+            summation_helper(x.into_par_iter().map(<[_; 2]>::from), len)
         },
         3 => {
             let x: (_, _, _) = polys_in_product.drain(..).collect_tuple().unwrap();
-            summation_helper(x.into_par_iter().map(|(x, y, z)| [x, y, z]), len)
+            summation_helper(x.into_par_iter().map(<[_; 3]>::from), len)
         },
         4 => {
             let x: (_, _, _, _) = polys_in_product.drain(..).collect_tuple().unwrap();
-            summation_helper(x.into_par_iter().map(|(x, y, z, w)| [x, y, z, w]), len)
+            summation_helper(x.into_par_iter().map(<[_; 4]>::from), len)
         },
         5 => {
             let x: (_, _, _, _, _) = polys_in_product.drain(..).collect_tuple().unwrap();
-            summation_helper(
-                x.into_par_iter().map(|(a, b, c, d, e)| [a, b, c, d, e]),
-                len,
-            )
+            summation_helper(x.into_par_iter().map(<[_; 5]>::from), len)
         },
         6 => {
             let x: (_, _, _, _, _, _) = polys_in_product.drain(..).collect_tuple().unwrap();
-            summation_helper(
-                x.into_par_iter()
-                    .map(|(a, b, c, d, e, f)| [a, b, c, d, e, f]),
-                len,
-            )
+            summation_helper(x.into_par_iter().map(<[_; 6]>::from), len)
         },
 
         7 => {
             let x: (_, _, _, _, _, _, _) = polys_in_product.drain(..).collect_tuple().unwrap();
-            summation_helper(
-                x.into_par_iter()
-                    .map(|(a, b, c, d, e, f, g)| [a, b, c, d, e, f, g]),
-                len,
-            )
+            summation_helper(x.into_par_iter().map(<[_; 7]>::from), len)
         },
 
         8 => {
             let x: (_, _, _, _, _, _, _, _) = polys_in_product.drain(..).collect_tuple().unwrap();
-            summation_helper(
-                x.into_par_iter()
-                    .map(|(a, b, c, d, e, f, g, h)| [a, b, c, d, e, f, g, h]),
-                len,
-            )
+            summation_helper(x.into_par_iter().map(<[_; 8]>::from), len)
         },
         9 => {
             let x: (_, _, _, _, _, _, _, _, _) =
                 polys_in_product.drain(..).collect_tuple().unwrap();
-            summation_helper(
-                x.into_par_iter()
-                    .map(|(a, b, c, d, e, f, g, h, i)| [a, b, c, d, e, f, g, h, i]),
-                len,
-            )
+            summation_helper(x.into_par_iter().map(<[_; 9]>::from), len)
         },
         10 => {
             let x: (_, _, _, _, _, _, _, _, _, _) =
                 polys_in_product.drain(..).collect_tuple().unwrap();
-            summation_helper(
-                x.into_par_iter()
-                    .map(|(a, b, c, d, e, f, g, h, i, j)| [a, b, c, d, e, f, g, h, i, j]),
-                len,
-            )
+            summation_helper(x.into_par_iter().map(<[_; 10]>::from), len)
         },
         11 => {
             let x: (_, _, _, _, _, _, _, _, _, _, _) =
                 polys_in_product.drain(..).collect_tuple().unwrap();
-            summation_helper(
-                x.into_par_iter()
-                    .map(|(a, b, c, d, e, f, g, h, i, j, k)| [a, b, c, d, e, f, g, h, i, j, k]),
-                len,
-            )
+            summation_helper(x.into_par_iter().map(<[_; 11]>::from), len)
         },
         12 => {
             let x: (_, _, _, _, _, _, _, _, _, _, _, _) =
                 polys_in_product.drain(..).collect_tuple().unwrap();
-            summation_helper(
-                x.into_par_iter()
-                    .map(|(a, b, c, d, e, f, g, h, i, j, k, l)| {
-                        [a, b, c, d, e, f, g, h, i, j, k, l]
-                    }),
-                len,
-            )
+            summation_helper(x.into_par_iter().map(<[_; 12]>::from), len)
         },
         _ => unimplemented!("products with more than 12 polynomials are not supported yet"),
     }
