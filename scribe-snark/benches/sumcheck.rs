@@ -11,7 +11,7 @@ fn sumcheck_2(c: &mut Criterion) {
     let num_threads = rayon::current_num_threads();
     let mut group = c.benchmark_group(format!("sumcheck_2 {num_threads}"));
     let mut rng = &mut ark_std::test_rng();
-    for num_vars in LOG_BUFFER_SIZE as usize..=21 {
+    for num_vars in (LOG_BUFFER_SIZE - 1) as usize..=21 {
         group.bench_with_input(BenchmarkId::from_parameter(num_vars), &num_vars, |b, _| {
             let poly =
                 VirtualPolynomial::<Fr>::rand_with_shared_terms(num_vars, (2, 3), 5, &mut rng)
