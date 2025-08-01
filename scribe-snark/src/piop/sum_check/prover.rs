@@ -1,4 +1,4 @@
-use std::borrow::BorrowMut;
+use std::{borrow::BorrowMut, collections::HashSet};
 
 use super::SumCheckProver;
 use crate::piop::{
@@ -26,18 +26,47 @@ impl<F: RawPrimeField> SumCheckProver<F> for IOPProverState<F> {
             ));
         }
         end_timer!(start);
-
+        let degrees = polynomial
+            .products
+            .iter()
+            .map(|(_, products)| products.len())
+            .collect::<HashSet<_>>();
+        let max_degree = polynomial.aux_info.max_degree;
+        let extrapolation_aux = (1..max_degree)
+            .into_par_iter()
+            .map(|degree| match degrees.contains(&degree) {
+                true => {
+                    let points = (0..1 + degree as u64).map(F::from).collect::<Vec<_>>();
+                    let weights = barycentric_weights(&points);
+                    let points = (0..(max_degree - degree))
+                        .into_par_iter()
+                        .map(|j| {
+                            let at = F::from((degree + 1 + j) as u64);
+                            let mut v = points.par_iter().map(|p| at - *p).collect::<Vec<_>>();
+                            batch_inversion(&mut v);
+                            let inv = v
+                                .par_iter_mut()
+                                .zip(&weights)
+                                .map(|(a, b)| {
+                                    *a *= *b;
+                                    *a
+                                })
+                                .sum::<F>()
+                                .inverse()
+                                .unwrap();
+                            (v, inv)
+                        })
+                        .collect();
+                    Some(points)
+                },
+                false => None,
+            })
+            .collect::<Vec<_>>();
         Ok(Self {
             challenges: Vec::with_capacity(polynomial.aux_info.num_variables),
             round: 0,
             poly: polynomial.clone(),
-            extrapolation_aux: (1..polynomial.aux_info.max_degree)
-                .map(|degree| {
-                    let points = (0..1 + degree as u64).map(F::from).collect::<Vec<_>>();
-                    let weights = barycentric_weights(&points);
-                    (points, weights)
-                })
-                .collect(),
+            extrapolation_aux,
         })
     }
 
@@ -152,14 +181,19 @@ impl<F: RawPrimeField> SumCheckProver<F> for IOPProverState<F> {
 
         let sums = sums
             .into_par_iter()
-            .map(|(coefficient, mut sum, product_size)| {
+            .map(|(coefficient, mut sum, degree)| {
                 sum.iter_mut().for_each(|sum| *sum *= *coefficient);
-                let extrapolation = (0..self.poly.aux_info.max_degree - product_size)
+                // We already have evaluations at `product_size + 1` points, we need to
+                // extrapolate to `max_degree + 1` points.
+                // i.e. we need to extrapolate to `max_degree - product_size` points
+                // at points `product_size + 1, product_size + 2, ..., max_degree`
+                // using barycentric interpolation.
+                let extrapolation = (0..self.poly.aux_info.max_degree - degree)
                     .into_par_iter()
                     .map(|i| {
-                        let (points, weights) = &self.extrapolation_aux[product_size - 1];
-                        let at = F::from((product_size + 1 + i) as u64);
-                        extrapolate(points, weights, &sum, &at)
+                        let points = &self.extrapolation_aux[degree - 1].as_ref().unwrap();
+                        let (points, inv) = &points[i];
+                        extrapolate(points, *inv, &sum)
                     })
                     .collect::<Vec<_>>();
                 sum.par_extend(extrapolation);
@@ -305,8 +339,9 @@ fn summation_helper<F: PrimeField, T: BorrowMut<[[F; 2]]>>(
     len: usize,
 ) -> Vec<F> {
     let zero_vec = || vec![F::zero(); len + 1];
-    let mut res = zipped
-        .fold_with(zero_vec(), |mut evals_of_product, mut products| {
+    zipped
+        .map(|mut products| {
+            let mut evals_of_product = zero_vec();
             // each entry in products is the evaluation of the following affine polynomial
             // g(X) = \sum_b p(r, X, b),
             // at the pair of points (r, r + 1) in [0, 2^n].
@@ -339,9 +374,6 @@ fn summation_helper<F: PrimeField, T: BorrowMut<[[F; 2]]>>(
             });
             evals_of_product
         })
-        .collect::<Vec<_>>();
-    res.push(zero_vec());
-    res.par_drain(..res.len())
         .reduce(zero_vec, |mut sum, partial| {
             sum.iter_mut()
                 .zip(partial)
@@ -352,42 +384,26 @@ fn summation_helper<F: PrimeField, T: BorrowMut<[[F; 2]]>>(
 
 fn barycentric_weights<F: PrimeField>(points: &[F]) -> Vec<F> {
     let mut weights = points
-        .iter()
+        .par_iter()
         .enumerate()
         .map(|(j, point_j)| {
             points
-                .iter()
+                .par_iter()
                 .enumerate()
                 .filter(|&(i, _)| i != j)
                 .map(|(_, point_i)| *point_j - point_i)
-                .reduce(|acc, value| acc * value)
-                .unwrap_or_else(F::one)
+                .reduce(|| F::one(), |acc, value| acc * value)
         })
         .collect::<Vec<_>>();
     batch_inversion(&mut weights);
     weights
 }
 
-fn extrapolate<F: PrimeField>(points: &[F], weights: &[F], evals: &[F], at: &F) -> F {
-    let mut coeffs = points
-        .par_iter()
-        .map(|point| *at - point)
-        .collect::<Vec<_>>();
-    batch_inversion(&mut coeffs);
-    let (denom_inv, num) = coeffs
+fn extrapolate<F: PrimeField>(points: &[F], denom: F, evals: &[F]) -> F {
+    let num = points
         .into_par_iter()
-        .zip(weights)
         .zip(evals)
-        .map(|((coeff, weight), e)| {
-            let cur_coeff = coeff * weight;
-            (cur_coeff, *e * cur_coeff)
-        })
-        .reduce(
-            || (F::zero(), F::zero()),
-            |(acc_coeff, acc_eval), (cur_coeff, cur_eval)| {
-                (acc_coeff + cur_coeff, acc_eval + cur_eval)
-            },
-        );
-    let denom_inv = denom_inv.inverse().unwrap_or_default();
-    num * denom_inv
+        .map(|(coeff, e)| *e * coeff)
+        .sum::<F>();
+    num * denom
 }

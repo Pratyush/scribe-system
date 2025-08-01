@@ -47,6 +47,8 @@ macro_rules! process_file {
                         break;
                     }
                 }
+                std::fs::remove_file(&file.path)
+                    .expect(&format!("failed to remove file {:?}", file.path));
                 if num_iters == 1 {
                     assert!(read_buffer.len() <= BUFFER_SIZE);
                     *$self = FileVec::Buffer {
