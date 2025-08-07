@@ -1,12 +1,10 @@
-use std::io::Read;
-
 use crate::{EqEvalIter, LexicoIter, LexicoIterWithBuf, MLE, eq_iter::EqEvalIterWithBuf};
-use ark_serialize::{
-    CanonicalDeserialize, CanonicalSerialize, Compress, SerializationError, Valid, Write,
+use rayon::{
+    iter::{Copied, MinLen},
+    prelude::*,
 };
-use rayon::iter::{Copied, MinLen};
 use scribe_streams::{
-    iterator::{BatchedIterator, BatchedIteratorAssocTypes},
+    iterator::{self, BatchedIterator, BatchedIteratorAssocTypes, Repeat},
     serialize::RawPrimeField,
 };
 
@@ -24,6 +22,10 @@ pub enum VirtualMLE<F: RawPrimeField> {
         num_vars: usize,
         offset: F,
         step_size: F,
+    },
+    Constant {
+        value: F,
+        num_vars: usize,
     },
 }
 
@@ -45,11 +47,16 @@ impl<F: RawPrimeField> VirtualMLE<F> {
         }
     }
 
+    pub fn constant(value: F, num_vars: usize) -> Self {
+        Self::Constant { value, num_vars }
+    }
+
     pub fn num_vars(&self) -> usize {
         match self {
             Self::MLE(mle) => mle.num_vars(),
             Self::EqAtPoint { num_vars, .. } => *num_vars,
             Self::Lexicographic { num_vars, .. } => *num_vars,
+            Self::Constant { num_vars, .. } => *num_vars,
         }
     }
 
@@ -81,6 +88,13 @@ impl<F: RawPrimeField> VirtualMLE<F> {
                 }
                 Some(res)
             },
+            Self::Constant { value, num_vars } => {
+                if point.len() != *num_vars {
+                    None
+                } else {
+                    Some(*value)
+                }
+            },
         }
     }
 
@@ -98,6 +112,9 @@ impl<F: RawPrimeField> VirtualMLE<F> {
                 offset,
                 step_size,
             } => VirtualMLEIter::Lexicographic(LexicoIter::new(*num_vars, *offset, *step_size)),
+            Self::Constant { value, num_vars } => {
+                VirtualMLEIter::Constant(iterator::repeat(*value, 1 << num_vars))
+            },
         }
     }
 
@@ -118,6 +135,10 @@ impl<F: RawPrimeField> VirtualMLE<F> {
             } => VirtualMLEIterWithBuf::Lexicographic(LexicoIterWithBuf::new(
                 *num_vars, *offset, *step_size, buf,
             )),
+            Self::Constant { value, num_vars } => VirtualMLEIterWithBuf::Constant {
+                iter: iterator::repeat(*value, 1 << num_vars),
+                buffer: buf,
+            },
         }
     }
 
@@ -156,6 +177,13 @@ impl<F: RawPrimeField> VirtualMLE<F> {
                     step_size,
                 }
             },
+            Self::Constant { value, num_vars } => {
+                let num_vars = num_vars.checked_sub(partial_point.len()).unwrap();
+                Self::Constant {
+                    value: *value,
+                    num_vars,
+                }
+            },
         }
     }
 
@@ -181,6 +209,9 @@ impl<F: RawPrimeField> VirtualMLE<F> {
                     step_size.double_in_place();
                     result
                 });
+            },
+            Self::Constant { num_vars, .. } => {
+                *num_vars = num_vars.checked_sub(partial_point.len()).unwrap();
             },
         }
     }
@@ -223,6 +254,7 @@ pub enum VirtualMLEIter<'a, F: RawPrimeField> {
     MLE(scribe_streams::file_vec::Iter<'a, F>),
     EqAtPoint(EqEvalIter<F>),
     Lexicographic(LexicoIter<F>),
+    Constant(Repeat<F>),
 }
 
 impl<'a, F: RawPrimeField> BatchedIteratorAssocTypes for VirtualMLEIter<'a, F> {
@@ -236,6 +268,12 @@ impl<'a, F: RawPrimeField> BatchedIterator for VirtualMLEIter<'a, F> {
             Self::MLE(mle) => mle.next_batch(),
             Self::EqAtPoint(e) => e.next_batch(),
             Self::Lexicographic(l) => l.next_batch(),
+            Self::Constant(c) => c.next_batch().map(|batch| {
+                batch
+                    .collect::<Vec<_>>()
+                    .into_par_iter()
+                    .with_min_len(1 << 12)
+            }),
         }
     }
 
@@ -244,6 +282,7 @@ impl<'a, F: RawPrimeField> BatchedIterator for VirtualMLEIter<'a, F> {
             Self::MLE(mle) => mle.len(),
             Self::EqAtPoint(e) => e.len(),
             Self::Lexicographic(l) => l.len(),
+            Self::Constant(c) => c.len(),
         }
     }
 }
@@ -252,6 +291,10 @@ pub enum VirtualMLEIterWithBuf<'a, F: RawPrimeField> {
     MLE(scribe_streams::file_vec::IterWithBuf<'a, F>),
     EqAtPoint(EqEvalIterWithBuf<'a, F>),
     Lexicographic(LexicoIterWithBuf<'a, F>),
+    Constant {
+        iter: Repeat<F>,
+        buffer: &'a mut Vec<F>,
+    },
 }
 
 impl<'a, F: RawPrimeField> BatchedIteratorAssocTypes for VirtualMLEIterWithBuf<'a, F> {
@@ -265,6 +308,13 @@ impl<'a, F: RawPrimeField> BatchedIterator for VirtualMLEIterWithBuf<'a, F> {
             Self::MLE(mle) => mle.next_batch(),
             Self::EqAtPoint(e) => e.next_batch(),
             Self::Lexicographic(l) => l.next_batch(),
+            Self::Constant { iter, buffer } => {
+                buffer.clear();
+                iter.next_batch().map(|b| {
+                    b.collect_into_vec(buffer);
+                    buffer.par_iter().copied().with_min_len(1 << 12)
+                })
+            },
         }
     }
 
@@ -273,6 +323,7 @@ impl<'a, F: RawPrimeField> BatchedIterator for VirtualMLEIterWithBuf<'a, F> {
             Self::MLE(mle) => mle.len(),
             Self::EqAtPoint(e) => e.len(),
             Self::Lexicographic(l) => l.len(),
+            Self::Constant { iter, .. } => iter.len(),
         }
     }
 }
@@ -305,123 +356,11 @@ impl<F: RawPrimeField> std::fmt::Debug for VirtualMLE<F> {
                 "VirtualMLE::Lexicographic(num_vars: {}, offset: {}, step_size: {:?})",
                 num_vars, offset, step_size,
             ),
-        }
-    }
-}
-
-impl<F: RawPrimeField> CanonicalSerialize for VirtualMLE<F> {
-    fn serialize_with_mode<W: Write>(
-        &self,
-        mut writer: W,
-        compress: Compress,
-    ) -> Result<(), SerializationError> {
-        match self {
-            Self::MLE(mle) => {
-                writer.write_all(&[0u8])?;
-                mle.serialize_with_mode(&mut writer, compress)
-            },
-            Self::EqAtPoint {
-                num_vars,
-                point,
-                fixed_vars,
-            } => {
-                writer.write_all(&[1u8])?;
-                num_vars.serialize_with_mode(&mut writer, compress)?;
-                for p in point {
-                    p.serialize_with_mode(&mut writer, compress)?;
-                }
-                fixed_vars.serialize_with_mode(&mut writer, compress)?;
-                Ok(())
-            },
-            Self::Lexicographic {
-                num_vars,
-                offset,
-                step_size,
-            } => {
-                writer.write_all(&[2u8])?;
-                num_vars.serialize_with_mode(&mut writer, compress)?;
-                offset.serialize_with_mode(&mut writer, compress)?;
-                step_size.serialize_with_mode(&mut writer, compress)?;
-                Ok(())
-            },
-        }
-    }
-
-    fn serialized_size(&self, compress: Compress) -> usize {
-        match self {
-            Self::MLE(mle) => 1 + mle.serialized_size(compress),
-            Self::EqAtPoint {
-                num_vars,
-                point,
-                fixed_vars,
-            } => {
-                1 + num_vars.serialized_size(compress)
-                    + point.len() * F::one().serialized_size(compress)
-                    + fixed_vars.serialized_size(compress)
-            },
-            Self::Lexicographic {
-                num_vars,
-                offset,
-                step_size,
-            } => {
-                1 + num_vars.serialized_size(compress)
-                    + offset.serialized_size(compress)
-                    + step_size.serialized_size(compress)
-            },
-        }
-    }
-}
-
-impl<F: RawPrimeField> Valid for VirtualMLE<F> {
-    fn check(&self) -> Result<(), SerializationError> {
-        match self {
-            Self::MLE(mle) => mle.check(),
-            _ => Ok(()),
-        }
-    }
-}
-
-impl<F: RawPrimeField> CanonicalDeserialize for VirtualMLE<F> {
-    fn deserialize_with_mode<R: Read>(
-        reader: R,
-        compress: Compress,
-        validate: ark_serialize::Validate,
-    ) -> Result<Self, SerializationError> {
-        let mut r = reader;
-        let disc = {
-            let mut buf = [0u8; 1];
-            r.read_exact(&mut buf)?;
-            buf[0]
-        };
-        match disc {
-            0 => {
-                let mle = MLE::deserialize_with_mode(r, compress, validate)?;
-                Ok(Self::MLE(mle))
-            },
-            1 => {
-                let num_vars = usize::deserialize_with_mode(&mut r, compress, validate)?;
-                let mut point = Vec::with_capacity(num_vars);
-                for _ in 0..num_vars {
-                    point.push(F::deserialize_with_mode(&mut r, compress, validate)?);
-                }
-                let fixed_vars = Vec::<F>::deserialize_with_mode(&mut r, compress, validate)?;
-                Ok(Self::EqAtPoint {
-                    num_vars,
-                    point,
-                    fixed_vars,
-                })
-            },
-            2 => {
-                let num_vars = usize::deserialize_with_mode(&mut r, compress, validate)?;
-                let offset = F::deserialize_with_mode(&mut r, compress, validate)?;
-                let step_size = F::deserialize_with_mode(&mut r, compress, validate)?;
-                Ok(Self::Lexicographic {
-                    num_vars,
-                    offset,
-                    step_size,
-                })
-            },
-            _ => Err(SerializationError::InvalidData),
+            Self::Constant { value, num_vars } => write!(
+                f,
+                "VirtualMLE::Constant(num_vars: {}, value: {})",
+                num_vars, value
+            ),
         }
     }
 }

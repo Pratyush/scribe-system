@@ -176,6 +176,7 @@ mod tests {
                     .step_by(1 << fixed_nv)
                     .map(|s| offset + Fr::from(s as u64))
                     .collect::<Vec<_>>();
+
                 let iter_result = mle.evals().to_vec();
                 for (i, (a, b)) in lexico_result.iter().zip(&iter_result).enumerate() {
                     assert_eq!(a, b, "failed for {nv} at {i}");

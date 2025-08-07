@@ -353,16 +353,17 @@ impl<F: RawPrimeField> VirtualPolynomial<F> {
     ) -> Result<VirtualPolynomial<F>, ArithError> {
         let num_vars = h_p.num_vars();
 
-        let mut poly = VirtualPolynomial::new_from_mle(
-            &MLE::constant(-batch_factor - F::ONE, num_vars),
+        let mut poly = VirtualPolynomial::new(num_vars);
+        poly.add_virtual_mles(
+            [VirtualMLE::constant(-batch_factor - F::ONE, num_vars)],
             F::one(),
-        );
-        poly.add_mles(vec![h_p.clone(), p], F::one())?;
-        poly.add_mles(vec![h_p.clone(), pi], alpha)?;
-        poly.add_mles(vec![h_q.clone(), q], batch_factor)?;
-        poly.add_mles(vec![h_q.clone(), index], alpha * batch_factor)?;
-        poly.add_mles(vec![h_p], gamma)?;
-        poly.add_mles(vec![h_q], gamma * batch_factor)?;
+        )?;
+        poly.add_mles([h_p.clone(), p], F::one())?;
+        poly.add_mles([h_p.clone(), pi], alpha)?;
+        poly.add_mles([h_q.clone(), q], batch_factor)?;
+        poly.add_mles([h_q.clone(), index], alpha * batch_factor)?;
+        poly.add_mles([h_p], gamma)?;
+        poly.add_mles([h_q], gamma * batch_factor)?;
 
         Ok(poly)
     }
@@ -389,34 +390,25 @@ impl<F: RawPrimeField> VirtualPolynomial<F> {
             batch_factor_power *= batch_factor;
         }
 
-        let mut poly =
-            VirtualPolynomial::new_from_mle(&MLE::constant(constant, num_vars), F::one());
+        let mut poly = VirtualPolynomial::new(num_vars);
+        poly.add_virtual_mles([VirtualMLE::constant(constant, num_vars)], F::one())?;
 
         let mut batch_factor_lower_power = F::one();
         let mut batch_factor_higher_power = batch_factor;
 
         for i in 0..h_p.len() {
-            poly.add_mles(vec![h_p[i].clone(), p[i].clone()], batch_factor_lower_power)
-                .unwrap();
+            poly.add_mles([h_p[i].clone(), p[i].clone()], batch_factor_lower_power)?;
             poly.add_mles(
-                vec![h_p[i].clone(), pi[i].clone()],
+                [h_p[i].clone(), pi[i].clone()],
                 batch_factor_lower_power * alpha,
-            )
-            .unwrap();
+            )?;
+            poly.add_mles([h_q[i].clone(), p[i].clone()], batch_factor_higher_power)?;
             poly.add_mles(
-                vec![h_q[i].clone(), p[i].clone()],
-                batch_factor_higher_power,
-            )
-            .unwrap();
-            poly.add_mles(
-                vec![h_q[i].clone(), index[i].clone()],
+                [h_q[i].clone(), index[i].clone()],
                 batch_factor_higher_power * alpha,
-            )
-            .unwrap();
-            poly.add_mles(vec![h_p[i].clone()], batch_factor_lower_power * gamma)
-                .unwrap();
-            poly.add_mles(vec![h_q[i].clone()], batch_factor_higher_power * gamma)
-                .unwrap();
+            )?;
+            poly.add_mles([h_p[i].clone()], batch_factor_lower_power * gamma)?;
+            poly.add_mles([h_q[i].clone()], batch_factor_higher_power * gamma)?;
 
             batch_factor_lower_power = batch_factor_lower_power * batch_factor * batch_factor;
             batch_factor_higher_power = batch_factor_higher_power * batch_factor * batch_factor;
@@ -450,32 +442,26 @@ impl<F: RawPrimeField> VirtualPolynomial<F> {
             batch_factor_power *= batch_factor;
         }
 
-        let constant_mle = MLE::constant(constant, num_vars);
+        let constant_mle = VirtualMLE::constant(constant, num_vars);
 
-        self.add_mles(vec![constant_mle.clone()], F::one()).unwrap();
+        self.add_virtual_mles([constant_mle], F::one()).unwrap();
 
         let mut batch_factor_lower_power = batch_factor;
         let mut batch_factor_higher_power = batch_factor * batch_factor;
 
         for i in 0..h_p.len() {
-            self.add_mles([h_p[i].clone(), p[i].clone()], batch_factor_lower_power)
-                .unwrap();
+            self.add_mles([h_p[i].clone(), p[i].clone()], batch_factor_lower_power)?;
             self.add_mles(
                 [h_p[i].clone(), pi[i].clone()],
                 batch_factor_lower_power * alpha,
-            )
-            .unwrap();
-            self.add_mles([h_q[i].clone(), p[i].clone()], batch_factor_higher_power)
-                .unwrap();
+            )?;
+            self.add_mles([h_q[i].clone(), p[i].clone()], batch_factor_higher_power)?;
             self.add_mles(
                 [h_q[i].clone(), index[i].clone()],
                 batch_factor_higher_power * alpha,
-            )
-            .unwrap();
-            self.add_mles([h_p[i].clone()], batch_factor_lower_power * gamma)
-                .unwrap();
-            self.add_mles([h_q[i].clone()], batch_factor_higher_power * gamma)
-                .unwrap();
+            )?;
+            self.add_mles([h_p[i].clone()], batch_factor_lower_power * gamma)?;
+            self.add_mles([h_q[i].clone()], batch_factor_higher_power * gamma)?;
 
             batch_factor_lower_power = batch_factor_lower_power * batch_factor * batch_factor;
             batch_factor_higher_power = batch_factor_higher_power * batch_factor * batch_factor;
