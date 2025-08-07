@@ -1,5 +1,5 @@
 use crate::piop::errors::PIOPError;
-use mle::MLE;
+use mle::{MLE, VirtualMLE};
 use scribe_streams::{iterator::BatchedIterator, serialize::RawPrimeField};
 
 use ark_std::{end_timer, start_timer};
@@ -30,7 +30,7 @@ pub(super) fn computer_nums_and_denoms<F: RawPrimeField>(
 
     let num_vars = fxs[0].num_vars();
 
-    let s_ids = MLE::<F>::identity_permutation_mles(num_vars, fxs.len());
+    let s_ids = VirtualMLE::<F>::identity_permutations(num_vars, fxs.len());
 
     let fxs = fxs.iter().map(|fx| (fx, vec![])).collect::<Vec<_>>();
     let gxs = gxs.iter().map(|gx| (gx, vec![])).collect::<Vec<_>>();
@@ -44,7 +44,7 @@ pub(super) fn computer_nums_and_denoms<F: RawPrimeField>(
                     .evals()
                     .iter_with_buf(&mut b1)
                     .zip(gx.evals().iter_with_buf(&mut b2))
-                    .zip(s_id.evals().iter_with_buf(&mut b3))
+                    .zip(s_id.evals_with_buf(&mut b3))
                     .zip(perm.evals().iter_with_buf(&mut b4))
                     .map(|(((f, g), s_id), perm)| {
                         let numerator = f + *beta * s_id + gamma;

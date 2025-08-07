@@ -12,7 +12,7 @@ use crate::eq_iter::EqEvalIterWithBuf;
 use scribe_streams::{
     BUFFER_SIZE, LOG_BUFFER_SIZE,
     file_vec::FileVec,
-    iterator::{BatchedIterator, from_fn, repeat},
+    iterator::{BatchedIterator, repeat},
     serialize::RawField,
 };
 
@@ -78,7 +78,7 @@ impl<F: RawField> Inner<F> {
         let shift = (1 << num_vars) as u64;
         (0..num_chunks as u64)
             .map(|i| {
-                let evals = from_fn(
+                let evals = scribe_streams::iterator::from_fn(
                     |j| (j < shift as usize).then(|| F::from(i * shift + (j as u64))),
                     shift as usize,
                 )
