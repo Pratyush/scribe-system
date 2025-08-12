@@ -304,10 +304,10 @@ mod test {
             let vanilla_gate = CustomizedGates::vanilla_plonk_gate();
             test_mock_circuit_zkp_helper(nv, &vanilla_gate, &pcs_srs)?;
         }
-        // for nv in MIN_NUM_VARS..MAX_NUM_VARS {
-        //     let tubro_gate = CustomizedGates::jellyfish_turbo_plonk_gate();
-        //     test_mock_circuit_zkp_helper(nv, &tubro_gate, &pcs_srs)?;
-        // }
+        for nv in MIN_NUM_VARS..MAX_NUM_VARS {
+            let tubro_gate = CustomizedGates::jellyfish_turbo_plonk_gate();
+            test_mock_circuit_zkp_helper(nv, &tubro_gate, &pcs_srs)?;
+        }
         // let nv = ;
         // for num_witness in 2..5 {
         //     for degree in CUSTOM_DEGREE {
