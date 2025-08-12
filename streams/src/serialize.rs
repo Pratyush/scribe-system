@@ -373,39 +373,45 @@ where
     fn serialize_raw(&self, _writer: &mut &mut [u8]) -> Option<()> {
         unimplemented!("Use serialize_raw_batch for SWAffine");
     }
-    
+
     fn serialize_raw_batch(
         result_buffer: &[Self],
         work_buffer: &mut AVec,
         mut file: impl crate::file_vec::WriteAligned,
     ) -> Result<(), io::Error>
     where
-        Self: Sync + Send + Sized, 
+        Self: Sync + Send + Sized,
     {
         if result_buffer.is_empty() {
             return Ok(());
         }
-        assert!(result_buffer.len() % 2 == 0, "SWAffine batch size must be even");
+        assert!(
+            result_buffer.len() % 2 == 0,
+            "SWAffine batch size must be even"
+        );
         work_buffer.clear();
         // We want to write pairs of points, so we reserve twice the size.
         let n = result_buffer.len() * Self::SIZE;
         work_buffer.reserve(n);
-        
-        
+
         // Safety: `work_buffer` is empty and has capacity at least `n`.
         unsafe {
             work_buffer.set_len(n);
         }
 
-        let (mut b_s, mut a_b_c_s): (Vec<_>, Vec<_>) = result_buffer.par_chunks_exact(2).map(|chunk| {
-            let [p1, p2] = chunk else { unreachable!() };
-            let a = p1.x - p2.x;
-            let b = p1.y - p2.y;
-            let c = p2.x;
-            (b, [a, b, c])
-        }).unzip();
+        let (mut b_s, mut a_b_c_s): (Vec<_>, Vec<_>) = result_buffer
+            .par_chunks_exact(2)
+            .map(|chunk| {
+                let [p1, p2] = chunk else { unreachable!() };
+                let a = p1.x - p2.x;
+                let b = p1.y - p2.y;
+                let c = p2.x;
+                (b, [a, b, c])
+            })
+            .unzip();
         ark_ff::batch_inversion(&mut b_s);
-        a_b_c_s.par_iter_mut()
+        a_b_c_s
+            .par_iter_mut()
             .zip(b_s)
             .zip(work_buffer.par_chunks_mut(Self::SIZE * 2))
             .for_each(|((abc, b_inv), buffer)| {
@@ -425,7 +431,7 @@ where
     fn deserialize_raw(_reader: &mut &[u8]) -> Option<Self> {
         unimplemented!("Use deserialize_raw_batch for SWAffine");
     }
-    
+
     fn deserialize_raw_batch(
         result_buffer: &mut Vec<Self>,
         work_buffer: &mut AVec,
@@ -433,7 +439,7 @@ where
         mut file: impl ReadN,
     ) -> Result<(), io::Error>
     where
-        Self: Sync + Send, 
+        Self: Sync + Send,
     {
         assert!(
             batch_size % 2 == 0,
@@ -451,18 +457,14 @@ where
             let x1_sub_x2 = a * b;
             let x1 = x1_sub_x2 + x2;
             let x1_x2 = x1 * x2;
-            let y1_plus_y2 = 
-                if P::COEFF_A == P::BaseField::ZERO {
-                    a * (x1_sub_x2.square() + (x1_x2).double() + x1_x2)
-                } else {
-                    a * (x1_sub_x2.square() + (x1_x2).double() + x1_x2 + P::COEFF_A)
-                };
+            let y1_plus_y2 = if P::COEFF_A == P::BaseField::ZERO {
+                a * (x1_sub_x2.square() + (x1_x2).double() + x1_x2)
+            } else {
+                a * (x1_sub_x2.square() + (x1_x2).double() + x1_x2 + P::COEFF_A)
+            };
             let y1 = (y1_plus_y2 + b) * two_inv;
             let y2 = y1 - b;
-            [
-                Self::new_unchecked(x1, y1),
-                Self::new_unchecked(x2, y2),
-            ]
+            [Self::new_unchecked(x1, y1), Self::new_unchecked(x2, y2)]
         });
         result_buffer.par_extend(iter);
         Ok(())

@@ -510,7 +510,7 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
                 }
                 A::serialize_raw_batch(&bufs.0, &mut writer_1, &file_1).unwrap();
                 B::serialize_raw_batch(&bufs.1, &mut writer_2, &file_2).unwrap();
-                
+
                 bufs.0.clear();
                 bufs.1.clear();
                 bufs.par_extend(batch);
@@ -520,12 +520,12 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
         // Write the last batch to the file.
         if more_than_one_batch {
             if let Some(s) = iter_len {
-                    file_1.allocate_space(s * A::SIZE).unwrap();
-                    file_2.allocate_space(s * B::SIZE).unwrap();
-                }
+                file_1.allocate_space(s * A::SIZE).unwrap();
+                file_2.allocate_space(s * B::SIZE).unwrap();
+            }
             A::serialize_raw_batch(&bufs.0, &mut writer_1, &file_1).unwrap();
             B::serialize_raw_batch(&bufs.1, &mut writer_2, &file_2).unwrap();
-            
+
             bufs.0.clear();
             bufs.1.clear();
             file_1.flush().expect("failed to flush file");
@@ -647,26 +647,29 @@ impl<T: SerializeRaw + DeserializeRaw + Valid + Sync + Send + CanonicalSerialize
         match self {
             Self::Buffer { buffer } => {
                 // Write the variant to indicate it's a buffer
-                writer.write(&[0u8])?;
+                writer.write_all(&[0u8])?;
                 buffer.serialize_uncompressed(&mut writer)
             },
             Self::File(file) => {
                 // Write the variant to indicate it's a file
-                writer.write(&[1u8])?;
+                writer.write_all(&[1u8])?;
                 let mut file = file.reopen_read_by_ref().expect(&format!(
                     "failed to open file, {}",
                     file.path.to_str().unwrap()
                 ));
                 let size = T::SIZE;
-                let mut work_buffer: AVec = avec![0u8; size * BUFFER_SIZE];
+                let len = self.len();
+                len.serialize_with_mode(&mut writer, _compress)?;
+                let mut work_buffer: AVec = avec![];
 
                 loop {
                     (&mut file).read_n(&mut work_buffer, size * BUFFER_SIZE)?;
                     let file_ended = work_buffer.len() < size * BUFFER_SIZE;
-                    writer.write(&work_buffer[..])?;
+                    writer.write_all(&work_buffer[..])?;
+                    work_buffer.clear();
 
                     // if we have read less than BUFFER_SIZE items, we've reached EOF
-                    if file_ended  {
+                    if file_ended {
                         break;
                     }
                 }
@@ -720,14 +723,14 @@ impl<T: SerializeRaw + DeserializeRaw + Valid + Sync + Send + CanonicalDeseriali
                 Ok(FileVec::Buffer { buffer })
             },
             1u8 => {
+                let mut remaining =
+                    usize::deserialize_with_mode(&mut reader, _compress, _validate)?;
                 let mut file = InnerFile::new_temp(prefix);
                 let mut work_buffer = avec![0u8; T::SIZE * BUFFER_SIZE];
-                loop {
-                    let n = reader.read(&mut work_buffer)?;
-                    if n < work_buffer.len() {
-                        break;
-                    }
+                while remaining > 0 {
+                    reader.read_exact(&mut work_buffer)?;
                     file.write_all(&work_buffer)?;
+                    remaining = remaining.saturating_sub(BUFFER_SIZE);
                 }
                 file.rewind()?;
                 Ok(FileVec::new_file(file))
@@ -785,30 +788,60 @@ mod tests {
 
     use super::*;
 
-    // Currently works for BUFFER_SIZE or below
     #[test]
-    fn test_file_vec_canonical_serialize() {
+    fn test_file_vec_fr_canonical_serialize() {
         let mut rng = test_rng();
-        let vec1 = (0..(BUFFER_SIZE * 2))
-            .map(|_| Fr::rand(&mut rng))
-            .collect::<Vec<Fr>>();
-        let file_vec = FileVec::from_iter(vec1.clone().into_iter());
-        let mut buffer = File::create("srs.params").unwrap();
-        file_vec.serialize_uncompressed(&mut buffer).unwrap();
+        for i in [1, 2, 4, 8] {
+            let vec1 = (0..(BUFFER_SIZE * i))
+                .map(|_| Fr::rand(&mut rng))
+                .collect::<Vec<Fr>>();
+            let file_vec = FileVec::from_iter(vec1.clone().into_iter());
+            let mut buffer = File::create("srs.params").unwrap();
+            file_vec.serialize_uncompressed(&mut buffer).unwrap();
 
-        let mut f = File::open("srs.params").unwrap();
-        let file_vec2 = FileVec::<Fr>::deserialize_uncompressed_unchecked(&mut f).unwrap();
+            let mut f = File::open("srs.params").unwrap();
+            let file_vec2 = FileVec::<Fr>::deserialize_uncompressed_unchecked(&mut f).unwrap();
 
-        match (&file_vec, &file_vec2) {
-            (FileVec::Buffer { .. }, FileVec::Buffer { .. }) => {
-                panic!("should both be File enums"); // size is both greater than BUFFER_SIZE, so should be File
-            },
-            (FileVec::File { .. }, FileVec::File { .. }) => {
-                let vec1 = file_vec.iter().to_vec();
-                let vec2 = file_vec2.iter().to_vec();
-                assert_eq!(vec1, vec2);
-            },
-            _ => panic!("file_vec and file_vec2 are different types"),
+            match (&file_vec, &file_vec2) {
+                (FileVec::Buffer { buffer: b1 }, FileVec::Buffer { buffer: b2 }) => {
+                    assert_eq!(b1, b2);
+                },
+                (FileVec::File { .. }, FileVec::File { .. }) => {
+                    let vec1 = file_vec.iter().to_vec();
+                    let vec2 = file_vec2.iter().to_vec();
+                    assert_eq!(vec1, vec2);
+                },
+                _ => panic!("file_vec and file_vec2 are different types"),
+            }
+        }
+    }
+
+    #[test]
+    fn test_file_vec_g1_canonical_serialize() {
+        use ark_bls12_381::G1Affine;
+        let mut rng = test_rng();
+        for i in [1, 2, 4, 8] {
+            let rand = G1Affine::rand(&mut rng);
+            let vec1 = (0..(BUFFER_SIZE * i)).map(|_| rand).collect::<Vec<_>>();
+            let file_vec = FileVec::from_iter(vec1.clone().into_iter());
+            let mut buffer = File::create("srs.params").unwrap();
+            file_vec.serialize_uncompressed(&mut buffer).unwrap();
+
+            let mut f = File::open("srs.params").unwrap();
+            let file_vec2 =
+                FileVec::<G1Affine>::deserialize_uncompressed_unchecked(&mut f).unwrap();
+
+            match (&file_vec, &file_vec2) {
+                (FileVec::Buffer { buffer: b1 }, FileVec::Buffer { buffer: b2 }) => {
+                    assert_eq!(b1, b2);
+                },
+                (FileVec::File { .. }, FileVec::File { .. }) => {
+                    let vec1 = file_vec.iter().to_vec();
+                    let vec2 = file_vec2.iter().to_vec();
+                    assert_eq!(vec1, vec2);
+                },
+                _ => panic!("file_vec and file_vec2 are different types"),
+            }
         }
     }
 }

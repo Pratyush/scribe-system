@@ -41,10 +41,13 @@ pub fn setup(min_num_vars: usize, max_num_vars: usize, file_dir_path: &Path) {
         .create(true)
         .truncate(true)
         .open(&srs_path)
-        .expect(format!(
-            "Failed to create SRS file at {}",
-            srs_path.to_string_lossy()
-        ).as_str());
+        .expect(
+            format!(
+                "Failed to create SRS file at {}",
+                srs_path.to_string_lossy()
+            )
+            .as_str(),
+        );
     let mut srs_file = std::io::BufWriter::new(srs_file);
     timed!(
         "Scribe: Serializing SRS",
@@ -92,11 +95,11 @@ pub fn prover(
     assert!(max_nv >= min_nv);
     assert!(max_nv <= supported_size);
 
-    let srs: SRS<_> = {
+    let srs = {
         let srs_path = file_dir_path.join(format!("scribe_srs_{supported_size}.params"));
         let srs_file = open_file(&srs_path);
         let srs_file = std::io::BufReader::new(srs_file);
-        let srs = CanonicalDeserialize::deserialize_uncompressed_unchecked(srs_file).unwrap();
+        let srs = SRS::deserialize_uncompressed_unchecked(srs_file).unwrap();
         clear_caches();
 
         srs
