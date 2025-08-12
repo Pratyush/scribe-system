@@ -41,7 +41,10 @@ pub fn setup(min_num_vars: usize, max_num_vars: usize, file_dir_path: &Path) {
         .create(true)
         .truncate(true)
         .open(&srs_path)
-        .unwrap();
+        .expect(format!(
+            "Failed to create SRS file at {}",
+            srs_path.to_string_lossy()
+        ).as_str());
     let mut srs_file = std::io::BufWriter::new(srs_file);
     timed!(
         "Scribe: Serializing SRS",
