@@ -349,19 +349,9 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
                 let file = file.as_mut().unwrap();
 
                 more_than_one_batch = true;
-                byte_buffer
-                    .par_chunks_mut(size)
-                    .zip(&buffer)
-                    .with_min_len(1 << 10)
-                    .try_for_each(|(mut chunk, item)| item.serialize_raw(&mut chunk))
-                    .unwrap();
-                let buf_len = buffer.len();
-                byte_buffer.truncate(buf_len * size);
+                T::serialize_raw_batch(&buffer, byte_buffer, &*file).unwrap();
                 buffer.clear();
-                rayon::join(
-                    || file.write_all(&byte_buffer).unwrap(),
-                    || buffer.par_extend(batch),
-                );
+                buffer.par_extend(batch);
             }
         }
 
@@ -369,15 +359,7 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
         if more_than_one_batch || batch_is_larger_than_buffer {
             let byte_buffer = byte_buffer.as_mut().unwrap();
             let mut file = file.unwrap();
-            byte_buffer
-                .par_chunks_mut(size)
-                .zip(&buffer)
-                .with_min_len(1 << 10)
-                .try_for_each(|(mut chunk, item)| item.serialize_raw(&mut chunk))
-                .unwrap();
-            byte_buffer.truncate(buffer.len() * size);
-            file.write_all(&byte_buffer)
-                .expect("failed to write to file");
+            T::serialize_raw_batch(&buffer, byte_buffer, &file).unwrap();
             file.flush().expect("failed to flush file");
             file.rewind().expect("failed to seek file");
             Self::File(file)
@@ -522,27 +504,13 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
                 bufs.par_extend(batch);
             } else {
                 more_than_one_batch = true;
-                let a = writer_1.par_chunks_mut(size_a).zip(&bufs.0);
-                let b = writer_2.par_chunks_mut(size_b).zip(&bufs.1);
-
-                a.zip(b)
-                    .try_for_each(|((mut c_a, a), (mut c_b, b))| {
-                        a.serialize_raw(&mut c_a)?;
-                        b.serialize_raw(&mut c_b)
-                    })
-                    .unwrap();
-                let buf_a_len = bufs.0.len();
-                let buf_b_len = bufs.1.len();
-                writer_1.truncate(buf_a_len * size_a);
-                writer_2.truncate(buf_b_len * size_b);
                 if let Some(s) = iter_len {
                     file_1.allocate_space(s * A::SIZE).unwrap();
                     file_2.allocate_space(s * B::SIZE).unwrap();
                 }
-                rayon::join(
-                    || file_1.write_all(&writer_1).unwrap(),
-                    || file_2.write_all(&writer_2).unwrap(),
-                );
+                A::serialize_raw_batch(&bufs.0, &mut writer_1, &file_1).unwrap();
+                B::serialize_raw_batch(&bufs.1, &mut writer_2, &file_2).unwrap();
+                
                 bufs.0.clear();
                 bufs.1.clear();
                 bufs.par_extend(batch);
@@ -551,28 +519,15 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
 
         // Write the last batch to the file.
         if more_than_one_batch {
-            writer_1
-                .par_chunks_mut(size_a)
-                .zip(&bufs.0)
-                .try_for_each(|(mut chunk, a)| a.serialize_raw(&mut chunk))
-                .unwrap();
-            writer_2
-                .par_chunks_mut(size_b)
-                .zip(&bufs.1)
-                .try_for_each(|(mut chunk, b)| b.serialize_raw(&mut chunk))
-                .unwrap();
-            let buf_a_len = bufs.0.len();
-            let buf_b_len = bufs.1.len();
-            writer_1.truncate(buf_a_len * size_a);
-            writer_2.truncate(buf_b_len * size_b);
             if let Some(s) = iter_len {
-                file_1.allocate_space(s * A::SIZE).unwrap();
-                file_2.allocate_space(s * B::SIZE).unwrap();
-            }
-            rayon::join(
-                || file_1.write_all(&writer_1).unwrap(),
-                || file_2.write_all(&writer_2).unwrap(),
-            );
+                    file_1.allocate_space(s * A::SIZE).unwrap();
+                    file_2.allocate_space(s * B::SIZE).unwrap();
+                }
+            A::serialize_raw_batch(&bufs.0, &mut writer_1, &file_1).unwrap();
+            B::serialize_raw_batch(&bufs.1, &mut writer_2, &file_2).unwrap();
+            
+            bufs.0.clear();
+            bufs.1.clear();
             file_1.flush().expect("failed to flush file");
             file_2.flush().expect("failed to flush file");
             file_1.rewind().expect("failed to seek file");
