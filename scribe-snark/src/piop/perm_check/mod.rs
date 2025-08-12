@@ -148,7 +148,7 @@ mod test {
     type Kzg = PST13<Bls12_381>;
 
     fn test_permutation_check_helper<E, PC>(
-        pcs_param: &PC::CommitterKey,
+        ck: &PC::CommitterKey,
         fxs: &[MLE<E::ScalarField>],
         gxs: &[MLE<E::ScalarField>],
         perms: &[MLE<E::ScalarField>],
@@ -170,7 +170,7 @@ mod test {
         let mut transcript = PermutationCheck::<E, PC>::init_transcript();
         transcript.append_message(b"testing", b"initializing transcript for testing")?;
         let (proof, prod_x, _frac_poly) =
-            PermutationCheck::<E, PC>::prove(pcs_param, fxs, gxs, perms, &mut transcript)?;
+            PermutationCheck::<E, PC>::prove(ck, fxs, gxs, perms, &mut transcript)?;
 
         // verifier
         let mut transcript = PermutationCheck::<E, PC>::init_transcript();
