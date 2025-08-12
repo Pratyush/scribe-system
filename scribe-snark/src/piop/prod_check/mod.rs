@@ -91,7 +91,7 @@ where
     }
 
     pub fn prove(
-        pcs_param: &PC::CommitterKey,
+        ck: &PC::CommitterKey,
         fxs: &[MLE<E::ScalarField>],
         gxs: &[MLE<E::ScalarField>],
         transcript: &mut IOPTranscript<E::ScalarField>,
@@ -129,10 +129,12 @@ where
 
         // generate challenge
 
-        let (frac_comm, prod_x_comm) = rayon::join(
-            || PC::commit(pcs_param, &frac_poly).unwrap(),
-            || PC::commit(pcs_param, &prod_x).unwrap(),
-        );
+        let commit_time = start_timer!(|| "prod_check commit");
+        let [frac_comm, prod_x_comm] = PC::batch_commit(ck, &[frac_poly.clone(), prod_x.clone()])?
+            .as_slice()
+            .try_into()
+            .unwrap();
+        end_timer!(commit_time);
         transcript.append_serializable_element(b"frac(x)", &frac_comm)?;
         transcript.append_serializable_element(b"prod(x)", &prod_x_comm)?;
         let alpha = transcript.get_and_append_challenge(b"alpha")?;

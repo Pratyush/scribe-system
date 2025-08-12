@@ -59,7 +59,7 @@ where
     }
 
     pub fn prove(
-        pcs_param: &PC::CommitterKey,
+        ck: &PC::CommitterKey,
         fxs: &[MLE<E::ScalarField>],
         gxs: &[MLE<E::ScalarField>],
         perms: &[MLE<E::ScalarField>],
@@ -104,7 +104,7 @@ where
 
         // invoke product check on numerator and denominator
         let (proof, prod_poly, frac_poly) =
-            ProductCheck::<E, PC>::prove(pcs_param, &numerators, &denominators, transcript)?;
+            ProductCheck::<E, PC>::prove(ck, &numerators, &denominators, transcript)?;
 
         end_timer!(start);
         Ok((proof, prod_poly, frac_poly))

@@ -9,7 +9,7 @@ use ark_ec::{
     short_weierstrass::{Affine as SWAffine, SWCurveConfig},
     twisted_edwards::{Affine as TEAffine, TECurveConfig},
 };
-use ark_ff::{BigInt, Field, Fp, FpConfig, PrimeField};
+use ark_ff::{AdditiveGroup, BigInt, Field, Fp, FpConfig, PrimeField};
 use ark_serialize::{Read, Write};
 
 use crate::file_vec::backend::ReadN;
@@ -316,22 +316,6 @@ impl<const N: usize> DeserializeRaw for BigInt<N> {
         assert!(head.is_empty());
         assert!(tail.is_empty());
         result_buffer.extend_from_slice(mid);
-
-        // if rayon::current_num_threads() == 1 {
-        //     result_buffer.extend(
-        //         work_buffer
-        //             .chunks(size)
-        //             .map(|mut chunk| Self::deserialize_raw(&mut chunk).unwrap()),
-        //     );
-        // } else {
-        //     result_buffer.par_extend(
-        //         work_buffer
-        //             .par_chunks(size)
-        //             .with_min_len(1 << 10)
-        //             .map(|mut chunk| Self::deserialize_raw(&mut chunk).unwrap()),
-        //     );
-        // }
-
         Ok(())
     }
 }
@@ -370,16 +354,7 @@ impl<P: FpConfig<N>, const N: usize> DeserializeRaw for Fp<P, N> {
         let (head, mid, tail) = unsafe { work_buffer.align_to::<Fp<P, N>>() };
         assert!(head.is_empty());
         assert!(tail.is_empty());
-        if rayon::current_num_threads() == 1 {
-            result_buffer.extend_from_slice(mid);
-        } else {
-            result_buffer.par_extend(
-                mid.par_iter()
-                    .with_min_len(1 << 10)
-                    .map(|x| Fp(x.0, core::marker::PhantomData)),
-            );
-        }
-
+        result_buffer.extend_from_slice(mid);
         Ok(())
     }
 }
@@ -388,12 +363,57 @@ impl<P: SWCurveConfig> SerializeRaw for SWAffine<P>
 where
     P::BaseField: SerializeRaw,
 {
-    const SIZE: usize = 2 * P::BaseField::SIZE;
+    /// The size of the serialized representation of a SWAffine point.
+    /// It is calculated as (3 * BaseField::SIZE) / 2 because we
+    /// serialize a pair of points (x1, y1) and (x2, y2) together as three field elements.
+    /// Hence the size per point is 1.5 field elements.
+    const SIZE: usize = (3 * P::BaseField::SIZE) / 2;
 
     #[inline(always)]
-    fn serialize_raw(&self, writer: &mut &mut [u8]) -> Option<()> {
-        self.x.serialize_raw(writer)?;
-        self.y.serialize_raw(writer)
+    fn serialize_raw(&self, _writer: &mut &mut [u8]) -> Option<()> {
+        unimplemented!("Use serialize_raw_batch for SWAffine");
+    }
+    
+    fn serialize_raw_batch(
+        result_buffer: &[Self],
+        work_buffer: &mut AVec,
+        mut file: impl crate::file_vec::WriteAligned,
+    ) -> Result<(), io::Error>
+    where
+        Self: Sync + Send + Sized, 
+    {
+        if result_buffer.is_empty() {
+            return Ok(());
+        }
+        assert!(result_buffer.len() % 2 == 0, "SWAffine batch size must be even");
+        work_buffer.clear();
+        // We want to write pairs of points, so we reserve twice the size.
+        let n = result_buffer.len() * Self::SIZE;
+        work_buffer.reserve(n);
+        
+        
+        // Safety: `work_buffer` is empty and has capacity at least `n`.
+        unsafe {
+            work_buffer.set_len(n);
+        }
+
+        let (mut b_s, mut a_b_c_s): (Vec<_>, Vec<_>) = result_buffer.par_chunks_exact(2).map(|chunk| {
+            let [p1, p2] = chunk else { unreachable!() };
+            let a = p1.x - p2.x;
+            let b = p1.y - p2.y;
+            let c = p2.x;
+            (b, [a, b, c])
+        }).unzip();
+        ark_ff::batch_inversion(&mut b_s);
+        a_b_c_s.par_iter_mut()
+            .zip(b_s)
+            .zip(work_buffer.par_chunks_mut(Self::SIZE * 2))
+            .for_each(|((abc, b_inv), buffer)| {
+                abc[0] *= b_inv;
+                abc.serialize_raw(&mut &mut buffer[..]).unwrap();
+            });
+        file.write_all(work_buffer)?;
+        Ok(())
     }
 }
 
@@ -402,10 +422,50 @@ where
     P::BaseField: DeserializeRaw,
 {
     #[inline(always)]
-    fn deserialize_raw(reader: &mut &[u8]) -> Option<Self> {
-        let x = P::BaseField::deserialize_raw(reader)?;
-        let y = P::BaseField::deserialize_raw(reader)?;
-        Some(Self::new_unchecked(x, y))
+    fn deserialize_raw(_reader: &mut &[u8]) -> Option<Self> {
+        unimplemented!("Use deserialize_raw_batch for SWAffine");
+    }
+    
+    fn deserialize_raw_batch(
+        result_buffer: &mut Vec<Self>,
+        work_buffer: &mut AVec,
+        batch_size: usize,
+        mut file: impl ReadN,
+    ) -> Result<(), io::Error>
+    where
+        Self: Sync + Send, 
+    {
+        assert!(
+            batch_size % 2 == 0,
+            "SWAffine batch size must be even (pairs are compressed)"
+        );
+        let two_inv = P::BaseField::ONE.double().inverse().unwrap();
+        work_buffer.clear();
+        result_buffer.clear();
+
+        // We want to read a pair of points at a time, so we read twice the size.
+        let size = Self::SIZE * 2;
+        file.read_n(work_buffer, size * batch_size / 2)?;
+        let iter = work_buffer.par_chunks_exact(size).flat_map(|mut r| {
+            let [a, b, x2] = <[P::BaseField; 3]>::deserialize_raw(&mut r).unwrap();
+            let x1_sub_x2 = a * b;
+            let x1 = x1_sub_x2 + x2;
+            let x1_x2 = x1 * x2;
+            let y1_plus_y2 = 
+                if P::COEFF_A == P::BaseField::ZERO {
+                    a * (x1_sub_x2.square() + (x1_x2).double() + x1_x2)
+                } else {
+                    a * (x1_sub_x2.square() + (x1_x2).double() + x1_x2 + P::COEFF_A)
+                };
+            let y1 = (y1_plus_y2 + b) * two_inv;
+            let y2 = y1 - b;
+            [
+                Self::new_unchecked(x1, y1),
+                Self::new_unchecked(x2, y2),
+            ]
+        });
+        result_buffer.par_extend(iter);
+        Ok(())
     }
 }
 

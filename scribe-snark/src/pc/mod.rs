@@ -26,7 +26,7 @@ pub trait PCScheme<E: Pairing> {
     /// Polynomial Evaluation
     type Evaluation: Field;
     /// Commitments
-    type Commitment: Clone
+    type Commitment: Copy
         + CanonicalSerialize
         + CanonicalDeserialize
         + Debug
