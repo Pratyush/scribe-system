@@ -732,7 +732,7 @@ impl<T: SerializeRaw + DeserializeRaw + Valid + Sync + Send + CanonicalDeseriali
                 file.rewind()?;
                 Ok(FileVec::new_file(file))
             },
-            _ => panic!("invalid variant for FileVec"),
+            x => panic!("invalid variant {x} for FileVec"),
         }
     }
 }
