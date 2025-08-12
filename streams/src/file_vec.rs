@@ -645,39 +645,32 @@ impl<T: SerializeRaw + DeserializeRaw + Valid + Sync + Send + CanonicalSerialize
         _compress: ark_serialize::Compress,
     ) -> Result<(), ark_serialize::SerializationError> {
         match self {
-            Self::Buffer { buffer } => buffer.serialize_uncompressed(&mut writer),
+            Self::Buffer { buffer } => {
+                // Write the variant to indicate it's a buffer
+                writer.write(&[0u8])?;
+                buffer.serialize_uncompressed(&mut writer)
+            },
             Self::File(file) => {
+                // Write the variant to indicate it's a file
+                writer.write(&[1u8])?;
                 let mut file = file.reopen_read_by_ref().expect(&format!(
                     "failed to open file, {}",
                     file.path.to_str().unwrap()
                 ));
                 let size = T::SIZE;
-                let mut final_result = vec![];
                 let mut work_buffer: AVec = avec![0u8; size * BUFFER_SIZE];
 
-                let mut result_buffer = Vec::with_capacity(BUFFER_SIZE);
                 loop {
-                    T::deserialize_raw_batch(
-                        &mut result_buffer,
-                        &mut work_buffer,
-                        BUFFER_SIZE,
-                        &mut file,
-                    )
-                    .unwrap();
-
-                    // need to store result_buffer len first or append removes all elements from result buffer
-                    let result_buffer_len = result_buffer.len();
-
-                    final_result.append(&mut result_buffer);
+                    (&mut file).read_n(&mut work_buffer, size * BUFFER_SIZE)?;
+                    let file_ended = work_buffer.len() < size * BUFFER_SIZE;
+                    writer.write(&work_buffer[..])?;
 
                     // if we have read less than BUFFER_SIZE items, we've reached EOF
-                    if result_buffer_len < BUFFER_SIZE {
+                    if file_ended  {
                         break;
                     }
                 }
-
-                // size of final_result vec (not byte size) should be serialized as a u64 as a part of this API
-                final_result.serialize_uncompressed(&mut writer)
+                Ok(())
             },
         }
     }
@@ -716,33 +709,30 @@ impl<T: SerializeRaw + DeserializeRaw + Valid + Sync + Send + CanonicalDeseriali
         _compress: ark_serialize::Compress,
         _validate: ark_serialize::Validate,
     ) -> Result<Self, ark_serialize::SerializationError> {
-        let size = usize::deserialize_uncompressed_unchecked(&mut reader)?;
-        let mut buffer = Vec::with_capacity(BUFFER_SIZE);
-        if size > BUFFER_SIZE {
-            let mut file = InnerFile::new_temp(prefix);
-            file.allocate_space(size * T::SIZE).unwrap();
-            let mut remaining = size;
-
-            let mut work_buffer = avec![0u8; T::SIZE * BUFFER_SIZE];
-            while remaining > 0 {
-                for _ in 0..std::cmp::min(remaining, BUFFER_SIZE) {
-                    let item = T::deserialize_uncompressed_unchecked(&mut reader).unwrap();
-                    buffer.push(item);
+        let variant = {
+            let mut buf = [0u8; 1];
+            reader.read_exact(&mut buf)?;
+            buf[0]
+        };
+        match variant {
+            0u8 => {
+                let buffer = Vec::deserialize_uncompressed_unchecked(&mut reader)?;
+                Ok(FileVec::Buffer { buffer })
+            },
+            1u8 => {
+                let mut file = InnerFile::new_temp(prefix);
+                let mut work_buffer = avec![0u8; T::SIZE * BUFFER_SIZE];
+                loop {
+                    let n = reader.read(&mut work_buffer)?;
+                    if n < work_buffer.len() {
+                        break;
+                    }
+                    file.write_all(&work_buffer)?;
                 }
-                remaining = remaining.saturating_sub(BUFFER_SIZE);
-                T::serialize_raw_batch(&buffer, &mut work_buffer, &file).unwrap();
-                buffer.clear();
-                work_buffer.clear();
-            }
-
-            Ok(FileVec::new_file(file))
-        } else {
-            for _ in 0..size {
-                let item = T::deserialize_uncompressed_unchecked(&mut reader).unwrap();
-                buffer.push(item);
-            }
-
-            Ok(FileVec::Buffer { buffer })
+                file.rewind()?;
+                Ok(FileVec::new_file(file))
+            },
+            _ => panic!("invalid variant for FileVec"),
         }
     }
 }
