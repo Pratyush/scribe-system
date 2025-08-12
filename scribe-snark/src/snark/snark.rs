@@ -10,7 +10,7 @@ use crate::snark::{
     Scribe,
     errors::ScribeErrors,
     structs::{Index, Proof, ProvingKey, VerifyingKey},
-    utils::{build_f, eval_f, eval_perm_gate, prover_sanity_check},
+    utils::{build_f, eval_f, eval_perm_gate},
 };
 use crate::transcript::IOPTranscript;
 use ark_ec::pairing::Pairing;
@@ -129,14 +129,14 @@ where
     /// - 5. deferred batch opening
     pub fn prove(
         pk: &ProvingKey<E, PC>,
-        pub_input: &[E::ScalarField],
+        _pub_input: &[E::ScalarField],
         witnesses: &[MLE<E::ScalarField>],
     ) -> Result<Proof<E, PC>, ScribeErrors> {
         let start = start_timer!(|| format!("scribe proving nv = {}", pk.config().num_variables()));
         let mut transcript = IOPTranscript::<E::ScalarField>::new(b"scribe");
 
         #[cfg(debug_assertions)]
-        prover_sanity_check(pk.config(), pub_input, witnesses.to_vec())?;
+        crate::snark::utils::prover_sanity_check(pk.config(), _pub_input, witnesses.to_vec())?;
 
         // witness assignment of length 2^n
         let num_vars = pk.config().num_variables();

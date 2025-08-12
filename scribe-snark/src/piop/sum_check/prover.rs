@@ -107,7 +107,7 @@ impl<F: RawPrimeField> SumCheckProver<F> for IOPProverState<F> {
             }
             self.challenges.push(*chal);
 
-            let fix_argument = start_timer!(|| "fix argument");
+            let fix_variable = start_timer!(|| "fix variable");
 
             let r = self.challenges[self.round - 1];
             if self.round == 1 {
@@ -124,7 +124,7 @@ impl<F: RawPrimeField> SumCheckProver<F> for IOPProverState<F> {
                     .par_iter_mut()
                     .for_each(|m| m.fix_variables_in_place(&[r]));
             }
-            end_timer!(fix_argument);
+            end_timer!(fix_variable);
         } else if self.round > 0 {
             return Err(PIOPError::InvalidProver(
                 "verifier message is empty".to_string(),
@@ -179,7 +179,9 @@ impl<F: RawPrimeField> SumCheckProver<F> for IOPProverState<F> {
         let sums = sums
             .into_par_iter()
             .map(|(coefficient, mut sum, degree)| {
-                sum.iter_mut().for_each(|sum| *sum *= *coefficient);
+                if !coefficient.is_one() {
+                    sum.iter_mut().for_each(|sum| *sum *= *coefficient);
+                }
                 // We already have evaluations at `product_size + 1` points, we need to
                 // extrapolate to `max_degree + 1` points.
                 // i.e. we need to extrapolate to `max_degree - product_size` points

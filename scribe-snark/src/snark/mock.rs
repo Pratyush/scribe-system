@@ -299,7 +299,7 @@ mod test {
     fn test_mock_circuit_zkp() -> Result<(), ScribeErrors> {
         let mut rng = test_rng();
         let pcs_srs = PST13::<Bls12_381>::gen_srs_for_testing(&mut rng, SUPPORTED_SIZE)?;
-        for nv in 18..MAX_NUM_VARS {
+        for nv in MIN_NUM_VARS..MAX_NUM_VARS {
             println!("\n\n\n test_mock_circuit_zkp for nv = {nv} \n\n\n");
             let vanilla_gate = CustomizedGates::vanilla_plonk_gate();
             test_mock_circuit_zkp_helper(nv, &vanilla_gate, &pcs_srs)?;

@@ -106,9 +106,11 @@ where
     let merged_tilde_gs = v
         .into_iter()
         .map(|(_, coeffs_and_polys)| {
+            let mut bufs = vec![vec![]; coeffs_and_polys.len()];
             let evals = coeffs_and_polys
                 .into_iter()
-                .map(|(coeff, poly)| poly.evals().iter().map(move |p| p * coeff))
+                .zip(&mut bufs)
+                .map(|((c, p), b)| p.evals().iter_with_buf(b).map(move |e| e * c))
                 .chunks(8)
                 .into_iter()
                 .map(|chunk| {
