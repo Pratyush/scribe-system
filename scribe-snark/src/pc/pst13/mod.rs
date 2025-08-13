@@ -141,7 +141,6 @@ where
         let ck_num_vars = ck.num_vars;
         let max_num_vars = polys.iter().map(|p| p.num_vars()).max().unwrap();
 
-        let mut f_buf = Vec::with_capacity(scribe_streams::BUFFER_SIZE);
         let mut g_buf = Vec::with_capacity(scribe_streams::BUFFER_SIZE);
         let mut commitments = vec![E::G1::zero(); polys.len()];
         polys
@@ -161,15 +160,25 @@ where
                 let mut poly_evals = group
                     .map(|(i, p)| (i, p.evals().iter()))
                     .collect::<Vec<_>>();
+                let mut f_bufs = vec![vec![]; poly_evals.len()];
                 while let Some(g) = srs.next_batch() {
                     g_buf.clear();
                     g.collect_into_vec(&mut g_buf);
-                    for (i, poly) in poly_evals.iter_mut() {
-                        f_buf.clear();
-                        if let Some(p) = poly.next_batch() {
-                            p.collect_into_vec(&mut f_buf);
-                            commitments[*i] += E::G1::msm_unchecked(&g_buf, &f_buf);
-                        }
+                    let result = poly_evals
+                        .par_iter_mut()
+                        .zip(&mut f_bufs)
+                        .map(|((i, poly), f_buf)| {
+                            f_buf.clear();
+                            let mut result = E::G1::zero();
+                            if let Some(p) = poly.next_batch() {
+                                p.collect_into_vec(f_buf);
+                                result += E::G1::msm_unchecked(&g_buf, &f_buf);
+                            }
+                            (i, result)
+                        })
+                        .collect::<Vec<_>>();
+                    for (i, res) in result {
+                        commitments[*i] += res;
                     }
                 }
                 Ok(())
