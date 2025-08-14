@@ -88,7 +88,7 @@ pub trait PCScheme<E: Pairing> {
     fn batch_commit(
         ck: impl Borrow<Self::CommitterKey>,
         polys: &[Self::Polynomial],
-    ) -> Result<Vec<Self::Commitment>, PCError>;
+    ) -> Result<Vec<Self::Commitment>, PCError>; 
 
     /// On input a polynomial `p` and a point `point`, outputs a proof for the
     /// same.
@@ -97,14 +97,6 @@ pub trait PCScheme<E: Pairing> {
         polynomial: &Self::Polynomial,
         point: &Self::Point,
     ) -> Result<(Self::Proof, Self::Evaluation), PCError>;
-
-    // // just a RLN of regular open
-    // fn multi_open_single_point(
-    //     prover_param: impl Borrow<Self::ProverParam>,
-    //     polynomials: &[Self::Polynomial],
-    //     points: Self::Point,
-    //     transcript: &mut IOPTranscript<E::ScalarField>,
-    // ) -> Result<(Self::Proof, Self::Evaluation), PCSError>;
 
     // this is the multi poly multi point version
     /// Input a list of multilinear extensions, and a same number of points, and
