@@ -9,7 +9,7 @@ use scribe_streams::{file_vec::FileVec, iterator::BatchedIterator, serialize::Ra
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone)]
 pub struct SmallMLE<F: RawField> {
-    pub evals: Arc<FileVec<u32>>,
+    pub evals: Arc<FileVec<u64>>,
     pub num_vars: usize,
     _phantom: std::marker::PhantomData<F>,
 }
@@ -42,7 +42,7 @@ impl<F: RawField> CanonicalDeserialize for SmallMLE<F> {
         validate: ark_serialize::Validate,
     ) -> Result<Self, ark_serialize::SerializationError> {
         let num_vars = usize::deserialize_with_mode(&mut reader, compress, validate)?;
-        let evals = FileVec::<u32>::deserialize_with_mode(reader, compress, validate)?;
+        let evals = FileVec::<u64>::deserialize_with_mode(reader, compress, validate)?;
         Ok(Self {
             evals: Arc::new(evals),
             num_vars,
@@ -63,7 +63,7 @@ impl<F: RawField> SmallMLE<F> {
     }
 
     #[inline(always)]
-    pub fn from_evals(evals: FileVec<u32>, num_vars: usize) -> Self {
+    pub fn from_evals(evals: FileVec<u64>, num_vars: usize) -> Self {
         Self {
             evals: Arc::new(evals),
             num_vars,
@@ -75,7 +75,7 @@ impl<F: RawField> SmallMLE<F> {
     ///
     /// This should only be used for testing.
     #[inline(always)]
-    pub fn from_evals_vec(evals: Vec<u32>, num_vars: usize) -> Self {
+    pub fn from_evals_vec(evals: Vec<u64>, num_vars: usize) -> Self {
         assert_eq!(evals.len(), 1 << num_vars);
         let evals = FileVec::from_iter(evals);
         Self::from_evals(evals, num_vars)
@@ -97,11 +97,11 @@ impl<F: RawField> SmallMLE<F> {
     /// Identity permutations are continuous from one to another
     #[inline(always)]
     pub fn identity_permutation(num_vars: usize, num_chunks: usize) -> Vec<Self> {
-        let shift = (1 << num_vars) as u32;
-        (0..num_chunks as u32)
+        let shift = (1 << num_vars) as u64;
+        (0..num_chunks as u64)
             .map(|i| {
                 let evals = scribe_streams::iterator::from_fn(
-                    |j| (j < shift as usize).then(|| i * shift + (j as u32)),
+                    |j| (j < shift as usize).then(|| i * shift + (j as u64)),
                     shift as usize,
                 )
                 .to_file_vec();
@@ -121,7 +121,7 @@ impl<F: RawField> SmallMLE<F> {
         let mut s_perm_vec = vec![];
         for _ in 0..len {
             let index = rng.next_u64() as usize % s_id_vec.len();
-            s_perm_vec.push(s_id_vec.remove(index) as u32);
+            s_perm_vec.push(s_id_vec.remove(index) as u64);
         }
 
         let shift = (1 << num_vars) as u64;
@@ -178,7 +178,7 @@ impl<F: RawField> SmallMLE<F> {
     /// Evaluates `self` at the given point.
     /// Returns `None` if the point has the wrong length.
     #[inline]
-    pub fn evaluate_with_bufs(&self, point: &[F], self_buf: &mut Vec<u32>) -> Option<F> {
+    pub fn evaluate_with_bufs(&self, point: &[F], self_buf: &mut Vec<u64>) -> Option<F> {
         if point.len() == self.num_vars {
             Some(
                 self.evals
@@ -198,7 +198,7 @@ impl<F: RawField> SmallMLE<F> {
     #[inline]
     pub fn fold_odd_even(
         &self,
-        f: impl Fn(&u32, &u32) -> F + Sync + 'static + Send + Sync,
+        f: impl Fn(&u64, &u64) -> F + Sync + 'static + Send + Sync,
     ) -> MLE<F> {
         assert!((1 << self.num_vars) % 2 == 0);
 

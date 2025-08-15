@@ -686,8 +686,8 @@ mod tests {
             };
             // let permutation = identity_permutation_mles(nv, num_witnesses);
             let permutation = vec![
-                SmallMLE::from_evals_vec(vec![1u32, 0u32, 2u32, 3u32], 2),
-                SmallMLE::from_evals_vec(vec![5u32, 4u32, 6u32, 7u32], 2),
+                SmallMLE::from_evals_vec(vec![1u64, 0u64, 2u64, 3u64], 2),
+                SmallMLE::from_evals_vec(vec![5u64, 4u64, 6u64, 7u64], 2),
             ];
             println!("Generated Permutation MLEs");
             let q1 = MLE::from_evals_vec(
@@ -777,8 +777,8 @@ mod tests {
 
             // let permutation = identity_permutation(nv, num_witnesses);
             let rand_perm = vec![
-                SmallMLE::from_evals_vec(vec![1u32, 3u32, 6u32, 7u32], 2),
-                SmallMLE::from_evals_vec(vec![2u32, 5u32, 0u32, 4u32], 2),
+                SmallMLE::from_evals_vec(vec![1u64, 3u64, 6u64, 7u64], 2),
+                SmallMLE::from_evals_vec(vec![2u64, 5u64, 0u64, 4u64], 2),
             ];
 
             let q1 = MLE::from_evals_vec(

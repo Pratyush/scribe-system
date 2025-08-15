@@ -247,7 +247,7 @@ impl<F: RawPrimeField> PartialEq<MLE<F>> for VirtualMLE<F> {
 pub enum VirtualMLEIter<'a, F: RawPrimeField> {
     MLE(scribe_streams::file_vec::Iter<'a, F>),
     Small {
-        iter: scribe_streams::file_vec::Iter<'a, u32>,
+        iter: scribe_streams::file_vec::Iter<'a, u64>,
         buffer: Vec<F>,
     },
     EqAtPoint(EqEvalIter<F>),
