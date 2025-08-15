@@ -32,7 +32,7 @@ pub fn setup(min_num_vars: usize, max_num_vars: usize, file_dir_path: &Path) {
     let mut rng = test_rng();
     let pc_srs = timed!(
         "Scribe: Generating SRS",
-        PST13::<Bls12_381>::gen_srs_for_testing(&mut rng, max_num_vars).unwrap()
+        PST13::<Bls12_381>::gen_fake_srs_for_testing(&mut rng, max_num_vars).unwrap()
     );
 
     let srs_path = file_dir_path.join(format!("scribe_srs_{max_num_vars}.params"));

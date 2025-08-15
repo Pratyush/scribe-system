@@ -12,6 +12,7 @@ ark-std = { version = "0.5", features = ["parallel", "std"] }
 scribe = { path = "../scribe-snark" }
 mle = { path = "../mle" }
 rayon = { version = "^1.5" }
+mimalloc = "0.1.47"
 jemallocator = { version = "0.5.0" }
 jf-relation = { path = "../constraints/relation" }
 
