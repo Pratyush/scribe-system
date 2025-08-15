@@ -140,24 +140,22 @@ pub fn prover(
             let stop_signal = Arc::new(AtomicBool::new(false));
             let stop_signal_2 = stop_signal.clone();
             let initial_size = get_size(&tmp_dir_path).unwrap();
-            let dir_sizes = s.spawn(move || {
-                let mut sizes = vec![initial_size];
+            let dir_size = s.spawn(move || {
+                let mut max_size = initial_size;
                 while !stop_signal_2.load(std::sync::atomic::Ordering::Relaxed) {
                     let cur_size = get_size(&tmp_dir_path).unwrap();
-                    if cur_size != *sizes.last().unwrap() {
-                        sizes.push(cur_size);
-                    }
+                    max_size = max_size.max(cur_size);
                     thread::sleep(std::time::Duration::from_secs(1));
                 }
-                sizes
+                max_size
             });
+
             let proof = timed!(
                 format!("Scribe: Proving for {nv}",),
                 Scribe::prove(&pk, &public_inputs, &witnesses).unwrap()
             );
             stop_signal.store(true, std::sync::atomic::Ordering::Relaxed);
-            let sizes = dir_sizes.join().unwrap();
-            let max_dir_size = sizes.iter().max().unwrap();
+            let max_dir_size = dir_size.join().unwrap();
             println!(
                 "Scribe: Directory size for {nv} is: {} bytes",
                 max_dir_size - initial_size

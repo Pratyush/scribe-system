@@ -91,13 +91,7 @@ where
             .polynomials
             .par_iter()
             .zip(&self.points)
-            .map(|(poly, point)| {
-                let pool = rayon::ThreadPoolBuilder::new()
-                    .num_threads(4)
-                    .build()
-                    .unwrap();
-                pool.install(|| poly.evaluate(point).unwrap())
-            })
+            .map(|(poly, point)| poly.evaluate(point).unwrap())
             .collect::<Vec<_>>();
 
         #[cfg(not(target_os = "linux"))]
