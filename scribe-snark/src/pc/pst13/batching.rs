@@ -55,7 +55,7 @@ where
     E::ScalarField: RawPrimeField,
     PC: PCScheme<
             E,
-            Polynomial = MLE<E::ScalarField>,
+            Polynomial = VirtualMLE<E::ScalarField>,
             Point = Vec<E::ScalarField>,
             Evaluation = E::ScalarField,
         >,
@@ -108,7 +108,7 @@ where
         .map(|(_, coeffs_and_polys)| {
             let evals = coeffs_and_polys
                 .into_iter()
-                .map(|(c, p)| p.evals().iter().map(move |e| e * c))
+                .map(|(c, p)| p.evals().map(move |e| e * c))
                 .chunks(8)
                 .into_iter()
                 .map(|chunk| {
@@ -263,7 +263,7 @@ where
                 .sum()
         })
         .to_file_vec();
-    let g_prime = MLE::from_evals(g_prime_evals, num_vars);
+    let g_prime = MLE::from_evals(g_prime_evals, num_vars).into();
     end_timer!(step);
 
     let step = start_timer!(|| "pc open");
@@ -295,7 +295,7 @@ where
     E::ScalarField: RawPrimeField,
     PC: PCScheme<
             E,
-            Polynomial = MLE<E::ScalarField>,
+            Polynomial = VirtualMLE<E::ScalarField>,
             Point = Vec<E::ScalarField>,
             Evaluation = E::ScalarField,
             Commitment = Commitment<E>,
@@ -372,7 +372,7 @@ mod tests {
 
     fn test_multi_open_helper<R: Rng>(
         ml_params: &SRS<E>,
-        polys: &[MLE<Fr>],
+        polys: &[VirtualMLE<Fr>],
         rng: &mut R,
     ) -> Result<(), PCError> {
         let merged_nv = get_batched_nv(polys[0].num_vars(), polys.len());
@@ -425,7 +425,9 @@ mod tests {
         for num_poly in 5..6 {
             // for nv in 9..19 {
             for nv in 17..19 {
-                let polys1: Vec<_> = (0..num_poly).map(|_| MLE::rand(nv, &mut rng)).collect();
+                let polys1: Vec<_> = (0..num_poly)
+                    .map(|_| MLE::rand(nv, &mut rng).into())
+                    .collect();
                 test_multi_open_helper(&ml_params, &polys1, &mut rng)?;
             }
         }

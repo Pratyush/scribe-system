@@ -5,7 +5,7 @@ use ark_ff::PrimeField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::log2;
 use derivative::Derivative;
-use mle::MLE;
+use mle::{MLE, SmallMLE};
 use scribe_streams::serialize::RawPrimeField;
 
 use super::prelude::ScribeErrors;
@@ -94,7 +94,7 @@ impl ScribeConfig {
 #[derive(Clone, Debug, Default, Eq, PartialEq, CanonicalDeserialize, CanonicalSerialize)]
 pub struct Index<F: RawPrimeField> {
     pub config: ScribeConfig,
-    pub permutation: Vec<MLE<F>>,
+    pub permutation: Vec<SmallMLE<F>>,
     pub selectors: Vec<MLE<F>>,
 }
 
@@ -136,7 +136,7 @@ where
 {
     pub fn new(
         config: ScribeConfig,
-        permutation_oracles: Vec<MLE<E::ScalarField>>,
+        permutation_oracles: Vec<SmallMLE<E::ScalarField>>,
         selector_oracles: Vec<MLE<E::ScalarField>>,
         vk: VerifyingKey<E, PC>,
         pc_ck: PC::CommitterKey,
@@ -156,7 +156,7 @@ where
         &self.inner.config
     }
 
-    pub fn permutation_oracles(&self) -> &[MLE<E::ScalarField>] {
+    pub fn permutation_oracles(&self) -> &[SmallMLE<E::ScalarField>] {
         &self.inner.permutation_oracles
     }
 
@@ -189,7 +189,7 @@ where
     /// scribe instance parameters
     pub config: ScribeConfig,
     /// The preprocessed permutation polynomials
-    pub permutation_oracles: Vec<MLE<E::ScalarField>>,
+    pub permutation_oracles: Vec<SmallMLE<E::ScalarField>>,
     /// The preprocessed selector polynomials
     pub selector_oracles: Vec<MLE<E::ScalarField>>,
     /// The verifying key for the circuit.

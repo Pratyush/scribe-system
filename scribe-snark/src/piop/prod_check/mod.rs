@@ -9,7 +9,7 @@ use crate::{
 };
 use ark_ec::pairing::Pairing;
 use ark_ff::{One, Zero};
-use mle::{MLE, virtual_polynomial::VPAuxInfo};
+use mle::{MLE, VirtualMLE, virtual_polynomial::VPAuxInfo};
 use scribe_streams::serialize::RawPrimeField;
 
 use ark_std::{end_timer, start_timer};
@@ -84,7 +84,7 @@ impl<E, PC> ProductCheck<E, PC>
 where
     E: Pairing,
     E::ScalarField: RawPrimeField,
-    PC: PCScheme<E, Polynomial = MLE<E::ScalarField>>,
+    PC: PCScheme<E, Polynomial = VirtualMLE<E::ScalarField>>,
 {
     pub fn init_transcript() -> IOPTranscript<E::ScalarField> {
         IOPTranscript::<E::ScalarField>::new(b"Initializing ProductCheck transcript")
@@ -130,10 +130,11 @@ where
         // generate challenge
 
         let commit_time = start_timer!(|| "prod_check commit");
-        let [frac_comm, prod_x_comm] = PC::batch_commit(ck, &[frac_poly.clone(), prod_x.clone()])?
-            .as_slice()
-            .try_into()
-            .unwrap();
+        let [frac_comm, prod_x_comm] =
+            PC::batch_commit(ck, &[frac_poly.clone().into(), prod_x.clone().into()])?
+                .as_slice()
+                .try_into()
+                .unwrap();
         end_timer!(commit_time);
         transcript.append_serializable_element(b"frac(x)", &frac_comm)?;
         transcript.append_serializable_element(b"prod(x)", &prod_x_comm)?;
@@ -200,7 +201,7 @@ mod test {
     use ark_ec::pairing::Pairing;
     use ark_std::UniformRand;
     use ark_std::test_rng;
-    use mle::{MLE, virtual_polynomial::VPAuxInfo};
+    use mle::{MLE, VirtualMLE, virtual_polynomial::VPAuxInfo};
     use scribe_streams::file_vec::FileVec;
     use scribe_streams::iterator::BatchedIterator;
     use scribe_streams::iterator::zip_many;
@@ -252,7 +253,7 @@ mod test {
     where
         E: Pairing,
         E::ScalarField: RawPrimeField,
-        PC: PCScheme<E, Polynomial = MLE<E::ScalarField>>,
+        PC: PCScheme<E, Polynomial = VirtualMLE<E::ScalarField>>,
     {
         let mut transcript = ProductCheck::<E, PC>::init_transcript();
         transcript.append_message(b"testing", b"initializing transcript for testing")?;

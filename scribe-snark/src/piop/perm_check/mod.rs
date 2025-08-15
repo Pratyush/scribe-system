@@ -8,7 +8,7 @@ use crate::{
 };
 use ark_ec::pairing::Pairing;
 use ark_std::{end_timer, start_timer};
-use mle::{MLE, virtual_polynomial::VPAuxInfo};
+use mle::{MLE, VirtualMLE, virtual_polynomial::VPAuxInfo};
 use scribe_streams::serialize::RawPrimeField;
 
 use super::prod_check::{ProductCheckProof, ProductCheckSubClaim};
@@ -52,7 +52,7 @@ impl<E, PC> PermutationCheck<E, PC>
 where
     E: Pairing,
     E::ScalarField: RawPrimeField,
-    PC: PCScheme<E, Polynomial = MLE<E::ScalarField>>,
+    PC: PCScheme<E, Polynomial = VirtualMLE<E::ScalarField>>,
 {
     pub fn init_transcript() -> IOPTranscript<E::ScalarField> {
         IOPTranscript::<E::ScalarField>::new(b"Initializing PermutationCheck transcript")
@@ -62,7 +62,7 @@ where
         ck: &PC::CommitterKey,
         fxs: &[MLE<E::ScalarField>],
         gxs: &[MLE<E::ScalarField>],
-        perms: &[MLE<E::ScalarField>],
+        perms: &[VirtualMLE<E::ScalarField>],
         transcript: &mut IOPTranscript<E::ScalarField>,
     ) -> Result<
         (
@@ -141,7 +141,7 @@ mod test {
     use ark_bls12_381::Bls12_381;
     use ark_ec::pairing::Pairing;
     use ark_std::test_rng;
-    use mle::{MLE, virtual_polynomial::VPAuxInfo};
+    use mle::{MLE, SmallMLE, VirtualMLE, virtual_polynomial::VPAuxInfo};
     use scribe_streams::serialize::RawPrimeField;
     use std::marker::PhantomData;
 
@@ -151,12 +151,12 @@ mod test {
         ck: &PC::CommitterKey,
         fxs: &[MLE<E::ScalarField>],
         gxs: &[MLE<E::ScalarField>],
-        perms: &[MLE<E::ScalarField>],
+        perms: &[VirtualMLE<E::ScalarField>],
     ) -> Result<(), PIOPError>
     where
         E: Pairing,
         E::ScalarField: RawPrimeField,
-        PC: PCScheme<E, Polynomial = MLE<E::ScalarField>>,
+        PC: PCScheme<E, Polynomial = VirtualMLE<E::ScalarField>>,
     {
         let nv = fxs[0].num_vars();
         // what's AuxInfo used for?
@@ -196,7 +196,10 @@ mod test {
 
         let srs = PST13::<Bls12_381>::gen_srs_for_testing(&mut rng, nv)?;
         let (pcs_param, _) = PST13::trim(&srs, nv)?;
-        let id_perms = MLE::identity_permutation_mles(nv, 2);
+        let id_perms = SmallMLE::identity_permutation(nv, 2)
+            .into_iter()
+            .map(|mle| mle.into())
+            .collect::<Vec<_>>();
 
         {
             // good path: (w1, w2) is a permutation of (w1, w2) itself under the identify
@@ -221,7 +224,10 @@ mod test {
             // bad path 1: w is a not permutation of w itself under a random map
             let ws = vec![MLE::rand(nv, &mut rng), MLE::rand(nv, &mut rng)];
             // perms is a random map
-            let perms = MLE::random_permutation_mles(nv, 2, &mut rng);
+            let perms = MLE::random_permutation_mles(nv, 2, &mut rng)
+                .into_iter()
+                .map(|mle| mle.into())
+                .collect::<Vec<_>>();
 
             assert!(
                 test_permutation_check_helper::<Bls12_381, Kzg>(&pcs_param, &ws, &ws, &perms)

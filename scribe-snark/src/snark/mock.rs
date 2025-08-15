@@ -5,7 +5,7 @@ use ark_std::{
     start_timer,
 };
 use itertools::Itertools;
-use mle::MLE;
+use mle::{MLE, SmallMLE};
 use rayon::prelude::*;
 use scribe_streams::{iterator::BatchedIterator, serialize::RawPrimeField};
 
@@ -147,7 +147,7 @@ impl<F: RawPrimeField> MockCircuit<F> {
         };
 
         let identity_time = start_timer!(|| "identity permutation");
-        let permutation = MLE::identity_permutation_mles(nv as usize, num_witnesses);
+        let permutation = SmallMLE::identity_permutation(nv as usize, num_witnesses);
         end_timer!(identity_time);
         Index {
             config,
@@ -371,8 +371,8 @@ mod test {
         }
 
         for (a, b) in index_1.permutation.iter().zip(&index_2.permutation) {
-            let a = a.evals().iter().to_vec();
-            let b = b.evals().iter().to_vec();
+            let a = a.evals_iter().to_vec();
+            let b = b.evals_iter().to_vec();
             assert_eq!(a.len(), b.len());
             a.iter().zip(b.iter()).for_each(|(a, b)| assert_eq!(a, b));
         }

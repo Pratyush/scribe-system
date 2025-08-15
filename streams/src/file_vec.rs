@@ -88,12 +88,6 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
         matches!(self, Self::File { .. })
     }
 
-    // #[inline(always)]
-    // pub fn with_prefix(prefix: impl AsRef<OsStr>) -> Self {
-    //     let file = InnerFile::new_temp(prefix);
-    //     Self::File(file)
-    // }
-
     #[inline(always)]
     pub fn with_prefix_and_space(prefix: impl AsRef<OsStr>, n: usize) -> Self {
         let mut file = InnerFile::new_temp(prefix);

@@ -16,7 +16,7 @@ use ark_std::{
     vec::Vec,
 };
 use itertools::Itertools;
-use mle::MLE;
+use mle::VirtualMLE;
 use rayon::prelude::*;
 use scribe_streams::iterator::BatchedIterator;
 use scribe_streams::serialize::{RawAffine, RawPrimeField};
@@ -48,7 +48,7 @@ where
     type VerifierKey = VerifierKey<E>;
     type SRS = SRS<E>;
     // Polynomial and its associated types
-    type Polynomial = MLE<E::ScalarField>;
+    type Polynomial = VirtualMLE<E::ScalarField>;
     type Point = Vec<E::ScalarField>;
     type Evaluation = E::ScalarField;
     // Commitments and proofs
@@ -105,7 +105,7 @@ where
         let ignored = ck.num_vars - poly_num_vars;
 
         let commitment = {
-            let mut poly_evals = poly.evals().iter();
+            let mut poly_evals = poly.evals();
             let mut srs = ck.powers_of_g[ignored].iter();
             let mut f_buf = Vec::with_capacity(scribe_streams::BUFFER_SIZE);
             let mut g_buf = Vec::with_capacity(scribe_streams::BUFFER_SIZE);
@@ -156,9 +156,7 @@ where
 
                 let ignored = ck_num_vars - num_vars;
                 let mut srs = ck.powers_of_g[ignored].iter();
-                let mut poly_evals = group
-                    .map(|(i, p)| (i, p.evals().iter()))
-                    .collect::<Vec<_>>();
+                let mut poly_evals = group.map(|(i, p)| (i, p.evals())).collect::<Vec<_>>();
                 let mut f_bufs = vec![vec![]; poly_evals.len()];
                 while let Some(g) = srs.next_batch() {
                     g_buf.clear();
@@ -257,7 +255,7 @@ where
 /// - at round i, we compute an MSM for `2^{num_var - i}` number of G1 elements.
 fn open_internal<E: Pairing>(
     prover_param: &CommitterKey<E>,
-    polynomial: &MLE<E::ScalarField>,
+    polynomial: &VirtualMLE<E::ScalarField>,
     point: &[E::ScalarField],
 ) -> Result<(MultilinearKzgProof<E>, E::ScalarField), PCError>
 where
@@ -285,7 +283,7 @@ where
     let nv = polynomial.num_vars();
     // the first `ignored` SRS vectors are unused for opening.
     let ignored = prover_param.num_vars - nv + 1;
-    let mut f = polynomial.evals();
+    let mut f = Some(polynomial.evals());
     let mut r;
 
     let mut proofs = Vec::new();
@@ -298,47 +296,56 @@ where
     let mut buf_2 = Vec::with_capacity(scribe_streams::BUFFER_SIZE);
     let mut buf_3 = Vec::with_capacity(scribe_streams::BUFFER_SIZE);
     let mut buf_4 = Vec::with_capacity(scribe_streams::BUFFER_SIZE);
-    for (_i, (&point_at_k, gi)) in point
+    let mut f2: Option<scribe_streams::file_vec::FileVec<E::ScalarField>> = None;
+    for (i, (&point_at_k, gi)) in point
         .iter()
         .zip(prover_param.powers_of_g[ignored..ignored + nv].iter())
         .enumerate()
     {
-        let ith_round = start_timer!(|| format!("{_i}-th round"));
-
-        // TODO: confirm that FileVec in prior round's q and r are auto dropped via the Drop trait once q and r are assigned new FileVec
+        let ith_round = start_timer!(|| format!("{i}-th round"));
 
         let mut commitment = E::G1::zero();
-        r = f
-            .array_chunks::<2>()
-            .zip_with_bufs(gi.iter_with_buf(&mut buf_2), &mut buf_3, &mut buf_4)
-            .batched_map(|batch| {
-                use rayon::prelude::*;
+        macro_rules! func {
+            ($f: expr) => {
+                $f.array_chunks::<2>()
+                    .zip_with_bufs(gi.iter_with_buf(&mut buf_2), &mut buf_3, &mut buf_4)
+                    .batched_map(|batch| {
+                        use rayon::prelude::*;
 
-                q_buf.clear();
-                q_and_g_buf.clear();
-                bases_buf.clear();
-                r_buf.clear();
-                batch
-                    .into_par_iter()
-                    .map(|([a, b], g)| {
-                        let q = b - a;
-                        let r = a + q * point_at_k;
-                        ((q, g), r)
+                        q_buf.clear();
+                        q_and_g_buf.clear();
+                        bases_buf.clear();
+                        r_buf.clear();
+                        batch
+                            .into_par_iter()
+                            .map(|([a, b], g)| {
+                                let q = b - a;
+                                let r = a + q * point_at_k;
+                                ((q, g), r)
+                            })
+                            .unzip_into_vecs(&mut q_and_g_buf, &mut r_buf);
+
+                        q_and_g_buf
+                            .par_iter()
+                            .copied()
+                            .unzip_into_vecs(&mut q_buf, &mut bases_buf);
+
+                        commitment += E::G1::msm_unchecked(&bases_buf, &q_buf);
+
+                        r_buf.to_vec().into_par_iter()
                     })
-                    .unzip_into_vecs(&mut q_and_g_buf, &mut r_buf);
+                    .to_file_vec()
+            };
+        }
+        // TODO: confirm that FileVec in prior round's q and r are auto dropped via the Drop trait once q and r are assigned new FileVec
 
-                q_and_g_buf
-                    .par_iter()
-                    .copied()
-                    .unzip_into_vecs(&mut q_buf, &mut bases_buf);
+        r = if i == 0 {
+            func!(f.take().unwrap())
+        } else {
+            func!(f2.take().unwrap())
+        };
 
-                commitment += E::G1::msm_unchecked(&bases_buf, &q_buf);
-
-                r_buf.to_vec().into_par_iter()
-            })
-            .to_file_vec();
-
-        f = &r;
+        f2 = Some(r);
         proofs.push(commitment.into_affine());
 
         end_timer!(ith_round);
@@ -418,13 +425,14 @@ mod tests {
     use ark_bls12_381::Bls12_381;
     use ark_ec::pairing::Pairing;
     use ark_std::{UniformRand, test_rng, vec::Vec};
+    use mle::MLE;
 
     type E = Bls12_381;
     type Fr = <E as Pairing>::ScalarField;
 
     fn test_single_helper<R: Rng>(
         params: &SRS<E>,
-        poly: &MLE<Fr>,
+        poly: &VirtualMLE<Fr>,
         rng: &mut R,
     ) -> Result<(), PCError> {
         let nv = poly.num_vars();
@@ -449,11 +457,11 @@ mod tests {
         let params = PST13::<E>::gen_srs_for_testing(&mut rng, 10)?;
 
         // normal polynomials
-        let poly1 = MLE::rand(8, &mut rng);
+        let poly1 = MLE::rand(8, &mut rng).into();
         test_single_helper(&params, &poly1, &mut rng)?;
 
         // single-variate polynomials
-        let poly2 = MLE::rand(1, &mut rng);
+        let poly2 = MLE::rand(1, &mut rng).into();
         test_single_helper(&params, &poly2, &mut rng)?;
 
         Ok(())

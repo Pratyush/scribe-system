@@ -24,7 +24,7 @@ pub(super) fn computer_nums_and_denoms<F: RawPrimeField>(
     gamma: &F,
     fxs: &[MLE<F>],
     gxs: &[MLE<F>],
-    perms: &[MLE<F>],
+    perms: &[VirtualMLE<F>],
 ) -> Result<(Vec<MLE<F>>, Vec<MLE<F>>), PIOPError> {
     let start = start_timer!(|| "compute numerators and denominators");
 
@@ -40,7 +40,7 @@ pub(super) fn computer_nums_and_denoms<F: RawPrimeField>(
                 .iter()
                 .zip(gx.evals().iter())
                 .zip(s_id.evals())
-                .zip(perm.evals().iter())
+                .zip(perm.evals())
                 .map(|(((f, g), s_id), perm)| {
                     let numerator = f + *beta * s_id + gamma;
                     let denominator = g + *beta * perm + gamma;
@@ -80,8 +80,8 @@ mod tests {
             MLE::from_evals_vec(vec![Fr::from(7), Fr::from(8)], 1),
         ];
         let perms = vec![
-            MLE::from_evals_vec(vec![Fr::from(13), Fr::from(14)], 1),
-            MLE::from_evals_vec(vec![Fr::from(15), Fr::from(16)], 1),
+            MLE::from_evals_vec(vec![Fr::from(13), Fr::from(14)], 1).into(),
+            MLE::from_evals_vec(vec![Fr::from(15), Fr::from(16)], 1).into(),
         ];
 
         // Compute the fractional polynomials

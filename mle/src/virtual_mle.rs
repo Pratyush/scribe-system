@@ -1,4 +1,4 @@
-use crate::{EqEvalIter, LexicoIter, MLE};
+use crate::{EqEvalIter, LexicoIter, MLE, SmallMLE};
 use rayon::{
     iter::{Copied, MinLen},
     prelude::*,
@@ -13,6 +13,7 @@ use crate::util::eq_eval;
 #[derive(Clone, PartialEq, Eq)]
 pub enum VirtualMLE<F: RawPrimeField> {
     MLE(MLE<F>),
+    Small(SmallMLE<F>),
     EqAtPoint {
         num_vars: usize,
         point: Vec<F>,
@@ -54,6 +55,7 @@ impl<F: RawPrimeField> VirtualMLE<F> {
     pub fn num_vars(&self) -> usize {
         match self {
             Self::MLE(mle) => mle.num_vars(),
+            Self::Small(inner) => inner.num_vars(),
             Self::EqAtPoint { num_vars, .. } => *num_vars,
             Self::Lexicographic { num_vars, .. } => *num_vars,
             Self::Constant { num_vars, .. } => *num_vars,
@@ -63,6 +65,7 @@ impl<F: RawPrimeField> VirtualMLE<F> {
     pub fn evaluate(&self, point: &[F]) -> Option<F> {
         match self {
             Self::MLE(mle) => mle.evaluate(point),
+            Self::Small(inner) => inner.evaluate(point),
             Self::EqAtPoint {
                 num_vars,
                 fixed_vars,
@@ -101,6 +104,10 @@ impl<F: RawPrimeField> VirtualMLE<F> {
     pub fn evals(&self) -> VirtualMLEIter<'_, F> {
         match self {
             Self::MLE(mle) => VirtualMLEIter::MLE(mle.evals().iter()),
+            Self::Small(inner) => VirtualMLEIter::Small {
+                iter: inner.evals.iter(),
+                buffer: vec![],
+            },
             Self::EqAtPoint {
                 point, fixed_vars, ..
             } => VirtualMLEIter::EqAtPoint(EqEvalIter::new_with_fixed_vars(
@@ -122,6 +129,7 @@ impl<F: RawPrimeField> VirtualMLE<F> {
     pub fn fix_variables(&self, partial_point: &[F]) -> Self {
         match self {
             Self::MLE(mle) => Self::MLE(mle.fix_variables(partial_point)),
+            Self::Small(inner) => Self::MLE(inner.fix_variables(partial_point)).into(),
             Self::EqAtPoint {
                 num_vars,
                 point,
@@ -167,6 +175,9 @@ impl<F: RawPrimeField> VirtualMLE<F> {
     pub fn fix_variables_in_place(&mut self, partial_point: &[F]) {
         match self {
             Self::MLE(mle) => mle.fix_variables_in_place(partial_point),
+            Self::Small(inner) => {
+                *self = Self::MLE(inner.fix_variables(partial_point));
+            },
             Self::EqAtPoint {
                 num_vars,
                 fixed_vars,
@@ -218,6 +229,12 @@ impl<F: RawPrimeField> From<MLE<F>> for VirtualMLE<F> {
     }
 }
 
+impl<F: RawPrimeField> From<SmallMLE<F>> for VirtualMLE<F> {
+    fn from(mle: SmallMLE<F>) -> Self {
+        Self::Small(mle)
+    }
+}
+
 impl<F: RawPrimeField> PartialEq<MLE<F>> for VirtualMLE<F> {
     fn eq(&self, other: &MLE<F>) -> bool {
         match self {
@@ -229,9 +246,16 @@ impl<F: RawPrimeField> PartialEq<MLE<F>> for VirtualMLE<F> {
 
 pub enum VirtualMLEIter<'a, F: RawPrimeField> {
     MLE(scribe_streams::file_vec::Iter<'a, F>),
+    Small {
+        iter: scribe_streams::file_vec::Iter<'a, u32>,
+        buffer: Vec<F>,
+    },
     EqAtPoint(EqEvalIter<F>),
     Lexicographic(LexicoIter<F>),
-    Constant { iter: Repeat<F>, buffer: Vec<F> },
+    Constant {
+        iter: Repeat<F>,
+        buffer: Vec<F>,
+    },
 }
 
 impl<'a, F: RawPrimeField> BatchedIteratorAssocTypes for VirtualMLEIter<'a, F> {
@@ -243,6 +267,13 @@ impl<'a, F: RawPrimeField> BatchedIterator for VirtualMLEIter<'a, F> {
     fn next_batch<'b>(&'b mut self) -> Option<Self::Batch<'b>> {
         match self {
             Self::MLE(mle) => mle.next_batch(),
+            Self::Small { iter, buffer } => {
+                buffer.clear();
+                iter.next_batch().map(|b| {
+                    b.map(F::from).collect_into_vec(buffer);
+                    buffer.par_iter().copied().with_min_len(1 << 12)
+                })
+            },
             Self::EqAtPoint(e) => e.next_batch(),
             Self::Lexicographic(l) => l.next_batch(),
             Self::Constant { iter, buffer } => iter.next_batch().map(|batch| {
@@ -255,6 +286,7 @@ impl<'a, F: RawPrimeField> BatchedIterator for VirtualMLEIter<'a, F> {
     fn len(&self) -> Option<usize> {
         match self {
             Self::MLE(mle) => mle.len(),
+            Self::Small { iter, .. } => iter.len(),
             Self::EqAtPoint(e) => e.len(),
             Self::Lexicographic(l) => l.len(),
             Self::Constant { iter, .. } => iter.len(),
@@ -311,6 +343,12 @@ impl<F: RawPrimeField> std::fmt::Debug for VirtualMLE<F> {
                 "VirtualMLE::MLE(is_file = {}; len = {})",
                 _mle.evals().is_file(),
                 _mle.evals().len()
+            ),
+            Self::Small(_inner) => write!(
+                f,
+                "VirtualMLE::Small(is_file = {}; len = {})",
+                _inner.evals.is_file(),
+                _inner.evals.len()
             ),
             Self::EqAtPoint {
                 num_vars,

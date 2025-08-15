@@ -6,8 +6,8 @@ use ark_ec::pairing::Pairing;
 use ark_ff::PrimeField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::{end_timer, start_timer};
-use mle::MLE;
 use mle::VirtualPolynomial;
+use mle::{MLE, VirtualMLE};
 use scribe_streams::file_vec::FileVec;
 use scribe_streams::{iterator::BatchedIterator, serialize::RawPrimeField};
 
@@ -29,7 +29,7 @@ where
     E::ScalarField: RawPrimeField,
     PC: PCScheme<
             E,
-            Polynomial = MLE<E::ScalarField>,
+            Polynomial = VirtualMLE<E::ScalarField>,
             Point = Vec<E::ScalarField>,
             Evaluation = E::ScalarField,
             Commitment = Commitment<E>,
@@ -47,6 +47,21 @@ where
 
     /// Push a new evaluation point into the accumulator
     pub(super) fn insert_poly_and_points(
+        &mut self,
+        poly: &MLE<E::ScalarField>,
+        commit: &PC::Commitment,
+        point: &PC::Point,
+    ) {
+        assert!(poly.num_vars() == point.len());
+        assert!(poly.num_vars() == self.num_var);
+
+        self.polynomials.push(poly.clone().into());
+        self.points.push(point.clone());
+        self.commitments.push(*commit);
+    }
+
+    /// Push a new evaluation point into the accumulator
+    pub(super) fn insert_virt_poly_and_points(
         &mut self,
         poly: &PC::Polynomial,
         commit: &PC::Commitment,
