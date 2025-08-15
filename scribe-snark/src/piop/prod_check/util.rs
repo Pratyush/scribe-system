@@ -20,23 +20,14 @@ pub(super) fn compute_frac_poly<F: RawPrimeField>(
 ) -> Result<MLE<F>, PIOPError> {
     let start = start_timer!(|| "compute frac(x)");
 
-    let mut bufs = (0..fxs.len()).map(|_| vec![]).collect::<Vec<_>>();
-    let denominator_evals = zip_many(
-        gxs.iter()
-            .zip(&mut bufs)
-            .map(|(p, b)| p.evals().iter_with_buf(b)),
-    )
-    .map(|v| v.into_iter().product())
-    .to_file_vec();
+    let denominator_evals = zip_many(gxs.iter().map(|p| p.evals().iter()))
+        .map(|v| v.into_iter().product())
+        .to_file_vec();
     let mut denominator = MLE::from_evals(denominator_evals, gxs[0].num_vars());
     denominator.invert_in_place();
 
-    let numerator_product = zip_many(
-        fxs.iter()
-            .zip(&mut bufs)
-            .map(|(p, b)| p.evals().iter_with_buf(b)),
-    )
-    .map(|v| v.into_iter().product::<F>());
+    let numerator_product =
+        zip_many(fxs.iter().map(|p| p.evals().iter())).map(|v| v.into_iter().product::<F>());
 
     denominator
         .evals_mut()
@@ -70,14 +61,7 @@ pub(super) fn compute_product_poly<F: RawPrimeField>(
         products.push(product.fold_odd_even(|a, b| *a * b));
     }
     products.push(MLE::from_evals_vec(vec![F::one()], 0));
-    let mut bufs = (0..products.len()).map(|_| vec![]).collect::<Vec<_>>();
-    let evals = chain_many(
-        products
-            .iter()
-            .zip(&mut bufs)
-            .map(|(p, b)| p.evals().iter_with_buf(b)),
-    )
-    .to_file_vec();
+    let evals = chain_many(products.iter().map(|p| p.evals().iter())).to_file_vec();
     let product = MLE::from_evals(evals, num_vars);
     end_timer!(start);
     Ok(product)

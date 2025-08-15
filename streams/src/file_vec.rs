@@ -6,13 +6,7 @@ use std::{
     mem,
 };
 
-use crate::{
-    file_vec::{
-        array_chunks_with_buf::ArrayChunksWithBuf,
-        iter_chunk_mapped_with_buf::IterChunkMappedWithBuf,
-    },
-    serialize::{DeserializeRaw, SerializeRaw},
-};
+use crate::serialize::{DeserializeRaw, SerializeRaw};
 
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Valid};
 use derivative::Derivative;
@@ -27,13 +21,12 @@ use super::{
     iterator::{BatchAdapter, BatchedIterator, IntoBatchedIterator},
 };
 
-mod array_chunks;
-mod array_chunks_with_buf;
 pub mod backend;
 pub use backend::*;
+
+mod array_chunks;
 mod iter;
 mod iter_chunk_mapped;
-mod iter_chunk_mapped_with_buf;
 mod iter_with_buf;
 
 pub(self) mod double_buffered;
@@ -219,29 +212,6 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
         }
     }
 
-    #[inline(always)]
-    pub fn iter_chunk_mapped_with_buf<'a, const N: usize, F, U>(
-        &'a self,
-        f: F,
-        output_buf: &'a mut Vec<U>,
-    ) -> IterChunkMappedWithBuf<'a, T, U, F, N>
-    where
-        T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy,
-        F: for<'b> Fn(&[T]) -> U + Sync + Send,
-        U: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy,
-    {
-        match self {
-            Self::File(file) => {
-                let file = file.reopen_read_by_ref().expect(&format!(
-                    "failed to open file, {}",
-                    file.path.to_str().unwrap()
-                ));
-                IterChunkMappedWithBuf::new_file(file, f, output_buf)
-            },
-            Self::Buffer { buffer } => IterChunkMappedWithBuf::new_buffer(buffer.clone(), f),
-        }
-    }
-
     pub fn array_chunks<const N: usize>(&self) -> ArrayChunks<'_, T, N>
     where
         T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy,
@@ -255,25 +225,6 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
                 ArrayChunks::new_file(file)
             },
             Self::Buffer { buffer } => ArrayChunks::new_buffer(buffer.clone()),
-        }
-    }
-
-    pub fn array_chunks_with_buf<'a, const N: usize>(
-        &self,
-        buf: &'a mut Vec<[T; N]>,
-    ) -> ArrayChunksWithBuf<'a, T, N>
-    where
-        T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy,
-    {
-        match self {
-            Self::File(file) => {
-                let file = file.reopen_read_by_ref().expect(&format!(
-                    "failed to open file, {}",
-                    file.path.to_str().unwrap()
-                ));
-                ArrayChunksWithBuf::new_file(file, buf)
-            },
-            Self::Buffer { buffer } => ArrayChunksWithBuf::new_buffer(buffer.clone()),
         }
     }
 

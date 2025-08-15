@@ -135,13 +135,11 @@ impl<F: RawPrimeField> SumCheckProver<F> for IOPProverState<F> {
         self.round += 1;
 
         let mut products_sum = vec![F::zero(); self.poly.aux_info.max_degree + 1];
-        let mut iter_bufs = vec![vec![]; self.poly.mles.len()];
         let mut mle_iters = self
             .poly
             .mles
             .iter()
-            .zip(&mut iter_bufs)
-            .map(|(m, b)| m.evals_with_buf(b).array_chunks::<2>())
+            .map(|m| m.evals().array_chunks::<2>())
             .collect::<Vec<_>>();
         let mut buffers = vec![vec![]; self.poly.mles.len()];
         let mut running_sums = None;

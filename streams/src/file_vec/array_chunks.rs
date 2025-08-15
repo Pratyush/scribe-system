@@ -4,7 +4,10 @@ use crate::{
     iterator::{BatchedIterator, BatchedIteratorAssocTypes},
     serialize::{DeserializeRaw, SerializeRaw},
 };
-use rayon::{iter::MinLen, prelude::*, vec::IntoIter};
+use rayon::{
+    iter::{Copied, MinLen},
+    prelude::*,
+};
 use std::marker::PhantomData;
 
 pub enum ArrayChunks<'a, T, const N: usize>
@@ -53,7 +56,7 @@ where
 {
     type Item = [T; N];
 
-    type Batch<'b> = MinLen<IntoIter<[T; N]>>;
+    type Batch<'b> = MinLen<Copied<rayon::slice::Iter<'b, [T; N]>>>;
 }
 
 impl<'a, T, const N: usize> BatchedIterator for ArrayChunks<'a, T, N>
@@ -77,21 +80,17 @@ where
                     return None;
                 }
 
-                Some(buffer.t_s.to_vec().into_par_iter().with_min_len(1 << 10))
+                Some(buffer.t_s.par_iter().copied().with_min_len(1 << 10))
             },
             Self::Buffer { buffer } => {
                 if buffer.is_empty() {
                     None
                 } else {
-                    Some(
-                        std::mem::take(buffer)
-                            .par_chunks(N)
-                            .map(|chunk| <[T; N]>::try_from(chunk).unwrap())
-                            .with_min_len(1 << 10)
-                            .collect::<Vec<_>>()
-                            .into_par_iter()
-                            .with_min_len(1 << 10),
-                    )
+                    let (head, mid, tail) = unsafe { buffer.align_to::<[T; N]>() };
+                    assert!(head.is_empty(), "Buffer not aligned properly");
+                    assert!(tail.is_empty(), "Buffer not aligned properly");
+                    let buffer = mid;
+                    Some(buffer.par_iter().copied().with_min_len(1 << 10))
                 }
             },
         }

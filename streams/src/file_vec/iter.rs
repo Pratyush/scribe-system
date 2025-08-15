@@ -4,7 +4,7 @@ use crate::{
     iterator::{BatchedIterator, BatchedIteratorAssocTypes},
     serialize::{DeserializeRaw, SerializeRaw},
 };
-use rayon::{iter::MinLen, prelude::*, vec::IntoIter};
+use rayon::{iter::MinLen, prelude::*};
 use std::{fmt::Debug, marker::PhantomData};
 
 pub enum Iter<'a, T: SerializeRaw + DeserializeRaw + 'static> {
@@ -37,7 +37,7 @@ impl<'a, T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy + Debug
     BatchedIteratorAssocTypes for Iter<'a, T>
 {
     type Item = T;
-    type Batch<'b> = MinLen<IntoIter<T>>;
+    type Batch<'b> = MinLen<rayon::iter::Copied<rayon::slice::Iter<'b, T>>>;
 }
 
 impl<'a, T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy + Debug> BatchedIterator
@@ -54,13 +54,13 @@ impl<'a, T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy + Debug
                     // If the output buffer is empty, we have reached the end of the file
                     return None;
                 }
-                Some(buffer.t_s.clone().into_par_iter().with_min_len(1 << 7))
+                Some(buffer.t_s.par_iter().copied().with_min_len(1 << 7))
             },
             Iter::Buffer { buffer } => {
                 if buffer.is_empty() {
                     None
                 } else {
-                    Some(std::mem::take(buffer).into_par_iter().with_min_len(1 << 7))
+                    Some(buffer.par_iter().copied().with_min_len(1 << 7))
                 }
             },
         }

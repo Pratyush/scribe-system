@@ -14,6 +14,11 @@ use scribe_streams::{
 pub struct EqEvalIterInner<F> {
     multiplier: F,
     cur_index: usize,
+    info: EqEvalInfo<F>,
+    buffer: Vec<F>,
+}
+
+struct EqEvalInfo<F> {
     r: Vec<F>,
     one_minus_r: Vec<F>,
     zero_values: Vec<F>,
@@ -22,89 +27,7 @@ pub struct EqEvalIterInner<F> {
     r_only_boolean: usize,
 }
 
-impl<F: Field> EqEvalIterInner<F> {
-    pub fn new(r: Vec<F>) -> Self {
-        Self::new_with_multiplier(r, F::one())
-    }
-
-    pub fn new_with_multiplier(r: Vec<F>, multiplier: F) -> Self {
-        let mut r_inv = r.clone();
-        ark_ff::batch_inversion(&mut r_inv);
-        assert_eq!(r.len(), r_inv.len());
-
-        let one_minus_r = r.iter().map(|r| F::one() - r).collect::<Vec<_>>();
-        let mut one_minus_r_inv = one_minus_r.clone();
-        ark_ff::batch_inversion(&mut one_minus_r_inv);
-        assert_eq!(r.len(), one_minus_r.len());
-        let boolean_mask = r
-            .iter()
-            .enumerate()
-            .map(|(i, r_j)| ((r_j.is_one() || r_j.is_zero()) as usize) << i)
-            .sum::<usize>();
-        let r_only_boolean = r
-            .iter()
-            .enumerate()
-            .map(|(i, r_j)| (r_j.is_one() as usize) << i)
-            .sum::<usize>();
-
-        let zero_values = one_minus_r_inv
-            .into_iter()
-            .zip(&r)
-            .map(|(r, one_minus_r_inv)| r * one_minus_r_inv)
-            .collect::<Vec<_>>();
-
-        let one_values = r_inv
-            .into_iter()
-            .zip(&one_minus_r)
-            .map(|(one_minus_r, r_inv)| one_minus_r * r_inv)
-            .collect::<Vec<_>>();
-
-        Self {
-            cur_index: 0,
-            multiplier,
-            r,
-            one_minus_r,
-            zero_values,
-            one_values,
-            r_only_boolean,
-            boolean_mask,
-        }
-    }
-
-    pub fn new_with_fixed_vars(r: Vec<F>, fixed_vars: Vec<F>) -> Self {
-        assert!(fixed_vars.len() <= r.len());
-        let (first_r, rest_r) = r.split_at(fixed_vars.len());
-        let multiplier = eq_eval(first_r, &fixed_vars).unwrap();
-        Self::new_with_multiplier(rest_r.to_vec(), multiplier)
-    }
-
-    pub fn next_batch_helper(&mut self, result: &mut Vec<F>) -> Option<()> {
-        let nv = self.r.len();
-        let total_num_evals = 1 << nv;
-        if self.cur_index >= total_num_evals {
-            None
-        } else {
-            let batch_size = total_num_evals.min(BUFFER_SIZE);
-            let batch_start = self.cur_index;
-            let batch_end = self.cur_index + batch_size;
-            result.clear();
-
-            result.par_extend(
-                (batch_start..batch_end)
-                    .into_par_iter()
-                    .step_by(CHUNK_SIZE)
-                    .flat_map(|c_start| {
-                        let c_end = c_start + CHUNK_SIZE.min(batch_size);
-                        let starting_value =
-                            self.compute_starting_value(c_start, c_end) * self.multiplier;
-                        self.p(starting_value, c_start, c_end)
-                    }),
-            );
-            self.cur_index += batch_size;
-            Some(())
-        }
-    }
-
+impl<F: Field> EqEvalInfo<F> {
     /// Computes the starting value for chunk `chunk_idx` by using the product
     /// of `r` and `one_minus_r` vectors and the binary decomposition of `chunk_idx * chunk_size - 1`
     #[inline]
@@ -159,6 +82,94 @@ impl<F: Field> EqEvalIterInner<F> {
     }
 }
 
+impl<F: Field> EqEvalIterInner<F> {
+    pub fn new(r: Vec<F>) -> Self {
+        Self::new_with_multiplier(r, F::one())
+    }
+
+    pub fn new_with_multiplier(r: Vec<F>, multiplier: F) -> Self {
+        let mut r_inv = r.clone();
+        ark_ff::batch_inversion(&mut r_inv);
+        assert_eq!(r.len(), r_inv.len());
+
+        let one_minus_r = r.iter().map(|r| F::one() - r).collect::<Vec<_>>();
+        let mut one_minus_r_inv = one_minus_r.clone();
+        ark_ff::batch_inversion(&mut one_minus_r_inv);
+        assert_eq!(r.len(), one_minus_r.len());
+        let boolean_mask = r
+            .iter()
+            .enumerate()
+            .map(|(i, r_j)| ((r_j.is_one() || r_j.is_zero()) as usize) << i)
+            .sum::<usize>();
+        let r_only_boolean = r
+            .iter()
+            .enumerate()
+            .map(|(i, r_j)| (r_j.is_one() as usize) << i)
+            .sum::<usize>();
+
+        let zero_values = one_minus_r_inv
+            .into_iter()
+            .zip(&r)
+            .map(|(r, one_minus_r_inv)| r * one_minus_r_inv)
+            .collect::<Vec<_>>();
+
+        let one_values = r_inv
+            .into_iter()
+            .zip(&one_minus_r)
+            .map(|(one_minus_r, r_inv)| one_minus_r * r_inv)
+            .collect::<Vec<_>>();
+
+        Self {
+            cur_index: 0,
+            multiplier,
+            info: EqEvalInfo {
+                r,
+                one_minus_r,
+                zero_values,
+                one_values,
+                boolean_mask,
+                r_only_boolean,
+            },
+            buffer: vec![],
+        }
+    }
+
+    pub fn new_with_fixed_vars(r: Vec<F>, fixed_vars: Vec<F>) -> Self {
+        assert!(fixed_vars.len() <= r.len());
+        let (first_r, rest_r) = r.split_at(fixed_vars.len());
+        let multiplier = eq_eval(first_r, &fixed_vars).unwrap();
+        Self::new_with_multiplier(rest_r.to_vec(), multiplier)
+    }
+
+    pub fn next_batch_helper(&mut self) -> Option<()> {
+        let nv = self.info.r.len();
+        let total_num_evals = 1 << nv;
+        if self.cur_index >= total_num_evals {
+            None
+        } else {
+            let batch_size = total_num_evals.min(BUFFER_SIZE);
+            let batch_start = self.cur_index;
+            let batch_end = self.cur_index + batch_size;
+            self.buffer.clear();
+
+            let multiplier = self.multiplier;
+
+            let iter = (batch_start..batch_end)
+                .into_par_iter()
+                .step_by(CHUNK_SIZE)
+                .flat_map(|c_start| {
+                    let c_end = c_start + CHUNK_SIZE.min(batch_size);
+                    let starting_value =
+                        self.info.compute_starting_value(c_start, c_end) * multiplier;
+                    self.info.p(starting_value, c_start, c_end)
+                });
+            self.buffer.par_extend(iter);
+            self.cur_index += batch_size;
+            Some(())
+        }
+    }
+}
+
 /// An iterator that generates the evaluations of the polynomial
 /// eq(r, y || x) over the Boolean hypercube.
 ///
@@ -181,69 +192,18 @@ impl<F: Field> EqEvalIter<F> {
 
 impl<F: Field> BatchedIteratorAssocTypes for EqEvalIter<F> {
     type Item = F;
-    type Batch<'a> = MinLen<rayon::vec::IntoIter<F>>;
+    type Batch<'b> = MinLen<rayon::iter::Copied<rayon::slice::Iter<'b, F>>>;
 }
 
 impl<F: Field> BatchedIterator for EqEvalIter<F> {
     fn next_batch<'a>(&'a mut self) -> Option<Self::Batch<'a>> {
-        let mut result = Vec::new();
-        self.0.next_batch_helper(&mut result)?;
-        Some(result.into_par_iter().with_min_len(1 << 7))
+        self.0.next_batch_helper()?;
+        Some(self.0.buffer.par_iter().copied().with_min_len(1 << 7))
     }
 
     fn len(&self) -> Option<usize> {
-        let nv = self.0.r.len();
+        let nv = self.0.info.r.len();
         Some((1usize << nv).saturating_sub(self.0.cur_index))
-    }
-}
-
-/// An iterator that generates the evaluations of the polynomial
-/// eq(r, y || x) over the Boolean hypercube.
-///
-/// Here y = `self.fixed_vars`, and r = `self.r`.
-pub struct EqEvalIterWithBuf<'a, F> {
-    inner: EqEvalIterInner<F>,
-    buffer: &'a mut Vec<F>,
-}
-
-impl<'a, F: Field> EqEvalIterWithBuf<'a, F> {
-    pub fn new(r: Vec<F>, buffer: &'a mut Vec<F>) -> Self {
-        Self {
-            inner: EqEvalIterInner::new(r),
-            buffer,
-        }
-    }
-
-    pub fn new_with_multiplier(r: Vec<F>, multiplier: F, buffer: &'a mut Vec<F>) -> Self {
-        Self {
-            inner: EqEvalIterInner::new_with_multiplier(r, multiplier),
-            buffer,
-        }
-    }
-
-    pub fn new_with_fixed_vars(r: Vec<F>, fixed_vars: Vec<F>, buffer: &'a mut Vec<F>) -> Self {
-        Self {
-            inner: EqEvalIterInner::new_with_fixed_vars(r, fixed_vars),
-            buffer,
-        }
-    }
-}
-
-impl<'a, F: Field> BatchedIteratorAssocTypes for EqEvalIterWithBuf<'a, F> {
-    type Item = F;
-    type Batch<'b> = MinLen<rayon::iter::Copied<rayon::slice::Iter<'b, F>>>;
-}
-
-impl<'a, F: Field> BatchedIterator for EqEvalIterWithBuf<'a, F> {
-    fn next_batch<'b>(&'b mut self) -> Option<Self::Batch<'b>> {
-        self.buffer.clear();
-        self.inner.next_batch_helper(&mut self.buffer)?;
-        Some(self.buffer.par_iter().copied().with_min_len(1 << 7))
-    }
-
-    fn len(&self) -> Option<usize> {
-        let nv = self.inner.r.len();
-        Some((1usize << nv).saturating_sub(self.inner.cur_index))
     }
 }
 

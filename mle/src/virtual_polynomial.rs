@@ -473,11 +473,10 @@ impl<F: RawPrimeField> VirtualPolynomial<F> {
     }
 
     pub fn sum_over_hypercube(&self) -> F {
-        let mut buf = vec![];
         let evals: Vec<_> = self
             .mles
             .iter()
-            .map(|mle| mle.evals_with_buf(&mut buf).to_file_vec())
+            .map(|mle| mle.evals().to_file_vec())
             .collect();
         let mut sum = F::zero();
         for (c, p) in &self.products {

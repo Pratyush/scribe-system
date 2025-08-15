@@ -83,9 +83,12 @@ mod tests {
 
             let result = fv
                 .iter()
-                .batched_map(|batch| {
+                .batched_map(move |batch| {
                     use rayon::prelude::*;
-                    batch.map(|x| x + Fr::from(3u64))
+                    batch
+                        .map(move |x| x + Fr::from(3u64))
+                        .collect::<Vec<_>>()
+                        .into_par_iter()
                 })
                 .to_vec();
 

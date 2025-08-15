@@ -10,6 +10,7 @@ pub struct LexicoIterInner<F: Field> {
     step: F,
     remaining: usize,
     nv: usize,
+    buffer: Vec<F>,
 }
 
 impl<F: Field> LexicoIterInner<F> {
@@ -19,11 +20,13 @@ impl<F: Field> LexicoIterInner<F> {
             next_value: offset,
             step,
             remaining: 1 << nv,
+            buffer: vec![],
         }
     }
 
     #[inline]
-    pub fn next_batch_helper(&mut self, out: &mut Vec<F>) -> Option<()> {
+    pub fn next_batch_helper(&mut self) -> Option<()> {
+        let out = &mut self.buffer;
         let total_num_evals = 1 << self.nv;
         if self.remaining == 0 {
             return None;
@@ -75,46 +78,17 @@ impl<F: Field> LexicoIter<F> {
 
 impl<F: Field> BatchedIteratorAssocTypes for LexicoIter<F> {
     type Item = F;
-    type Batch<'b> = MinLen<rayon::vec::IntoIter<F>>;
+    type Batch<'b> = MinLen<rayon::iter::Copied<rayon::slice::Iter<'b, F>>>;
 }
 impl<F: Field> BatchedIterator for LexicoIter<F> {
     fn next_batch(&mut self) -> Option<Self::Batch<'_>> {
-        let mut buffer = Vec::with_capacity(BUFFER_SIZE);
-        self.0.next_batch_helper(&mut buffer)?;
-        Some(buffer.into_par_iter().with_min_len(1 << 12))
+        self.0.buffer.clear();
+        self.0.next_batch_helper()?;
+        Some(self.0.buffer.par_iter().copied().with_min_len(1 << 12))
     }
 
     fn len(&self) -> Option<usize> {
         Some(self.0.remaining)
-    }
-}
-
-pub struct LexicoIterWithBuf<'a, F: Field> {
-    inner: LexicoIterInner<F>,
-    buffer: &'a mut Vec<F>,
-}
-
-impl<'a, F: Field> LexicoIterWithBuf<'a, F> {
-    pub fn new(nv: usize, offset: F, step: F, buffer: &'a mut Vec<F>) -> Self {
-        Self {
-            inner: LexicoIterInner::new(nv, offset, step),
-            buffer,
-        }
-    }
-}
-
-impl<'a, F: Field> BatchedIteratorAssocTypes for LexicoIterWithBuf<'a, F> {
-    type Item = F;
-    type Batch<'b> = MinLen<rayon::iter::Copied<rayon::slice::Iter<'b, F>>>;
-}
-impl<'a, F: Field> BatchedIterator for LexicoIterWithBuf<'a, F> {
-    fn next_batch(&mut self) -> Option<Self::Batch<'_>> {
-        self.inner.next_batch_helper(self.buffer)?;
-        Some(self.buffer.par_iter().copied().with_min_len(1 << 12))
-    }
-
-    fn len(&self) -> Option<usize> {
-        Some(self.inner.remaining)
     }
 }
 

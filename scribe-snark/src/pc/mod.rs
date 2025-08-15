@@ -88,7 +88,7 @@ pub trait PCScheme<E: Pairing> {
     fn batch_commit(
         ck: impl Borrow<Self::CommitterKey>,
         polys: &[Self::Polynomial],
-    ) -> Result<Vec<Self::Commitment>, PCError>; 
+    ) -> Result<Vec<Self::Commitment>, PCError>;
 
     /// On input a polynomial `p` and a point `point`, outputs a proof for the
     /// same.

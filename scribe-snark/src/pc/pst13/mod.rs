@@ -105,8 +105,7 @@ where
         let ignored = ck.num_vars - poly_num_vars;
 
         let commitment = {
-            let mut poly_buf = Vec::with_capacity(scribe_streams::BUFFER_SIZE);
-            let mut poly_evals = poly.evals().iter_with_buf(&mut poly_buf);
+            let mut poly_evals = poly.evals().iter();
             let mut srs = ck.powers_of_g[ignored].iter();
             let mut f_buf = Vec::with_capacity(scribe_streams::BUFFER_SIZE);
             let mut g_buf = Vec::with_capacity(scribe_streams::BUFFER_SIZE);

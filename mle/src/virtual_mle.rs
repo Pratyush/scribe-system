@@ -1,4 +1,4 @@
-use crate::{EqEvalIter, LexicoIter, LexicoIterWithBuf, MLE, eq_iter::EqEvalIterWithBuf};
+use crate::{EqEvalIter, LexicoIter, MLE};
 use rayon::{
     iter::{Copied, MinLen},
     prelude::*,
@@ -112,32 +112,9 @@ impl<F: RawPrimeField> VirtualMLE<F> {
                 offset,
                 step_size,
             } => VirtualMLEIter::Lexicographic(LexicoIter::new(*num_vars, *offset, *step_size)),
-            Self::Constant { value, num_vars } => {
-                VirtualMLEIter::Constant(iterator::repeat(*value, 1 << num_vars))
-            },
-        }
-    }
-
-    pub fn evals_with_buf<'a>(&'a self, buf: &'a mut Vec<F>) -> VirtualMLEIterWithBuf<'a, F> {
-        match self {
-            Self::MLE(mle) => VirtualMLEIterWithBuf::MLE(mle.evals().iter_with_buf(buf)),
-            Self::EqAtPoint {
-                point, fixed_vars, ..
-            } => VirtualMLEIterWithBuf::EqAtPoint(EqEvalIterWithBuf::new_with_fixed_vars(
-                point.clone(),
-                fixed_vars.to_vec(),
-                buf,
-            )),
-            Self::Lexicographic {
-                num_vars,
-                offset,
-                step_size,
-            } => VirtualMLEIterWithBuf::Lexicographic(LexicoIterWithBuf::new(
-                *num_vars, *offset, *step_size, buf,
-            )),
-            Self::Constant { value, num_vars } => VirtualMLEIterWithBuf::Constant {
+            Self::Constant { value, num_vars } => VirtualMLEIter::Constant {
                 iter: iterator::repeat(*value, 1 << num_vars),
-                buffer: buf,
+                buffer: vec![],
             },
         }
     }
@@ -254,12 +231,12 @@ pub enum VirtualMLEIter<'a, F: RawPrimeField> {
     MLE(scribe_streams::file_vec::Iter<'a, F>),
     EqAtPoint(EqEvalIter<F>),
     Lexicographic(LexicoIter<F>),
-    Constant(Repeat<F>),
+    Constant { iter: Repeat<F>, buffer: Vec<F> },
 }
 
 impl<'a, F: RawPrimeField> BatchedIteratorAssocTypes for VirtualMLEIter<'a, F> {
     type Item = F;
-    type Batch<'b> = MinLen<rayon::vec::IntoIter<F>>;
+    type Batch<'b> = MinLen<Copied<rayon::slice::Iter<'b, F>>>;
 }
 
 impl<'a, F: RawPrimeField> BatchedIterator for VirtualMLEIter<'a, F> {
@@ -268,11 +245,9 @@ impl<'a, F: RawPrimeField> BatchedIterator for VirtualMLEIter<'a, F> {
             Self::MLE(mle) => mle.next_batch(),
             Self::EqAtPoint(e) => e.next_batch(),
             Self::Lexicographic(l) => l.next_batch(),
-            Self::Constant(c) => c.next_batch().map(|batch| {
-                batch
-                    .collect::<Vec<_>>()
-                    .into_par_iter()
-                    .with_min_len(1 << 12)
+            Self::Constant { iter, buffer } => iter.next_batch().map(|batch| {
+                batch.collect_into_vec(buffer);
+                buffer.par_iter().copied().with_min_len(1 << 12)
             }),
         }
     }
@@ -282,15 +257,15 @@ impl<'a, F: RawPrimeField> BatchedIterator for VirtualMLEIter<'a, F> {
             Self::MLE(mle) => mle.len(),
             Self::EqAtPoint(e) => e.len(),
             Self::Lexicographic(l) => l.len(),
-            Self::Constant(c) => c.len(),
+            Self::Constant { iter, .. } => iter.len(),
         }
     }
 }
 
 pub enum VirtualMLEIterWithBuf<'a, F: RawPrimeField> {
     MLE(scribe_streams::file_vec::IterWithBuf<'a, F>),
-    EqAtPoint(EqEvalIterWithBuf<'a, F>),
-    Lexicographic(LexicoIterWithBuf<'a, F>),
+    EqAtPoint(EqEvalIter<F>),
+    Lexicographic(LexicoIter<F>),
     Constant {
         iter: Repeat<F>,
         buffer: &'a mut Vec<F>,

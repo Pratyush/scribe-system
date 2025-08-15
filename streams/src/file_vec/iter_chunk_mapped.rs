@@ -4,7 +4,11 @@ use crate::{
     iterator::{BatchedIterator, BatchedIteratorAssocTypes},
     serialize::{DeserializeRaw, SerializeRaw},
 };
-use rayon::{prelude::*, vec::IntoIter};
+use rayon::{
+    iter::{Map, MinLen},
+    prelude::*,
+    slice::ChunksExact,
+};
 use std::marker::PhantomData;
 
 pub enum IterChunkMapped<'a, T, U, F, const N: usize>
@@ -58,17 +62,17 @@ impl<'a, T, U, F, const N: usize> BatchedIteratorAssocTypes for IterChunkMapped<
 where
     T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy,
     U: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy,
-    F: for<'b> Fn(&[T]) -> U + Sync + Send,
+    F: 'static + for<'b> Fn(&[T]) -> U + Sync + Send,
 {
     type Item = U;
-    type Batch<'b> = IntoIter<U>;
+    type Batch<'b> = MinLen<Map<ChunksExact<'b, T>, &'b F>>;
 }
 
 impl<'a, T, U, F, const N: usize> BatchedIterator for IterChunkMapped<'a, T, U, F, N>
 where
     T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy,
     U: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy,
-    F: for<'b> Fn(&[T]) -> U + Sync + Send,
+    F: 'static + for<'b> Fn(&[T]) -> U + Sync + Send,
 {
     #[inline]
     fn next_batch<'b>(&'b mut self) -> Option<Self::Batch<'b>> {
@@ -87,23 +91,14 @@ where
                     .t_s
                     .par_chunks_exact(N)
                     .map(&*f)
-                    .with_min_len(1 << 10)
-                    .collect::<Vec<_>>()
-                    .into_par_iter();
+                    .with_min_len(1 << 10);
                 Some(output)
             },
             Self::Buffer { buffer, f } => {
                 if buffer.is_empty() {
                     None
                 } else {
-                    Some(
-                        std::mem::take(buffer)
-                            .par_chunks_exact(N)
-                            .map(&*f)
-                            .with_min_len(1 << 7)
-                            .collect::<Vec<_>>()
-                            .into_par_iter(),
-                    )
+                    Some(buffer.par_chunks_exact(N).map(&*f).with_min_len(1 << 7))
                 }
             },
         }

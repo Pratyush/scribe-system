@@ -7,8 +7,8 @@ pub mod util;
 pub mod virtual_mle;
 pub mod virtual_polynomial;
 
-pub use eq_iter::{EqEvalIter, EqEvalIterWithBuf};
-pub use lexico_iter::{LexicoIter, LexicoIterWithBuf};
+pub use eq_iter::EqEvalIter;
+pub use lexico_iter::LexicoIter;
 pub use mle::MLE;
 pub use util::eq_eval;
 pub use virtual_mle::VirtualMLE;
