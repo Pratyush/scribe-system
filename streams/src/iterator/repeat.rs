@@ -26,7 +26,7 @@ where
         }
         let batch_size = self.count.min(BUFFER_SIZE);
         self.count -= batch_size;
-        Some(rayon::iter::repeatn(self.iter, batch_size))
+        Some(rayon::iter::repeat_n(self.iter, batch_size))
     }
 
     fn len(&self) -> Option<usize> {

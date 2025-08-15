@@ -1,4 +1,4 @@
-use crate::{EqEvalIter, LexicoIter, MLE, SmallMLE};
+use crate::{EqEvalIter, LexicoIter, MLE, SmallMLE, small_mle::u48};
 use rayon::{
     iter::{Copied, MinLen},
     prelude::*,
@@ -247,7 +247,7 @@ impl<F: RawPrimeField> PartialEq<MLE<F>> for VirtualMLE<F> {
 pub enum VirtualMLEIter<'a, F: RawPrimeField> {
     MLE(scribe_streams::file_vec::Iter<'a, F>),
     Small {
-        iter: scribe_streams::file_vec::Iter<'a, u64>,
+        iter: scribe_streams::file_vec::Iter<'a, crate::small_mle::u48>,
         buffer: Vec<F>,
     },
     EqAtPoint(EqEvalIter<F>),
@@ -270,7 +270,7 @@ impl<'a, F: RawPrimeField> BatchedIterator for VirtualMLEIter<'a, F> {
             Self::Small { iter, buffer } => {
                 buffer.clear();
                 iter.next_batch().map(|b| {
-                    b.map(F::from).collect_into_vec(buffer);
+                    b.map(u48::into_field).collect_into_vec(buffer);
                     buffer.par_iter().copied().with_min_len(1 << 12)
                 })
             },

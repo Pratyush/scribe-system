@@ -1,15 +1,82 @@
-use std::{fmt::Display, sync::Arc};
+use std::{fmt::Display, ops::Sub, sync::Arc};
 
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize, Valid};
-use ark_std::rand::RngCore;
+use ark_std::rand::{RngCore, seq::SliceRandom};
 use rayon::prelude::*;
 
 use crate::{MLE, eq_iter::EqEvalIter};
-use scribe_streams::{file_vec::FileVec, iterator::BatchedIterator, serialize::RawField};
+use scribe_streams::{
+    file_vec::FileVec,
+    iterator::BatchedIterator,
+    serialize::{DeserializeRaw, RawField, SerializeRaw},
+};
+
+#[allow(nonstandard_style)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug, Copy, CanonicalDeserialize, CanonicalSerialize)]
+pub struct u48([u16; 3]);
+
+impl SerializeRaw for u48 {
+    const SIZE: usize = 6;
+    fn serialize_raw(&self, writer: &mut &mut [u8]) -> Option<()> {
+        self.0.serialize_raw(writer)
+    }
+}
+
+impl DeserializeRaw for u48 {
+    fn deserialize_raw(reader: &mut &[u8]) -> Option<Self> {
+        <[u16; 3]>::deserialize_raw(reader).map(Self)
+    }
+}
+
+impl Display for u48 {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", u64::from(*self))
+    }
+}
+
+impl From<u48> for u64 {
+    fn from(value: u48) -> Self {
+        (u64::from(value.0[0])) | (u64::from(value.0[1]) << 16) | (u64::from(value.0[2]) << 32)
+    }
+}
+
+impl TryFrom<u64> for u48 {
+    type Error = ();
+    fn try_from(value: u64) -> Result<Self, Self::Error> {
+        if value >> 48 != 0 {
+            return Err(());
+        }
+        Ok(Self([
+            (value & 0xFFFF) as u16,
+            ((value >> 16) & 0xFFFF) as u16,
+            ((value >> 32) & 0xFFFF) as u16,
+        ]))
+    }
+}
+
+impl Sub for u48 {
+    type Output = Self;
+    fn sub(self, rhs: Self) -> Self::Output {
+        let a = u64::from(self);
+        let b = u64::from(rhs);
+        let c = a - b;
+        c.try_into().unwrap()
+    }
+}
+
+impl u48 {
+    pub(super) fn to_field<F: RawField>(&self) -> F {
+        F::from(u64::from(*self))
+    }
+
+    pub(super) fn into_field<F: RawField>(self) -> F {
+        F::from(u64::from(self))
+    }
+}
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone)]
 pub struct SmallMLE<F: RawField> {
-    pub evals: Arc<FileVec<u64>>,
+    pub evals: Arc<FileVec<u48>>,
     pub num_vars: usize,
     _phantom: std::marker::PhantomData<F>,
 }
@@ -42,7 +109,7 @@ impl<F: RawField> CanonicalDeserialize for SmallMLE<F> {
         validate: ark_serialize::Validate,
     ) -> Result<Self, ark_serialize::SerializationError> {
         let num_vars = usize::deserialize_with_mode(&mut reader, compress, validate)?;
-        let evals = FileVec::<u64>::deserialize_with_mode(reader, compress, validate)?;
+        let evals = FileVec::<u48>::deserialize_with_mode(reader, compress, validate)?;
         Ok(Self {
             evals: Arc::new(evals),
             num_vars,
@@ -63,7 +130,7 @@ impl<F: RawField> SmallMLE<F> {
     }
 
     #[inline(always)]
-    pub fn from_evals(evals: FileVec<u64>, num_vars: usize) -> Self {
+    pub fn from_evals(evals: FileVec<u48>, num_vars: usize) -> Self {
         Self {
             evals: Arc::new(evals),
             num_vars,
@@ -75,7 +142,7 @@ impl<F: RawField> SmallMLE<F> {
     ///
     /// This should only be used for testing.
     #[inline(always)]
-    pub fn from_evals_vec(evals: Vec<u64>, num_vars: usize) -> Self {
+    pub fn from_evals_vec(evals: Vec<u48>, num_vars: usize) -> Self {
         assert_eq!(evals.len(), 1 << num_vars);
         let evals = FileVec::from_iter(evals);
         Self::from_evals(evals, num_vars)
@@ -85,7 +152,7 @@ impl<F: RawField> SmallMLE<F> {
     pub fn evals_iter(
         &self,
     ) -> impl for<'a> BatchedIterator<Item = F, Batch<'a>: IndexedParallelIterator<Item = F>> {
-        self.evals.iter().map(F::from)
+        self.evals.iter().map(u48::into_field)
     }
 
     #[inline(always)]
@@ -101,7 +168,7 @@ impl<F: RawField> SmallMLE<F> {
         (0..num_chunks as u64)
             .map(|i| {
                 let evals = scribe_streams::iterator::from_fn(
-                    |j| (j < shift as usize).then(|| i * shift + (j as u64)),
+                    |j| (j < shift as usize).then(|| (i * shift + (j as u64)).try_into().unwrap()),
                     shift as usize,
                 )
                 .to_file_vec();
@@ -117,18 +184,18 @@ impl<F: RawField> SmallMLE<F> {
         rng: &mut R,
     ) -> Vec<Self> {
         let len = (num_chunks as u64) * (1u64 << num_vars);
-        let mut s_id_vec: Vec<_> = (0..len).collect();
-        let mut s_perm_vec = vec![];
-        for _ in 0..len {
-            let index = rng.next_u64() as usize % s_id_vec.len();
-            s_perm_vec.push(s_id_vec.remove(index) as u64);
-        }
+        let s_id: Vec<_> = (0u64..len)
+            .map(u48::try_from)
+            .collect::<Result<_, ()>>()
+            .unwrap();
+        let mut s_perm = s_id.clone();
+        s_perm.shuffle(rng);
 
         let shift = (1 << num_vars) as u64;
         (0..num_chunks as u64)
             .map(|i| {
                 Self::from_evals_vec(
-                    s_perm_vec[(i * shift) as usize..((i + 1) * shift) as usize].to_vec(),
+                    s_perm[(i * shift) as usize..((i + 1) * shift) as usize].to_vec(),
                     num_vars,
                 )
             })
@@ -160,9 +227,9 @@ impl<F: RawField> SmallMLE<F> {
             if let Some(s) = result.as_mut() {
                 s.fold_odd_even_in_place(move |even, odd| *even + r * (*odd - even));
             } else {
-                result = Some(
-                    self.fold_odd_even(move |even, odd| F::from(*even) + r * F::from(*odd - even)),
-                );
+                result = Some(self.fold_odd_even(move |even, odd| {
+                    (even).to_field::<F>() + r * (*odd - *even).to_field::<F>()
+                }));
             }
         }
         result.unwrap()
@@ -178,13 +245,13 @@ impl<F: RawField> SmallMLE<F> {
     /// Evaluates `self` at the given point.
     /// Returns `None` if the point has the wrong length.
     #[inline]
-    pub fn evaluate_with_bufs(&self, point: &[F], self_buf: &mut Vec<u64>) -> Option<F> {
+    pub fn evaluate_with_bufs(&self, point: &[F], self_buf: &mut Vec<u48>) -> Option<F> {
         if point.len() == self.num_vars {
             Some(
                 self.evals
                     .iter_with_buf(self_buf)
                     .zip_with_bufs(EqEvalIter::new(point.to_vec()), &mut vec![], &mut vec![])
-                    .map(|(a, b)| F::from(a) * b)
+                    .map(|(a, b)| a.to_field::<F>() * b)
                     .sum(),
             )
         } else {
@@ -198,7 +265,7 @@ impl<F: RawField> SmallMLE<F> {
     #[inline]
     pub fn fold_odd_even(
         &self,
-        f: impl Fn(&u64, &u64) -> F + Sync + 'static + Send + Sync,
+        f: impl Fn(&u48, &u48) -> F + Sync + 'static + Send + Sync,
     ) -> MLE<F> {
         assert!((1 << self.num_vars) % 2 == 0);
 

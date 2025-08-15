@@ -626,7 +626,7 @@ mod tests {
     use crate::pc::pst13::PST13;
 
     use crate::snark::{custom_gate::CustomizedGates, structs::ScribeConfig};
-    use mle::SmallMLE;
+    use mle::{SmallMLE, u48};
     use scribe_streams::serialize::RawAffine;
 
     use ark_bls12_381::Bls12_381;
@@ -685,9 +685,20 @@ mod tests {
                 gate_func: gate_func.clone(),
             };
             // let permutation = identity_permutation_mles(nv, num_witnesses);
+            //
+            let p1 = [1, 0, 2, 3]
+                .into_iter()
+                .map(u48::try_from)
+                .collect::<Result<Vec<u48>, _>>()
+                .unwrap();
+            let p2 = [5u64, 4u64, 6u64, 7u64]
+                .into_iter()
+                .map(u48::try_from)
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap();
             let permutation = vec![
-                SmallMLE::from_evals_vec(vec![1u64, 0u64, 2u64, 3u64], 2),
-                SmallMLE::from_evals_vec(vec![5u64, 4u64, 6u64, 7u64], 2),
+                SmallMLE::from_evals_vec(p1, 2),
+                SmallMLE::from_evals_vec(p2, 2),
             ];
             println!("Generated Permutation MLEs");
             let q1 = MLE::from_evals_vec(
@@ -774,11 +785,21 @@ mod tests {
                 num_pub_input,
                 gate_func,
             };
+            let p1 = [1, 3, 6, 7]
+                .into_iter()
+                .map(u48::try_from)
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap();
+            let p2 = [2, 5, 0, 4]
+                .into_iter()
+                .map(u48::try_from)
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap();
 
             // let permutation = identity_permutation(nv, num_witnesses);
             let rand_perm = vec![
-                SmallMLE::from_evals_vec(vec![1u64, 3u64, 6u64, 7u64], 2),
-                SmallMLE::from_evals_vec(vec![2u64, 5u64, 0u64, 4u64], 2),
+                SmallMLE::from_evals_vec(p1, 2),
+                SmallMLE::from_evals_vec(p2, 2),
             ];
 
             let q1 = MLE::from_evals_vec(
