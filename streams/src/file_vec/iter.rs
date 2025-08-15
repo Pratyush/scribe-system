@@ -15,6 +15,7 @@ pub enum Iter<'a, T: SerializeRaw + DeserializeRaw + 'static> {
     },
     Buffer {
         buffer: Vec<T>,
+        remaining: bool,
     },
 }
 
@@ -29,7 +30,10 @@ impl<'a, T: SerializeRaw + DeserializeRaw> Iter<'a, T> {
     }
 
     pub fn new_buffer(buffer: Vec<T>) -> Self {
-        Self::Buffer { buffer }
+        Self::Buffer {
+            buffer,
+            remaining: true,
+        }
     }
 }
 
@@ -56,10 +60,11 @@ impl<'a, T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy + Debug
                 }
                 Some(buffer.t_s.par_iter().copied().with_min_len(1 << 7))
             },
-            Iter::Buffer { buffer } => {
-                if buffer.is_empty() {
+            Iter::Buffer { buffer, remaining } => {
+                if buffer.is_empty() || !*remaining {
                     None
                 } else {
+                    *remaining = false;
                     Some(buffer.par_iter().copied().with_min_len(1 << 7))
                 }
             },
@@ -69,7 +74,7 @@ impl<'a, T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy + Debug
     fn len(&self) -> Option<usize> {
         match self {
             Self::File { file, .. } => Some((file.len() - file.position()) / T::SIZE),
-            Self::Buffer { buffer } => Some(buffer.len()),
+            Self::Buffer { buffer, remaining } => remaining.then(|| buffer.len()),
         }
     }
 }

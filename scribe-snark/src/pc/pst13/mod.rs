@@ -295,7 +295,6 @@ where
     let mut q_buf = Vec::with_capacity(scribe_streams::BUFFER_SIZE);
     let mut r_buf = Vec::with_capacity(scribe_streams::BUFFER_SIZE);
 
-    let mut buf = Vec::with_capacity(scribe_streams::BUFFER_SIZE);
     let mut buf_2 = Vec::with_capacity(scribe_streams::BUFFER_SIZE);
     let mut buf_3 = Vec::with_capacity(scribe_streams::BUFFER_SIZE);
     let mut buf_4 = Vec::with_capacity(scribe_streams::BUFFER_SIZE);
@@ -310,7 +309,7 @@ where
 
         let mut commitment = E::G1::zero();
         r = f
-            .array_chunks_with_buf::<2>(&mut buf)
+            .array_chunks::<2>()
             .zip_with_bufs(gi.iter_with_buf(&mut buf_2), &mut buf_3, &mut buf_4)
             .batched_map(|batch| {
                 use rayon::prelude::*;

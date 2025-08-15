@@ -25,6 +25,7 @@ where
     },
     Buffer {
         buffer: Vec<T>,
+        remaining: bool,
         f: F,
     },
 }
@@ -54,7 +55,12 @@ where
         assert!(BUFFER_SIZE % N == 0, "BUFFER_SIZE must be divisible by N");
         assert_eq!(std::mem::align_of::<[T; N]>(), std::mem::align_of::<T>());
         assert_eq!(std::mem::size_of::<[T; N]>(), N * std::mem::size_of::<T>());
-        Self::Buffer { buffer, f }
+        let remaining = true;
+        Self::Buffer {
+            buffer,
+            remaining,
+            f,
+        }
     }
 }
 
@@ -94,10 +100,15 @@ where
                     .with_min_len(1 << 10);
                 Some(output)
             },
-            Self::Buffer { buffer, f } => {
-                if buffer.is_empty() {
+            Self::Buffer {
+                buffer,
+                f,
+                remaining,
+            } => {
+                if buffer.is_empty() || !*remaining {
                     None
                 } else {
+                    *remaining = false;
                     Some(buffer.par_chunks_exact(N).map(&*f).with_min_len(1 << 7))
                 }
             },
@@ -107,7 +118,9 @@ where
     fn len(&self) -> Option<usize> {
         match self {
             Self::File { file, .. } => Some((file.len() - file.position()) / (N * T::SIZE)),
-            Self::Buffer { buffer, .. } => Some(buffer.len() / N),
+            Self::Buffer {
+                buffer, remaining, ..
+            } => remaining.then(|| buffer.len() / N),
         }
     }
 }

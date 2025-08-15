@@ -775,10 +775,10 @@ mod tests {
             let rand = G1Affine::rand(&mut rng);
             let vec1 = (0..(BUFFER_SIZE * i)).map(|_| rand).collect::<Vec<_>>();
             let file_vec = FileVec::from_iter(vec1.clone().into_iter());
-            let mut buffer = File::create("srs.params").unwrap();
+            let mut buffer = File::create("g_srs.params").unwrap();
             file_vec.serialize_uncompressed(&mut buffer).unwrap();
 
-            let mut f = File::open("srs.params").unwrap();
+            let mut f = File::open("g_srs.params").unwrap();
             let file_vec2 =
                 FileVec::<G1Affine>::deserialize_uncompressed_unchecked(&mut f).unwrap();
 

@@ -193,7 +193,7 @@ impl<F: RawField> MLE<F> {
     /// Modifies self by folding the evaluations over the hypercube with the function `f`.
     /// After each fold, the number of variables is reduced by 1.
     #[inline(always)]
-    pub fn fold_odd_even_in_place(&mut self, f: impl Fn(&F, &F) -> F + Send + Sync) {
+    pub fn fold_odd_even_in_place(&mut self, f: impl Fn(&F, &F) -> F + Send + Sync + 'static) {
         self.map_in_place(|inner| inner.fold_odd_even_in_place(f));
     }
 
@@ -203,7 +203,7 @@ impl<F: RawField> MLE<F> {
     ///
     /// Note that the number of variables in the result is `self.num_vars() - 1`.
     #[inline(always)]
-    pub fn fold_odd_even(&self, f: impl Fn(&F, &F) -> F + Send + Sync) -> Self {
+    pub fn fold_odd_even(&self, f: impl Fn(&F, &F) -> F + Send + Sync + 'static) -> Self {
         self.map(|inner| inner.fold_odd_even(f)).into()
     }
 

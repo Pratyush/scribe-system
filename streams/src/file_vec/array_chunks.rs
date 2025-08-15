@@ -20,6 +20,7 @@ where
         lifetime: PhantomData<&'a T>,
     },
     Buffer {
+        remaining: bool,
         buffer: Vec<T>,
     },
 }
@@ -46,7 +47,8 @@ where
         assert!(BUFFER_SIZE % N == 0, "BUFFER_SIZE must be divisible by N");
         assert_eq!(std::mem::align_of::<[T; N]>(), std::mem::align_of::<T>());
         assert_eq!(std::mem::size_of::<[T; N]>(), N * std::mem::size_of::<T>());
-        Self::Buffer { buffer }
+        let remaining = true;
+        Self::Buffer { remaining, buffer }
     }
 }
 
@@ -82,14 +84,15 @@ where
 
                 Some(buffer.t_s.par_iter().copied().with_min_len(1 << 10))
             },
-            Self::Buffer { buffer } => {
-                if buffer.is_empty() {
+            Self::Buffer { buffer, remaining } => {
+                if buffer.is_empty() || !*remaining {
                     None
                 } else {
                     let (head, mid, tail) = unsafe { buffer.align_to::<[T; N]>() };
                     assert!(head.is_empty(), "Buffer not aligned properly");
                     assert!(tail.is_empty(), "Buffer not aligned properly");
                     let buffer = mid;
+                    *remaining = false;
                     Some(buffer.par_iter().copied().with_min_len(1 << 10))
                 }
             },
@@ -99,7 +102,7 @@ where
     fn len(&self) -> Option<usize> {
         match self {
             Self::File { file, .. } => Some((file.len() - file.position()) / (N * T::SIZE)),
-            Self::Buffer { buffer } => Some(buffer.len() / N),
+            Self::Buffer { buffer, remaining } => remaining.then(|| buffer.len() / N),
         }
     }
 }
