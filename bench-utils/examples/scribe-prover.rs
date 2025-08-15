@@ -1,7 +1,9 @@
+use mimalloc::MiMalloc;
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
+
 /* use jemallocator::Jemalloc;
 
-#[global_allocator]
-static GLOBAL: Jemalloc = Jemalloc;
  */
 pub fn main() {
     let args = std::env::args().skip(1).collect::<Vec<String>>();
