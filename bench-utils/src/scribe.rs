@@ -143,7 +143,7 @@ pub fn prover(
             let dir_size = s.spawn(move || {
                 let mut max_size = initial_size;
                 while !stop_signal_2.load(std::sync::atomic::Ordering::Relaxed) {
-                    let cur_size = get_size(&tmp_dir_path).unwrap();
+                    let cur_size = get_size(&tmp_dir_path).unwrap_or(0);
                     max_size = max_size.max(cur_size);
                     thread::sleep(std::time::Duration::from_secs(1));
                 }

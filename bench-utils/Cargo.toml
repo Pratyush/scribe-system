@@ -13,7 +13,6 @@ scribe = { path = "../scribe-snark" }
 mle = { path = "../mle" }
 rayon = { version = "^1.5" }
 mimalloc = "0.1.47"
-jemallocator = { version = "0.5.0" }
 jf-relation = { path = "../constraints/relation" }
 
 # HyperPlonk
@@ -28,6 +27,7 @@ ark-ec-04 = { package = "ark-ec", version = "0.4" }
 
 # Plonky2
 plonky2 = { version = "1.0.2", optional = true }
+jemallocator = { version = "0.5.0", optional = true }
 
 # Halo2
 halo2_proofs = { package = "halo2-axiom", version = "0.5", optional = true, default-features = false, features = [ "batch", "multicore" ] }
@@ -44,7 +44,7 @@ crossbeam = "0.8.4"
 [features]
 print-trace = ["scribe/print-trace"]
 gemini = ["ark-gemini"]
-plonky2 = ["dep:plonky2"]
+plonky2 = ["dep:plonky2", "jemallocator"]
 halo2 = [ "halo2_proofs", "group", "halo2_curves" ]
 asm = [ "ark-ff/asm" ]
 
