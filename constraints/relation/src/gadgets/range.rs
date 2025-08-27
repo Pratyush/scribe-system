@@ -7,7 +7,7 @@
 //! Implementation of circuit lookup related gadgets
 
 use super::utils::next_multiple;
-use crate::{constants::GATE_WIDTH, BoolVar, Circuit, CircuitError, PlonkCircuit, Variable};
+use crate::{BoolVar, Circuit, CircuitError, PlonkCircuit, Variable, constants::GATE_WIDTH};
 use ark_ff::BigInteger;
 use ark_std::{format, string::ToString, vec::Vec};
 use scribe_streams::serialize::RawPrimeField;

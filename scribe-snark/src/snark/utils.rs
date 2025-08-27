@@ -1,5 +1,5 @@
-use crate::pc::structs::Commitment;
 use crate::pc::PCScheme;
+use crate::pc::structs::Commitment;
 use crate::snark::{custom_gate::CustomizedGates, errors::ScribeErrors, structs::ScribeConfig};
 use crate::transcript::IOPTranscript;
 use ark_ec::pairing::Pairing;
@@ -7,7 +7,7 @@ use ark_ff::PrimeField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::{end_timer, start_timer};
 use mle::VirtualPolynomial;
-use mle::MLE;
+use mle::{MLE, VirtualMLE};
 use scribe_streams::file_vec::FileVec;
 use scribe_streams::{iterator::BatchedIterator, serialize::RawPrimeField};
 
@@ -28,12 +28,12 @@ where
     E: Pairing,
     E::ScalarField: RawPrimeField,
     PC: PCScheme<
-        E,
-        Polynomial = MLE<E::ScalarField>,
-        Point = Vec<E::ScalarField>,
-        Evaluation = E::ScalarField,
-        Commitment = Commitment<E>,
-    >,
+            E,
+            Polynomial = VirtualMLE<E::ScalarField>,
+            Point = Vec<E::ScalarField>,
+            Evaluation = E::ScalarField,
+            Commitment = Commitment<E>,
+        >,
 {
     /// Create an empty accumulator.
     pub(super) fn new(num_var: usize) -> Self {
@@ -47,6 +47,21 @@ where
 
     /// Push a new evaluation point into the accumulator
     pub(super) fn insert_poly_and_points(
+        &mut self,
+        poly: &MLE<E::ScalarField>,
+        commit: &PC::Commitment,
+        point: &PC::Point,
+    ) {
+        assert!(poly.num_vars() == point.len());
+        assert!(poly.num_vars() == self.num_var);
+
+        self.polynomials.push(poly.clone().into());
+        self.points.push(point.clone());
+        self.commitments.push(*commit);
+    }
+
+    /// Push a new evaluation point into the accumulator
+    pub(super) fn insert_virt_poly_and_points(
         &mut self,
         poly: &PC::Polynomial,
         commit: &PC::Commitment,
@@ -76,13 +91,7 @@ where
             .polynomials
             .par_iter()
             .zip(&self.points)
-            .map(|(poly, point)| {
-                let pool = rayon::ThreadPoolBuilder::new()
-                    .num_threads(4)
-                    .build()
-                    .unwrap();
-                pool.install(|| poly.evaluate(point).unwrap())
-            })
+            .map(|(poly, point)| poly.evaluate(point).unwrap())
             .collect::<Vec<_>>();
 
         #[cfg(not(target_os = "linux"))]
@@ -153,10 +162,7 @@ pub(crate) fn prover_sanity_check<F: RawPrimeField + CanonicalDeserialize + Cano
         .zip(witnesses[0].evals().iter())
         .for_each(|(pi, w)| {
             if pi != w {
-                panic!(
-                    "Public input does not match witness[0]: got {:?}, expect {:?}",
-                    pi, w
-                );
+                panic!("Public input does not match witness[0]: got {pi:?}, expect {w:?}",);
             }
         });
 
@@ -198,7 +204,7 @@ pub(crate) fn build_f<F: RawPrimeField>(
     let mut res = VirtualPolynomial::<F>::new(num_vars);
 
     for (coeff, selector, witnesses) in gates.gates.iter() {
-        let coeff_fr = coeff.into_fp();
+        let coeff = coeff.into_fp();
         let mut mle_list = vec![];
         if let Some(s) = *selector {
             mle_list.push(selector_mles[s].clone())
@@ -206,7 +212,7 @@ pub(crate) fn build_f<F: RawPrimeField>(
         for &witness in witnesses.iter() {
             mle_list.push(witness_mles[witness].clone())
         }
-        res.add_mles(mle_list, coeff_fr)?;
+        res.add_mles(mle_list, coeff)?;
     }
 
     Ok(res)

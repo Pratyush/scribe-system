@@ -6,20 +6,18 @@ categories.workspace = true
 include.workspace = true
 license.workspace = true
 edition.workspace = true
-rust-version.workspace = true
 
 [dependencies]
-ark-ec = { version = "^0.4.0", default-features = false, features = ["parallel"] }
-ark-ff = { version = "^0.4.0", default-features = false, features = ["parallel"] }
-ark-std = { version = "^0.4.0", default-features = false, features = ["parallel"] }
-ark-poly = { version = "^0.4.0", default-features = false, features = ["parallel"] }
-ark-serialize = {version = "0.4.0", features = ["derive", "std"]}
+ark-ec = { workspace = true, default-features = false, features = ["parallel"] }
+ark-ff = { workspace = true, default-features = false, features = ["parallel"] }
+ark-std = { workspace = true, default-features = false, features = ["parallel"] }
+ark-poly = { workspace = true, default-features = false, features = ["parallel"] }
+ark-serialize = { workspace = true, features = ["derive", "std"]}
 scribe-streams = { path = "../streams" }
 tempfile = "3.3.0"
 merlin = "3.0.0"
 smallvec = "1.6"
 rayon = { version = "1.5.2", default-features = false }
-displaydoc = "0.2.0"
 derivative = { version = "2", features = ["use_core"] }
 libc = { version = "0.2.101" }
 
@@ -28,8 +26,8 @@ libc = { version = "0.2.101" }
 aligned-vec = { version = "0.6.1" }
 
 [dev-dependencies]
-ark-bls12-381 = { version = "0.4.0", default-features = false, features = [ "curve" ] }
-criterion = { version = "0.5" }
+ark-bls12-381 = { workspace = true, default-features = false, features = [ "curve" ] }
+criterion = { version = "0.6", default-features = false, features = [ "cargo_bench_support" ]}
 
 [[bench]]
 name = "mle"

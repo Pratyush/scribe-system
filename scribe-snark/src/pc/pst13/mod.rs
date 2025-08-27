@@ -1,29 +1,29 @@
 pub(crate) mod batching;
 pub mod srs;
 pub(crate) mod util;
-use crate::pc::pst13::batching::multi_open_internal;
 use crate::pc::StructuredReferenceString;
-use crate::pc::{structs::Commitment, PCError, PCScheme};
+use crate::pc::pst13::batching::multi_open_internal;
+use crate::pc::{PCError, PCScheme, structs::Commitment};
 use crate::transcript::IOPTranscript;
 use ark_ec::{
-    pairing::Pairing,
-    scalar_mul::{fixed_base::FixedBase, variable_base::VariableBaseMSM},
     AffineRepr, CurveGroup,
+    pairing::Pairing,
+    scalar_mul::{BatchMulPreprocessing, variable_base::VariableBaseMSM},
 };
-use ark_ff::PrimeField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::{
-    borrow::Borrow, end_timer, format, marker::PhantomData, rand::Rng, start_timer, vec::Vec, One,
-    Zero,
+    One, Zero, borrow::Borrow, end_timer, format, marker::PhantomData, rand::Rng, start_timer,
+    vec::Vec,
 };
-use mle::MLE;
-use rayon::iter::ParallelExtend;
+use itertools::Itertools;
+use mle::VirtualMLE;
+use rayon::prelude::*;
 use scribe_streams::iterator::BatchedIterator;
 use scribe_streams::serialize::{RawAffine, RawPrimeField};
-use srs::{CommitterKey, VerifierKey, SRS};
+use srs::{CommitterKey, SRS, VerifierKey};
 use std::ops::Mul;
 
-use self::batching::{batch_verify_internal, BatchProof};
+use self::batching::{BatchProof, batch_verify_internal};
 
 /// KZG Polynomial Commitment Scheme on multilinear polynomials.
 pub struct PST13<E: Pairing> {
@@ -48,7 +48,7 @@ where
     type VerifierKey = VerifierKey<E>;
     type SRS = SRS<E>;
     // Polynomial and its associated types
-    type Polynomial = MLE<E::ScalarField>;
+    type Polynomial = VirtualMLE<E::ScalarField>;
     type Point = Vec<E::ScalarField>;
     type Evaluation = E::ScalarField;
     // Commitments and proofs
@@ -92,29 +92,29 @@ where
         ck: impl Borrow<Self::CommitterKey>,
         poly: &Self::Polynomial,
     ) -> Result<Self::Commitment, PCError> {
-        let prover_param = ck.borrow();
+        let ck = ck.borrow();
         let poly_num_vars = poly.num_vars();
 
-        let commit_timer = start_timer!(|| format!("commit poly nv = {}", poly_num_vars));
-        if prover_param.num_vars < poly_num_vars {
+        let commit_timer = start_timer!(|| format!("commit poly nv = {poly_num_vars}"));
+        if ck.num_vars < poly_num_vars {
             return Err(PCError::InvalidParameters(format!(
-                "MLE length ({}) exceeds param limit ({})",
-                poly_num_vars, prover_param.num_vars
+                "MLE length ({poly_num_vars}) exceeds param limit ({})",
+                ck.num_vars
             )));
         }
-        let ignored = prover_param.num_vars - poly_num_vars;
+        let ignored = ck.num_vars - poly_num_vars;
 
         let commitment = {
-            let mut poly_evals = poly.evals().iter();
-            let mut srs = prover_param.powers_of_g[ignored].iter();
+            let mut poly_evals = poly.evals();
+            let mut srs = ck.powers_of_g[ignored].iter();
             let mut f_buf = Vec::with_capacity(scribe_streams::BUFFER_SIZE);
             let mut g_buf = Vec::with_capacity(scribe_streams::BUFFER_SIZE);
             let mut commitment = E::G1::zero();
             while let (Some(p), Some(g)) = (poly_evals.next_batch(), srs.next_batch()) {
                 f_buf.clear();
                 g_buf.clear();
-                f_buf.par_extend(p);
-                g_buf.par_extend(g);
+                p.collect_into_vec(&mut f_buf);
+                g.collect_into_vec(&mut g_buf);
                 commitment += E::G1::msm_unchecked(&g_buf, &f_buf);
             }
             commitment.into_affine()
@@ -122,6 +122,69 @@ where
 
         end_timer!(commit_timer);
         Ok(Commitment(commitment))
+    }
+
+    /// Generate commitments to a batch of polynomials.
+    ///
+    /// This function takes `2^num_vars` number of scalar multiplications over
+    /// G1.
+    fn batch_commit(
+        ck: impl Borrow<Self::CommitterKey>,
+        polys: &[Self::Polynomial],
+    ) -> Result<Vec<Self::Commitment>, PCError> {
+        let ck = ck.borrow();
+
+        if polys.is_empty() {
+            return Ok(vec![]);
+        }
+        let ck_num_vars = ck.num_vars;
+        let max_num_vars = polys.iter().map(|p| p.num_vars()).max().unwrap();
+
+        let mut g_buf = Vec::with_capacity(scribe_streams::BUFFER_SIZE);
+        let mut commitments = vec![E::G1::zero(); polys.len()];
+        polys
+            .iter()
+            .enumerate()
+            .chunk_by(|(_, p)| p.num_vars())
+            .into_iter()
+            .try_for_each(|(num_vars, group)| {
+                if ck_num_vars < num_vars {
+                    return Err(PCError::InvalidParameters(format!(
+                        "MLE length ({max_num_vars}) exceeds param limit ({ck_num_vars})"
+                    )));
+                }
+
+                let ignored = ck_num_vars - num_vars;
+                let mut srs = ck.powers_of_g[ignored].iter();
+                let mut poly_evals = group.map(|(i, p)| (i, p.evals())).collect::<Vec<_>>();
+                let mut f_bufs = vec![vec![]; poly_evals.len()];
+                while let Some(g) = srs.next_batch() {
+                    g_buf.clear();
+                    g.collect_into_vec(&mut g_buf);
+                    let result = poly_evals
+                        .par_iter_mut()
+                        .zip(&mut f_bufs)
+                        .map(|((i, poly), f_buf)| {
+                            f_buf.clear();
+                            let mut result = E::G1::zero();
+                            if let Some(p) = poly.next_batch() {
+                                p.collect_into_vec(f_buf);
+                                result += E::G1::msm_unchecked(&g_buf, &f_buf);
+                            }
+                            (i, result)
+                        })
+                        .collect::<Vec<_>>();
+                    for (i, res) in result {
+                        commitments[*i] += res;
+                    }
+                }
+                Ok(())
+            })?;
+
+        Ok(commitments
+            .into_iter()
+            .map(|c| Commitment(c.into_affine()))
+            .collect())
     }
 
     /// On input a polynomial `p` and a point `point`, outputs a proof for the
@@ -192,7 +255,7 @@ where
 /// - at round i, we compute an MSM for `2^{num_var - i}` number of G1 elements.
 fn open_internal<E: Pairing>(
     prover_param: &CommitterKey<E>,
-    polynomial: &MLE<E::ScalarField>,
+    polynomial: &VirtualMLE<E::ScalarField>,
     point: &[E::ScalarField],
 ) -> Result<(MultilinearKzgProof<E>, E::ScalarField), PCError>
 where
@@ -220,66 +283,75 @@ where
     let nv = polynomial.num_vars();
     // the first `ignored` SRS vectors are unused for opening.
     let ignored = prover_param.num_vars - nv + 1;
-    let mut f = polynomial.evals();
+    let mut f = Some(polynomial.evals());
     let mut r;
-    let mut q;
 
     let mut proofs = Vec::new();
 
-    let mut scalars_buf = Vec::with_capacity(scribe_streams::BUFFER_SIZE);
     let mut bases_buf = Vec::with_capacity(scribe_streams::BUFFER_SIZE);
-    for (_i, (&point_at_k, gi)) in point
+    let mut q_and_g_buf = Vec::with_capacity(scribe_streams::BUFFER_SIZE);
+    let mut q_buf = Vec::with_capacity(scribe_streams::BUFFER_SIZE);
+    let mut r_buf = Vec::with_capacity(scribe_streams::BUFFER_SIZE);
+
+    let mut buf_2 = Vec::with_capacity(scribe_streams::BUFFER_SIZE);
+    let mut buf_3 = Vec::with_capacity(scribe_streams::BUFFER_SIZE);
+    let mut buf_4 = Vec::with_capacity(scribe_streams::BUFFER_SIZE);
+    let mut f2: Option<scribe_streams::file_vec::FileVec<E::ScalarField>> = None;
+    for (i, (&point_at_k, gi)) in point
         .iter()
         .zip(prover_param.powers_of_g[ignored..ignored + nv].iter())
         .enumerate()
     {
-        let ith_round = start_timer!(|| format!("{_i}-th round"));
+        let ith_round = start_timer!(|| format!("{i}-th round"));
 
-        let ith_round_eval = start_timer!(|| format!("{_i}-th round eval"));
+        let mut commitment = E::G1::zero();
+        macro_rules! func {
+            ($f: expr) => {
+                $f.array_chunks::<2>()
+                    .zip_with_bufs(gi.iter_with_buf(&mut buf_2), &mut buf_3, &mut buf_4)
+                    .batched_map(|batch| {
+                        use rayon::prelude::*;
 
+                        q_buf.clear();
+                        q_and_g_buf.clear();
+                        bases_buf.clear();
+                        r_buf.clear();
+                        batch
+                            .into_par_iter()
+                            .map(|([a, b], g)| {
+                                let q = b - a;
+                                let r = a + q * point_at_k;
+                                ((q, g), r)
+                            })
+                            .unzip_into_vecs(&mut q_and_g_buf, &mut r_buf);
+
+                        q_and_g_buf
+                            .par_iter()
+                            .copied()
+                            .unzip_into_vecs(&mut q_buf, &mut bases_buf);
+
+                        commitment += E::G1::msm_unchecked(&bases_buf, &q_buf);
+
+                        r_buf.to_vec().into_par_iter()
+                    })
+                    .to_file_vec()
+            };
+        }
         // TODO: confirm that FileVec in prior round's q and r are auto dropped via the Drop trait once q and r are assigned new FileVec
-        (q, r) = f
-            .iter()
-            .array_chunks::<2>()
-            .map(|chunk| {
-                let q_bit = chunk[1] - chunk[0];
-                let r_bit = chunk[0] + q_bit * point_at_k;
-                (q_bit, r_bit)
-            })
-            .unzip();
 
-        f = &r;
-
-        end_timer!(ith_round_eval);
-
-        let msm_timer =
-            start_timer!(|| format!("msm of size {} at round {}", 1 << (nv - 1 - _i), _i));
-
-        // let commitment = PST13::commit(prover_param, &MLE::from_evals(q, nv - 1 - i))?;
-
-        let commitment = {
-            let mut scalars = q.iter();
-            let mut bases = gi.iter();
-            let mut commitment = E::G1::zero();
-            while let (Some(scalar_batch), Some(base_batch)) =
-                (scalars.next_batch(), bases.next_batch())
-            {
-                scalars_buf.clear();
-                bases_buf.clear();
-                scalars_buf.par_extend(scalar_batch);
-                bases_buf.par_extend(base_batch);
-                commitment += E::G1::msm_unchecked(&bases_buf, &scalars_buf);
-            }
-            commitment.into_affine()
+        r = if i == 0 {
+            func!(f.take().unwrap())
+        } else {
+            func!(f2.take().unwrap())
         };
 
-        proofs.push(commitment);
-        end_timer!(msm_timer);
+        f2 = Some(r);
+        proofs.push(commitment.into_affine());
 
         end_timer!(ith_round);
     }
 
-    // Doesn't consumer the polynomial
+    // Doesn't consume the polynomial
     let eval = polynomial.evaluate(point).unwrap();
     end_timer!(open_timer);
     Ok((MultilinearKzgProof { proofs }, eval))
@@ -310,11 +382,9 @@ fn verify_internal<E: Pairing>(
 
     let prepare_inputs_timer = start_timer!(|| "prepare pairing inputs");
 
-    let scalar_size = E::ScalarField::MODULUS_BIT_SIZE as usize;
-    let window_size = FixedBase::get_mul_window_size(num_var);
+    let h_table = BatchMulPreprocessing::new(vk.h.into_group(), num_var);
 
-    let h_table = FixedBase::get_window_table(scalar_size, window_size, vk.h.into_group());
-    let h_mul: Vec<E::G2> = FixedBase::msm(scalar_size, window_size, &h_table, point);
+    let h_mul = h_table.batch_mul(point);
 
     let ignored = vk.num_vars - num_var;
     let h_vec: Vec<_> = (0..num_var)
@@ -354,14 +424,15 @@ mod tests {
     use super::*;
     use ark_bls12_381::Bls12_381;
     use ark_ec::pairing::Pairing;
-    use ark_std::{test_rng, vec::Vec, UniformRand};
+    use ark_std::{UniformRand, test_rng, vec::Vec};
+    use mle::MLE;
 
     type E = Bls12_381;
     type Fr = <E as Pairing>::ScalarField;
 
     fn test_single_helper<R: Rng>(
         params: &SRS<E>,
-        poly: &MLE<Fr>,
+        poly: &VirtualMLE<Fr>,
         rng: &mut R,
     ) -> Result<(), PCError> {
         let nv = poly.num_vars();
@@ -386,11 +457,11 @@ mod tests {
         let params = PST13::<E>::gen_srs_for_testing(&mut rng, 10)?;
 
         // normal polynomials
-        let poly1 = MLE::rand(8, &mut rng);
+        let poly1 = MLE::rand(8, &mut rng).into();
         test_single_helper(&params, &poly1, &mut rng)?;
 
         // single-variate polynomials
-        let poly2 = MLE::rand(1, &mut rng);
+        let poly2 = MLE::rand(1, &mut rng).into();
         test_single_helper(&params, &poly2, &mut rng)?;
 
         Ok(())

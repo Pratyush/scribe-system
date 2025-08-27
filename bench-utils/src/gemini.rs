@@ -1,5 +1,5 @@
-use ark_bls12_381::{Bls12_381, Fr, G1Affine as G1, G2Affine as G2};
-use ark_ec::AffineRepr;
+use ark_bls12_381_04::{Bls12_381, Fr, G1Affine as G1, G2Affine as G2};
+use ark_ec_04::AffineRepr;
 use ark_gemini::iterable::dummy::dummy_r1cs_stream;
 use ark_gemini::iterable::dummy::DummyStreamer;
 use ark_gemini::kzg::Commitment;

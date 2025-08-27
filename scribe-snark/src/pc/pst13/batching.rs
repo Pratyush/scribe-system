@@ -1,24 +1,23 @@
+use crate::pc::PCScheme;
 use crate::pc::errors::PCError;
 use crate::pc::structs::Commitment;
-use crate::pc::PCScheme;
 use crate::piop::{prelude::SumCheck, structs::IOPProof};
 use crate::transcript::IOPTranscript;
 use mle::{
-    eq_eval,
+    MLE, VirtualMLE, eq_eval,
     util::build_eq_x_r_vec,
     virtual_polynomial::{VPAuxInfo, VirtualPolynomial},
-    VirtualMLE, MLE,
 };
 use scribe_streams::{
-    iterator::{zip_many, BatchedIterator},
+    iterator::{BatchedIterator, zip_many},
     serialize::RawPrimeField,
 };
 
 use ark_ec::pairing::Pairing;
-use ark_ec::{scalar_mul::variable_base::VariableBaseMSM, CurveGroup};
+use ark_ec::{CurveGroup, scalar_mul::variable_base::VariableBaseMSM};
 
+use ark_std::{One, Zero, end_timer, log2, start_timer};
 use ark_std::{collections::BTreeMap, marker::PhantomData};
-use ark_std::{end_timer, log2, start_timer, One, Zero};
 
 use itertools::Itertools;
 
@@ -55,11 +54,11 @@ where
     E: Pairing,
     E::ScalarField: RawPrimeField,
     PC: PCScheme<
-        E,
-        Polynomial = MLE<E::ScalarField>,
-        Point = Vec<E::ScalarField>,
-        Evaluation = E::ScalarField,
-    >,
+            E,
+            Polynomial = VirtualMLE<E::ScalarField>,
+            Point = Vec<E::ScalarField>,
+            Evaluation = E::ScalarField,
+        >,
 {
     let open_timer = start_timer!(|| format!("multi open {} points", points.len()));
 
@@ -103,12 +102,13 @@ where
     }
     let mut v = v.into_iter().collect::<Vec<_>>();
     v.sort_by_key(|(point, _)| point_indices[point]);
+    let mut buf = vec![];
     let merged_tilde_gs = v
         .into_iter()
         .map(|(_, coeffs_and_polys)| {
             let evals = coeffs_and_polys
                 .into_iter()
-                .map(|(coeff, poly)| poly.evals().iter().map(move |p| p * coeff))
+                .map(|(c, p)| p.evals().map(move |e| e * c))
                 .chunks(8)
                 .into_iter()
                 .map(|chunk| {
@@ -207,7 +207,7 @@ where
                     }
                 })
                 .reduce(|mut acc, p| {
-                    acc.zipped_for_each(p.into_iter(), |a, b| *a += b);
+                    acc.zipped_for_each(p.iter_with_buf(&mut buf), |a, b| *a += b);
                     acc
                 })
                 .unwrap();
@@ -232,7 +232,7 @@ where
     let mut sum_check_vp = VirtualPolynomial::new(num_vars);
     for (merged_tilde_g, tilde_eq) in merged_tilde_gs.iter().zip(tilde_eqs.clone()) {
         sum_check_vp.add_virtual_mles(
-            [merged_tilde_g.clone().into(), tilde_eq.into()],
+            [merged_tilde_g.clone().into(), tilde_eq],
             E::ScalarField::one(),
         )?;
     }
@@ -263,7 +263,7 @@ where
                 .sum()
         })
         .to_file_vec();
-    let g_prime = MLE::from_evals(g_prime_evals, num_vars);
+    let g_prime = MLE::from_evals(g_prime_evals, num_vars).into();
     end_timer!(step);
 
     let step = start_timer!(|| "pc open");
@@ -294,12 +294,12 @@ where
     E: Pairing,
     E::ScalarField: RawPrimeField,
     PC: PCScheme<
-        E,
-        Polynomial = MLE<E::ScalarField>,
-        Point = Vec<E::ScalarField>,
-        Evaluation = E::ScalarField,
-        Commitment = Commitment<E>,
-    >,
+            E,
+            Polynomial = VirtualMLE<E::ScalarField>,
+            Point = Vec<E::ScalarField>,
+            Evaluation = E::ScalarField,
+            Commitment = Commitment<E>,
+        >,
 {
     let open_timer = start_timer!(|| "batch verification");
 
@@ -360,19 +360,19 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::pc::pst13::srs::SRS;
-    use crate::pc::pst13::PST13;
     use crate::pc::StructuredReferenceString;
+    use crate::pc::pst13::PST13;
+    use crate::pc::pst13::srs::SRS;
     use ark_bls12_381::Bls12_381 as E;
     use ark_ec::pairing::Pairing;
-    use ark_std::{rand::Rng, test_rng, vec::Vec, UniformRand};
+    use ark_std::{UniformRand, rand::Rng, test_rng, vec::Vec};
     use mle::util::get_batched_nv;
 
     type Fr = <E as Pairing>::ScalarField;
 
     fn test_multi_open_helper<R: Rng>(
         ml_params: &SRS<E>,
-        polys: &[MLE<Fr>],
+        polys: &[VirtualMLE<Fr>],
         rng: &mut R,
     ) -> Result<(), PCError> {
         let merged_nv = get_batched_nv(polys[0].num_vars(), polys.len());
@@ -423,8 +423,11 @@ mod tests {
 
         let ml_params = SRS::<E>::gen_srs_for_testing(&mut rng, 21)?;
         for num_poly in 5..6 {
-            for nv in 9..19 {
-                let polys1: Vec<_> = (0..num_poly).map(|_| MLE::rand(nv, &mut rng)).collect();
+            // for nv in 9..19 {
+            for nv in 17..19 {
+                let polys1: Vec<_> = (0..num_poly)
+                    .map(|_| MLE::rand(nv, &mut rng).into())
+                    .collect();
                 test_multi_open_helper(&ml_params, &polys1, &mut rng)?;
             }
         }

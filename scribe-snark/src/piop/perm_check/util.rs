@@ -1,5 +1,5 @@
 use crate::piop::errors::PIOPError;
-use mle::MLE;
+use mle::{MLE, VirtualMLE};
 use scribe_streams::{iterator::BatchedIterator, serialize::RawPrimeField};
 
 use ark_std::{end_timer, start_timer};
@@ -24,23 +24,23 @@ pub(super) fn computer_nums_and_denoms<F: RawPrimeField>(
     gamma: &F,
     fxs: &[MLE<F>],
     gxs: &[MLE<F>],
-    perms: &[MLE<F>],
+    perms: &[VirtualMLE<F>],
 ) -> Result<(Vec<MLE<F>>, Vec<MLE<F>>), PIOPError> {
     let start = start_timer!(|| "compute numerators and denominators");
 
     let num_vars = fxs[0].num_vars();
 
-    let s_ids = MLE::<F>::identity_permutation_mles(num_vars, fxs.len());
+    let s_ids = VirtualMLE::<F>::identity_permutations(num_vars, fxs.len());
 
-    let (numerators, denominators) = (fxs, gxs, &s_ids, perms)
+    let (numerators, denominators) = (fxs, gxs, s_ids, perms)
         .into_par_iter()
         .map(|(fx, gx, s_id, perm)| {
             let (numerator, denominator) = fx
                 .evals()
                 .iter()
                 .zip(gx.evals().iter())
-                .zip(s_id.evals().iter())
-                .zip(perm.evals().iter())
+                .zip(s_id.evals())
+                .zip(perm.evals())
                 .map(|(((f, g), s_id), perm)| {
                     let numerator = f + *beta * s_id + gamma;
                     let denominator = g + *beta * perm + gamma;
@@ -80,8 +80,8 @@ mod tests {
             MLE::from_evals_vec(vec![Fr::from(7), Fr::from(8)], 1),
         ];
         let perms = vec![
-            MLE::from_evals_vec(vec![Fr::from(13), Fr::from(14)], 1),
-            MLE::from_evals_vec(vec![Fr::from(15), Fr::from(16)], 1),
+            MLE::from_evals_vec(vec![Fr::from(13), Fr::from(14)], 1).into(),
+            MLE::from_evals_vec(vec![Fr::from(15), Fr::from(16)], 1).into(),
         ];
 
         // Compute the fractional polynomials

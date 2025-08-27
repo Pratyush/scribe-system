@@ -1,14 +1,13 @@
 // use crate::pc::prelude::PCSError;
 // use arithmetic::ArithErrors;
 use ark_std::string::String;
-use displaydoc::Display;
 // use transcript::TranscriptError;
 use crate::pc::errors::PCError;
 use crate::transcript::TranscriptError;
 use mle::errors::ArithError;
 
 /// A `enum` specifying the possible failure modes of the PolyIOP.
-#[derive(Display, Debug)]
+#[derive(Debug)]
 pub enum PIOPError {
     /// Invalid Prover: {0}
     InvalidProver(String),

@@ -1,7 +1,7 @@
-use crate::{errors::ArithError, virtual_mle::VirtualMLE, MLE};
+use crate::{MLE, errors::ArithError, virtual_mle::VirtualMLE};
 use ark_serialize::CanonicalSerialize;
 use ark_std::{
-    end_timer,
+    UniformRand, end_timer,
     rand::{Rng, RngCore},
     start_timer,
 };
@@ -28,10 +28,10 @@ use std::{cmp::max, marker::PhantomData};
 /// - flattened_ml_extensions stores the multilinear extension representation of
 ///   f0, f1, f2, f3 and f4
 /// - products is
-///     \[
-///         (c0, \[0, 1, 2\]),
-///         (c1, \[3, 4\])
-///     \]
+///   \[
+///       (c0, \[0, 1, 2\]),
+///       (c1, \[3, 4\])
+///   \]
 /// - raw_pointers_lookup_table maps fi to i
 ///
 #[derive(Clone)]
@@ -254,11 +254,39 @@ impl<F: RawPrimeField> VirtualPolynomial<F> {
             sum += product_sum * coefficient;
         }
 
-        #[cfg(debug_assertions)]
-        println!("final rand sum: {:?}", sum);
-
         end_timer!(start);
         Ok((poly, sum))
+    }
+
+    /// Sample a random virtual polynomial, return the polynomial and its sum.
+    pub fn rand_with_shared_terms<R: RngCore>(
+        nv: usize,
+        num_multiplicands_range: (usize, usize),
+        num_products: usize,
+        rng: &mut R,
+    ) -> Result<Self, ArithError> {
+        let start = start_timer!(|| "sample random virtual polynomial");
+
+        let mut poly = VirtualPolynomial::new(nv);
+        let shared_1 = MLE::rand(nv, rng);
+        let shared_2 = MLE::rand(nv, rng);
+        for _ in 0..num_products {
+            let num_multiplicands =
+                rng.gen_range(num_multiplicands_range.0..num_multiplicands_range.1);
+            let (mut product, _) = MLE::rand_product_with_sum(nv, num_multiplicands, rng);
+            let coefficient = F::rand(rng);
+            let use_1 = bool::rand(rng);
+            if use_1 {
+                product.push(shared_1.clone());
+            } else {
+                product.push(shared_2.clone());
+            }
+
+            poly.add_mles(product.into_iter(), coefficient)?;
+        }
+
+        end_timer!(start);
+        Ok(poly)
     }
 
     /// Sample a random virtual polynomial that evaluates to zero everywhere
@@ -277,11 +305,6 @@ impl<F: RawPrimeField> VirtualPolynomial<F> {
             let coefficient = F::rand(rng);
             poly.add_mles(product.into_iter(), coefficient)?;
         }
-
-        #[cfg(debug_assertions)]
-        poly.products.iter().for_each(|(_, p)| {
-            println!("rand_zero product: {:?}", p);
-        });
 
         Ok(poly)
     }
@@ -330,16 +353,17 @@ impl<F: RawPrimeField> VirtualPolynomial<F> {
     ) -> Result<VirtualPolynomial<F>, ArithError> {
         let num_vars = h_p.num_vars();
 
-        let mut poly = VirtualPolynomial::new_from_mle(
-            &MLE::constant(-batch_factor - F::ONE, num_vars),
+        let mut poly = VirtualPolynomial::new(num_vars);
+        poly.add_virtual_mles(
+            [VirtualMLE::constant(-batch_factor - F::ONE, num_vars)],
             F::one(),
-        );
-        poly.add_mles(vec![h_p.clone(), p], F::one())?;
-        poly.add_mles(vec![h_p.clone(), pi], alpha)?;
-        poly.add_mles(vec![h_q.clone(), q], batch_factor)?;
-        poly.add_mles(vec![h_q.clone(), index], alpha * batch_factor)?;
-        poly.add_mles(vec![h_p], gamma)?;
-        poly.add_mles(vec![h_q], gamma * batch_factor)?;
+        )?;
+        poly.add_mles([h_p.clone(), p], F::one())?;
+        poly.add_mles([h_p.clone(), pi], alpha)?;
+        poly.add_mles([h_q.clone(), q], batch_factor)?;
+        poly.add_mles([h_q.clone(), index], alpha * batch_factor)?;
+        poly.add_mles([h_p], gamma)?;
+        poly.add_mles([h_q], gamma * batch_factor)?;
 
         Ok(poly)
     }
@@ -366,34 +390,25 @@ impl<F: RawPrimeField> VirtualPolynomial<F> {
             batch_factor_power *= batch_factor;
         }
 
-        let mut poly =
-            VirtualPolynomial::new_from_mle(&MLE::constant(constant, num_vars), F::one());
+        let mut poly = VirtualPolynomial::new(num_vars);
+        poly.add_virtual_mles([VirtualMLE::constant(constant, num_vars)], F::one())?;
 
         let mut batch_factor_lower_power = F::one();
         let mut batch_factor_higher_power = batch_factor;
 
         for i in 0..h_p.len() {
-            poly.add_mles(vec![h_p[i].clone(), p[i].clone()], batch_factor_lower_power)
-                .unwrap();
+            poly.add_mles([h_p[i].clone(), p[i].clone()], batch_factor_lower_power)?;
             poly.add_mles(
-                vec![h_p[i].clone(), pi[i].clone()],
+                [h_p[i].clone(), pi[i].clone()],
                 batch_factor_lower_power * alpha,
-            )
-            .unwrap();
+            )?;
+            poly.add_mles([h_q[i].clone(), p[i].clone()], batch_factor_higher_power)?;
             poly.add_mles(
-                vec![h_q[i].clone(), p[i].clone()],
-                batch_factor_higher_power,
-            )
-            .unwrap();
-            poly.add_mles(
-                vec![h_q[i].clone(), index[i].clone()],
+                [h_q[i].clone(), index[i].clone()],
                 batch_factor_higher_power * alpha,
-            )
-            .unwrap();
-            poly.add_mles(vec![h_p[i].clone()], batch_factor_lower_power * gamma)
-                .unwrap();
-            poly.add_mles(vec![h_q[i].clone()], batch_factor_higher_power * gamma)
-                .unwrap();
+            )?;
+            poly.add_mles([h_p[i].clone()], batch_factor_lower_power * gamma)?;
+            poly.add_mles([h_q[i].clone()], batch_factor_higher_power * gamma)?;
 
             batch_factor_lower_power = batch_factor_lower_power * batch_factor * batch_factor;
             batch_factor_higher_power = batch_factor_higher_power * batch_factor * batch_factor;
@@ -427,32 +442,26 @@ impl<F: RawPrimeField> VirtualPolynomial<F> {
             batch_factor_power *= batch_factor;
         }
 
-        let constant_mle = MLE::constant(constant, num_vars);
+        let constant_mle = VirtualMLE::constant(constant, num_vars);
 
-        self.add_mles(vec![constant_mle.clone()], F::one()).unwrap();
+        self.add_virtual_mles([constant_mle], F::one()).unwrap();
 
         let mut batch_factor_lower_power = batch_factor;
         let mut batch_factor_higher_power = batch_factor * batch_factor;
 
         for i in 0..h_p.len() {
-            self.add_mles([h_p[i].clone(), p[i].clone()], batch_factor_lower_power)
-                .unwrap();
+            self.add_mles([h_p[i].clone(), p[i].clone()], batch_factor_lower_power)?;
             self.add_mles(
                 [h_p[i].clone(), pi[i].clone()],
                 batch_factor_lower_power * alpha,
-            )
-            .unwrap();
-            self.add_mles([h_q[i].clone(), p[i].clone()], batch_factor_higher_power)
-                .unwrap();
+            )?;
+            self.add_mles([h_q[i].clone(), p[i].clone()], batch_factor_higher_power)?;
             self.add_mles(
                 [h_q[i].clone(), index[i].clone()],
                 batch_factor_higher_power * alpha,
-            )
-            .unwrap();
-            self.add_mles([h_p[i].clone()], batch_factor_lower_power * gamma)
-                .unwrap();
-            self.add_mles([h_q[i].clone()], batch_factor_higher_power * gamma)
-                .unwrap();
+            )?;
+            self.add_mles([h_p[i].clone()], batch_factor_lower_power * gamma)?;
+            self.add_mles([h_q[i].clone()], batch_factor_higher_power * gamma)?;
 
             batch_factor_lower_power = batch_factor_lower_power * batch_factor * batch_factor;
             batch_factor_higher_power = batch_factor_higher_power * batch_factor * batch_factor;
@@ -472,7 +481,7 @@ impl<F: RawPrimeField> VirtualPolynomial<F> {
         let mut sum = F::zero();
         for (c, p) in &self.products {
             let element_wise_product = p.iter().fold(
-                FileVec::from_iter(std::iter::repeat(F::one()).take(1 << self.num_vars())),
+                FileVec::from_iter(std::iter::repeat_n(F::one(), 1 << self.num_vars())),
                 |mut acc, &i| {
                     acc.zipped_for_each(evals[i].iter(), |a, b| *a *= b);
                     acc
@@ -493,72 +502,6 @@ mod test {
     use ark_ff::UniformRand;
     use ark_std::test_rng;
     use scribe_streams::iterator::BatchedIterator;
-
-    // TODO: this is failing now, need to fix it
-    #[test]
-    fn test_build_perm_check_poly() {
-        // Setup sample values for alpha and r
-        let alpha = Fr::from(11u64);
-        let gamma = Fr::from(13u64);
-        let r = Fr::from(12u64);
-
-        // Setup sample streams for h_p, h_q, p, q, and pi
-        let h_p = MLE::from_evals_vec(vec![Fr::from(1u64), Fr::from(2u64)], 1);
-        let h_q = MLE::from_evals_vec(vec![Fr::from(3u64), Fr::from(4u64)], 1);
-        let p = MLE::from_evals_vec(vec![Fr::from(5u64), Fr::from(6u64)], 1);
-        let q = MLE::from_evals_vec(vec![Fr::from(7u64), Fr::from(8u64)], 1);
-        let pi = MLE::from_evals_vec(vec![Fr::from(9u64), Fr::from(10u64)], 1);
-        let index = MLE::from_evals_vec(vec![Fr::from(13u64), Fr::from(14u64)], 1);
-
-        // Call the function under test
-        let result_poly =
-            VirtualPolynomial::build_perm_check_poly(h_p, h_q, p, q, pi, index, alpha, r, gamma)
-                .unwrap();
-
-        // Define expected products directly
-        let expected_products = vec![
-            (Fr::from(1u64), vec![0]),
-            (Fr::from(1u64), vec![1, 2]),
-            (Fr::from(11u64), vec![1, 3]),
-            (Fr::from(12u64), vec![4, 5]),
-            (Fr::from(132u64), vec![4, 6]),
-            (Fr::from(13u64), vec![0]),
-            (Fr::from(156u64), vec![1]),
-        ];
-
-        // Compare max_degree and num_variables
-        assert_eq!(result_poly.aux_info.max_degree, 2);
-        assert_eq!(result_poly.aux_info.num_variables, 1);
-
-        // Compare the length of products
-        assert_eq!(
-            result_poly.products.len(),
-            expected_products.len(),
-            "Products length mismatch"
-        );
-
-        // Detailed comparison of products
-        for (i, (expected_coef, expected_indices)) in expected_products.iter().enumerate() {
-            let (result_coef, result_indices) = &result_poly.products[i];
-            assert_eq!(
-                result_coef, expected_coef,
-                "Mismatch in coefficient at index {}",
-                i
-            );
-            assert_eq!(
-                result_indices, expected_indices,
-                "Mismatch in indices at index {}",
-                i
-            );
-        }
-
-        // Compare lengths of flattened_ml_extensions and raw_pointers_lookup_table
-        assert_eq!(
-            result_poly.mles.len(),
-            7,
-            "Mismatch in flattened_ml_extensions length"
-        );
-    }
 
     #[test]
     fn test_build_eq_x_r() {

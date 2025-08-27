@@ -8,8 +8,8 @@ use crate::{
 use ark_ff::PrimeField;
 use ark_std::{end_timer, start_timer};
 use mle::{
-    virtual_polynomial::{VPAuxInfo, VirtualPolynomial},
     MLE,
+    virtual_polynomial::{VPAuxInfo, VirtualPolynomial},
 };
 use scribe_streams::serialize::RawPrimeField;
 use std::fmt::Debug;
@@ -158,9 +158,8 @@ impl<F: RawPrimeField> SumCheck<F> {
                 prover_msg,
                 transcript,
             )
-            .map_err(|e| {
+            .inspect_err(|_| {
                 end_timer!(start);
-                e
             });
         }
 

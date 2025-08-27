@@ -1,8 +1,7 @@
 use ark_std::string::String;
-use displaydoc::Display;
 
 /// A `enum` specifying the possible failure modes of the Transcript.
-#[derive(Display, Debug)]
+#[derive(Debug)]
 pub enum TranscriptError {
     /// Invalid Transcript: {0}
     InvalidTranscript(String),

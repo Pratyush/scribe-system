@@ -1,18 +1,16 @@
-use std::borrow::BorrowMut;
+use std::{borrow::BorrowMut, collections::HashSet};
 
 use super::SumCheckProver;
 use crate::piop::{
     errors::PIOPError,
     structs::{IOPProverMessage, IOPProverState},
 };
-use ark_ff::{batch_inversion, PrimeField};
+use ark_ff::{PrimeField, batch_inversion};
 use ark_std::{end_timer, start_timer, vec::Vec};
+use itertools::Itertools;
 use mle::virtual_polynomial::VirtualPolynomial;
 use rayon::prelude::*;
-use scribe_streams::{
-    iterator::{zip_many, BatchedIterator},
-    serialize::RawPrimeField,
-};
+use scribe_streams::{iterator::BatchedIterator, serialize::RawPrimeField};
 
 impl<F: RawPrimeField> SumCheckProver<F> for IOPProverState<F> {
     type VirtualPolynomial = VirtualPolynomial<F>;
@@ -28,18 +26,48 @@ impl<F: RawPrimeField> SumCheckProver<F> for IOPProverState<F> {
             ));
         }
         end_timer!(start);
-
+        let degrees = polynomial
+            .products
+            .iter()
+            .map(|(_, products)| products.len())
+            .collect::<HashSet<_>>();
+        let max_degree = polynomial.aux_info.max_degree;
+        let extrapolation_aux = (1..max_degree)
+            .into_par_iter()
+            .map(|degree| match degrees.contains(&degree) {
+                true => {
+                    let points = (0..1 + degree as u64).map(F::from).collect::<Vec<_>>();
+                    let weights = barycentric_weights(&points);
+                    // Compute lagrange coefficients for extrapolation.
+                    let points = (0..(max_degree - degree))
+                        .into_par_iter()
+                        .map(|j| {
+                            let at = F::from((degree + 1 + j) as u64);
+                            let mut v = points.par_iter().map(|p| at - *p).collect::<Vec<_>>();
+                            batch_inversion(&mut v);
+                            let inv = v
+                                .par_iter_mut()
+                                .zip(&weights)
+                                .map(|(a, b)| {
+                                    *a *= *b;
+                                    *a
+                                })
+                                .sum::<F>()
+                                .inverse()
+                                .unwrap();
+                            (v, inv)
+                        })
+                        .collect();
+                    Some(points)
+                },
+                false => None,
+            })
+            .collect::<Vec<_>>();
         Ok(Self {
             challenges: Vec::with_capacity(polynomial.aux_info.num_variables),
             round: 0,
             poly: polynomial.clone(),
-            extrapolation_aux: (1..polynomial.aux_info.max_degree)
-                .map(|degree| {
-                    let points = (0..1 + degree as u64).map(F::from).collect::<Vec<_>>();
-                    let weights = barycentric_weights(&points);
-                    (points, weights)
-                })
-                .collect(),
+            extrapolation_aux,
         })
     }
 
@@ -79,7 +107,7 @@ impl<F: RawPrimeField> SumCheckProver<F> for IOPProverState<F> {
             }
             self.challenges.push(*chal);
 
-            let fix_argument = start_timer!(|| "fix argument");
+            let fix_variable = start_timer!(|| "fix variable");
 
             let r = self.challenges[self.round - 1];
             if self.round == 1 {
@@ -89,14 +117,14 @@ impl<F: RawPrimeField> SumCheckProver<F> for IOPProverState<F> {
                 self.poly
                     .mles
                     .par_iter_mut()
-                    .for_each(|mle| *mle = mle.fix_variables(&[r]));
+                    .for_each(|m| *m = m.fix_variables(&[r]));
             } else {
                 self.poly
                     .mles
                     .par_iter_mut()
-                    .for_each(|mle| mle.fix_variables_in_place(&[r]));
+                    .for_each(|m| m.fix_variables_in_place(&[r]));
             }
-            end_timer!(fix_argument);
+            end_timer!(fix_variable);
         } else if self.round > 0 {
             return Err(PIOPError::InvalidProver(
                 "verifier message is empty".to_string(),
@@ -107,74 +135,66 @@ impl<F: RawPrimeField> SumCheckProver<F> for IOPProverState<F> {
         self.round += 1;
 
         let mut products_sum = vec![F::zero(); self.poly.aux_info.max_degree + 1];
+        let mut mle_iters = self
+            .poly
+            .mles
+            .iter()
+            .map(|m| m.evals().array_chunks::<2>())
+            .collect::<Vec<_>>();
+        let mut buffers = vec![vec![]; self.poly.mles.len()];
+        let mut running_sums = None;
+
+        while next_mle_batch(&mut mle_iters, &mut buffers).is_some() {
+            let sums = self
+                .poly
+                .products
+                .par_iter()
+                .map(|(coefficient, products)| {
+                    let polys_in_product = products
+                        .iter()
+                        .map(|&i| buffers[i].par_iter().copied())
+                        .collect();
+                    let sums_of_evals_of_products =
+                        compute_sums_of_evals_of_products(polys_in_product);
+                    (coefficient, sums_of_evals_of_products, products.len())
+                })
+                .collect::<Vec<_>>();
+            match running_sums.as_mut() {
+                None => running_sums = Some(sums),
+                Some(r) => r
+                    .iter_mut()
+                    .zip(sums)
+                    .for_each(|((_, running, _), (_, cur, _))| {
+                        running.iter_mut().zip(cur).for_each(|(a, v)| *a += v);
+                    }),
+            }
+        }
+        let sums = running_sums.expect("at least one batch should be processed");
 
         // Step 2: generate sum for the partial evaluated polynomial:
         // f(r_1, ... r_m,, x_{m+1}... x_n)
-        let sums = self
-            .poly
-            .products
-            .par_iter()
-            .map(|(coefficient, products)| {
-                let mut polys_in_product = products
-                    .iter()
-                    .map(|&f| self.poly.mles[f].evals().array_chunks::<2>())
-                    .collect::<Vec<_>>();
-                let mut sum = match polys_in_product.len() {
-                    1 => {
-                        let a = polys_in_product.pop().unwrap();
-                        summation_helper(a.map(|x| [x]), 1)
-                    },
-                    2 => {
-                        let a = polys_in_product.pop().unwrap();
-                        let b = polys_in_product.pop().unwrap();
-                        summation_helper(a.zip(b).map(|(x, y)| [x, y]), 2)
-                    },
-                    3 => {
-                        let a = polys_in_product.pop().unwrap();
-                        let b = polys_in_product.pop().unwrap();
-                        let c = polys_in_product.pop().unwrap();
-                        summation_helper(a.zip(b).zip(c).map(|((x, y), z)| [x, y, z]), 3)
-                    },
-                    4 => {
-                        let a = polys_in_product.pop().unwrap();
-                        let b = polys_in_product.pop().unwrap();
-                        let c = polys_in_product.pop().unwrap();
-                        let d = polys_in_product.pop().unwrap();
-                        summation_helper(
-                            a.zip(b).zip(c).zip(d).map(|(((x, y), z), w)| [x, y, z, w]),
-                            4,
-                        )
-                    },
-                    5 => {
-                        let a = polys_in_product.pop().unwrap();
-                        let b = polys_in_product.pop().unwrap();
-                        let c = polys_in_product.pop().unwrap();
-                        let d = polys_in_product.pop().unwrap();
-                        let e = polys_in_product.pop().unwrap();
-                        summation_helper(
-                            a.zip(b)
-                                .zip(c)
-                                .zip(d)
-                                .zip(e)
-                                .map(|((((x, y), z), w), v)| [x, y, z, w, v]),
-                            5,
-                        )
-                    },
-                    n => summation_helper(zip_many(polys_in_product), n),
-                };
 
-                sum.iter_mut().for_each(|sum| *sum *= *coefficient);
-                let extrapolation = (0..self.poly.aux_info.max_degree - products.len())
+        let sums = sums
+            .into_par_iter()
+            .map(|(coefficient, mut sum, degree)| {
+                if !coefficient.is_one() {
+                    sum.iter_mut().for_each(|sum| *sum *= *coefficient);
+                }
+                // We already have evaluations at `product_size + 1` points, we need to
+                // extrapolate to `max_degree + 1` points.
+                // i.e. we need to extrapolate to `max_degree - product_size` points
+                // at points `product_size + 1, product_size + 2, ..., max_degree`
+                // using barycentric interpolation.
+                let extrapolation = (0..self.poly.aux_info.max_degree - degree)
                     .into_par_iter()
                     .map(|i| {
-                        let (points, weights) = &self.extrapolation_aux[products.len() - 1];
-                        let at = F::from((products.len() + 1 + i) as u64);
-                        extrapolate(points, weights, &sum, &at)
+                        let points = &self.extrapolation_aux[degree - 1].as_ref().unwrap();
+                        let (points, inv) = &points[i];
+                        extrapolate(points, *inv, &sum)
                     })
                     .collect::<Vec<_>>();
-                sum.into_iter()
-                    .chain(extrapolation.into_iter())
-                    .collect::<Vec<_>>()
+                sum.par_extend(extrapolation);
+                sum
             })
             .collect::<Vec<_>>();
         for sum in sums {
@@ -193,69 +213,143 @@ impl<F: RawPrimeField> SumCheckProver<F> for IOPProverState<F> {
     }
 }
 
+fn next_mle_batch<F: PrimeField, I: BatchedIterator<Item = [F; 2]> + Sync + Send>(
+    mle_iters: &mut [I],
+    buffers: &mut [Vec<[F; 2]>],
+) -> Option<()>
+where
+    for<'a> I::Batch<'a>: rayon::iter::IndexedParallelIterator<Item = [F; 2]>,
+{
+    mle_iters
+        .par_iter_mut()
+        .zip(buffers)
+        .map(|(iter, buf)| {
+            buf.clear();
+            if let Some(b) = iter.next_batch() {
+                b.collect_into_vec(buf);
+                Some(())
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+type T1<T> = (T,);
+type T2<T> = (T, T);
+type T3<T> = (T, T, T);
+type T4<T> = (T, T, T, T);
+type T5<T> = (T, T, T, T, T);
+type T6<T> = (T, T, T, T, T, T);
+type T7<T> = (T, T, T, T, T, T, T);
+type T8<T> = (T, T, T, T, T, T, T, T);
+type T9<T> = (T, T, T, T, T, T, T, T, T);
+type T10<T> = (T, T, T, T, T, T, T, T, T, T);
+type T11<T> = (T, T, T, T, T, T, T, T, T, T, T);
+type T12<T> = (T, T, T, T, T, T, T, T, T, T, T, T);
+macro_rules! sum {
+    ($n:literal, $polys_in_product:expr) => {{
+        paste::paste! {
+            let x: [<T $n>]<_> =
+                $polys_in_product.drain(..).collect_tuple().unwrap();
+            summation_helper(
+                x.into_par_iter().map(<[_; $n]>::from),
+                $n,
+            )
+        }
+    }};
+}
+
+fn compute_sums_of_evals_of_products<F: PrimeField>(
+    mut polys_in_product: Vec<impl IndexedParallelIterator<Item = [F; 2]> + Send + Sync>,
+) -> Vec<F> {
+    match polys_in_product.len() {
+        1 => sum!(1, polys_in_product),
+        2 => sum!(2, polys_in_product),
+        3 => sum!(3, polys_in_product),
+        4 => sum!(4, polys_in_product),
+        5 => sum!(5, polys_in_product),
+        6 => sum!(6, polys_in_product),
+        7 => sum!(7, polys_in_product),
+        8 => sum!(8, polys_in_product),
+        9 => sum!(9, polys_in_product),
+        10 => sum!(10, polys_in_product),
+        11 => sum!(11, polys_in_product),
+        12 => sum!(12, polys_in_product),
+        _ => unimplemented!("products with more than 12 polynomials are not supported yet"),
+    }
+}
+
 fn summation_helper<F: PrimeField, T: BorrowMut<[[F; 2]]>>(
-    zipped: impl BatchedIterator<Item = T>,
+    zipped: impl IndexedParallelIterator<Item = T>,
     len: usize,
 ) -> Vec<F> {
-    zipped.fold(
-        || vec![F::zero(); len + 1],
-        |mut acc, mut products| {
+    let zero_vec = || vec![F::zero(); len + 1];
+    zipped
+        .map(|mut products| {
+            let mut evals_of_product = zero_vec();
+            // each entry in products is the evaluation of the following affine polynomial
+            // g(X) = \sum_b p(r, X, b),
+            // at the pair of points (r, r + 1) in [0, 2^n].
+            //
+            // Since g(X) is affine, we can write it as g(X) = a * X + b.
+            // Furthermore, we have that g(r + 1) - g(r) = a * (r + 1 - r) + b - b = a.
             let products = products.borrow_mut();
-            products.iter_mut().for_each(|[even, odd]| {
-                *odd -= *even;
+            // Now, products[i] = [g_i(r), a_i]
+            evals_of_product[0] += products
+                .iter_mut()
+                .map(|[even, odd]| {
+                    *odd -= *even;
+                    *even
+                })
+                .product::<F>();
+
+            // We are computing the evaluations of the product polynomial at the point `r`
+            // This loop computes the rest of the evaluations at points r + 1, r + 2, ..., r + len
+            // The idea is as follows: given the evaluation at r + j, we can compute the evaluation at r + (j + 1) as g_i(r + j + 1) = g_i(r + j) + a_i.
+            // Inside the loop, we perform exactly this calculation; step denotes the `a` values.
+            evals_of_product[1..].iter_mut().for_each(|eval| {
+                *eval += products
+                    .iter_mut()
+                    .map(|[g_r_j, a]| {
+                        let g_r_j_plus_1 = *g_r_j + a;
+                        *g_r_j = g_r_j_plus_1;
+                        *g_r_j
+                    })
+                    .product::<F>();
             });
-            acc[0] += products.iter().map(|[e, _]| *e).product::<F>();
-            acc[1..].iter_mut().for_each(|acc| {
-                products.iter_mut().for_each(|[eval, step]| *eval += step);
-                *acc += products.iter().map(|[e, _]| e).product::<F>();
-            });
-            acc // by the bit
-        },
-        |mut sum, partial| {
+            evals_of_product
+        })
+        .reduce(zero_vec, |mut sum, partial| {
             sum.iter_mut()
                 .zip(partial)
                 .for_each(|(sum, partial)| *sum += partial);
-            sum // sum for half of the bits
-        },
-    )
+            sum
+        })
 }
 
 fn barycentric_weights<F: PrimeField>(points: &[F]) -> Vec<F> {
     let mut weights = points
-        .iter()
+        .par_iter()
         .enumerate()
         .map(|(j, point_j)| {
             points
-                .iter()
+                .par_iter()
                 .enumerate()
-                .filter(|&(i, _)| (i != j))
+                .filter(|&(i, _)| i != j)
                 .map(|(_, point_i)| *point_j - point_i)
-                .reduce(|acc, value| acc * value)
-                .unwrap_or_else(F::one)
+                .reduce(|| F::one(), |acc, value| acc * value)
         })
         .collect::<Vec<_>>();
     batch_inversion(&mut weights);
     weights
 }
 
-fn extrapolate<F: PrimeField>(points: &[F], weights: &[F], evals: &[F], at: &F) -> F {
-    let (coeffs, sum_inv) = {
-        let mut coeffs = points
-            .par_iter()
-            .map(|point| *at - point)
-            .collect::<Vec<_>>();
-        batch_inversion(&mut coeffs);
-        coeffs
-            .par_iter_mut()
-            .zip(weights)
-            .for_each(|(coeff, weight)| *coeff *= weight);
-        let sum_inv = coeffs.par_iter().sum::<F>().inverse().unwrap_or_default();
-        (coeffs, sum_inv)
-    };
-    coeffs
+fn extrapolate<F: PrimeField>(points: &[F], denom: F, evals: &[F]) -> F {
+    let num = points
         .par_iter()
         .zip(evals)
-        .map(|(coeff, eval)| *coeff * eval)
-        .sum::<F>()
-        * sum_inv
+        .map(|(coeff, e)| *coeff * e)
+        .sum::<F>();
+    num * denom
 }

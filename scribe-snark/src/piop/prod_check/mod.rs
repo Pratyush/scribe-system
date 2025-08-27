@@ -9,7 +9,7 @@ use crate::{
 };
 use ark_ec::pairing::Pairing;
 use ark_ff::{One, Zero};
-use mle::{virtual_polynomial::VPAuxInfo, MLE};
+use mle::{MLE, VirtualMLE, virtual_polynomial::VPAuxInfo};
 use scribe_streams::serialize::RawPrimeField;
 
 use ark_std::{end_timer, start_timer};
@@ -84,14 +84,14 @@ impl<E, PC> ProductCheck<E, PC>
 where
     E: Pairing,
     E::ScalarField: RawPrimeField,
-    PC: PCScheme<E, Polynomial = MLE<E::ScalarField>>,
+    PC: PCScheme<E, Polynomial = VirtualMLE<E::ScalarField>>,
 {
     pub fn init_transcript() -> IOPTranscript<E::ScalarField> {
         IOPTranscript::<E::ScalarField>::new(b"Initializing ProductCheck transcript")
     }
 
     pub fn prove(
-        pcs_param: &PC::CommitterKey,
+        ck: &PC::CommitterKey,
         fxs: &[MLE<E::ScalarField>],
         gxs: &[MLE<E::ScalarField>],
         transcript: &mut IOPTranscript<E::ScalarField>,
@@ -129,10 +129,13 @@ where
 
         // generate challenge
 
-        let (frac_comm, prod_x_comm) = rayon::join(
-            || PC::commit(pcs_param, &frac_poly).unwrap(),
-            || PC::commit(pcs_param, &prod_x).unwrap(),
-        );
+        let commit_time = start_timer!(|| "prod_check commit");
+        let [frac_comm, prod_x_comm] =
+            PC::batch_commit(ck, &[frac_poly.clone().into(), prod_x.clone().into()])?
+                .as_slice()
+                .try_into()
+                .unwrap();
+        end_timer!(commit_time);
         transcript.append_serializable_element(b"frac(x)", &frac_comm)?;
         transcript.append_serializable_element(b"prod(x)", &prod_x_comm)?;
         let alpha = transcript.get_and_append_challenge(b"alpha")?;
@@ -191,17 +194,17 @@ where
 mod test {
     use super::ProductCheck;
     use crate::{
-        pc::{pst13::PST13, PCScheme},
+        pc::{PCScheme, pst13::PST13},
         piop::errors::PIOPError,
     };
     use ark_bls12_381::{Bls12_381, Fr};
     use ark_ec::pairing::Pairing;
-    use ark_std::test_rng;
     use ark_std::UniformRand;
-    use mle::{virtual_polynomial::VPAuxInfo, MLE};
+    use ark_std::test_rng;
+    use mle::{MLE, VirtualMLE, virtual_polynomial::VPAuxInfo};
     use scribe_streams::file_vec::FileVec;
-    use scribe_streams::iterator::zip_many;
     use scribe_streams::iterator::BatchedIterator;
+    use scribe_streams::iterator::zip_many;
     use scribe_streams::serialize::RawPrimeField;
     use std::marker::PhantomData;
 
@@ -250,7 +253,7 @@ mod test {
     where
         E: Pairing,
         E::ScalarField: RawPrimeField,
-        PC: PCScheme<E, Polynomial = MLE<E::ScalarField>>,
+        PC: PCScheme<E, Polynomial = VirtualMLE<E::ScalarField>>,
     {
         let mut transcript = ProductCheck::<E, PC>::init_transcript();
         transcript.append_message(b"testing", b"initializing transcript for testing")?;

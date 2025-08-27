@@ -10,7 +10,7 @@ use ark_std::{end_timer, rand::RngCore, start_timer};
 
 use crate::inner::Inner;
 use scribe_streams::{
-    file_vec::FileVec, iterator::BatchedIterator, serialize::RawField, LOG_BUFFER_SIZE,
+    LOG_BUFFER_SIZE, file_vec::FileVec, iterator::BatchedIterator, serialize::RawField,
 };
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
@@ -193,7 +193,7 @@ impl<F: RawField> MLE<F> {
     /// Modifies self by folding the evaluations over the hypercube with the function `f`.
     /// After each fold, the number of variables is reduced by 1.
     #[inline(always)]
-    pub fn fold_odd_even_in_place(&mut self, f: impl Fn(&F, &F) -> F + Send + Sync) {
+    pub fn fold_odd_even_in_place(&mut self, f: impl Fn(&F, &F) -> F + Send + Sync + 'static) {
         self.map_in_place(|inner| inner.fold_odd_even_in_place(f));
     }
 
@@ -203,7 +203,7 @@ impl<F: RawField> MLE<F> {
     ///
     /// Note that the number of variables in the result is `self.num_vars() - 1`.
     #[inline(always)]
-    pub fn fold_odd_even(&self, f: impl Fn(&F, &F) -> F + Send + Sync) -> Self {
+    pub fn fold_odd_even(&self, f: impl Fn(&F, &F) -> F + Send + Sync + 'static) -> Self {
         self.map(|inner| inner.fold_odd_even(f)).into()
     }
 
@@ -256,7 +256,7 @@ impl<F: RawField> MulAssign<F> for MLE<F> {
     }
 }
 
-impl<'a, F: RawField> Mul<F> for &'a MLE<F> {
+impl<F: RawField> Mul<F> for &MLE<F> {
     type Output = MLE<F>;
 
     #[inline(always)]
@@ -388,7 +388,7 @@ fn eq_x_r_helper<F: RawField>(r: &[F]) -> Option<FileVec<F>> {
     } else {
         let prev = eq_x_r_helper(&r[1..])?;
         let result = prev
-            .into_iter()
+            .iter()
             .map(|cur| {
                 let tmp = r[0] * cur;
                 [cur - tmp, tmp]
@@ -407,9 +407,9 @@ mod test {
     use crate::util::build_eq_x_r_vec;
     use ark_bls12_381::Fr;
     use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-    use ark_std::test_rng;
     use ark_std::UniformRand;
-    use scribe_streams::{file_vec::FileVec, iterator::BatchedIterator, LOG_BUFFER_SIZE};
+    use ark_std::test_rng;
+    use scribe_streams::{LOG_BUFFER_SIZE, file_vec::FileVec, iterator::BatchedIterator};
 
     #[test]
     fn multi_eq_x_r() {
@@ -418,7 +418,7 @@ mod test {
             let r: Vec<Fr> = (0..num_vars).map(|_| Fr::rand(&mut test_rng())).collect();
             let eq_1 = MLE::eq_x_r(&r);
             let eq_2 = FileVec::from_iter(build_eq_x_r_vec(&r).unwrap().into_iter());
-            eq_1.to_evals().zipped_for_each(eq_2.into_iter(), |a, b| {
+            eq_1.to_evals().zipped_for_each(eq_2.iter(), |a, b| {
                 assert_eq!(*a, b);
             });
         }
@@ -440,5 +440,3 @@ mod test {
         assert_eq!(vec, vec_2);
     }
 }
-
-// Buffer { buffer: [BigInt([11091219084094443142, 4010008289479289305, 3139266430053181684, 1161211522812571285]), BigInt([9822150885673284880, 15400504344459953975, 2282615559425841091, 865030216231708633]), BigInt([15468738206133273609, 5713111823994055412, 8021618164619295792, 7214559998083271659]), BigInt([9763440026807441989, 6238059692177119888, 1572673752554939620, 1173253155448292303]), BigInt([16544975391993553601, 12536994293839119218, 14191849839123728213, 6619274875552936476]), BigInt([16820177190113810734, 12775374885969670184, 16650339122569395119, 1165065650630765330]), BigInt([18335621969920165164, 3456775633753981671, 4615225256654173118, 2621584562126356209]), BigInt([12834141674636434693, 13311881483069712098, 15940300792047415167, 4240570597507446158])] }

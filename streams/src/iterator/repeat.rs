@@ -1,4 +1,4 @@
-use crate::BUFFER_SIZE;
+use crate::{BUFFER_SIZE, iterator::BatchedIteratorAssocTypes};
 
 use super::BatchedIterator;
 
@@ -7,25 +7,26 @@ pub struct Repeat<T> {
     pub count: usize,
 }
 
-impl<T> BatchedIterator for Repeat<T>
+impl<T> BatchedIteratorAssocTypes for Repeat<T>
 where
     T: Send + Sync + Copy,
 {
     type Item = T;
-    type Batch = rayon::iter::RepeatN<T>;
+    type Batch<'a> = rayon::iter::RepeatN<T>;
+}
 
+impl<T> BatchedIterator for Repeat<T>
+where
+    T: Send + Sync + Copy,
+{
     #[inline]
-    fn next_batch(&mut self) -> Option<Self::Batch> {
+    fn next_batch<'a>(&'a mut self) -> Option<Self::Batch<'a>> {
         if self.count == 0 {
             return None;
         }
-        let batch_size = if self.count < BUFFER_SIZE {
-            self.count
-        } else {
-            BUFFER_SIZE
-        };
+        let batch_size = self.count.min(BUFFER_SIZE);
         self.count -= batch_size;
-        Some(rayon::iter::repeatn(self.iter, batch_size))
+        Some(rayon::iter::repeat_n(self.iter, batch_size))
     }
 
     fn len(&self) -> Option<usize> {

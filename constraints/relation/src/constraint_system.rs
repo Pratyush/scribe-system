@@ -6,13 +6,13 @@
 
 //! Definitions and constructions of plonk constraint system
 use crate::{
-    constants::{compute_coset_representatives, GATE_WIDTH, N_MUL_SELECTORS},
-    gates::*,
     CircuitError,
     CircuitError::*,
+    constants::{GATE_WIDTH, N_MUL_SELECTORS, compute_coset_representatives},
+    gates::*,
 };
 use ark_ff::Field;
-use ark_poly::{domain::Radix2EvaluationDomain, EvaluationDomain};
+use ark_poly::{EvaluationDomain, domain::Radix2EvaluationDomain};
 use ark_std::{boxed::Box, format, vec, vec::Vec};
 use scribe_streams::{file_vec::FileVec, serialize::RawPrimeField};
 
@@ -459,7 +459,9 @@ impl<F: RawPrimeField + RawPrimeField> Circuit<F> for PlonkCircuit<F> {
         if let Mode::Prove { index: true } = self.mode {
             Ok(self.witness_buf[idx])
         } else {
-            panic!("No random access for witnesses if mode doesn't equal mode != `Prove` with `construct_index = true`");
+            panic!(
+                "No random access for witnesses if mode doesn't equal mode != `Prove` with `construct_index = true`"
+            );
         }
     }
 
@@ -654,18 +656,13 @@ impl<F: RawPrimeField> PlonkCircuit<F> {
             + q_c;
         let gate_output = q_o * w_vals[4];
         if expected_gate_output != gate_output {
-            return Err(
-                GateCheckFailure(
-                    gate_id,
-                    format!(
-                        "gate: {:?}, wire values: {:?}, pub_input: {}, expected_gate_output: {}, gate_output: {}",
-                        self.gates[gate_id],
-                        w_vals,
-                        pub_input,
-                        expected_gate_output,
-                        gate_output
-                    )
-                ));
+            return Err(GateCheckFailure(
+                gate_id,
+                format!(
+                    "gate: {:?}, wire values: {:?}, pub_input: {}, expected_gate_output: {}, gate_output: {}",
+                    self.gates[gate_id], w_vals, pub_input, expected_gate_output, gate_output
+                ),
+            ));
         }
         Ok(())
     }

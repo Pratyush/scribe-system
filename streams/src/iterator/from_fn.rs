@@ -1,6 +1,6 @@
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
-use crate::BUFFER_SIZE;
+use crate::{BUFFER_SIZE, iterator::BatchedIteratorAssocTypes};
 
 use super::BatchedIterator;
 
@@ -20,16 +20,22 @@ impl<F> FromFn<F> {
     }
 }
 
-impl<F, T> BatchedIterator for FromFn<F>
+impl<F, T> BatchedIteratorAssocTypes for FromFn<F>
 where
     F: Fn(usize) -> Option<T> + Send + Sync + Copy,
     T: Send + Sync + Clone,
 {
     type Item = T;
-    type Batch = rayon::iter::FilterMap<rayon::range::Iter<usize>, F>;
+    type Batch<'a> = rayon::iter::FilterMap<rayon::range::Iter<usize>, F>;
+}
 
+impl<F, T> BatchedIterator for FromFn<F>
+where
+    F: Fn(usize) -> Option<T> + Send + Sync + Copy,
+    T: Send + Sync + Clone,
+{
     #[inline]
-    fn next_batch(&mut self) -> Option<Self::Batch> {
+    fn next_batch<'a>(&'a mut self) -> Option<Self::Batch<'a>> {
         if self.cur_pos >= self.max {
             return None;
         }

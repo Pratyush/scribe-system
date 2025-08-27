@@ -3,13 +3,52 @@ use std::os::unix::fs::OpenOptionsExt;
 use std::{
     ffi::OsStr,
     fs::{File, OpenOptions},
-    io::{self, IoSlice, Read, Write},
+    io::{self, Read, Seek, Write},
     path::PathBuf,
-    sync::{Arc, Mutex},
 };
 use tempfile::Builder;
 
-pub trait ReadN: std::io::Read {
+pub trait ReadN {
+    /// Reads `n` bytes from the file into `dest`.
+    /// This assumes that `dest` is of length `n`.
+    /// Clears `dest` before reading.
+    ///
+    /// If `self` contains `m` bytes, for `m < n`, this function will fill `dest` with `m` bytes and return `Ok(())`.
+    fn read_n(&mut self, dest: &mut AVec, n: usize) -> std::io::Result<()>;
+}
+
+pub trait WriteAligned {
+    /// Write all elements from `src` into `self.
+    fn write_all(&mut self, src: &AVec) -> std::io::Result<()>;
+
+    fn flush(&mut self) -> std::io::Result<()>;
+}
+
+impl ReadN for &mut InnerFile {
+    /// Reads `n` bytes from the file into `dest`.
+    /// This assumes that `dest` is of length `n`.
+    /// Clears `dest` before reading.
+    ///
+    /// If `self` contains `m` bytes, for `m < n`, this function will fill `dest` with `m` bytes and return `Ok(())`.
+    fn read_n(&mut self, dest: &mut AVec, n: usize) -> std::io::Result<()> {
+        debug_assert_eq!(dest.len(), 0);
+        unsafe {
+            dest.set_len(0);
+        }
+        dest.reserve(n);
+        // Safety: `dest` is empty and has capacity `n`.
+        unsafe {
+            dest.set_len(n);
+        }
+        // dest.fill(0);
+        debug_assert_eq!(dest.len() % PAGE_SIZE, 0);
+        let n = (&self.file).read(&mut dest[..])?;
+        dest.truncate(n);
+        Ok(())
+    }
+}
+
+impl ReadN for &InnerFile {
     /// Reads `n` bytes from the file into `dest`.
     /// This assumes that `dest` is of length `n`.
     /// Clears `dest` before reading.
@@ -26,61 +65,36 @@ pub trait ReadN: std::io::Read {
             dest.set_len(n);
         }
         dest.fill(0);
+        debug_assert_eq!(dest.len() % PAGE_SIZE, 0);
+        let n = (&self.file).read(&mut dest[..])?;
+        dest.truncate(n);
+        Ok(())
+    }
+}
+
+impl ReadN for &[u8] {
+    /// Reads `n` bytes from the file into `dest`.
+    /// This assumes that `dest` is of length `n`.
+    /// Clears `dest` before reading.
+    ///
+    /// If `self` contains `m` bytes, for `m < n`, this function will fill `dest` with `m` bytes and return `Ok(())`.
+    fn read_n(&mut self, dest: &mut AVec, n: usize) -> std::io::Result<()> {
+        debug_assert_eq!(dest.len(), 0);
+        unsafe {
+            dest.set_len(0);
+        }
+        dest.reserve(n);
+        // Safety: `dest` is empty and has capacity `n`.
+        unsafe {
+            dest.set_len(n);
+        }
+        // TODO: figure out how to do this without undefined behaviour.
+        // dest.fill(0);
         let n = self.read(&mut dest[..n])?;
         dest.truncate(n);
         Ok(())
     }
 }
-
-impl<'a> ReadN for &'a mut InnerFile {
-    /// Reads `n` bytes from the file into `dest`.
-    /// This assumes that `dest` is of length `n`.
-    /// Clears `dest` before reading.
-    ///
-    /// If `self` contains `m` bytes, for `m < n`, this function will fill `dest` with `m` bytes and return `Ok(())`.
-    fn read_n(&mut self, dest: &mut AVec, n: usize) -> std::io::Result<()> {
-        debug_assert_eq!(dest.len(), 0);
-        unsafe {
-            dest.set_len(0);
-        }
-        dest.reserve(n);
-        // Safety: `dest` is empty and has capacity `n`.
-        unsafe {
-            dest.set_len(n);
-        }
-        dest.fill(0);
-        debug_assert_eq!(dest.len() % PAGE_SIZE, 0);
-        let n = (&self.file).read(&mut dest[..])?;
-        dest.truncate(n);
-        Ok(())
-    }
-}
-
-impl<'a> ReadN for &'a InnerFile {
-    /// Reads `n` bytes from the file into `dest`.
-    /// This assumes that `dest` is of length `n`.
-    /// Clears `dest` before reading.
-    ///
-    /// If `self` contains `m` bytes, for `m < n`, this function will fill `dest` with `m` bytes and return `Ok(())`.
-    fn read_n(&mut self, dest: &mut AVec, n: usize) -> std::io::Result<()> {
-        debug_assert_eq!(dest.len(), 0);
-        unsafe {
-            dest.set_len(0);
-        }
-        dest.reserve(n);
-        // Safety: `dest` is empty and has capacity `n`.
-        unsafe {
-            dest.set_len(n);
-        }
-        dest.fill(0);
-        debug_assert_eq!(dest.len() % PAGE_SIZE, 0);
-        let n = (&self.file).read(&mut dest[..])?;
-        dest.truncate(n);
-        Ok(())
-    }
-}
-
-impl<'a> ReadN for &'a [u8] {}
 
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 pub const PAGE_SIZE: usize = 16384;
@@ -104,7 +118,6 @@ pub(crate) use avec;
 #[derive(Debug)]
 pub struct InnerFile {
     file: File,
-    buffer: Arc<Mutex<AVec>>,
     pub path: PathBuf,
 }
 
@@ -118,13 +131,7 @@ impl InnerFile {
         let file = options.open(&path).expect("failed to open file");
 
         file_set_nocache(&file);
-
-        let buffer: AVec = AVec::new(PAGE_SIZE);
-        Self {
-            file,
-            buffer: Arc::new(Mutex::new(buffer)),
-            path,
-        }
+        Self { file, path }
     }
 
     #[inline(always)]
@@ -137,32 +144,7 @@ impl InnerFile {
         let file = options.open(&path).expect("failed to open file");
 
         file_set_nocache(&file);
-
-        let buffer: AVec = AVec::new(PAGE_SIZE);
-        Self {
-            file,
-            buffer: Arc::new(Mutex::new(buffer)),
-            path,
-        }
-    }
-
-    #[doc(hidden)]
-    #[inline(always)]
-    pub(super) fn empty() -> Self {
-        let mut options = OpenOptions::new();
-        options.read(true).create(true);
-        let (file, path) = Builder::new()
-            .suffix(".scribe")
-            .tempfile()
-            .expect("failed to open file")
-            .keep()
-            .expect("failed to keep file");
-        let buffer: AVec = AVec::new(PAGE_SIZE);
-        Self {
-            file,
-            buffer: Arc::new(Mutex::new(buffer)),
-            path,
-        }
+        Self { file, path }
     }
 
     #[inline(always)]
@@ -174,7 +156,7 @@ impl InnerFile {
         let (file, path) = Builder::new()
             .prefix(&prefix)
             .suffix(".scribe")
-            .keep(true)
+            .disable_cleanup(true)
             .make(|p| options.open(p))
             .expect("failed to open file")
             .keep()
@@ -182,12 +164,7 @@ impl InnerFile {
 
         file_set_nocache(&file);
 
-        let buffer: AVec = AVec::new(PAGE_SIZE);
-        Self {
-            file,
-            buffer: Arc::new(Mutex::new(buffer)),
-            path,
-        }
+        Self { file, path }
     }
 
     #[inline(always)]
@@ -222,7 +199,7 @@ impl InnerFile {
         let fd = self.file.as_raw_fd();
         #[cfg(target_os = "linux")]
         {
-            use libc::{fallocate, FALLOC_FL_KEEP_SIZE};
+            use libc::{FALLOC_FL_KEEP_SIZE, fallocate};
             let result = unsafe { fallocate(fd, FALLOC_FL_KEEP_SIZE, 0, len as i64) };
             if result == 0 {
                 Ok(())
@@ -232,7 +209,7 @@ impl InnerFile {
         }
         #[cfg(any(target_os = "macos", target_os = "ios"))]
         {
-            use libc::{c_void, fcntl, off_t, F_ALLOCATEALL, F_ALLOCATECONTIG, F_PREALLOCATE};
+            use libc::{F_ALLOCATEALL, F_ALLOCATECONTIG, F_PREALLOCATE, c_void, fcntl, off_t};
             // Prepare the allocation request
             let mut alloc_struct = libc::fstore_t {
                 fst_flags: F_ALLOCATECONTIG,
@@ -266,8 +243,6 @@ impl InnerFile {
                 }
             }
 
-            // Set the file size to the desired length
-            // self.file.set_len(len as u64)?;
             Ok(())
         }
     }
@@ -282,6 +257,14 @@ impl InnerFile {
         self.metadata().expect("failed to get metadata").len() as usize
     }
 
+    pub fn position(&self) -> usize {
+        (&self.file).stream_position().unwrap() as usize
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     #[inline(always)]
     pub fn try_clone(&self) -> io::Result<Self> {
         let file = self.file.try_clone()?;
@@ -290,147 +273,60 @@ impl InnerFile {
 
         Ok(Self {
             file,
-            buffer: self.buffer.clone(),
             path: self.path.clone(),
         })
     }
 }
 
-impl Read for InnerFile {
+impl WriteAligned for InnerFile {
     #[inline(always)]
-    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        (&*self).read(buf)
-    }
-
-    fn read_exact(&mut self, buf: &mut [u8]) -> io::Result<()> {
-        (&*self).read_exact(buf)
-    }
-
-    fn read_to_end(&mut self, buf: &mut Vec<u8>) -> io::Result<usize> {
-        (&*self).read_to_end(buf)
-    }
-}
-
-impl Read for &InnerFile {
-    /// Read some bytes from the file.
-    ///
-    /// See [`Read::read`] docs for more info.
-    ///
-    /// # Platform-specific behavior
-    ///
-    /// This function currently corresponds to the `read` function on Unix and
-    /// the `NtReadFile` function on Windows. Note that this [may change in
-    /// the future][changes].
-    ///
-    /// [changes]: io#platform-specific-behavior
-    #[inline(always)]
-    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        let mut self_buffer = self.buffer.lock().unwrap();
-        self_buffer.clear();
-        self_buffer.extend_from_slice(&buf);
-        debug_assert_eq!(self_buffer.len(), buf.len());
-        debug_assert_eq!(self_buffer.len() % PAGE_SIZE, 0, "Buffer length: {}", self_buffer.len());
-        let e = (&self.file).read(&mut self_buffer)?;
-        buf.copy_from_slice(&self_buffer);
-        Ok(e)
-    }
-
-    fn read_exact(&mut self, buf: &mut [u8]) -> io::Result<()> {
-        let mut self_buffer = self.buffer.lock().unwrap();
-        self_buffer.clear();
-        self_buffer.extend_from_slice(&buf);
-        debug_assert_eq!(self_buffer.len(), buf.len());
-        debug_assert_eq!(self_buffer.len() % PAGE_SIZE, 0);
-        (&self.file).read_exact(&mut self_buffer)?;
-        buf.copy_from_slice(&self_buffer);
-        Ok(())
-    }
-}
-
-impl Write for InnerFile {
-    #[inline(always)]
-    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        (&*self).write(buf)
-    }
-
-    #[inline(always)]
-    fn write_vectored(&mut self, bufs: &[IoSlice<'_>]) -> io::Result<usize> {
-        (&*self).write_vectored(bufs)
-    }
-
-    #[inline(always)]
-    fn write_all(&mut self, buf: &[u8]) -> io::Result<()> {
-        (&*self).write_all(buf)
-    }
-
-    #[inline(always)]
-    fn flush(&mut self) -> io::Result<()> {
-        (&*self).flush()
-    }
-}
-
-impl Write for &InnerFile {
-    /// Write some bytes from the file.
-    ///
-    /// See [`Write::write`] docs for more info.
-    ///
-    /// # Platform-specific behavior
-    ///
-    /// This function currently corresponds to the `write` function on Unix and
-    /// the `NtWriteFile` function on Windows. Note that this [may change in
-    /// the future][changes].
-    ///
-    /// [changes]: io#platform-specific-behavior
-    #[inline(always)]
-    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+    fn write_all(&mut self, buf: &AVec) -> io::Result<()> {
         debug_assert_eq!(buf.len() % PAGE_SIZE, 0);
-        if std::mem::align_of_val(buf) % PAGE_SIZE == 0 {
-            // If the buffer is already aligned, we can write directly.
-            (&self.file).write(buf)
-        } else {
-            let mut self_buffer = self.buffer.lock().unwrap();
-            self_buffer.clear();
-            self_buffer.extend_from_slice(&buf);
-            (&self.file).write(&self_buffer)
-        }
+        (&self.file).write_all(buf)
     }
 
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.file.flush()
+    }
+}
+
+impl WriteAligned for &InnerFile {
     #[inline(always)]
-    fn write_all(&mut self, buf: &[u8]) -> io::Result<()> {
+    fn write_all(&mut self, buf: &AVec) -> io::Result<()> {
         debug_assert_eq!(buf.len() % PAGE_SIZE, 0);
-        if std::mem::align_of_val(buf) % PAGE_SIZE == 0 {
-            // If the buffer is already aligned, we can write directly.
-            (&self.file).write_all(buf)
-        } else {
-            let mut self_buffer = self.buffer.lock().unwrap();
-            self_buffer.clear();
-            self_buffer.extend_from_slice(&buf);
-            (&self.file).write_all(&self_buffer)
-        }
+        (&self.file).write_all(buf)
     }
 
-    /// Flushes the file, ensuring that all intermediately buffered contents
-    /// reach their destination.
-    ///
-    /// See [`Write::flush`] docs for more info.
-    ///
-    /// # Platform-specific behavior
-    ///
-    /// Since a `File` structure doesn't contain any buffers, this function is
-    /// currently a no-op on Unix and Windows. Note that this [may change in
-    /// the future][changes].
-    ///
-    /// [changes]: io#platform-specific-behavior
-    #[inline(always)]
-    fn flush(&mut self) -> io::Result<()> {
+    fn flush(&mut self) -> std::io::Result<()> {
         (&self.file).flush()
+    }
+}
+
+impl WriteAligned for &mut [u8] {
+    #[inline(always)]
+    fn write_all(&mut self, buf: &AVec) -> io::Result<()> {
+        Write::write_all(&mut *self, buf)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
     }
 }
 
 impl io::Seek for &InnerFile {
     #[inline(always)]
-    fn seek(&mut self, _: io::SeekFrom) -> io::Result<u64> {
-        unimplemented!()
+    fn seek(&mut self, s: io::SeekFrom) -> io::Result<u64> {
+        match s {
+            io::SeekFrom::Start(pos) => {
+                assert_eq!(
+                    pos % PAGE_SIZE as u64,
+                    0,
+                    "Seek position must be a multiple of PAGE_SIZE"
+                );
+            },
+            _ => unimplemented!(),
+        }
+        (&self.file).seek(s)
     }
 
     #[inline(always)]
@@ -441,8 +337,18 @@ impl io::Seek for &InnerFile {
 
 impl io::Seek for InnerFile {
     #[inline(always)]
-    fn seek(&mut self, _: io::SeekFrom) -> io::Result<u64> {
-        unimplemented!()
+    fn seek(&mut self, s: io::SeekFrom) -> io::Result<u64> {
+        match s {
+            io::SeekFrom::Start(pos) => {
+                assert_eq!(
+                    pos % PAGE_SIZE as u64,
+                    0,
+                    "Seek position must be a multiple of PAGE_SIZE"
+                );
+            },
+            _ => unimplemented!(),
+        }
+        self.file.seek(s)
     }
 
     #[inline(always)]
@@ -454,7 +360,7 @@ impl io::Seek for InnerFile {
 fn file_set_nocache(_file: &File) {
     #[cfg(target_os = "macos")]
     {
-        use libc::{fcntl, F_NOCACHE};
+        use libc::{F_NOCACHE, fcntl};
         use std::os::unix::io::AsRawFd;
         let fd = _file.as_raw_fd();
         let result = unsafe { fcntl(fd, F_NOCACHE, 1) };

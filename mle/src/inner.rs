@@ -5,15 +5,15 @@ use std::{
 
 use ark_ff::batch_inversion;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
-use ark_std::rand::RngCore;
+use ark_std::rand::{RngCore, SeedableRng, rngs::StdRng};
 use rayon::prelude::*;
 
-use crate::EqEvalIter;
+use crate::eq_iter::EqEvalIter;
 use scribe_streams::{
+    BUFFER_SIZE, LOG_BUFFER_SIZE,
     file_vec::FileVec,
-    iterator::{from_fn, repeat, BatchedIterator},
+    iterator::{BatchedIterator, repeat},
     serialize::RawField,
-    LOG_BUFFER_SIZE,
 };
 
 #[derive(Debug, Hash, PartialEq, Eq, CanonicalDeserialize, CanonicalSerialize)]
@@ -78,7 +78,7 @@ impl<F: RawField> Inner<F> {
         let shift = (1 << num_vars) as u64;
         (0..num_chunks as u64)
             .map(|i| {
-                let evals = from_fn(
+                let evals = scribe_streams::iterator::from_fn(
                     |j| (j < shift as usize).then(|| F::from(i * shift + (j as u64))),
                     shift as usize,
                 )
@@ -115,8 +115,43 @@ impl<F: RawField> Inner<F> {
 
     #[inline(always)]
     pub fn rand<R: ark_std::rand::RngCore>(num_vars: usize, rng: &mut R) -> Self {
-        let evals = FileVec::from_iter((0..(1 << num_vars)).map(|_| F::rand(rng)));
-        Self::from_evals(evals, num_vars)
+        const RNG_NUM_BATCHES: usize = 1 << 10;
+        const RNG_BATCH_SIZE: usize = BUFFER_SIZE / RNG_NUM_BATCHES;
+        let size = 1 << num_vars;
+        if size < BUFFER_SIZE {
+            let evals: Vec<F> = (0..size).map(|_| F::rand(rng)).collect();
+            Self::from_evals_vec(evals, num_vars)
+        } else {
+            let num_chunks = (1 << num_vars) / BUFFER_SIZE;
+            let seeds = (0..num_chunks)
+                .map(|_| {
+                    let mut seed = [0u8; 32];
+                    rng.fill_bytes(&mut seed[8..]);
+                    seed
+                })
+                .collect::<Vec<_>>();
+            let evals = FileVec::from_iter(
+                seeds
+                    .into_iter()
+                    .map(|seed_bytes| {
+                        (0..RNG_NUM_BATCHES)
+                            .into_par_iter()
+                            .flat_map(move |i| {
+                                let mut seed_bytes = seed_bytes;
+                                let offset = i as u64 * RNG_BATCH_SIZE as u64;
+                                let offset_bytes = offset.to_le_bytes();
+                                seed_bytes[..8].copy_from_slice(&offset_bytes);
+                                let mut rng = StdRng::from_seed(seed_bytes);
+                                (0..RNG_BATCH_SIZE)
+                                    .map(|_| F::rand(&mut rng))
+                                    .collect::<Vec<_>>()
+                            })
+                            .collect::<Vec<_>>()
+                    })
+                    .flatten(),
+            );
+            Self::from_evals(evals, num_vars)
+        }
     }
 
     #[inline(always)]
@@ -142,7 +177,7 @@ impl<F: RawField> Inner<F> {
 
         for &r in partial_point {
             // Decrements num_vars internally.
-            self.fold_odd_even_in_place(|even, odd| r * (*odd - even) + even);
+            self.fold_odd_even_in_place(move |even, odd| r * (*odd - even) + even);
         }
     }
 
@@ -161,9 +196,9 @@ impl<F: RawField> Inner<F> {
         for &r in partial_point {
             // Decrements num_vars internally.
             if let Some(s) = result.as_mut() {
-                s.fold_odd_even_in_place(|even, odd| *even + r * (*odd - even))
+                s.fold_odd_even_in_place(move |even, odd| *even + r * (*odd - even))
             } else {
-                result = Some(self.fold_odd_even(|even, odd| *even + r * (*odd - even)));
+                result = Some(self.fold_odd_even(move |even, odd| *even + r * (*odd - even)));
             }
         }
         result.unwrap_or_else(|| self.deep_copy())
@@ -173,11 +208,18 @@ impl<F: RawField> Inner<F> {
     /// Returns `None` if the point has the wrong length.
     #[inline]
     pub fn evaluate(&self, point: &[F]) -> Option<F> {
+        self.evaluate_with_bufs(point, &mut vec![])
+    }
+
+    /// Evaluates `self` at the given point.
+    /// Returns `None` if the point has the wrong length.
+    #[inline]
+    pub fn evaluate_with_bufs(&self, point: &[F], self_buf: &mut Vec<F>) -> Option<F> {
         if point.len() == self.num_vars {
             Some(
                 self.evals
-                    .iter()
-                    .zip(EqEvalIter::new(point.to_vec()))
+                    .iter_with_buf(self_buf)
+                    .zip_with_bufs(EqEvalIter::new(point.to_vec()), &mut vec![], &mut vec![])
                     .map(|(a, b)| a * b)
                     .sum(),
             )
@@ -189,7 +231,10 @@ impl<F: RawField> Inner<F> {
     /// Modifies self by folding the evaluations over the hypercube with the function `f`.
     /// After each fold, the number of variables is reduced by 1.
     #[inline]
-    pub fn fold_odd_even_in_place(&mut self, f: impl Fn(&F, &F) -> F + Sync) {
+    pub fn fold_odd_even_in_place(
+        &mut self,
+        f: impl Fn(&F, &F) -> F + Sync + 'static + Sync + Send,
+    ) {
         assert!((1 << self.num_vars) % 2 == 0);
         if self.num_vars <= LOG_BUFFER_SIZE as usize {
             self.evals.convert_to_buffer_in_place();
@@ -199,7 +244,7 @@ impl<F: RawField> Inner<F> {
             FileVec::File { .. } => {
                 self.evals = self
                     .evals
-                    .iter_chunk_mapped::<2, _, _>(|chunk| f(&chunk[0], &chunk[1]))
+                    .iter_chunk_mapped::<2, _, _>(move |chunk| f(&chunk[0], &chunk[1]))
                     .to_file_vec();
             },
             FileVec::Buffer { ref mut buffer } => {
@@ -218,12 +263,23 @@ impl<F: RawField> Inner<F> {
     /// folded according to the function `f`.
     /// After each fold, the number of variables is reduced by 1.
     #[inline]
-    pub fn fold_odd_even(&self, f: impl Fn(&F, &F) -> F + Sync) -> Self {
+    pub fn fold_odd_even(&self, f: impl Fn(&F, &F) -> F + Sync + 'static + Send + Sync) -> Self {
         assert!((1 << self.num_vars) % 2 == 0);
-        let evals = self
-            .evals
-            .iter_chunk_mapped::<2, _, _>(|chunk| f(&chunk[0], &chunk[1]))
-            .to_file_vec();
+
+        let evals = match self.evals {
+            FileVec::File { .. } => self
+                .evals
+                .iter_chunk_mapped::<2, _, _>(move |chunk| f(&chunk[0], &chunk[1]))
+                .to_file_vec(),
+            FileVec::Buffer { ref buffer } => {
+                let buffer = buffer
+                    .par_chunks(2)
+                    .map(|chunk| f(&chunk[0], &chunk[1]))
+                    .with_min_len(1 << 8)
+                    .collect();
+                FileVec::new_buffer(buffer)
+            },
+        };
         Self {
             evals,
             num_vars: self.num_vars - 1,
@@ -260,14 +316,16 @@ impl<F: RawField> Inner<F> {
         let polys = (0..degree)
             .map(|_| Self::rand(num_vars, rng))
             .collect::<Vec<_>>();
+        let mut buf = vec![];
         let product_poly = polys
             .iter()
             .fold(Self::constant(F::one(), num_vars), |mut acc, p| {
-                acc.evals.zipped_for_each(p.evals.iter(), |a, b| *a *= b);
+                acc.evals
+                    .zipped_for_each(p.evals.iter_with_buf(&mut buf), |a, b| *a *= b);
                 acc
             });
-
-        (polys, product_poly.evals.iter().sum())
+        let result = (polys, product_poly.evals.iter_with_buf(&mut buf).sum());
+        result
     }
 
     pub fn rand_product_summing_to_zero<R: ark_std::rand::RngCore>(
@@ -335,6 +393,9 @@ impl<F: RawField> MulAssign<(F, Self)> for Inner<F> {
     fn mul_assign(&mut self, (f, other): (F, Self)) {
         if f.is_one() {
             *self *= other;
+        } else if f == -F::one() {
+            self.evals
+                .zipped_for_each(other.evals.iter(), |a, b| *a *= -b);
         } else {
             self.evals
                 .zipped_for_each(other.evals.iter(), |a, b| *a *= f * b);
@@ -347,6 +408,9 @@ impl<'a, F: RawField> MulAssign<(F, &'a Self)> for Inner<F> {
     fn mul_assign(&mut self, (f, other): (F, &'a Self)) {
         if f.is_one() {
             *self *= other;
+        } else if f == -F::one() {
+            self.evals
+                .zipped_for_each(other.evals.iter(), |a, b| *a *= -b);
         } else {
             self.evals
                 .zipped_for_each(other.evals.iter(), |a, b| *a *= f * b);
@@ -363,7 +427,7 @@ impl<F: RawField> MulAssign<F> for Inner<F> {
     }
 }
 
-impl<'a, F: RawField> Mul<F> for &'a Inner<F> {
+impl<F: RawField> Mul<F> for &Inner<F> {
     type Output = Inner<F>;
     #[inline(always)]
     fn mul(self, f: F) -> Self::Output {
@@ -434,14 +498,14 @@ impl<F: RawField> Display for Inner<F> {
 mod tests {
     use ark_bls12_381::Fr;
     use ark_ff::Field;
-    use ark_poly::{DenseMultilinearExtension, MultilinearExtension};
+    use ark_poly::{DenseMultilinearExtension, MultilinearExtension, Polynomial};
     use ark_std::UniformRand;
     use rayon::prelude::*;
 
     use crate::MLE;
     use scribe_streams::{
-        iterator::{BatchAdapter, BatchedIterator},
         LOG_BUFFER_SIZE,
+        iterator::{BatchAdapter, BatchedIterator},
     };
 
     #[test]
@@ -454,7 +518,7 @@ mod tests {
                 .map(|_| Fr::rand(&mut rng))
                 .collect::<Vec<_>>();
             let mle = MLE::from_evals_vec(lde.to_evaluations(), num_vars);
-            let eval = lde.evaluate(&point).unwrap();
+            let eval = lde.evaluate(&point);
             let eval_2 = mle.evaluate(&point).unwrap();
             let lde_evals = BatchAdapter::from(lde.to_evaluations().into_iter());
             mle.evals()
@@ -498,5 +562,24 @@ mod tests {
         });
 
         res
+    }
+
+    #[test]
+    fn add_assign() {
+        let mut rng = ark_std::test_rng();
+        for num_vars in LOG_BUFFER_SIZE..=(LOG_BUFFER_SIZE + 5) {
+            let num_vars = num_vars as usize;
+            let lde1 = DenseMultilinearExtension::<Fr>::rand(num_vars, &mut rng);
+            let lde2 = DenseMultilinearExtension::<Fr>::rand(num_vars, &mut rng);
+            let mut mle1 = MLE::from_evals_vec(lde1.to_evaluations(), num_vars);
+            let mle2 = MLE::from_evals_vec(lde2.to_evaluations(), num_vars);
+            mle1 += &mle2;
+            let lde_sum = &lde1 + &lde2;
+            let mle_sum = MLE::from_evals_vec(lde_sum.to_evaluations(), num_vars);
+            mle1.evals()
+                .iter()
+                .zip(mle_sum.evals().iter())
+                .for_each(|(a, b)| assert_eq!(a, b));
+        }
     }
 }

@@ -1,8 +1,7 @@
 use ark_std::string::String;
-use displaydoc::Display;
 
 /// A `enum` specifying the possible failure modes of the arithmetics.
-#[derive(Display, Debug)]
+#[derive(Debug)]
 pub enum ArithError {
     /// Invalid parameters: {0}
     InvalidParameters(String),

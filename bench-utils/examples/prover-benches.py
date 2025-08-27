@@ -157,7 +157,10 @@ def run_benchmark(prover, thread_count, memory_limit, min_vars, max_vars, bw_lim
 
     
     for (num_variables, run_time) in sorted(run_times.items()):
-        dir_size = dir_sizes[num_variables]
+        if prover != "scribe":
+            dir_size = 'None'
+        else:
+            dir_size = dir_sizes[num_variables]
         data.write(f"{prover},{num_variables},{thread_count},{memory_limit},{bw_limit if bw_limit else 'None'},{dir_size},{run_time}\n")
         data.flush()
 

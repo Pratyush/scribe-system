@@ -1,39 +1,72 @@
-use crate::{EqEvalIter, MLE};
-use rayon::iter::MinLen;
-use scribe_streams::{iterator::BatchedIterator, serialize::RawPrimeField};
+use crate::{EqEvalIter, LexicoIter, MLE, SmallMLE, small_mle::u48};
+use rayon::{
+    iter::{Copied, MinLen},
+    prelude::*,
+};
+use scribe_streams::{
+    iterator::{self, BatchedIterator, BatchedIteratorAssocTypes, Repeat},
+    serialize::RawPrimeField,
+};
 
 use crate::util::eq_eval;
 
 #[derive(Clone, PartialEq, Eq)]
 pub enum VirtualMLE<F: RawPrimeField> {
     MLE(MLE<F>),
+    Small(SmallMLE<F>),
     EqAtPoint {
         num_vars: usize,
         point: Vec<F>,
         fixed_vars: Vec<F>,
     },
+    Lexicographic {
+        num_vars: usize,
+        offset: F,
+        step_size: F,
+    },
+    Constant {
+        value: F,
+        num_vars: usize,
+    },
 }
 
 impl<F: RawPrimeField> VirtualMLE<F> {
     pub fn eq_x_r(point: &[F]) -> Self {
-        VirtualMLE::EqAtPoint {
+        Self::EqAtPoint {
             num_vars: point.len(),
             point: point.to_vec(),
             fixed_vars: vec![],
         }
     }
 
+    pub fn lexicographic(num_vars: usize, offset: F) -> Self {
+        let step_size = F::one();
+        Self::Lexicographic {
+            num_vars,
+            offset,
+            step_size,
+        }
+    }
+
+    pub fn constant(value: F, num_vars: usize) -> Self {
+        Self::Constant { value, num_vars }
+    }
+
     pub fn num_vars(&self) -> usize {
         match self {
-            VirtualMLE::MLE(mle) => mle.num_vars(),
-            VirtualMLE::EqAtPoint { num_vars, .. } => *num_vars,
+            Self::MLE(mle) => mle.num_vars(),
+            Self::Small(inner) => inner.num_vars(),
+            Self::EqAtPoint { num_vars, .. } => *num_vars,
+            Self::Lexicographic { num_vars, .. } => *num_vars,
+            Self::Constant { num_vars, .. } => *num_vars,
         }
     }
 
     pub fn evaluate(&self, point: &[F]) -> Option<F> {
         match self {
-            VirtualMLE::MLE(mle) => mle.evaluate(point),
-            VirtualMLE::EqAtPoint {
+            Self::MLE(mle) => mle.evaluate(point),
+            Self::Small(inner) => inner.evaluate(point),
+            Self::EqAtPoint {
                 num_vars,
                 fixed_vars,
                 point: eq_point,
@@ -42,25 +75,62 @@ impl<F: RawPrimeField> VirtualMLE<F> {
                 new_point.extend(point);
                 (point.len() == *num_vars).then(|| eq_eval(eq_point, &new_point).unwrap())
             },
+            Self::Lexicographic {
+                num_vars,
+                offset,
+                step_size,
+            } => {
+                if point.len() != *num_vars {
+                    return None;
+                }
+                let mut res = *offset;
+                let mut coeff = F::one();
+                for p in point {
+                    res += *p * coeff;
+                    coeff *= *step_size;
+                }
+                Some(res)
+            },
+            Self::Constant { value, num_vars } => {
+                if point.len() != *num_vars {
+                    None
+                } else {
+                    Some(*value)
+                }
+            },
         }
     }
 
     pub fn evals(&self) -> VirtualMLEIter<'_, F> {
         match self {
-            VirtualMLE::MLE(mle) => VirtualMLEIter::MLE(mle.evals().iter()),
-            VirtualMLE::EqAtPoint {
+            Self::MLE(mle) => VirtualMLEIter::MLE(mle.evals().iter()),
+            Self::Small(inner) => VirtualMLEIter::Small {
+                iter: inner.evals.iter(),
+                buffer: vec![],
+            },
+            Self::EqAtPoint {
                 point, fixed_vars, ..
             } => VirtualMLEIter::EqAtPoint(EqEvalIter::new_with_fixed_vars(
                 point.clone(),
                 fixed_vars.to_vec(),
             )),
+            Self::Lexicographic {
+                num_vars,
+                offset,
+                step_size,
+            } => VirtualMLEIter::Lexicographic(LexicoIter::new(*num_vars, *offset, *step_size)),
+            Self::Constant { value, num_vars } => VirtualMLEIter::Constant {
+                iter: iterator::repeat(*value, 1 << num_vars),
+                buffer: vec![],
+            },
         }
     }
 
     pub fn fix_variables(&self, partial_point: &[F]) -> Self {
         match self {
-            VirtualMLE::MLE(mle) => VirtualMLE::MLE(mle.fix_variables(partial_point)),
-            VirtualMLE::EqAtPoint {
+            Self::MLE(mle) => Self::MLE(mle.fix_variables(partial_point)),
+            Self::Small(inner) => Self::MLE(inner.fix_variables(partial_point)).into(),
+            Self::EqAtPoint {
                 num_vars,
                 point,
                 fixed_vars,
@@ -68,10 +138,35 @@ impl<F: RawPrimeField> VirtualMLE<F> {
                 let num_vars = num_vars.checked_sub(partial_point.len()).unwrap();
                 let mut fixed_vars = fixed_vars.to_vec();
                 fixed_vars.extend(partial_point);
-                VirtualMLE::EqAtPoint {
+                Self::EqAtPoint {
                     num_vars,
                     point: point.to_vec(),
                     fixed_vars,
+                }
+            },
+            Self::Lexicographic {
+                num_vars,
+                offset,
+                step_size,
+            } => {
+                let num_vars = num_vars.checked_sub(partial_point.len()).unwrap();
+                let mut step_size = *step_size;
+                let offset = partial_point.iter().fold(*offset, |acc, x| {
+                    let result = acc + *x * step_size;
+                    step_size.double_in_place();
+                    result
+                });
+                Self::Lexicographic {
+                    num_vars,
+                    offset,
+                    step_size,
+                }
+            },
+            Self::Constant { value, num_vars } => {
+                let num_vars = num_vars.checked_sub(partial_point.len()).unwrap();
+                Self::Constant {
+                    value: *value,
+                    num_vars,
                 }
             },
         }
@@ -79,8 +174,11 @@ impl<F: RawPrimeField> VirtualMLE<F> {
 
     pub fn fix_variables_in_place(&mut self, partial_point: &[F]) {
         match self {
-            VirtualMLE::MLE(mle) => mle.fix_variables_in_place(partial_point),
-            VirtualMLE::EqAtPoint {
+            Self::MLE(mle) => mle.fix_variables_in_place(partial_point),
+            Self::Small(inner) => {
+                *self = Self::MLE(inner.fix_variables(partial_point));
+            },
+            Self::EqAtPoint {
                 num_vars,
                 fixed_vars,
                 ..
@@ -88,38 +186,194 @@ impl<F: RawPrimeField> VirtualMLE<F> {
                 *num_vars = num_vars.checked_sub(partial_point.len()).unwrap();
                 fixed_vars.extend(partial_point);
             },
+            Self::Lexicographic {
+                num_vars,
+                step_size,
+                offset,
+            } => {
+                *num_vars = num_vars.checked_sub(partial_point.len()).unwrap();
+                *offset = partial_point.iter().fold(*offset, |acc, x| {
+                    let result = acc + *x * *step_size;
+                    step_size.double_in_place();
+                    result
+                });
+            },
+            Self::Constant { num_vars, .. } => {
+                *num_vars = num_vars.checked_sub(partial_point.len()).unwrap();
+            },
         }
+    }
+
+    /// Creates multiple identity permutation streams equal to the number of witness streams
+    /// Identity permutations are continuous from one to another
+    #[inline(always)]
+    pub fn identity_permutations(num_vars: usize, num_chunks: usize) -> Vec<Self> {
+        let shift = F::from(1u64 << num_vars);
+
+        (0..num_chunks as u64)
+            .map(|chunk_idx| {
+                let offset = F::from(chunk_idx) * shift;
+                Self::Lexicographic {
+                    num_vars,
+                    offset,
+                    step_size: F::one(),
+                }
+            })
+            .collect()
     }
 }
 
 impl<F: RawPrimeField> From<MLE<F>> for VirtualMLE<F> {
     fn from(mle: MLE<F>) -> Self {
-        VirtualMLE::MLE(mle)
+        Self::MLE(mle)
+    }
+}
+
+impl<F: RawPrimeField> From<SmallMLE<F>> for VirtualMLE<F> {
+    fn from(mle: SmallMLE<F>) -> Self {
+        Self::Small(mle)
     }
 }
 
 impl<F: RawPrimeField> PartialEq<MLE<F>> for VirtualMLE<F> {
     fn eq(&self, other: &MLE<F>) -> bool {
         match self {
-            VirtualMLE::MLE(mle) => mle == other,
-            VirtualMLE::EqAtPoint { .. } => false,
+            Self::MLE(mle) => mle == other,
+            _ => false,
         }
     }
 }
 
 pub enum VirtualMLEIter<'a, F: RawPrimeField> {
     MLE(scribe_streams::file_vec::Iter<'a, F>),
+    Small {
+        iter: scribe_streams::file_vec::Iter<'a, crate::small_mle::u48>,
+        buffer: Vec<F>,
+    },
     EqAtPoint(EqEvalIter<F>),
+    Lexicographic(LexicoIter<F>),
+    Constant {
+        iter: Repeat<F>,
+        buffer: Vec<F>,
+    },
+}
+
+impl<'a, F: RawPrimeField> BatchedIteratorAssocTypes for VirtualMLEIter<'a, F> {
+    type Item = F;
+    type Batch<'b> = MinLen<Copied<rayon::slice::Iter<'b, F>>>;
 }
 
 impl<'a, F: RawPrimeField> BatchedIterator for VirtualMLEIter<'a, F> {
-    type Item = F;
-    type Batch = MinLen<rayon::vec::IntoIter<F>>;
-
-    fn next_batch(&mut self) -> Option<Self::Batch> {
+    fn next_batch<'b>(&'b mut self) -> Option<Self::Batch<'b>> {
         match self {
-            VirtualMLEIter::MLE(mle) => mle.next_batch(),
-            VirtualMLEIter::EqAtPoint(e) => e.next_batch(),
+            Self::MLE(mle) => mle.next_batch(),
+            Self::Small { iter, buffer } => {
+                buffer.clear();
+                iter.next_batch().map(|b| {
+                    b.map(u48::into_field).collect_into_vec(buffer);
+                    buffer.par_iter().copied().with_min_len(1 << 12)
+                })
+            },
+            Self::EqAtPoint(e) => e.next_batch(),
+            Self::Lexicographic(l) => l.next_batch(),
+            Self::Constant { iter, buffer } => iter.next_batch().map(|batch| {
+                batch.collect_into_vec(buffer);
+                buffer.par_iter().copied().with_min_len(1 << 12)
+            }),
+        }
+    }
+
+    fn len(&self) -> Option<usize> {
+        match self {
+            Self::MLE(mle) => mle.len(),
+            Self::Small { iter, .. } => iter.len(),
+            Self::EqAtPoint(e) => e.len(),
+            Self::Lexicographic(l) => l.len(),
+            Self::Constant { iter, .. } => iter.len(),
+        }
+    }
+}
+
+pub enum VirtualMLEIterWithBuf<'a, F: RawPrimeField> {
+    MLE(scribe_streams::file_vec::IterWithBuf<'a, F>),
+    EqAtPoint(EqEvalIter<F>),
+    Lexicographic(LexicoIter<F>),
+    Constant {
+        iter: Repeat<F>,
+        buffer: &'a mut Vec<F>,
+    },
+}
+
+impl<'a, F: RawPrimeField> BatchedIteratorAssocTypes for VirtualMLEIterWithBuf<'a, F> {
+    type Item = F;
+    type Batch<'b> = MinLen<Copied<rayon::slice::Iter<'b, F>>>;
+}
+
+impl<'a, F: RawPrimeField> BatchedIterator for VirtualMLEIterWithBuf<'a, F> {
+    fn next_batch<'b>(&'b mut self) -> Option<Self::Batch<'b>> {
+        match self {
+            Self::MLE(mle) => mle.next_batch(),
+            Self::EqAtPoint(e) => e.next_batch(),
+            Self::Lexicographic(l) => l.next_batch(),
+            Self::Constant { iter, buffer } => {
+                buffer.clear();
+                iter.next_batch().map(|b| {
+                    b.collect_into_vec(buffer);
+                    buffer.par_iter().copied().with_min_len(1 << 12)
+                })
+            },
+        }
+    }
+
+    fn len(&self) -> Option<usize> {
+        match self {
+            Self::MLE(mle) => mle.len(),
+            Self::EqAtPoint(e) => e.len(),
+            Self::Lexicographic(l) => l.len(),
+            Self::Constant { iter, .. } => iter.len(),
+        }
+    }
+}
+
+impl<F: RawPrimeField> std::fmt::Debug for VirtualMLE<F> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::MLE(_mle) => write!(
+                f,
+                "VirtualMLE::MLE(is_file = {}; len = {})",
+                _mle.evals().is_file(),
+                _mle.evals().len()
+            ),
+            Self::Small(_inner) => write!(
+                f,
+                "VirtualMLE::Small(is_file = {}; len = {})",
+                _inner.evals.is_file(),
+                _inner.evals.len()
+            ),
+            Self::EqAtPoint {
+                num_vars,
+                fixed_vars,
+                ..
+            } => write!(
+                f,
+                "VirtualMLE::EqAtPoint(num_vars: {}, fixed_vars: {:?})",
+                num_vars,
+                fixed_vars.len()
+            ),
+            Self::Lexicographic {
+                num_vars,
+                offset,
+                step_size,
+            } => write!(
+                f,
+                "VirtualMLE::Lexicographic(num_vars: {}, offset: {}, step_size: {:?})",
+                num_vars, offset, step_size,
+            ),
+            Self::Constant { value, num_vars } => write!(
+                f,
+                "VirtualMLE::Constant(num_vars: {}, value: {})",
+                num_vars, value
+            ),
         }
     }
 }

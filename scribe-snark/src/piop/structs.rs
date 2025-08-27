@@ -28,10 +28,10 @@ pub struct IOPProverState<F: RawPrimeField> {
     pub(crate) round: usize,
     /// pointer to the virtual polynomial
     pub(crate) poly: VirtualPolynomial<F>,
-    // pub(crate) poly: DenseMLPolyStream<F>,
+
     /// points with precomputed barycentric weights for extrapolating smaller
     /// degree uni-polys to `max_degree + 1` evaluations.
-    pub(crate) extrapolation_aux: Vec<(Vec<F>, Vec<F>)>,
+    pub(crate) extrapolation_aux: Vec<Option<Vec<(Vec<F>, F)>>>,
 }
 
 /// Prover State of a PolyIOP

@@ -4,31 +4,35 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-ark-ff = { version = "^0.4", features = ["parallel"] }
-ark-ec = { version = "^0.4", features = ["parallel"] }
-ark-bls12-381 = { version = "^0.4" }
-ark-serialize = { version = "^0.4" }
-ark-std = { version = "^0.4", features = ["parallel", "std"] }
+ark-ff = { version = "^0.5", features = ["parallel"] }
+ark-ec = { version = "0.5", features = ["parallel"] }
+ark-bls12-381 = { version = "0.5" }
+ark-serialize = { version = "0.5" }
+ark-std = { version = "0.5", features = ["parallel", "std"] }
 scribe = { path = "../scribe-snark" }
 mle = { path = "../mle" }
 rayon = { version = "^1.5" }
-jemallocator = { version = "0.5.0" }
+mimalloc = "0.1.47"
 jf-relation = { path = "../constraints/relation" }
 
 # HyperPlonk
 hp = { git = "https://github.com/EspressoSystems/hyperplonk/", package = "hyperplonk" }
 hp-subroutines = { git = "https://github.com/EspressoSystems/hyperplonk/", package = "subroutines" }
+ark-bls12-381-04 = { package = "ark-bls12-381", version = "0.4" }
+ark-serialize-04 = { package = "ark-serialize", version = "0.4" }
 
 # Gemini
 ark-gemini = { git = "https://github.com/pratyush/gemini/", optional = true, features = [ "parallel" ] }
+ark-ec-04 = { package = "ark-ec", version = "0.4" }
 
 # Plonky2
 plonky2 = { version = "1.0.2", optional = true }
+jemallocator = { version = "0.5.0", optional = true }
 
 # Halo2
-halo2_proofs = { package = "halo2-axiom", version = "0.4.4", optional = true }
+halo2_proofs = { package = "halo2-axiom", version = "0.5", optional = true, default-features = false, features = [ "batch", "multicore" ] }
 group = { version = "0.13", optional = true }
-halo2_curves = { package = "halo2curves-axiom", version = "0.5.0", default-features = false, features = ["bits", "derive_serde"], optional = true }
+halo2_curves = { package = "halo2curves-axiom", version = "0.7.0", default-features = false, features = ["bits", "derive_serde"], optional = true }
 
 
 # For iOS
@@ -40,7 +44,7 @@ crossbeam = "0.8.4"
 [features]
 print-trace = ["scribe/print-trace"]
 gemini = ["ark-gemini"]
-plonky2 = ["dep:plonky2"]
+plonky2 = ["dep:plonky2", "jemallocator"]
 halo2 = [ "halo2_proofs", "group", "halo2_curves" ]
 asm = [ "ark-ff/asm" ]
 

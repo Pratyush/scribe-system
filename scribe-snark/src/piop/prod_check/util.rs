@@ -1,9 +1,9 @@
 use crate::piop::{errors::PIOPError, structs::IOPProof, zero_check::ZeroCheck};
 use crate::transcript::IOPTranscript;
-use mle::{virtual_polynomial::VirtualPolynomial, MLE};
+use mle::{MLE, virtual_polynomial::VirtualPolynomial};
 use scribe_streams::{
     file_vec::FileVec,
-    iterator::{chain_many, zip_many, BatchedIterator},
+    iterator::{BatchedIterator, chain_many, zip_many},
     serialize::RawPrimeField,
 };
 
@@ -20,13 +20,15 @@ pub(super) fn compute_frac_poly<F: RawPrimeField>(
 ) -> Result<MLE<F>, PIOPError> {
     let start = start_timer!(|| "compute frac(x)");
 
-    let numerator_product =
-        zip_many(fxs.iter().map(|p| p.evals().iter())).map(|v| v.into_iter().product::<F>());
     let denominator_evals = zip_many(gxs.iter().map(|p| p.evals().iter()))
         .map(|v| v.into_iter().product())
         .to_file_vec();
     let mut denominator = MLE::from_evals(denominator_evals, gxs[0].num_vars());
     denominator.invert_in_place();
+
+    let numerator_product =
+        zip_many(fxs.iter().map(|p| p.evals().iter())).map(|v| v.into_iter().product::<F>());
+
     denominator
         .evals_mut()
         .zipped_for_each(numerator_product, |den_inv, num| {
@@ -89,10 +91,12 @@ pub(super) fn prove_zero_check<F: RawPrimeField>(
     // which is checking that frac is computed correctly from fxs and gxs
     let start = start_timer!(|| "zerocheck in product check");
 
+    let mut bufs = [vec![], vec![]];
     let (p1, p2): (FileVec<F>, FileVec<F>) = chain_many(
         [frac_poly, prod_x]
             .iter()
-            .map(|mle| (*mle).evals().iter().array_chunks()),
+            .zip(&mut bufs)
+            .map(|(mle, b)| (*mle).evals().iter_with_buf(b).array_chunks()),
     )
     .map(|[even, odd]| (even, odd))
     .unzip();
@@ -137,9 +141,9 @@ mod test {
     use ark_bls12_381::Fr;
     use mle::MLE;
 
+    use ark_std::rand::SeedableRng;
     use ark_std::rand::distributions::{Distribution, Standard};
     use ark_std::rand::rngs::StdRng;
-    use ark_std::rand::SeedableRng;
 
     use std::vec::Vec;
 

@@ -13,21 +13,23 @@ use derivative::Derivative;
 use rayon::prelude::*;
 
 pub use self::iter::Iter;
-pub use self::{
-    array_chunks::ArrayChunks, into_iter::IntoIter, iter_chunk_mapped::IterChunkMapped,
-};
+pub use self::iter_with_buf::IterWithBuf;
+pub use self::{array_chunks::ArrayChunks, iter_chunk_mapped::IterChunkMapped};
 
 use super::{
-    iterator::{BatchAdapter, BatchedIterator, IntoBatchedIterator},
     BUFFER_SIZE,
+    iterator::{BatchAdapter, BatchedIterator, IntoBatchedIterator},
 };
 
-mod array_chunks;
 pub mod backend;
 pub use backend::*;
-mod into_iter;
+
+mod array_chunks;
 mod iter;
 mod iter_chunk_mapped;
+mod iter_with_buf;
+
+pub(self) mod double_buffered;
 
 #[macro_use]
 mod macros;
@@ -74,11 +76,17 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
         }
     }
 
-    // #[inline(always)]
-    // pub fn with_prefix(prefix: impl AsRef<OsStr>) -> Self {
-    //     let file = InnerFile::new_temp(prefix);
-    //     Self::File(file)
-    // }
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    pub fn is_buffer(&self) -> bool {
+        matches!(self, Self::Buffer { .. })
+    }
+
+    pub fn is_file(&self) -> bool {
+        matches!(self, Self::File { .. })
+    }
 
     #[inline(always)]
     pub fn with_prefix_and_space(prefix: impl AsRef<OsStr>, n: usize) -> Self {
@@ -105,10 +113,10 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
     where
         T: Send + Sync,
     {
-        if let Self::Buffer { .. } = self {
+        if let Self::File { .. } = self {
             let mut buffer = Vec::with_capacity(BUFFER_SIZE);
             process_file!(self, |b: &mut Vec<T>| {
-                buffer.par_extend(b.par_drain(..));
+                b.par_drain(..).collect_into_vec(&mut buffer);
                 Some(())
             });
             *self = FileVec::Buffer { buffer };
@@ -147,6 +155,22 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
         }
     }
 
+    #[inline(always)]
+    pub fn iter_with_buf<'a>(&'a self, buf: &'a mut Vec<T>) -> IterWithBuf<'a, T> {
+        match self {
+            Self::File(file) => {
+                buf.clear();
+                let file = file.reopen_read_by_ref().expect("failed to reopen file");
+                IterWithBuf::new_file_with_buf(file, buf)
+            },
+            Self::Buffer { buffer } => {
+                buf.clear();
+                buf.extend_from_slice(buffer);
+                IterWithBuf::new_buffer(buf)
+            },
+        }
+    }
+
     pub fn iter_chunk_mapped_in_place<const N: usize, F>(&mut self, f: F)
     where
         T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy,
@@ -156,7 +180,7 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
         process_file!(self, |buffer: &mut Vec<T>| {
             buffer
                 .par_chunks(N)
-                .map(|chunk| f(chunk))
+                .map(&f)
                 .collect_into_vec(&mut result_buffer);
             mem::swap(buffer, &mut result_buffer);
             Some(())
@@ -182,7 +206,7 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
         }
     }
 
-    pub fn array_chunks<const N: usize>(&self) -> ArrayChunks<T, N>
+    pub fn array_chunks<const N: usize>(&self) -> ArrayChunks<'_, T, N>
     where
         T: 'static + SerializeRaw + DeserializeRaw + Send + Sync + Copy,
     {
@@ -196,33 +220,6 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
             },
             Self::Buffer { buffer } => ArrayChunks::new_buffer(buffer.clone()),
         }
-    }
-
-    #[inline(always)]
-    pub fn into_iter(mut self) -> IntoIter<T>
-    where
-        T: Clone,
-    {
-        match &mut self {
-            Self::File(file) => {
-                let file = std::mem::replace(file, InnerFile::empty())
-                    .reopen_read()
-                    .unwrap();
-                IntoIter::new_file(file)
-            },
-            Self::Buffer { buffer } => {
-                let buffer = core::mem::take(buffer);
-                IntoIter::new_buffer(buffer)
-            },
-        }
-    }
-
-    #[inline(always)]
-    pub fn from_iter(iter: impl IntoIterator<Item = T>) -> Self
-    where
-        T: Send + Sync + Debug,
-    {
-        Self::from_batched_iter(BatchAdapter::from(iter.into_iter()))
     }
 
     #[inline(always)]
@@ -264,7 +261,9 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
                 batch_is_larger_than_buffer = true;
                 byte_buffer = Some(avec![0u8; buffer.len() * size]);
                 let mut f = InnerFile::new_temp(&prefix);
-                file_length.map(|l| f.allocate_space(l).unwrap());
+                if let Some(l) = file_length {
+                    f.allocate_space(l).unwrap();
+                }
                 file = Some(f);
             }
         } else {
@@ -286,25 +285,18 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
                 }
                 if file.is_none() {
                     let mut f = InnerFile::new_temp(&prefix);
-                    file_length.map(|l| f.allocate_space(l).unwrap());
+                    if let Some(l) = file_length {
+                        f.allocate_space(l).unwrap();
+                    }
                     file = Some(f);
                 }
                 let byte_buffer = byte_buffer.as_mut().unwrap();
                 let file = file.as_mut().unwrap();
 
                 more_than_one_batch = true;
-                byte_buffer
-                    .par_chunks_mut(size)
-                    .zip(&buffer)
-                    .with_min_len(1 << 10)
-                    .try_for_each(|(chunk, item)| item.serialize_raw(chunk))
-                    .unwrap();
-                let buf_len = buffer.len();
+                T::serialize_raw_batch(&buffer, byte_buffer, &*file).unwrap();
                 buffer.clear();
-                rayon::join(
-                    || file.write_all(&byte_buffer[..buf_len * size]).unwrap(),
-                    || buffer.par_extend(batch),
-                );
+                buffer.par_extend(batch);
             }
         }
 
@@ -312,14 +304,7 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
         if more_than_one_batch || batch_is_larger_than_buffer {
             let byte_buffer = byte_buffer.as_mut().unwrap();
             let mut file = file.unwrap();
-            byte_buffer
-                .par_chunks_mut(size)
-                .zip(&buffer)
-                .with_min_len(1 << 10)
-                .try_for_each(|(chunk, item)| item.serialize_raw(chunk))
-                .unwrap();
-            file.write_all(&byte_buffer[..buffer.len() * size])
-                .expect("failed to write to file");
+            T::serialize_raw_batch(&buffer, byte_buffer, &file).unwrap();
             file.flush().expect("failed to flush file");
             file.rewind().expect("failed to seek file");
             Self::File(file)
@@ -345,15 +330,15 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
         T: Send + Sync + Copy,
     {
         match self {
-            Self::File(ref mut file) => {
+            Self::File(file) => {
                 let mut work_buffer = avec![0u8; T::SIZE * b.len()];
-                T::serialize_raw_batch(b, &mut work_buffer, file).unwrap();
+                T::serialize_raw_batch(b, &mut work_buffer, &*file).unwrap();
             },
-            Self::Buffer { ref mut buffer } => {
+            Self::Buffer { buffer } => {
                 buffer.extend_from_slice(b);
                 if buffer.len() > BUFFER_SIZE {
                     let buffer = mem::take(buffer);
-                    *self = Self::from_iter(buffer.into_iter())
+                    *self = Self::from_iter(buffer)
                 }
             },
         }
@@ -364,7 +349,7 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
         T: Send + Sync,
     {
         process_file!(self, |buffer: &mut Vec<T>| {
-            buffer.par_iter_mut().for_each(|t| f(t));
+            buffer.par_iter_mut().for_each(&f);
             Some(())
         })
     }
@@ -399,12 +384,11 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
                     FileVec::Buffer { buffer }
                 } else {
                     let mut byte_buffer = avec![0u8; buffer.len() * T::SIZE];
-                    byte_buffer
-                        .par_chunks_mut(T::SIZE)
-                        .zip(buffer)
-                        .for_each(|(chunk, item)| {
-                            item.serialize_raw(chunk).unwrap();
-                        });
+                    byte_buffer.par_chunks_mut(T::SIZE).zip(buffer).for_each(
+                        |(mut chunk, item)| {
+                            item.serialize_raw(&mut chunk).unwrap();
+                        },
+                    );
 
                     let mut file = InnerFile::new_temp("");
                     file.write_all(&byte_buffer)
@@ -415,7 +399,7 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
         }
     }
 
-    pub fn batched_for_each(&mut self, f: impl Fn(&mut Vec<T>) + Send + Sync)
+    pub fn batched_for_each(&mut self, mut f: impl FnMut(&mut Vec<T>) + Send + Sync)
     where
         T: Send + Sync,
     {
@@ -465,25 +449,13 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
                 bufs.par_extend(batch);
             } else {
                 more_than_one_batch = true;
-                let a = writer_1.par_chunks_mut(size_a).zip(&bufs.0);
-                let b = writer_2.par_chunks_mut(size_b).zip(&bufs.1);
-
-                a.zip(b)
-                    .try_for_each(|((c_a, a), (c_b, b))| {
-                        a.serialize_raw(c_a)?;
-                        b.serialize_raw(c_b)
-                    })
-                    .unwrap();
-                let buf_a_len = bufs.0.len();
-                let buf_b_len = bufs.1.len();
-                iter_len.map(|s| {
+                if let Some(s) = iter_len {
                     file_1.allocate_space(s * A::SIZE).unwrap();
                     file_2.allocate_space(s * B::SIZE).unwrap();
-                });
-                rayon::join(
-                    || file_1.write_all(&writer_1[..buf_a_len * size_a]).unwrap(),
-                    || file_2.write_all(&writer_2[..buf_b_len * size_b]).unwrap(),
-                );
+                }
+                A::serialize_raw_batch(&bufs.0, &mut writer_1, &file_1).unwrap();
+                B::serialize_raw_batch(&bufs.1, &mut writer_2, &file_2).unwrap();
+
                 bufs.0.clear();
                 bufs.1.clear();
                 bufs.par_extend(batch);
@@ -492,26 +464,15 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
 
         // Write the last batch to the file.
         if more_than_one_batch {
-            writer_1
-                .par_chunks_mut(size_a)
-                .zip(&bufs.0)
-                .try_for_each(|(chunk, a)| a.serialize_raw(chunk))
-                .unwrap();
-            writer_2
-                .par_chunks_mut(size_b)
-                .zip(&bufs.1)
-                .try_for_each(|(chunk, b)| b.serialize_raw(chunk))
-                .unwrap();
-            let buf_a_len = bufs.0.len();
-            let buf_b_len = bufs.1.len();
-            iter_len.map(|s| {
+            if let Some(s) = iter_len {
                 file_1.allocate_space(s * A::SIZE).unwrap();
                 file_2.allocate_space(s * B::SIZE).unwrap();
-            });
-            rayon::join(
-                || file_1.write_all(&writer_1[..buf_a_len * size_a]).unwrap(),
-                || file_2.write_all(&writer_2[..buf_b_len * size_b]).unwrap(),
-            );
+            }
+            A::serialize_raw_batch(&bufs.0, &mut writer_1, &file_1).unwrap();
+            B::serialize_raw_batch(&bufs.1, &mut writer_2, &file_2).unwrap();
+
+            bufs.0.clear();
+            bufs.1.clear();
             file_1.flush().expect("failed to flush file");
             file_2.flush().expect("failed to flush file");
             file_1.rewind().expect("failed to seek file");
@@ -538,7 +499,7 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
         T: Send + Sync,
         I: BatchedIterator,
         I::Item: Send + Sync,
-        I::Batch: IndexedParallelIterator,
+        for<'a> I::Batch<'a>: IndexedParallelIterator,
     {
         process_file!(self, |buffer: &mut Vec<T>| {
             let next_batch = other.next_batch()?;
@@ -559,13 +520,32 @@ impl<T: SerializeRaw + DeserializeRaw> FileVec<T> {
     }
 }
 
+impl<T: SerializeRaw + DeserializeRaw> Default for FileVec<T> {
+    #[inline(always)]
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<T: SerializeRaw + DeserializeRaw> FromIterator<T> for FileVec<T>
+where
+    T: Send + Sync + Debug,
+{
+    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
+        Self::from_batched_iter(BatchAdapter::from(iter.into_iter()))
+    }
+}
+
 impl<T: SerializeRaw + DeserializeRaw> Drop for FileVec<T> {
     #[inline(always)]
     fn drop(&mut self) {
         match self {
             Self::File(file) => match std::fs::remove_file(&file.path) {
                 Ok(_) => (),
-                Err(e) => eprintln!("Failed to remove file at path {:?}: {e:?}", file.path),
+                Err(e) => eprintln!(
+                    "FileVec: Failed to remove file at path {:?}: {e:?}",
+                    file.path
+                ),
             },
             Self::Buffer { .. } => (),
         }
@@ -601,9 +581,8 @@ impl<T: SerializeRaw + DeserializeRaw + Eq> Eq for FileVec<T> {}
 // serialize:
 // File: use our local serialization to read the entire file to a Vec<T>, and call T::serialize_uncompressed on Vec<T>
 // Buffer: call T::serialize_uncompressed directly on the inner content (automatically writes length first)
-impl<
-        T: SerializeRaw + DeserializeRaw + Valid + Sync + Send + CanonicalSerialize + Debug + Display,
-    > CanonicalSerialize for FileVec<T>
+impl<T: SerializeRaw + DeserializeRaw + Valid + Sync + Send + CanonicalSerialize + Debug + Display>
+    CanonicalSerialize for FileVec<T>
 {
     fn serialize_with_mode<W: Write>(
         &self,
@@ -611,39 +590,35 @@ impl<
         _compress: ark_serialize::Compress,
     ) -> Result<(), ark_serialize::SerializationError> {
         match self {
-            Self::Buffer { buffer } => buffer.serialize_uncompressed(&mut writer),
+            Self::Buffer { buffer } => {
+                // Write the variant to indicate it's a buffer
+                writer.write_all(&[0u8])?;
+                buffer.serialize_uncompressed(&mut writer)
+            },
             Self::File(file) => {
+                // Write the variant to indicate it's a file
+                writer.write_all(&[1u8])?;
                 let mut file = file.reopen_read_by_ref().expect(&format!(
                     "failed to open file, {}",
                     file.path.to_str().unwrap()
                 ));
                 let size = T::SIZE;
-                let mut final_result = vec![];
-                let mut work_buffer: AVec = avec![0u8; size * BUFFER_SIZE];
+                let len = self.len();
+                len.serialize_with_mode(&mut writer, _compress)?;
+                let mut work_buffer: AVec = avec![];
 
-                let mut result_buffer = Vec::with_capacity(BUFFER_SIZE);
                 loop {
-                    T::deserialize_raw_batch(
-                        &mut result_buffer,
-                        &mut work_buffer,
-                        BUFFER_SIZE,
-                        &mut file,
-                    )
-                    .unwrap();
-
-                    // need to store result_buffer len first or append removes all elements from result buffer
-                    let result_buffer_len = result_buffer.len();
-
-                    final_result.append(&mut result_buffer);
+                    (&mut file).read_n(&mut work_buffer, size * BUFFER_SIZE)?;
+                    let file_ended = work_buffer.len() < size * BUFFER_SIZE;
+                    writer.write_all(&work_buffer[..])?;
+                    work_buffer.clear();
 
                     // if we have read less than BUFFER_SIZE items, we've reached EOF
-                    if result_buffer_len < BUFFER_SIZE {
+                    if file_ended {
                         break;
                     }
                 }
-
-                // size of final_result vec (not byte size) should be serialized as a u64 as a part of this API
-                final_result.serialize_uncompressed(&mut writer)
+                Ok(())
             },
         }
     }
@@ -682,33 +657,30 @@ impl<T: SerializeRaw + DeserializeRaw + Valid + Sync + Send + CanonicalDeseriali
         _compress: ark_serialize::Compress,
         _validate: ark_serialize::Validate,
     ) -> Result<Self, ark_serialize::SerializationError> {
-        let size = usize::deserialize_uncompressed_unchecked(&mut reader)?;
-        let mut buffer = Vec::with_capacity(BUFFER_SIZE);
-        if size > BUFFER_SIZE {
-            let mut file = InnerFile::new_temp(prefix);
-            file.allocate_space(size * T::SIZE).unwrap();
-            let mut remaining = size;
-
-            let mut work_buffer = avec![0u8; T::SIZE * BUFFER_SIZE];
-            while remaining > 0 {
-                for _ in 0..std::cmp::min(remaining, BUFFER_SIZE) {
-                    let item = T::deserialize_uncompressed_unchecked(&mut reader).unwrap();
-                    buffer.push(item);
+        let variant = {
+            let mut buf = [0u8; 1];
+            reader.read_exact(&mut buf)?;
+            buf[0]
+        };
+        match variant {
+            0u8 => {
+                let buffer = Vec::deserialize_uncompressed_unchecked(&mut reader)?;
+                Ok(FileVec::Buffer { buffer })
+            },
+            1u8 => {
+                let mut remaining =
+                    usize::deserialize_with_mode(&mut reader, _compress, _validate)?;
+                let mut file = InnerFile::new_temp(prefix);
+                let mut work_buffer = avec![0u8; T::SIZE * BUFFER_SIZE];
+                while remaining > 0 {
+                    reader.read_exact(&mut work_buffer)?;
+                    file.write_all(&work_buffer)?;
+                    remaining = remaining.saturating_sub(BUFFER_SIZE);
                 }
-                remaining = remaining.saturating_sub(BUFFER_SIZE);
-                T::serialize_raw_batch(&buffer, &mut work_buffer, &mut file).unwrap();
-                buffer.clear();
-                work_buffer.clear();
-            }
-
-            Ok(FileVec::new_file(file))
-        } else {
-            for _ in 0..size {
-                let item = T::deserialize_uncompressed_unchecked(&mut reader).unwrap();
-                buffer.push(item);
-            }
-
-            Ok(FileVec::Buffer { buffer })
+                file.rewind()?;
+                Ok(FileVec::new_file(file))
+            },
+            x => panic!("invalid variant {x} for FileVec"),
         }
     }
 }
@@ -728,23 +700,21 @@ impl<T: SerializeRaw + DeserializeRaw + Valid> Valid for FileVec<T> {
     }
 }
 
-impl<T: SerializeRaw + DeserializeRaw + Display> Display for FileVec<T> {
+impl<T: SerializeRaw + DeserializeRaw + Display + Send + Sync + 'static> Display for FileVec<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::File(file) => {
                 writeln!(f, "FileVec at {}: [", file.path.display())?;
-                let file = file.reopen_read_by_ref().unwrap();
-                let mut reader = std::io::BufReader::new(file);
-                while let Ok(item) = T::deserialize_raw(&mut reader) {
-                    writeln!(f, "  {},", item)?;
-                }
+                self.iter().to_vec().into_iter().for_each(|item| {
+                    writeln!(f, "  {item},").unwrap();
+                });
                 writeln!(f, "]")?;
                 Ok(())
             },
             Self::Buffer { buffer } => {
                 writeln!(f, "FileVec: [")?;
                 for item in buffer {
-                    writeln!(f, "  {},", item)?;
+                    writeln!(f, "  {item},")?;
                 }
                 writeln!(f, "]")?;
                 Ok(())
@@ -757,36 +727,66 @@ impl<T: SerializeRaw + DeserializeRaw + Display> Display for FileVec<T> {
 mod tests {
     use ark_bls12_381::Fr;
     use ark_serialize::CanonicalSerialize;
-    use ark_std::test_rng;
     use ark_std::UniformRand;
+    use ark_std::test_rng;
     use std::fs::File;
 
     use super::*;
 
-    // Currently works for BUFFER_SIZE or below
     #[test]
-    fn test_file_vec_canonical_serialize() {
+    fn test_file_vec_fr_canonical_serialize() {
         let mut rng = test_rng();
-        let vec1 = (0..(BUFFER_SIZE * 2))
-            .map(|_| Fr::rand(&mut rng))
-            .collect::<Vec<Fr>>();
-        let file_vec = FileVec::from_iter(vec1.clone().into_iter());
-        let mut buffer = File::create("srs.params").unwrap();
-        file_vec.serialize_uncompressed(&mut buffer).unwrap();
+        for i in [1, 2, 4, 8] {
+            let vec1 = (0..(BUFFER_SIZE * i))
+                .map(|_| Fr::rand(&mut rng))
+                .collect::<Vec<Fr>>();
+            let file_vec = FileVec::from_iter(vec1.clone().into_iter());
+            let mut buffer = File::create("srs.params").unwrap();
+            file_vec.serialize_uncompressed(&mut buffer).unwrap();
 
-        let mut f = File::open("srs.params").unwrap();
-        let file_vec2 = FileVec::<Fr>::deserialize_uncompressed_unchecked(&mut f).unwrap();
+            let mut f = File::open("srs.params").unwrap();
+            let file_vec2 = FileVec::<Fr>::deserialize_uncompressed_unchecked(&mut f).unwrap();
 
-        match (&file_vec, &file_vec2) {
-            (FileVec::Buffer { .. }, FileVec::Buffer { .. }) => {
-                panic!("should both be File enums"); // size is both greater than BUFFER_SIZE, so should be File
-            },
-            (FileVec::File { .. }, FileVec::File { .. }) => {
-                let vec1 = file_vec.iter().to_vec();
-                let vec2 = file_vec2.iter().to_vec();
-                assert_eq!(vec1, vec2);
-            },
-            _ => panic!("file_vec and file_vec2 are different types"),
+            match (&file_vec, &file_vec2) {
+                (FileVec::Buffer { buffer: b1 }, FileVec::Buffer { buffer: b2 }) => {
+                    assert_eq!(b1, b2);
+                },
+                (FileVec::File { .. }, FileVec::File { .. }) => {
+                    let vec1 = file_vec.iter().to_vec();
+                    let vec2 = file_vec2.iter().to_vec();
+                    assert_eq!(vec1, vec2);
+                },
+                _ => panic!("file_vec and file_vec2 are different types"),
+            }
+        }
+    }
+
+    #[test]
+    fn test_file_vec_g1_canonical_serialize() {
+        use ark_bls12_381::G1Affine;
+        let mut rng = test_rng();
+        for i in [1, 2, 4, 8] {
+            let rand = G1Affine::rand(&mut rng);
+            let vec1 = (0..(BUFFER_SIZE * i)).map(|_| rand).collect::<Vec<_>>();
+            let file_vec = FileVec::from_iter(vec1.clone().into_iter());
+            let mut buffer = File::create("g_srs.params").unwrap();
+            file_vec.serialize_uncompressed(&mut buffer).unwrap();
+
+            let mut f = File::open("g_srs.params").unwrap();
+            let file_vec2 =
+                FileVec::<G1Affine>::deserialize_uncompressed_unchecked(&mut f).unwrap();
+
+            match (&file_vec, &file_vec2) {
+                (FileVec::Buffer { buffer: b1 }, FileVec::Buffer { buffer: b2 }) => {
+                    assert_eq!(b1, b2);
+                },
+                (FileVec::File { .. }, FileVec::File { .. }) => {
+                    let vec1 = file_vec.iter().to_vec();
+                    let vec2 = file_vec2.iter().to_vec();
+                    assert_eq!(vec1, vec2);
+                },
+                _ => panic!("file_vec and file_vec2 are different types"),
+            }
         }
     }
 }

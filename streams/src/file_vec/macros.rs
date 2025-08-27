@@ -9,7 +9,7 @@ macro_rules! process_file {
                 let mut read_byte_buffer = AVec::with_capacity(PAGE_SIZE, T::SIZE * BUFFER_SIZE);
 
                 let mut write_buffer = Vec::with_capacity(BUFFER_SIZE);
-                let mut write_byte_buffer = vec![0u8; T::SIZE * BUFFER_SIZE];
+                let mut write_byte_buffer = avec![0u8; T::SIZE * BUFFER_SIZE];
 
                 let mut writer = InnerFile::new_temp("");
                 writer
@@ -28,7 +28,7 @@ macro_rules! process_file {
                     let deser_result = $crate::serialize::serialize_and_deserialize_raw_batch(
                         &write_buffer,
                         &mut write_byte_buffer,
-                        &mut writer,
+                        &writer,
                         &mut read_buffer,
                         &mut read_byte_buffer,
                         reader,

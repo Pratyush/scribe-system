@@ -7,7 +7,7 @@
 //! Crate wide constants.
 
 use ark_ff::{FftField, PrimeField};
-use ark_std::rand::{rngs::StdRng, SeedableRng};
+use ark_std::rand::{SeedableRng, rngs::StdRng};
 use ark_std::{vec, vec::Vec};
 
 // ==========================

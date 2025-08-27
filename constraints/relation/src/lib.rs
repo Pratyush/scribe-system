@@ -15,9 +15,9 @@ pub mod constraint_system;
 pub use constraint_system::*;
 
 use ark_std::string::String;
-use displaydoc::Display;
+
 /// A `enum` specifying the possible failure modes of the circuit.
-#[derive(Display, Debug)]
+#[derive(Debug)]
 pub enum CircuitError {
     /// Failed to create domain
     DomainCreationError,
@@ -52,5 +52,3 @@ pub enum CircuitError {
     /// Incorrect mode
     IncorrectMode,
 }
-
-impl ark_std::error::Error for CircuitError {}

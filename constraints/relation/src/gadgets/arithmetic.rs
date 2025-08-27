@@ -8,12 +8,12 @@
 
 use super::utils::next_multiple;
 use crate::{
+    Circuit, CircuitError, PlonkCircuit, Variable,
     constants::{GATE_WIDTH, N_MUL_SELECTORS},
     gates::{
         ConstantAdditionGate, ConstantMultiplicationGate, FifthRootGate, LinCombGate, MulAddGate,
         QuadPolyGate,
     },
-    Circuit, CircuitError, PlonkCircuit, Variable,
 };
 use ark_std::{borrow::ToOwned, boxed::Box, string::ToString, vec::Vec};
 use scribe_streams::serialize::RawPrimeField;
@@ -326,13 +326,13 @@ impl<F: RawPrimeField> PlonkCircuit<F> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{constants::GATE_WIDTH, Circuit, CircuitError, PlonkCircuit};
+    use crate::{Circuit, CircuitError, PlonkCircuit, constants::GATE_WIDTH};
     use ark_bls12_377::Fq as Fq377;
     use ark_ed_on_bls12_377::Fq as FqEd377;
     use ark_ed_on_bls12_381::Fq as FqEd381;
     use ark_ed_on_bn254::Fq as FqEd254;
+    use ark_std::test_rng;
     use ark_std::{vec, vec::Vec};
-    use jf_utils::test_rng;
 
     #[test]
     fn test_quad_poly_gate() -> Result<(), CircuitError> {
@@ -377,9 +377,11 @@ mod test {
         *circuit.witness_mut(var) = F::from(34u32);
         assert!(circuit.check_circuit_satisfiability(&[]).is_err());
         // Check variable out of bound error.
-        assert!(circuit
-            .quad_poly_gate(&[0, 1, 1, circuit.num_vars(), 0], &q_lc, &q_mul, q_o, q_c)
-            .is_err());
+        assert!(
+            circuit
+                .quad_poly_gate(&[0, 1, 1, circuit.num_vars(), 0], &q_lc, &q_mul, q_o, q_c)
+                .is_err()
+        );
 
         let _ = build_quad_poly_gate_circuit([
             -F::from(98973u32),
@@ -506,9 +508,11 @@ mod test {
         *circuit.witness_mut(y_1) = F::from(34u32);
         assert!(circuit.check_circuit_satisfiability(&[]).is_err());
         // Check variable out of bound error.
-        assert!(circuit
-            .mul_add(&[0, 1, 1, circuit.num_vars()], &q_muls)
-            .is_err());
+        assert!(
+            circuit
+                .mul_add(&[0, 1, 1, circuit.num_vars()], &q_muls)
+                .is_err()
+        );
 
         let _ =
             build_mul_add_circuit([-F::from(98973u32), F::from(4u32), F::zero(), F::from(79u32)])?;

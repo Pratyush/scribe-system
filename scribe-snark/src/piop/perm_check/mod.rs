@@ -8,7 +8,7 @@ use crate::{
 };
 use ark_ec::pairing::Pairing;
 use ark_std::{end_timer, start_timer};
-use mle::{virtual_polynomial::VPAuxInfo, MLE};
+use mle::{MLE, VirtualMLE, virtual_polynomial::VPAuxInfo};
 use scribe_streams::serialize::RawPrimeField;
 
 use super::prod_check::{ProductCheckProof, ProductCheckSubClaim};
@@ -52,17 +52,17 @@ impl<E, PC> PermutationCheck<E, PC>
 where
     E: Pairing,
     E::ScalarField: RawPrimeField,
-    PC: PCScheme<E, Polynomial = MLE<E::ScalarField>>,
+    PC: PCScheme<E, Polynomial = VirtualMLE<E::ScalarField>>,
 {
     pub fn init_transcript() -> IOPTranscript<E::ScalarField> {
         IOPTranscript::<E::ScalarField>::new(b"Initializing PermutationCheck transcript")
     }
 
     pub fn prove(
-        pcs_param: &PC::CommitterKey,
+        ck: &PC::CommitterKey,
         fxs: &[MLE<E::ScalarField>],
         gxs: &[MLE<E::ScalarField>],
-        perms: &[MLE<E::ScalarField>],
+        perms: &[VirtualMLE<E::ScalarField>],
         transcript: &mut IOPTranscript<E::ScalarField>,
     ) -> Result<
         (
@@ -104,7 +104,7 @@ where
 
         // invoke product check on numerator and denominator
         let (proof, prod_poly, frac_poly) =
-            ProductCheck::<E, PC>::prove(pcs_param, &numerators, &denominators, transcript)?;
+            ProductCheck::<E, PC>::prove(ck, &numerators, &denominators, transcript)?;
 
         end_timer!(start);
         Ok((proof, prod_poly, frac_poly))
@@ -135,28 +135,28 @@ where
 mod test {
     use super::PermutationCheck;
     use crate::{
-        pc::{pst13::PST13, PCScheme},
+        pc::{PCScheme, pst13::PST13},
         piop::errors::PIOPError,
     };
     use ark_bls12_381::Bls12_381;
     use ark_ec::pairing::Pairing;
     use ark_std::test_rng;
-    use mle::{virtual_polynomial::VPAuxInfo, MLE};
+    use mle::{MLE, SmallMLE, VirtualMLE, virtual_polynomial::VPAuxInfo};
     use scribe_streams::serialize::RawPrimeField;
     use std::marker::PhantomData;
 
     type Kzg = PST13<Bls12_381>;
 
     fn test_permutation_check_helper<E, PC>(
-        pcs_param: &PC::CommitterKey,
+        ck: &PC::CommitterKey,
         fxs: &[MLE<E::ScalarField>],
         gxs: &[MLE<E::ScalarField>],
-        perms: &[MLE<E::ScalarField>],
+        perms: &[VirtualMLE<E::ScalarField>],
     ) -> Result<(), PIOPError>
     where
         E: Pairing,
         E::ScalarField: RawPrimeField,
-        PC: PCScheme<E, Polynomial = MLE<E::ScalarField>>,
+        PC: PCScheme<E, Polynomial = VirtualMLE<E::ScalarField>>,
     {
         let nv = fxs[0].num_vars();
         // what's AuxInfo used for?
@@ -170,7 +170,7 @@ mod test {
         let mut transcript = PermutationCheck::<E, PC>::init_transcript();
         transcript.append_message(b"testing", b"initializing transcript for testing")?;
         let (proof, prod_x, _frac_poly) =
-            PermutationCheck::<E, PC>::prove(pcs_param, fxs, gxs, perms, &mut transcript)?;
+            PermutationCheck::<E, PC>::prove(ck, fxs, gxs, perms, &mut transcript)?;
 
         // verifier
         let mut transcript = PermutationCheck::<E, PC>::init_transcript();
@@ -196,7 +196,10 @@ mod test {
 
         let srs = PST13::<Bls12_381>::gen_srs_for_testing(&mut rng, nv)?;
         let (pcs_param, _) = PST13::trim(&srs, nv)?;
-        let id_perms = MLE::identity_permutation_mles(nv, 2);
+        let id_perms = SmallMLE::identity_permutation(nv, 2)
+            .into_iter()
+            .map(|mle| mle.into())
+            .collect::<Vec<_>>();
 
         {
             // good path: (w1, w2) is a permutation of (w1, w2) itself under the identify
@@ -221,7 +224,10 @@ mod test {
             // bad path 1: w is a not permutation of w itself under a random map
             let ws = vec![MLE::rand(nv, &mut rng), MLE::rand(nv, &mut rng)];
             // perms is a random map
-            let perms = MLE::random_permutation_mles(nv, 2, &mut rng);
+            let perms = MLE::random_permutation_mles(nv, 2, &mut rng)
+                .into_iter()
+                .map(|mle| mle.into())
+                .collect::<Vec<_>>();
 
             assert!(
                 test_permutation_check_helper::<Bls12_381, Kzg>(&pcs_param, &ws, &ws, &perms)
@@ -235,10 +241,10 @@ mod test {
             let gs = vec![MLE::rand(nv, &mut rng), MLE::rand(nv, &mut rng)];
             // s_perm is the identity map
 
-            assert!(test_permutation_check_helper::<Bls12_381, Kzg>(
-                &pcs_param, &fs, &gs, &id_perms
-            )
-            .is_err());
+            assert!(
+                test_permutation_check_helper::<Bls12_381, Kzg>(&pcs_param, &fs, &gs, &id_perms)
+                    .is_err()
+            );
         }
 
         Ok(())

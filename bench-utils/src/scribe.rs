@@ -39,8 +39,15 @@ pub fn setup(min_num_vars: usize, max_num_vars: usize, file_dir_path: &Path) {
     let srs_file = OpenOptions::new()
         .write(true)
         .create(true)
+        .truncate(true)
         .open(&srs_path)
-        .unwrap();
+        .expect(
+            format!(
+                "Failed to create SRS file at {}",
+                srs_path.to_string_lossy()
+            )
+            .as_str(),
+        );
     let mut srs_file = std::io::BufWriter::new(srs_file);
     timed!(
         "Scribe: Serializing SRS",
@@ -88,11 +95,11 @@ pub fn prover(
     assert!(max_nv >= min_nv);
     assert!(max_nv <= supported_size);
 
-    let srs: SRS<_> = {
+    let srs = {
         let srs_path = file_dir_path.join(format!("scribe_srs_{supported_size}.params"));
         let srs_file = open_file(&srs_path);
         let srs_file = std::io::BufReader::new(srs_file);
-        let srs = CanonicalDeserialize::deserialize_uncompressed_unchecked(srs_file).unwrap();
+        let srs = SRS::deserialize_uncompressed_unchecked(srs_file).unwrap();
         clear_caches();
 
         srs
@@ -133,24 +140,22 @@ pub fn prover(
             let stop_signal = Arc::new(AtomicBool::new(false));
             let stop_signal_2 = stop_signal.clone();
             let initial_size = get_size(&tmp_dir_path).unwrap();
-            let dir_sizes = s.spawn(move || {
-                let mut sizes = vec![initial_size];
+            let dir_size = s.spawn(move || {
+                let mut max_size = initial_size;
                 while !stop_signal_2.load(std::sync::atomic::Ordering::Relaxed) {
-                    let cur_size = get_size(&tmp_dir_path).unwrap();
-                    if cur_size != *sizes.last().unwrap() {
-                        sizes.push(cur_size);
-                    }
+                    let cur_size = get_size(&tmp_dir_path).unwrap_or(0);
+                    max_size = max_size.max(cur_size);
                     thread::sleep(std::time::Duration::from_secs(1));
                 }
-                sizes
+                max_size
             });
+
             let proof = timed!(
                 format!("Scribe: Proving for {nv}",),
                 Scribe::prove(&pk, &public_inputs, &witnesses).unwrap()
             );
             stop_signal.store(true, std::sync::atomic::Ordering::Relaxed);
-            let sizes = dir_sizes.join().unwrap();
-            let max_dir_size = sizes.iter().max().unwrap();
+            let max_dir_size = dir_size.join().unwrap();
             println!(
                 "Scribe: Directory size for {nv} is: {} bytes",
                 max_dir_size - initial_size
@@ -163,7 +168,7 @@ pub fn prover(
         // verify a proof
         let result = timed!(
             format!("Scribe: Verifying for {nv}"),
-            Scribe::verify(&pk.vk(), &public_inputs, &proof).unwrap()
+            Scribe::verify(pk.vk(), &public_inputs, &proof).unwrap()
         );
         if !result {
             eprintln!("Verification failed for {nv}");

@@ -1,24 +1,22 @@
+use crate::pc::PCScheme;
 use crate::pc::pst13::batching::BatchProof;
 use crate::pc::structs::Commitment;
-use crate::pc::PCScheme;
 use crate::snark::utils::PCAccumulator;
-use mle::{util::gen_eval_point, virtual_polynomial::VPAuxInfo, MLE};
+use mle::{MLE, VirtualMLE, util::gen_eval_point, virtual_polynomial::VPAuxInfo};
 
 use crate::piop::perm_check::PermutationCheck;
 use crate::piop::prelude::ZeroCheck;
 use crate::snark::{
+    Scribe,
     errors::ScribeErrors,
     structs::{Index, Proof, ProvingKey, VerifyingKey},
-    utils::{build_f, eval_f, eval_perm_gate, prover_sanity_check},
-    Scribe,
+    utils::{build_f, eval_f, eval_perm_gate},
 };
 use crate::transcript::IOPTranscript;
 use ark_ec::pairing::Pairing;
 use scribe_streams::serialize::RawPrimeField;
 
-use ark_std::{end_timer, log2, start_timer, One, Zero};
-use rayon::iter::IntoParallelRefIterator;
-use rayon::iter::ParallelIterator;
+use ark_std::{One, Zero, end_timer, log2, start_timer};
 
 use std::marker::PhantomData;
 
@@ -27,13 +25,13 @@ where
     E: Pairing,
     E::ScalarField: RawPrimeField,
     PC: PCScheme<
-        E,
-        Polynomial = MLE<E::ScalarField>,
-        Point = Vec<E::ScalarField>,
-        Evaluation = E::ScalarField,
-        Commitment = Commitment<E>,
-        BatchProof = BatchProof<E, PC>,
-    >,
+            E,
+            Polynomial = VirtualMLE<E::ScalarField>,
+            Point = Vec<E::ScalarField>,
+            Evaluation = E::ScalarField,
+            Commitment = Commitment<E>,
+            BatchProof = BatchProof<E, PC>,
+        >,
 {
     pub fn preprocess(
         index: &Index<E::ScalarField>,
@@ -48,23 +46,30 @@ where
         end_timer!(trim_time);
 
         // build permutation oracles
-        let permutation_oracles = index.permutation.clone();
-        let permutation_commit_time = start_timer!(|| "commit permutation oracles");
-        let permutation_commitments = permutation_oracles
-            .par_iter()
-            .map(|poly| PC::commit(&pc_ck, poly))
-            .collect::<Result<_, _>>()?;
-        end_timer!(permutation_commit_time);
+        let selector_oracles = index
+            .selectors
+            .iter()
+            .cloned()
+            .map(VirtualMLE::from)
+            .collect::<Vec<_>>();
+        let permutation_oracles = index
+            .permutation
+            .iter()
+            .cloned()
+            .map(VirtualMLE::from)
+            .collect::<Vec<_>>();
 
-        // commit selector oracles
-        let selector_oracles = index.selectors.clone();
+        let commit_time = start_timer!(|| "commit permutation and selector oracles");
+        let permutation_and_selector_polys =
+            [&permutation_oracles[..], &selector_oracles[..]].concat();
+        let permutation_and_selector_commitments =
+            PC::batch_commit(&pc_ck, &permutation_and_selector_polys)?;
 
-        let selector_commit_time = start_timer!(|| "commit selector oracles");
-        let selector_commitments = selector_oracles
-            .par_iter()
-            .map(|poly| PC::commit(&pc_ck, poly))
-            .collect::<Result<_, _>>()?;
-        end_timer!(selector_commit_time);
+        let (permutation_commitments, selector_commitments) =
+            permutation_and_selector_commitments.split_at(permutation_oracles.len());
+        let permutation_commitments = permutation_commitments.to_vec();
+        let selector_commitments = selector_commitments.to_vec();
+        end_timer!(commit_time);
 
         end_timer!(start);
 
@@ -76,8 +81,8 @@ where
         };
         let pk = ProvingKey::new(
             index.config.clone(),
-            permutation_oracles,
-            selector_oracles,
+            index.permutation.clone(),
+            index.selectors.clone(),
             vk.clone(),
             pc_ck,
         );
@@ -134,14 +139,19 @@ where
     /// - 5. deferred batch opening
     pub fn prove(
         pk: &ProvingKey<E, PC>,
-        pub_input: &[E::ScalarField],
+        _pub_input: &[E::ScalarField],
         witnesses: &[MLE<E::ScalarField>],
     ) -> Result<Proof<E, PC>, ScribeErrors> {
+        let witnesses_virtual = witnesses
+            .iter()
+            .cloned()
+            .map(VirtualMLE::from)
+            .collect::<Vec<_>>();
         let start = start_timer!(|| format!("scribe proving nv = {}", pk.config().num_variables()));
         let mut transcript = IOPTranscript::<E::ScalarField>::new(b"scribe");
 
         #[cfg(debug_assertions)]
-        prover_sanity_check(&pk.config(), pub_input, witnesses.to_vec())?;
+        crate::snark::utils::prover_sanity_check(pk.config(), _pub_input, witnesses.to_vec())?;
 
         // witness assignment of length 2^n
         let num_vars = pk.config().num_variables();
@@ -159,16 +169,7 @@ where
         // =======================================================================
         let step = start_timer!(|| "commit witnesses");
 
-        #[cfg(target_os = "linux")]
-        let witness_commits = witnesses
-            .iter()
-            .map(|x| PC::commit(&pk.pc_ck, x).unwrap())
-            .collect::<Vec<_>>();
-        #[cfg(not(target_os = "linux"))]
-        let witness_commits = witnesses
-            .par_iter()
-            .map(|x| PC::commit(&pk.pc_ck, x).unwrap())
-            .collect::<Vec<_>>();
+        let witness_commits = PC::batch_commit(&pk.pc_ck, &witnesses_virtual)?;
         for w_com in witness_commits.iter() {
             transcript.append_serializable_element(b"w", w_com)?;
         }
@@ -192,7 +193,7 @@ where
         let fx = build_f(
             &pk.config().gate_func,
             pk.config().num_variables(),
-            &pk.selector_oracles(),
+            pk.selector_oracles(),
             witnesses,
         )?;
 
@@ -204,12 +205,17 @@ where
         // obtain a PermCheckSubClaim.
         // =======================================================================
         let step = start_timer!(|| "Permutation check on w_i(x)");
-
+        let perms = pk
+            .permutation_oracles()
+            .iter()
+            .cloned()
+            .map(VirtualMLE::from)
+            .collect::<Vec<_>>();
         let (perm_check_proof, prod_x, frac_poly) = <PermutationCheck<E, PC>>::prove(
             &pk.pc_ck,
             witnesses,
             witnesses,
-            &pk.permutation_oracles(),
+            &perms,
             &mut transcript,
         )?;
         let perm_check_point = &perm_check_proof.zero_check_proof.point;
@@ -292,7 +298,7 @@ where
             .iter()
             .zip(&pk.vk().perm_commitments)
         {
-            pcs_acc.insert_poly_and_points(perm, pcom, perm_check_point);
+            pcs_acc.insert_virt_poly_and_points(&perm.clone().into(), pcom, perm_check_point);
         }
 
         // witnesses' points
@@ -435,7 +441,7 @@ where
         let zero_check_aux_info = VPAuxInfo::<E::ScalarField> {
             max_degree: vk.config.gate_func.degree(),
             num_variables: num_vars,
-            phantom: PhantomData::default(),
+            phantom: PhantomData,
         };
         // push witness to transcript
         for w_com in proof.witness_commits.iter() {
@@ -587,8 +593,7 @@ where
         let expect_pi_eval = pi_poly.evaluate(&r_pi[..]).unwrap();
         if expect_pi_eval != *pi_eval {
             return Err(ScribeErrors::InvalidProver(format!(
-                "Public input eval mismatch: got {}, expect {}",
-                pi_eval, expect_pi_eval,
+                "Public input eval mismatch: got {pi_eval}, expect {expect_pi_eval}",
             )));
         }
         let r_pi_padded = [r_pi, vec![E::ScalarField::zero(); num_vars - ell]].concat();
@@ -621,12 +626,13 @@ mod tests {
     use crate::pc::pst13::PST13;
 
     use crate::snark::{custom_gate::CustomizedGates, structs::ScribeConfig};
+    use mle::{SmallMLE, u48};
     use scribe_streams::serialize::RawAffine;
 
     use ark_bls12_381::Bls12_381;
-    use ark_std::rand::rngs::StdRng;
-    use ark_std::rand::SeedableRng;
     use ark_std::One;
+    use ark_std::rand::SeedableRng;
+    use ark_std::rand::rngs::StdRng;
 
     #[test]
     fn test_scribe_e2e() -> Result<(), ScribeErrors> {
@@ -679,25 +685,20 @@ mod tests {
                 gate_func: gate_func.clone(),
             };
             // let permutation = identity_permutation_mles(nv, num_witnesses);
+            //
+            let p1 = [1, 0, 2, 3]
+                .into_iter()
+                .map(u48::try_from)
+                .collect::<Result<Vec<u48>, _>>()
+                .unwrap();
+            let p2 = [5u64, 4u64, 6u64, 7u64]
+                .into_iter()
+                .map(u48::try_from)
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap();
             let permutation = vec![
-                MLE::from_evals_vec(
-                    vec![
-                        E::ScalarField::from(1u64),
-                        E::ScalarField::from(0u64),
-                        E::ScalarField::from(2u64),
-                        E::ScalarField::from(3u64),
-                    ],
-                    2,
-                ),
-                MLE::from_evals_vec(
-                    vec![
-                        E::ScalarField::from(5u64),
-                        E::ScalarField::from(4u64),
-                        E::ScalarField::from(6u64),
-                        E::ScalarField::from(7u64),
-                    ],
-                    2,
-                ),
+                SmallMLE::from_evals_vec(p1, 2),
+                SmallMLE::from_evals_vec(p2, 2),
             ];
             println!("Generated Permutation MLEs");
             let q1 = MLE::from_evals_vec(
@@ -784,27 +785,21 @@ mod tests {
                 num_pub_input,
                 gate_func,
             };
+            let p1 = [1, 3, 6, 7]
+                .into_iter()
+                .map(u48::try_from)
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap();
+            let p2 = [2, 5, 0, 4]
+                .into_iter()
+                .map(u48::try_from)
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap();
 
             // let permutation = identity_permutation(nv, num_witnesses);
             let rand_perm = vec![
-                MLE::from_evals_vec(
-                    vec![
-                        E::ScalarField::from(1u64),
-                        E::ScalarField::from(3u64),
-                        E::ScalarField::from(6u64),
-                        E::ScalarField::from(7u64),
-                    ],
-                    2,
-                ),
-                MLE::from_evals_vec(
-                    vec![
-                        E::ScalarField::from(2u64),
-                        E::ScalarField::from(5u64),
-                        E::ScalarField::from(0u64),
-                        E::ScalarField::from(4u64),
-                    ],
-                    2,
-                ),
+                SmallMLE::from_evals_vec(p1, 2),
+                SmallMLE::from_evals_vec(p2, 2),
             ];
 
             let q1 = MLE::from_evals_vec(

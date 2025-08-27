@@ -6,7 +6,6 @@ categories.workspace = true
 include.workspace = true
 license.workspace = true
 edition.workspace = true
-rust-version.workspace = true
 
 [dependencies]
 ark-ec = { workspace = true }
@@ -17,16 +16,16 @@ ark-serialize = { workspace = true }
 
 rayon = { workspace = true }
 derivative = { workspace = true }
-displaydoc = { workspace = true }
 
 tempfile = "3.3.0"
 smallvec = "1.6"
 libc = { version = "0.2.101" }
 aligned-vec = { version = "0.6.1" }
+crossbeam = { version = "0.8" }
 
 [dev-dependencies]
-ark-bls12-381 = { version = "0.4.0", default-features = false, features = [ "curve" ] }
-criterion = { version = "0.5" }
+ark-bls12-381 = { version = "0.5.0", default-features = false, features = [ "curve" ] }
+criterion = { version = "0.6", default-features = false, features = [ "cargo_bench_support" ]}
 
 [[bench]]
 name = "file_vec"
